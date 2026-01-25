@@ -33,4 +33,58 @@ Describe 'yx add'
     When run sh -c 'yx add this is a test && yx list'
     The output should include "- [ ] this is a test"
   End
+
+  It 'rejects yak names with forward slash'
+    When run yx add "foo/bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with backslash'
+    When run yx add "foo\\bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with colon'
+    When run yx add "foo:bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with asterisk'
+    When run yx add "foo*bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with question mark'
+    When run yx add "foo?bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with pipe'
+    When run yx add "foo|bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with less than'
+    When run yx add "foo<bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with greater than'
+    When run yx add "foo>bar"
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
+
+  It 'rejects yak names with quotes'
+    When run yx add 'foo"bar'
+    The error should include "Invalid yak name"
+    The status should be failure
+  End
 End

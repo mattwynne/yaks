@@ -1,7 +1,34 @@
 #!/usr/bin/env bash
 
 YAK_DIR="${YAK_PATH:-.yaks}"
-YAKS_FILE="$YAK_DIR/yks"
+
+validate_yak_name() {
+  local name="$1"
+  # Reject characters that are invalid on POSIX or Windows: / \ : * ? | < > "
+  if [[ "$name" =~ [/\\:\*\?\|\<\>\"] ]]; then
+    echo "Invalid yak name: contains forbidden characters (/ \\ : * ? | < > \")" >&2
+    return 1
+  fi
+  return 0
+}
+
+list_yaks() {
+  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    echo "You have no yaks. Are you done?"
+    return
+  fi
+
+  for yak_dir in "$YAK_DIR"/*; do
+    if [ -d "$yak_dir" ]; then
+      local yak_name=$(basename "$yak_dir")
+      if [ -f "$yak_dir/done" ]; then
+        echo "- [x] $yak_name"
+      else
+        echo "- [ ] $yak_name"
+      fi
+    fi
+  done
+}
 
 show_help() {
   cat <<EOF
@@ -10,6 +37,7 @@ Usage: yx <command> [arguments]
 Commands:
   add <name>    Add a new yak
   list, ls      List all yaks
+  done <name>   Mark a yak as done
   rm <name>     Remove a yak by name
   --help        Show this help message
 EOF
@@ -31,38 +59,36 @@ case "$1" in
         if [ -z "$line" ]; then
           break
         fi
-        echo "$line" >> "$YAKS_FILE"
+        validate_yak_name "$line" || exit 1
+        mkdir -p "$YAK_DIR/$line"
       done
     else
       # Single yak mode
-      mkdir -p "$YAK_DIR"
-      echo "${*:2}" >> "$YAKS_FILE"
+      yak_name="${*:2}"
+      validate_yak_name "$yak_name" || exit 1
+      mkdir -p "$YAK_DIR/$yak_name"
     fi
     ;;
   list|ls)
-    if [ -f "$YAKS_FILE" ]; then
-      sed 's/^/- [ ] /' "$YAKS_FILE"
-    else
-      echo "You have no yaks. Are you done?"
+    list_yaks
+    ;;
+  done)
+    yak_name="${*:2}"
+    yak_path="$YAK_DIR/$yak_name"
+    if [ ! -d "$yak_path" ]; then
+      echo "Error: yak '$yak_name' not found" >&2
+      exit 1
     fi
+    touch "$yak_path/done"
     ;;
   rm)
     yak_name="${*:2}"
-    if [ ! -f "$YAKS_FILE" ]; then
+    yak_path="$YAK_DIR/$yak_name"
+    if [ ! -d "$yak_path" ]; then
       echo "Error: yak '$yak_name' not found" >&2
       exit 1
     fi
-    if grep -Fxq "$yak_name" "$YAKS_FILE"; then
-      grep -Fxv "$yak_name" "$YAKS_FILE" > "$YAKS_FILE.tmp"
-      mv "$YAKS_FILE.tmp" "$YAKS_FILE"
-      # Remove the file if it's empty
-      if [ ! -s "$YAKS_FILE" ]; then
-        rm "$YAKS_FILE"
-      fi
-    else
-      echo "Error: yak '$yak_name' not found" >&2
-      exit 1
-    fi
+    rm -rf "$yak_path"
     ;;
   *)
     show_help
