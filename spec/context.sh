@@ -24,7 +24,7 @@ Describe 'yx context'
   It 'shows a yak with context'
     When run sh -c "
       yx add 'my yak'
-      echo '# Some context' > \"\$YAK_PATH/my yak/context.md\"
+      echo '# Some context' | yx context 'my yak'
       yx context --show 'my yak'
     "
     The output should equal "my yak
