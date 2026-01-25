@@ -29,25 +29,52 @@ list_yaks() {
     return
   fi
 
-  # Sort by creation time (oldest first) using ls -tr
-  local sorted_dirs
-  sorted_dirs=$(ls -tr "$YAK_DIR")
+  # Find all yak directories and sort them:
+  # 1. By directory depth (parents before children)
+  # 2. By creation time (oldest first) within each level
+  local all_yaks
+  all_yaks=$(cd "$YAK_DIR" && find . -type d -mindepth 1 -printf '%d %T@ %p\n' | sort -k1,1n -k2,2n | cut -d' ' -f3- | sed 's|^\./||')
 
-  # First pass: display done yaks
+  # Helper function to display a yak with proper indentation
+  display_yak() {
+    local yak_name="$1"
+    local is_done="$2"
+    local depth=$(echo "$yak_name" | tr -cd '/' | wc -c | xargs)
+    local indent=""
+    if [ "$depth" -gt 0 ]; then
+      indent=$(printf '  %.0s' $(seq 1 $depth))
+    fi
+    local display_name=$(basename "$yak_name")
+
+    if [ "$is_done" = "true" ]; then
+      echo -e "${indent}\e[90m- [x] $display_name\e[0m"
+    else
+      echo "${indent}- [ ] $display_name"
+    fi
+  }
+
+  # Collect all yaks in arrays
+  local -a done_yaks
+  local -a undone_yaks
+
   while IFS= read -r yak_name; do
     local yak_dir="$YAK_DIR/$yak_name"
-    if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
-      echo -e "\e[90m- [x] $yak_name\e[0m"
+    if [ -f "$yak_dir/done" ]; then
+      done_yaks+=("$yak_name")
+    else
+      undone_yaks+=("$yak_name")
     fi
-  done <<< "$sorted_dirs"
+  done <<< "$all_yaks"
 
-  # Second pass: display undone yaks
-  while IFS= read -r yak_name; do
-    local yak_dir="$YAK_DIR/$yak_name"
-    if [ -d "$yak_dir" ] && [ ! -f "$yak_dir/done" ]; then
-      echo "- [ ] $yak_name"
-    fi
-  done <<< "$sorted_dirs"
+  # Display done yaks first
+  for yak_name in "${done_yaks[@]}"; do
+    display_yak "$yak_name" "true"
+  done
+
+  # Display undone yaks
+  for yak_name in "${undone_yaks[@]}"; do
+    display_yak "$yak_name" "false"
+  done
 }
 
 show_help() {

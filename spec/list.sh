@@ -51,4 +51,14 @@ Describe 'yx list'
     The line 1 should equal $'\e[90m- [x] done task\e[0m'
     The line 2 should equal "- [ ] todo task"
   End
+
+  It 'displays nested yaks with indentation'
+    When run sh -c "
+      yx add 'first task'
+      yx add 'first task/second task'
+      yx list
+    "
+    The line 1 should equal "- [ ] first task"
+    The line 2 should equal "  - [ ] second task"
+  End
 End

@@ -52,7 +52,7 @@ Describe 'yx move'
   It 'rejects new name with forbidden characters'
     When run sh -c "
       yx add 'valid'
-      yx move 'valid' 'invalid/name'
+      yx move 'valid' 'invalid:name'
     "
     The status should be failure
     The error should include "forbidden characters"
