@@ -18,16 +18,25 @@ list_yaks() {
     return
   fi
 
-  for yak_dir in "$YAK_DIR"/*; do
-    if [ -d "$yak_dir" ]; then
-      local yak_name=$(basename "$yak_dir")
-      if [ -f "$yak_dir/done" ]; then
-        echo "- [x] $yak_name"
-      else
-        echo "- [ ] $yak_name"
-      fi
+  # Sort by creation time (oldest first) using ls -tr
+  local sorted_dirs
+  sorted_dirs=$(ls -tr "$YAK_DIR")
+
+  # First pass: display done yaks
+  while IFS= read -r yak_name; do
+    local yak_dir="$YAK_DIR/$yak_name"
+    if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
+      echo "- [x] $yak_name"
     fi
-  done
+  done <<< "$sorted_dirs"
+
+  # Second pass: display undone yaks
+  while IFS= read -r yak_name; do
+    local yak_dir="$YAK_DIR/$yak_name"
+    if [ -d "$yak_dir" ] && [ ! -f "$yak_dir/done" ]; then
+      echo "- [ ] $yak_name"
+    fi
+  done <<< "$sorted_dirs"
 }
 
 show_help() {
