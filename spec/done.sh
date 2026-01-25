@@ -35,4 +35,9 @@ Describe 'yx done'
     When run sh -c 'yx add "x marks the spot" && yx done "x marks the spot" && yx list'
     The output should include "- [x] x marks the spot"
   End
+
+  It 'unmarks a done yak with --undo flag'
+    When run sh -c 'yx add "Fix the bug" && yx done "Fix the bug" && yx done --undo "Fix the bug" && yx list'
+    The output should include "- [ ] Fix the bug"
+  End
 End

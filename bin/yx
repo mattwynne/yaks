@@ -35,11 +35,12 @@ show_help() {
 Usage: yx <command> [arguments]
 
 Commands:
-  add <name>    Add a new yak
-  list, ls      List all yaks
-  done <name>   Mark a yak as done
-  rm <name>     Remove a yak by name
-  --help        Show this help message
+  add <name>         Add a new yak
+  list, ls           List all yaks
+  done <name>        Mark a yak as done
+  done --undo <name> Unmark a yak as done
+  rm <name>          Remove a yak by name
+  --help             Show this help message
 EOF
 }
 
@@ -73,13 +74,23 @@ case "$1" in
     list_yaks
     ;;
   done)
-    yak_name="${*:2}"
-    yak_path="$YAK_DIR/$yak_name"
-    if [ ! -d "$yak_path" ]; then
-      echo "Error: yak '$yak_name' not found" >&2
-      exit 1
+    if [ "$2" = "--undo" ]; then
+      yak_name="${*:3}"
+      yak_path="$YAK_DIR/$yak_name"
+      if [ ! -d "$yak_path" ]; then
+        echo "Error: yak '$yak_name' not found" >&2
+        exit 1
+      fi
+      rm -f "$yak_path/done"
+    else
+      yak_name="${*:2}"
+      yak_path="$YAK_DIR/$yak_name"
+      if [ ! -d "$yak_path" ]; then
+        echo "Error: yak '$yak_name' not found" >&2
+        exit 1
+      fi
+      touch "$yak_path/done"
     fi
-    touch "$yak_path/done"
     ;;
   rm)
     yak_name="${*:2}"
