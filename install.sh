@@ -19,12 +19,51 @@ else
     BIN_DIR="$HOME/.local/bin"
 fi
 
-# Determine completion location
-if [ -d "/usr/local/etc/bash_completion.d" ] && [ -w "/usr/local/etc/bash_completion.d" ]; then
-    COMPLETION_DIR="/usr/local/etc/bash_completion.d"
+# Detect user's shell
+DETECTED_SHELL=""
+if [[ "$SHELL" == *"zsh"* ]]; then
+    DETECTED_SHELL="zsh"
+elif [[ "$SHELL" == *"bash"* ]]; then
+    DETECTED_SHELL="bash"
 else
-    COMPLETION_DIR="$HOME/.bash_completion.d"
+    DETECTED_SHELL="bash"  # Default to bash
+fi
+
+# Prompt user to confirm or choose shell
+echo ""
+echo "Detected shell: $DETECTED_SHELL"
+echo "Install completions for:"
+echo "  1) zsh"
+echo "  2) bash"
+if [ "$DETECTED_SHELL" = "zsh" ]; then
+    DEFAULT_CHOICE="1"
+else
+    DEFAULT_CHOICE="2"
+fi
+read -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE
+SHELL_CHOICE="${SHELL_CHOICE:-$DEFAULT_CHOICE}"
+
+if [ "$SHELL_CHOICE" = "1" ]; then
+    INSTALL_SHELL="zsh"
+else
+    INSTALL_SHELL="bash"
+fi
+
+# Determine completion location based on shell
+if [ "$INSTALL_SHELL" = "zsh" ]; then
+    COMPLETION_DIR="$HOME/.zsh/completions"
     mkdir -p "$COMPLETION_DIR"
+    COMPLETION_FILE="yx.zsh"
+    SHELL_CONFIG="$HOME/.zshrc"
+else
+    if [ -d "/usr/local/etc/bash_completion.d" ] && [ -w "/usr/local/etc/bash_completion.d" ]; then
+        COMPLETION_DIR="/usr/local/etc/bash_completion.d"
+    else
+        COMPLETION_DIR="$HOME/.bash_completion.d"
+        mkdir -p "$COMPLETION_DIR"
+    fi
+    COMPLETION_FILE="yx.bash"
+    SHELL_CONFIG="$HOME/.bashrc"
 fi
 
 # Download or copy files
@@ -33,29 +72,22 @@ if [ -f "bin/yx" ]; then
     echo "Installing from local repository..."
     cp bin/yx "$BIN_DIR/yx"
     chmod +x "$BIN_DIR/yx"
-    cp completions/yx.bash "$COMPLETION_DIR/yx"
+    cp "completions/$COMPLETION_FILE" "$COMPLETION_DIR/yx"
 else
     # Download from GitHub
     echo "Downloading from GitHub..."
     REPO_URL="https://raw.githubusercontent.com/mattwynne/yaks/main"
     curl -fsSL "$REPO_URL/bin/yx" -o "$BIN_DIR/yx"
     chmod +x "$BIN_DIR/yx"
-    curl -fsSL "$REPO_URL/completions/yx.bash" -o "$COMPLETION_DIR/yx"
+    curl -fsSL "$REPO_URL/completions/$COMPLETION_FILE" -o "$COMPLETION_DIR/yx"
 fi
 
 echo -e "${GREEN}✓${NC} Installed yx to $BIN_DIR/yx"
 echo -e "${GREEN}✓${NC} Installed completion to $COMPLETION_DIR/yx"
 
 # Check if completion is already sourced
-SHELL_CONFIG=""
-if [ -n "$BASH_VERSION" ]; then
-    SHELL_CONFIG="$HOME/.bashrc"
-elif [ -n "$ZSH_VERSION" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-fi
-
-if [ -n "$SHELL_CONFIG" ] && [ -f "$SHELL_CONFIG" ]; then
-    if ! grep -q "source.*yx" "$SHELL_CONFIG"; then
+if [ -f "$SHELL_CONFIG" ]; then
+    if ! grep -q "source.*completions.*yx\|source.*yx" "$SHELL_CONFIG" 2>/dev/null; then
         echo ""
         echo -e "${YELLOW}To enable tab completion, add this to $SHELL_CONFIG:${NC}"
         echo ""
