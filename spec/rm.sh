@@ -18,4 +18,10 @@ Describe 'yx rm'
     When run sh -c 'yx add "Only yak" && yx rm "Only yak" && yx list'
     The output should equal "You have no yaks. Are you done?"
   End
+
+  It 'removes multi-word yak names without quotes'
+    When run sh -c 'yx add this is a test && yx add another yak && yx rm this is a test && yx list'
+    The output should include "- [ ] another yak"
+    The output should not include "- [ ] this is a test"
+  End
 End

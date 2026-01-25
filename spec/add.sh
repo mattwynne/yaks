@@ -28,4 +28,9 @@ Describe 'yx add'
     The output should include "- [ ] Fix the bug"
     The output should include "- [ ] Write the docs"
   End
+
+  It 'captures multi-word yak names without quotes'
+    When run sh -c 'yx add this is a test && yx list'
+    The output should include "- [ ] this is a test"
+  End
 End

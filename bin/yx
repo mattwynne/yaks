@@ -36,7 +36,7 @@ case "$1" in
     else
       # Single yak mode
       mkdir -p "$YAK_DIR"
-      echo "$2" >> "$YAKS_FILE"
+      echo "${*:2}" >> "$YAKS_FILE"
     fi
     ;;
   list|ls)
@@ -47,19 +47,20 @@ case "$1" in
     fi
     ;;
   rm)
+    yak_name="${*:2}"
     if [ ! -f "$YAKS_FILE" ]; then
-      echo "Error: yak '$2' not found" >&2
+      echo "Error: yak '$yak_name' not found" >&2
       exit 1
     fi
-    if grep -Fxq "$2" "$YAKS_FILE"; then
-      grep -Fxv "$2" "$YAKS_FILE" > "$YAKS_FILE.tmp"
+    if grep -Fxq "$yak_name" "$YAKS_FILE"; then
+      grep -Fxv "$yak_name" "$YAKS_FILE" > "$YAKS_FILE.tmp"
       mv "$YAKS_FILE.tmp" "$YAKS_FILE"
       # Remove the file if it's empty
       if [ ! -s "$YAKS_FILE" ]; then
         rm "$YAKS_FILE"
       fi
     else
-      echo "Error: yak '$2' not found" >&2
+      echo "Error: yak '$yak_name' not found" >&2
       exit 1
     fi
     ;;
