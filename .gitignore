@@ -10,6 +10,6 @@ devenv.local.yaml
 .pre-commit-config.yaml
 
 # yaks data directory
-.yk
+.yaks
 
 .claude

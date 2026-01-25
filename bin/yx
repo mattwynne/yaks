@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-YAK_DIR="${YAK_PATH:-.yk}"
+YAK_DIR="${YAK_PATH:-.yaks}"
 YAKS_FILE="$YAK_DIR/yks"
 
 show_help() {
   cat <<EOF
-Usage: yk <command> [arguments]
+Usage: yx <command> [arguments]
 
 Commands:
   add <name>    Add a new yak
