@@ -35,12 +35,15 @@ show_help() {
 Usage: yx <command> [arguments]
 
 Commands:
-  add <name>         Add a new yak
-  list, ls           List all yaks
-  done <name>        Mark a yak as done
-  done --undo <name> Unmark a yak as done
-  rm <name>          Remove a yak by name
-  --help             Show this help message
+  add <name>              Add a new yak
+  list, ls                List all yaks
+  context [--show] <name> Edit context (uses \$EDITOR) or set from stdin
+                          --show: Display yak with context
+                          --edit: Edit context (default)
+  done <name>             Mark a yak as done
+  done --undo <name>      Unmark a yak as done
+  rm <name>               Remove a yak by name
+  --help                  Show this help message
 EOF
 }
 
@@ -100,6 +103,41 @@ case "$1" in
       exit 1
     fi
     rm -rf "$yak_path"
+    ;;
+  context)
+    if [ "$2" = "--show" ]; then
+      # Show mode
+      yak_name="${*:3}"
+      yak_path="$YAK_DIR/$yak_name"
+      if [ ! -d "$yak_path" ]; then
+        echo "Error: yak '$yak_name' not found" >&2
+        exit 1
+      fi
+      echo "$yak_name"
+      if [ -f "$yak_path/context.md" ]; then
+        echo
+        cat "$yak_path/context.md"
+      fi
+    else
+      # Edit mode (default or --edit)
+      if [ "$2" = "--edit" ]; then
+        yak_name="${*:3}"
+      else
+        yak_name="${*:2}"
+      fi
+      yak_path="$YAK_DIR/$yak_name"
+      if [ ! -d "$yak_path" ]; then
+        echo "Error: yak '$yak_name' not found" >&2
+        exit 1
+      fi
+      if [ -t 0 ]; then
+        # stdin is a terminal, open editor
+        ${EDITOR:-vi} "$yak_path/context.md"
+      else
+        # stdin is piped, read from stdin
+        cat > "$yak_path/context.md"
+      fi
+    fi
     ;;
   *)
     show_help
