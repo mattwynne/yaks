@@ -121,12 +121,14 @@ add_yak() {
       fi
       validate_yak_name "$line" || exit 1
       mkdir -p "$YAK_DIR/$line"
+      touch "$YAK_DIR/$line/context.md"
     done
   else
     # Single yak mode
     local yak_name="$*"
     validate_yak_name "$yak_name" || exit 1
     mkdir -p "$YAK_DIR/$yak_name"
+    touch "$YAK_DIR/$yak_name/context.md"
   fi
 }
 
@@ -266,11 +268,6 @@ sync_yaks() {
   # Merge local yaks into sync_dir (overwrites remote yaks with same name)
   if [ -d "$YAK_DIR" ] && [ "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
     cp -r "$YAK_DIR"/. "$sync_dir"/
-  fi
-
-  # Add .yak marker files to ensure git tracks all directories
-  if [ -d "$sync_dir" ] && [ "$(ls -A "$sync_dir" 2>/dev/null)" ]; then
-    find "$sync_dir" -mindepth 1 -type d -exec touch {}/.yak \;
   fi
 
   # Initialize temp repo and commit

@@ -50,9 +50,9 @@ Describe 'yx sync does not pollute working tree or index'
     cd "$REPO"
     YAK_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
 
-    # Check that no yak marker files appear at root (like claim/.yak)
-    # The bug we're preventing had files like "claim/.yak" at root instead of ".yaks/claim/.yak"
-    When call sh -c "find '$REPO' -maxdepth 1 -name '*.yak' | wc -l | tr -d ' '"
+    # Check that no yak directories appear at root (like claim/)
+    # The bug we're preventing had directories like "claim/" at root instead of ".yaks/claim/"
+    When call sh -c "cd '$REPO' && find . -maxdepth 1 -type d ! -name . ! -name .git ! -name .yaks ! -name '.*' | wc -l | tr -d ' '"
     The output should equal "0"
 
     rm -rf "$ORIGIN" "$REPO"
