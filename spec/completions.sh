@@ -36,4 +36,14 @@ Fix bug"
     "
     The output should equal "Fix bug"
   End
+
+  It 'includes nested yak paths in completions'
+    When run sh -c "
+      yx add 'parent'
+      yx add 'parent/child'
+      yx completions
+    "
+    The output should include "parent"
+    The output should include "parent/child"
+  End
 End

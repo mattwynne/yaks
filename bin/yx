@@ -197,31 +197,30 @@ completions() {
   fi
   local cmd="$1"
   local flag="$2"
-  for yak_dir in "$YAK_DIR"/*; do
-    if [ -d "$yak_dir" ]; then
-      local yak_name
-      yak_name=$(basename "$yak_dir")
-      case "$cmd" in
-        done)
-          if [ "$flag" = "--undo" ]; then
-            # Only show done yaks
-            if [ -f "$yak_dir/done" ]; then
-              echo "$yak_name"
-            fi
-          else
-            # Only show incomplete yaks
-            if [ ! -f "$yak_dir/done" ]; then
-              echo "$yak_name"
-            fi
+
+  # Find all yak directories including nested ones
+  while IFS= read -r yak_path; do
+    local yak_name="${yak_path#$YAK_DIR/}"
+    case "$cmd" in
+      done)
+        if [ "$flag" = "--undo" ]; then
+          # Only show done yaks
+          if [ -f "$yak_path/done" ]; then
+            echo "$yak_name"
           fi
-          ;;
-        *)
-          # Show all yaks
-          echo "$yak_name"
-          ;;
-      esac
-    fi
-  done
+        else
+          # Only show incomplete yaks
+          if [ ! -f "$yak_path/done" ]; then
+            echo "$yak_name"
+          fi
+        fi
+        ;;
+      *)
+        # Show all yaks
+        echo "$yak_name"
+        ;;
+    esac
+  done < <(find "$YAK_DIR" -type d -mindepth 1)
 }
 
 case "$1" in
