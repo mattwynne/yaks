@@ -23,11 +23,20 @@ case "$1" in
     ;;
   add)
     if [ -z "$2" ]; then
-      echo "Error: yak name cannot be empty" >&2
-      exit 1
+      # Interactive mode
+      echo "Enter yaks (empty line to finish):"
+      mkdir -p "$YAK_DIR"
+      while IFS= read -r line; do
+        if [ -z "$line" ]; then
+          break
+        fi
+        echo "$line" >> "$YAKS_FILE"
+      done
+    else
+      # Single yak mode
+      mkdir -p "$YAK_DIR"
+      echo "$2" >> "$YAKS_FILE"
     fi
-    mkdir -p "$YAK_DIR"
-    echo "$2" >> "$YAKS_FILE"
     ;;
   list|ls)
     if [ -f "$YAKS_FILE" ]; then

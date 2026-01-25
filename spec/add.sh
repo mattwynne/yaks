@@ -7,9 +7,25 @@ Describe 'yx add'
     The status should be success
   End
 
-  It 'rejects empty yak names'
-    When run yx add ""
-    The status should be failure
-    The error should include "name cannot be empty"
+  It 'enters interactive mode when run without arguments'
+    Data
+      #|Fix the bug
+      #|Write the docs
+      #|
+    End
+    When run yx add
+    The status should be success
+    The output should include "Enter yaks (empty line to finish)"
+  End
+
+  It 'adds multiple yaks in interactive mode'
+    Data
+      #|Fix the bug
+      #|Write the docs
+      #|
+    End
+    When run sh -c 'yx add && yx list'
+    The output should include "- [ ] Fix the bug"
+    The output should include "- [ ] Write the docs"
   End
 End
