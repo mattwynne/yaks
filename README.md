@@ -1,8 +1,20 @@
-# Yaks - A TODO List for humans and robots
+# Yaks - A non-linear TODO list for humans and robots
 
-A CLI tool for managing TODO lists as a directed acyclic graph (DAG), designed for teams working on software projects.
+Yaks is CLI tool for managing Yak Maps - a TODO list of nested goals - designed for teams of humans and robots working on software projects together.
 
-The name comes from "yak shaving" - when you set out to do task A but discover you need B first, which requires C, creating chains of dependencies.
+A Yak Map is basically the same as a [Mikado Graph](https://mikadomethod.info) or a [Discovery Tree](https://www.fastagile.io/method/product-mapping-and-discovery-trees). But I like calling it a Yak Map.
+
+![image](https://github.com/user-attachments/assets/1e935831-7807-4127-a698-3fdb50615080)
+
+## Isn't this just like Beads?
+
+I've been using Yak Maps for several years working on teams of humans. We just used to cobble something together in Miro or whatever. [Beads](https://github.com/steveyegge/beads) was the first tool I've seen that supports this kind of acyclic graph for managing work, and I've found it hugely inspiring in this robot-driven era.
+
+But beads has some shortcomings, for me:
+
+* I like my software simple. I want my tools to do one thing well, and have minimal code and feeatures. Beads, for me, is over-featured and complicated.
+* Yaks all the way down. There are no classifications of task here: epics, stories, tasks and whatnot. Everything is a yak.
+* No more committing your plan to git. Yaks uses a hidden git ref to sync changes, so with `yx sync` anyone with a clone of the repo and a connection to `origin` can be working off the same list at the same time.
 
 ## Installation
 
