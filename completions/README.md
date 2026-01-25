@@ -1,8 +1,8 @@
 # Shell Completion
 
-## Setup
+The install script handles completion setup automatically.
 
-Add to your `~/.bashrc`:
+For manual setup, add to your `~/.bashrc`:
 
 ```bash
 source /path/to/yaks/completions/yx.bash

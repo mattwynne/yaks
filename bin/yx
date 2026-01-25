@@ -44,6 +44,7 @@ Commands:
   done --undo <name>      Unmark a yak as done
   rm <name>               Remove a yak by name
   prune                   Remove all done yaks
+  completions [cmd]       Output yak names for shell completion
   --help                  Show this help message
 EOF
 }
