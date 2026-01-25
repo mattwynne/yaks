@@ -149,6 +149,38 @@ case "$1" in
       fi
     fi
     ;;
+  completions)
+    # Output yak names for shell completion
+    if [ ! -d "$YAK_DIR" ]; then
+      exit 0
+    fi
+    cmd="$2"
+    flag="$3"
+    for yak_dir in "$YAK_DIR"/*; do
+      if [ -d "$yak_dir" ]; then
+        yak_name=$(basename "$yak_dir")
+        case "$cmd" in
+          done)
+            if [ "$flag" = "--undo" ]; then
+              # Only show done yaks
+              if [ -f "$yak_dir/done" ]; then
+                echo "$yak_name"
+              fi
+            else
+              # Only show incomplete yaks
+              if [ ! -f "$yak_dir/done" ]; then
+                echo "$yak_name"
+              fi
+            fi
+            ;;
+          *)
+            # Show all yaks
+            echo "$yak_name"
+            ;;
+        esac
+      fi
+    done
+    ;;
   *)
     show_help
     ;;
