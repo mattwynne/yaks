@@ -12,6 +12,16 @@ validate_yak_name() {
   return 0
 }
 
+require_yak() {
+  local yak_name="$1"
+  local yak_path="$YAK_DIR/$yak_name"
+  if [ ! -d "$yak_path" ]; then
+    echo "Error: yak '$yak_name' not found" >&2
+    return 1
+  fi
+  return 0
+}
+
 list_yaks() {
   if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
     echo "You have no yaks. Are you done?"
@@ -60,151 +70,165 @@ Commands:
 EOF
 }
 
+add_yak() {
+  if [ -z "$1" ]; then
+    # Interactive mode
+    echo "Enter yaks (empty line to finish):"
+    mkdir -p "$YAK_DIR"
+    while IFS= read -r line; do
+      if [ -z "$line" ]; then
+        break
+      fi
+      validate_yak_name "$line" || exit 1
+      mkdir -p "$YAK_DIR/$line"
+    done
+  else
+    # Single yak mode
+    local yak_name="$*"
+    validate_yak_name "$yak_name" || exit 1
+    mkdir -p "$YAK_DIR/$yak_name"
+  fi
+}
+
+done_yak() {
+  if [ "$1" = "--undo" ]; then
+    local yak_name="${*:2}"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    rm -f "$yak_path/done"
+  else
+    local yak_name="$*"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    touch "$yak_path/done"
+  fi
+}
+
+remove_yak() {
+  local yak_name="$*"
+  require_yak "$yak_name" || exit 1
+  local yak_path="$YAK_DIR/$yak_name"
+  rm -rf "$yak_path"
+}
+
+prune_yaks() {
+  if [ -d "$YAK_DIR" ]; then
+    for yak_dir in "$YAK_DIR"/*; do
+      if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
+        rm -rf "$yak_dir"
+      fi
+    done
+  fi
+}
+
+move_yak() {
+  local old_name="$1"
+  shift
+  local new_name="$*"
+  require_yak "$old_name" || exit 1
+  local old_path="$YAK_DIR/$old_name"
+  local new_path="$YAK_DIR/$new_name"
+  validate_yak_name "$new_name" || exit 1
+  mv "$old_path" "$new_path"
+}
+
+context_yak() {
+  if [ "$1" = "--show" ]; then
+    # Show mode
+    local yak_name="${*:2}"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    echo "$yak_name"
+    if [ -f "$yak_path/context.md" ]; then
+      echo
+      cat "$yak_path/context.md"
+    fi
+  else
+    # Edit mode (default or --edit)
+    if [ "$1" = "--edit" ]; then
+      local yak_name="${*:2}"
+    else
+      local yak_name="$*"
+    fi
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    if [ -t 0 ]; then
+      # stdin is a terminal, open editor
+      ${EDITOR:-vi} "$yak_path/context.md"
+    else
+      # stdin is piped, read from stdin
+      cat > "$yak_path/context.md"
+    fi
+  fi
+}
+
+completions() {
+  # Output yak names for shell completion
+  if [ ! -d "$YAK_DIR" ]; then
+    return 0
+  fi
+  local cmd="$1"
+  local flag="$2"
+  for yak_dir in "$YAK_DIR"/*; do
+    if [ -d "$yak_dir" ]; then
+      local yak_name
+      yak_name=$(basename "$yak_dir")
+      case "$cmd" in
+        done)
+          if [ "$flag" = "--undo" ]; then
+            # Only show done yaks
+            if [ -f "$yak_dir/done" ]; then
+              echo "$yak_name"
+            fi
+          else
+            # Only show incomplete yaks
+            if [ ! -f "$yak_dir/done" ]; then
+              echo "$yak_name"
+            fi
+          fi
+          ;;
+        *)
+          # Show all yaks
+          echo "$yak_name"
+          ;;
+      esac
+    fi
+  done
+}
+
 case "$1" in
-  --help)
-    show_help
-    ;;
-  "")
+  --help|"")
     show_help
     ;;
   add)
-    if [ -z "$2" ]; then
-      # Interactive mode
-      echo "Enter yaks (empty line to finish):"
-      mkdir -p "$YAK_DIR"
-      while IFS= read -r line; do
-        if [ -z "$line" ]; then
-          break
-        fi
-        validate_yak_name "$line" || exit 1
-        mkdir -p "$YAK_DIR/$line"
-      done
-    else
-      # Single yak mode
-      yak_name="${*:2}"
-      validate_yak_name "$yak_name" || exit 1
-      mkdir -p "$YAK_DIR/$yak_name"
-    fi
+    shift
+    add_yak "$@"
     ;;
   list|ls)
     list_yaks
     ;;
   done)
-    if [ "$2" = "--undo" ]; then
-      yak_name="${*:3}"
-      yak_path="$YAK_DIR/$yak_name"
-      if [ ! -d "$yak_path" ]; then
-        echo "Error: yak '$yak_name' not found" >&2
-        exit 1
-      fi
-      rm -f "$yak_path/done"
-    else
-      yak_name="${*:2}"
-      yak_path="$YAK_DIR/$yak_name"
-      if [ ! -d "$yak_path" ]; then
-        echo "Error: yak '$yak_name' not found" >&2
-        exit 1
-      fi
-      touch "$yak_path/done"
-    fi
+    shift
+    done_yak "$@"
     ;;
   rm)
-    yak_name="${*:2}"
-    yak_path="$YAK_DIR/$yak_name"
-    if [ ! -d "$yak_path" ]; then
-      echo "Error: yak '$yak_name' not found" >&2
-      exit 1
-    fi
-    rm -rf "$yak_path"
+    shift
+    remove_yak "$@"
     ;;
   prune)
-    if [ -d "$YAK_DIR" ]; then
-      for yak_dir in "$YAK_DIR"/*; do
-        if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
-          rm -rf "$yak_dir"
-        fi
-      done
-    fi
+    prune_yaks
     ;;
   move|mv)
-    old_name="$2"
-    shift 2
-    new_name="$*"
-    old_path="$YAK_DIR/$old_name"
-    new_path="$YAK_DIR/$new_name"
-    if [ ! -d "$old_path" ]; then
-      echo "Error: yak '$old_name' not found" >&2
-      exit 1
-    fi
-    validate_yak_name "$new_name" || exit 1
-    mv "$old_path" "$new_path"
+    shift
+    move_yak "$@"
     ;;
   context)
-    if [ "$2" = "--show" ]; then
-      # Show mode
-      yak_name="${*:3}"
-      yak_path="$YAK_DIR/$yak_name"
-      if [ ! -d "$yak_path" ]; then
-        echo "Error: yak '$yak_name' not found" >&2
-        exit 1
-      fi
-      echo "$yak_name"
-      if [ -f "$yak_path/context.md" ]; then
-        echo
-        cat "$yak_path/context.md"
-      fi
-    else
-      # Edit mode (default or --edit)
-      if [ "$2" = "--edit" ]; then
-        yak_name="${*:3}"
-      else
-        yak_name="${*:2}"
-      fi
-      yak_path="$YAK_DIR/$yak_name"
-      if [ ! -d "$yak_path" ]; then
-        echo "Error: yak '$yak_name' not found" >&2
-        exit 1
-      fi
-      if [ -t 0 ]; then
-        # stdin is a terminal, open editor
-        ${EDITOR:-vi} "$yak_path/context.md"
-      else
-        # stdin is piped, read from stdin
-        cat > "$yak_path/context.md"
-      fi
-    fi
+    shift
+    context_yak "$@"
     ;;
   completions)
-    # Output yak names for shell completion
-    if [ ! -d "$YAK_DIR" ]; then
-      exit 0
-    fi
-    cmd="$2"
-    flag="$3"
-    for yak_dir in "$YAK_DIR"/*; do
-      if [ -d "$yak_dir" ]; then
-        yak_name=$(basename "$yak_dir")
-        case "$cmd" in
-          done)
-            if [ "$flag" = "--undo" ]; then
-              # Only show done yaks
-              if [ -f "$yak_dir/done" ]; then
-                echo "$yak_name"
-              fi
-            else
-              # Only show incomplete yaks
-              if [ ! -f "$yak_dir/done" ]; then
-                echo "$yak_name"
-              fi
-            fi
-            ;;
-          *)
-            # Show all yaks
-            echo "$yak_name"
-            ;;
-        esac
-      fi
-    done
+    shift
+    completions "$@"
     ;;
   *)
     show_help
