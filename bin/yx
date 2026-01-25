@@ -43,6 +43,7 @@ Commands:
   done <name>             Mark a yak as done
   done --undo <name>      Unmark a yak as done
   rm <name>               Remove a yak by name
+  prune                   Remove all done yaks
   --help                  Show this help message
 EOF
 }
@@ -103,6 +104,15 @@ case "$1" in
       exit 1
     fi
     rm -rf "$yak_path"
+    ;;
+  prune)
+    if [ -d "$YAK_DIR" ]; then
+      for yak_dir in "$YAK_DIR"/*; do
+        if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
+          rm -rf "$yak_dir"
+        fi
+      done
+    fi
     ;;
   context)
     if [ "$2" = "--show" ]; then
