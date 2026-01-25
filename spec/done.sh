@@ -3,7 +3,11 @@ Describe 'yx done'
   AfterEach 'rm -rf "$YAK_PATH"'
 
   It 'marks a yak as done'
-    When run sh -c 'yx add "Fix the bug" && yx done "Fix the bug" && yx list'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx done 'Fix the bug'
+      yx list
+    "
     The output should include "- [x] Fix the bug"
   End
 
@@ -20,24 +24,40 @@ Describe 'yx done'
       #|Add tests
       #|
     End
-    When run sh -c 'yx add && yx done "Write the docs" && yx list'
+    When run sh -c "
+      yx add
+      yx done 'Write the docs'
+      yx list
+    "
     The output should include "- [ ] Fix the bug"
     The output should include "- [x] Write the docs"
     The output should include "- [ ] Add tests"
   End
 
   It 'handles yak names starting with x'
-    When run sh -c 'yx add "x marks the spot" && yx list'
+    When run sh -c "
+      yx add 'x marks the spot'
+      yx list
+    "
     The output should include "- [ ] x marks the spot"
   End
 
   It 'marks yak starting with x as done correctly'
-    When run sh -c 'yx add "x marks the spot" && yx done "x marks the spot" && yx list'
+    When run sh -c "
+      yx add 'x marks the spot'
+      yx done 'x marks the spot'
+      yx list
+    "
     The output should include "- [x] x marks the spot"
   End
 
   It 'unmarks a done yak with --undo flag'
-    When run sh -c 'yx add "Fix the bug" && yx done "Fix the bug" && yx done --undo "Fix the bug" && yx list'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx done 'Fix the bug'
+      yx done --undo 'Fix the bug'
+      yx list
+    "
     The output should include "- [ ] Fix the bug"
   End
 End

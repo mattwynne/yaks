@@ -8,7 +8,10 @@ Describe 'yx list'
   End
 
   It 'lists added yaks'
-    When run sh -c 'yx add "Fix the bug" && yx list'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx list
+    "
     The output should equal "- [ ] Fix the bug"
   End
 
@@ -18,7 +21,10 @@ Describe 'yx list'
   End
 
   It 'supports ls as an alias for list (with yaks)'
-    When run sh -c 'yx add "Fix the bug" && yx ls'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx ls
+    "
     The output should equal "- [ ] Fix the bug"
   End
 End

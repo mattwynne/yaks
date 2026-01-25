@@ -3,7 +3,12 @@ Describe 'yx rm'
   AfterEach 'rm -rf "$YAK_PATH"'
 
   It 'removes a yak by name'
-    When run sh -c 'yx add "Fix the bug" && yx add "Write docs" && yx rm "Fix the bug" && yx list'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx add 'Write docs'
+      yx rm 'Fix the bug'
+      yx list
+    "
     The output should include "- [ ] Write docs"
     The output should not include "- [ ] Fix the bug"
   End
@@ -15,12 +20,21 @@ Describe 'yx rm'
   End
 
   It 'handles removing the only yak'
-    When run sh -c 'yx add "Only yak" && yx rm "Only yak" && yx list'
+    When run sh -c "
+      yx add 'Only yak'
+      yx rm 'Only yak'
+      yx list
+    "
     The output should equal "You have no yaks. Are you done?"
   End
 
   It 'removes multi-word yak names without quotes'
-    When run sh -c 'yx add this is a test && yx add another yak && yx rm this is a test && yx list'
+    When run sh -c "
+      yx add this is a test
+      yx add another yak
+      yx rm this is a test
+      yx list
+    "
     The output should include "- [ ] another yak"
     The output should not include "- [ ] this is a test"
   End
