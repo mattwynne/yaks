@@ -33,7 +33,18 @@ list_yaks() {
   # 1. By directory depth (parents before children)
   # 2. By creation time (oldest first) within each level
   local all_yaks
-  all_yaks=$(cd "$YAK_DIR" && find . -mindepth 1 -type d -printf '%d %T@ %p\n' | sort -k1,1n -k2,2n | cut -d' ' -f3- | sed 's|^\./||')
+  all_yaks=$(cd "$YAK_DIR" && find . -mindepth 1 -type d | while read -r path; do
+    depth=$(echo "$path" | tr -cd '/' | wc -c)
+    # Get mtime - portable across macOS and Linux
+    if stat -f "%m" "$path" >/dev/null 2>&1; then
+      # macOS/BSD
+      mtime=$(stat -f "%m" "$path")
+    else
+      # Linux/GNU
+      mtime=$(stat -c "%Y" "$path")
+    fi
+    printf "%d %s %s\n" "$depth" "$mtime" "$path"
+  done | sort -k1,1n -k2,2n | cut -d' ' -f3- | sed 's|^\./||')
 
   # Helper function to display a yak with proper indentation
   display_yak() {
