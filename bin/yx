@@ -1,0 +1,442 @@
+#!/usr/bin/env bash
+
+YAK_DIR="${YAK_PATH:-.yaks}"
+
+migrate_done_to_state() {
+  if [ ! -d "$YAK_DIR" ]; then
+    return 0
+  fi
+
+  # Find all done files and convert them to state files
+  while IFS= read -r done_file; do
+    local yak_dir=$(dirname "$done_file")
+    echo "done" > "$yak_dir/state"
+    rm -f "$done_file"
+  done < <(find "$YAK_DIR" -type f -name "done")
+}
+
+log_command() {
+  # Only commit if we're in a git repository
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    return 0
+  fi
+
+  # Skip if YAK_DIR doesn't exist or is empty
+  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    return 0
+  fi
+
+  local commit_message="$*"
+
+  # Create a temp directory for the commit
+  local temp_dir=$(mktemp -d)
+  trap "rm -rf '$temp_dir'" RETURN
+
+  # Copy yaks to temp dir
+  cp -r "$YAK_DIR"/. "$temp_dir"/
+
+  # Initialize temp repo and create commit
+  git -C "$temp_dir" init --quiet
+  git -C "$temp_dir" add -A
+
+  # Get git user info from main repo or use defaults
+  local user_name=$(git config user.name 2>/dev/null || echo "Yak User")
+  local user_email=$(git config user.email 2>/dev/null || echo "yak@local")
+  git -C "$temp_dir" config user.name "$user_name"
+  git -C "$temp_dir" config user.email "$user_email"
+
+  git -C "$temp_dir" commit --allow-empty -m "$commit_message" --quiet
+
+  # Get the tree from the temp commit
+  local tree=$(git -C "$temp_dir" rev-parse HEAD^{tree})
+
+  # Fetch objects from temp repo into main repo
+  git fetch "$temp_dir" HEAD >/dev/null 2>&1
+
+  # Get parent commit if refs/notes/yaks exists
+  local parent_args=""
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    parent_args="-p $(git rev-parse refs/notes/yaks)"
+  fi
+
+  # Create commit on refs/notes/yaks with proper parent
+  local new_commit=$(git commit-tree $tree $parent_args -m "$commit_message")
+  git update-ref refs/notes/yaks "$new_commit"
+}
+
+validate_yak_name() {
+  local name="$1"
+  # Reject characters that are invalid on POSIX or Windows: \ : * ? | < > "
+  # Forward slash is allowed for nesting
+  if [[ "$name" =~ [\\:\*\?\|\<\>\"] ]]; then
+    echo "Invalid yak name: contains forbidden characters (\\ : * ? | < > \")" >&2
+    return 1
+  fi
+  return 0
+}
+
+require_yak() {
+  local yak_name="$1"
+  local yak_path="$YAK_DIR/$yak_name"
+  if [ ! -d "$yak_path" ]; then
+    echo "Error: yak '$yak_name' not found" >&2
+    return 1
+  fi
+  return 0
+}
+
+list_yaks() {
+  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    echo "You have no yaks. Are you done?"
+    return
+  fi
+
+  # Helper function to display a yak with proper indentation
+  display_yak() {
+    local yak_name="$1"
+    local depth=$(echo "$yak_name" | tr -cd '/' | wc -c | xargs)
+    local indent=""
+    if [ "$depth" -gt 0 ]; then
+      indent=$(printf '  %.0s' $(seq 1 $depth))
+    fi
+    local display_name=$(basename "$yak_name")
+    local yak_dir="$YAK_DIR/$yak_name"
+
+    local state="todo"
+    if [ -f "$yak_dir/state" ]; then
+      state=$(cat "$yak_dir/state")
+    fi
+
+    if [ "$state" = "done" ]; then
+      echo -e "\e[90m${indent}- [x] $display_name\e[0m"
+    else
+      echo "${indent}- [ ] $display_name"
+    fi
+  }
+
+  # Recursive function to list yaks in a directory
+  list_dir() {
+    local parent_dir="$1"
+
+    # Find immediate children (not recursive)
+    local children=$(cd "$YAK_DIR" && find "$parent_dir" -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||')
+
+    # Sort children by: done status (done first), then mtime (oldest first)
+    local sorted_children=$(echo "$children" | while read -r child; do
+      [ -z "$child" ] && continue
+      local full_path="$YAK_DIR/$child"
+
+      # Get mtime - portable across macOS and Linux
+      local mtime
+      if stat -f "%m" "$full_path" >/dev/null 2>&1; then
+        # macOS/BSD
+        mtime=$(stat -f "%m" "$full_path" 2>/dev/null)
+      else
+        # Linux/GNU
+        mtime=$(stat -c "%Y" "$full_path" 2>/dev/null)
+      fi
+
+      # Get done status (0 = done, 1 = undone)
+      local done_flag=1
+      if [ -f "$full_path/state" ]; then
+        local state=$(cat "$full_path/state")
+        if [ "$state" = "done" ]; then
+          done_flag=0
+        fi
+      fi
+
+      printf "%d\t%015d\t%s\t%s\n" "$done_flag" "$mtime" "$child" "$child"
+    done | sort -t$'\t' -k1,1n -k2,2n -k3,3 | cut -f4-)
+
+    # Display each child and recurse
+    while IFS= read -r child; do
+      [ -z "$child" ] && continue
+      display_yak "$child"
+      list_dir "$child"
+    done <<< "$sorted_children"
+  }
+
+  # Start listing from root
+  list_dir "."
+}
+
+show_help() {
+  cat <<EOF
+Usage: yx <command> [arguments]
+
+Commands:
+  add <name>              Add a new yak
+  list, ls                List all yaks
+  context [--show] <name> Edit context (uses \$EDITOR) or set from stdin
+                          --show: Display yak with context
+                          --edit: Edit context (default)
+  done <name>             Mark a yak as done
+  done --undo <name>      Unmark a yak as done
+  rm <name>               Remove a yak by name
+  move <old> <new>        Rename a yak
+  mv <old> <new>          Alias for move
+  prune                   Remove all done yaks
+  sync                    Push and pull yaks to/from origin via git ref
+  completions [cmd]       Output yak names for shell completion
+  --help                  Show this help message
+EOF
+}
+
+add_yak() {
+  if [ -z "$1" ]; then
+    # Interactive mode
+    echo "Enter yaks (empty line to finish):"
+    mkdir -p "$YAK_DIR"
+    while IFS= read -r line; do
+      if [ -z "$line" ]; then
+        break
+      fi
+      validate_yak_name "$line" || exit 1
+      mkdir -p "$YAK_DIR/$line"
+      echo "todo" > "$YAK_DIR/$line/state"
+      touch "$YAK_DIR/$line/context.md"
+      log_command "add $line"
+    done
+  else
+    # Single yak mode
+    local yak_name="$*"
+    validate_yak_name "$yak_name" || exit 1
+    mkdir -p "$YAK_DIR/$yak_name"
+    echo "todo" > "$YAK_DIR/$yak_name/state"
+    touch "$YAK_DIR/$yak_name/context.md"
+    log_command "add $yak_name"
+  fi
+}
+
+done_yak() {
+  if [ "$1" = "--undo" ]; then
+    local yak_name="${*:2}"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    echo "todo" > "$yak_path/state"
+    log_command "done --undo $yak_name"
+  else
+    local yak_name="$*"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    echo "done" > "$yak_path/state"
+    log_command "done $yak_name"
+  fi
+}
+
+remove_yak() {
+  local yak_name="$*"
+  require_yak "$yak_name" || exit 1
+  local yak_path="$YAK_DIR/$yak_name"
+  rm -rf "$yak_path"
+}
+
+prune_yaks() {
+  if [ -d "$YAK_DIR" ]; then
+    for yak_dir in "$YAK_DIR"/*; do
+      if [ -d "$yak_dir" ] && [ -f "$yak_dir/state" ]; then
+        local state=$(cat "$yak_dir/state")
+        if [ "$state" = "done" ]; then
+          rm -rf "$yak_dir"
+        fi
+      fi
+    done
+  fi
+}
+
+move_yak() {
+  local old_name="$1"
+  shift
+  local new_name="$*"
+  require_yak "$old_name" || exit 1
+  local old_path="$YAK_DIR/$old_name"
+  local new_path="$YAK_DIR/$new_name"
+  validate_yak_name "$new_name" || exit 1
+  mv "$old_path" "$new_path"
+}
+
+context_yak() {
+  if [ "$1" = "--show" ]; then
+    # Show mode
+    local yak_name="${*:2}"
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    echo "$yak_name"
+    if [ -f "$yak_path/context.md" ]; then
+      echo
+      cat "$yak_path/context.md"
+    fi
+  else
+    # Edit mode (default or --edit)
+    if [ "$1" = "--edit" ]; then
+      local yak_name="${*:2}"
+    else
+      local yak_name="$*"
+    fi
+    require_yak "$yak_name" || exit 1
+    local yak_path="$YAK_DIR/$yak_name"
+    if [ -t 0 ]; then
+      # stdin is a terminal, open editor
+      ${EDITOR:-vi} "$yak_path/context.md"
+    else
+      # stdin is piped, read from stdin
+      cat > "$yak_path/context.md"
+    fi
+  fi
+}
+
+completions() {
+  # Output yak names for shell completion
+  if [ ! -d "$YAK_DIR" ]; then
+    return 0
+  fi
+  local cmd="$1"
+  local flag="$2"
+
+  # Find all yak directories including nested ones
+  while IFS= read -r yak_path; do
+    local yak_name="${yak_path#$YAK_DIR/}"
+    local state="todo"
+    if [ -f "$yak_path/state" ]; then
+      state=$(cat "$yak_path/state")
+    fi
+
+    case "$cmd" in
+      done)
+        if [ "$flag" = "--undo" ]; then
+          # Only show done yaks
+          if [ "$state" = "done" ]; then
+            echo "$yak_name"
+          fi
+        else
+          # Only show incomplete yaks
+          if [ "$state" != "done" ]; then
+            echo "$yak_name"
+          fi
+        fi
+        ;;
+      *)
+        # Show all yaks
+        echo "$yak_name"
+        ;;
+    esac
+  done < <(find "$YAK_DIR" -mindepth 1 -type d)
+}
+
+sync_yaks() {
+  # Check if we're in a git repository
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Error: not in a git repository" >&2
+    exit 1
+  fi
+
+  # Check if origin remote exists
+  if ! git remote get-url origin > /dev/null 2>&1; then
+    echo "Error: no origin remote configured" >&2
+    exit 1
+  fi
+
+  # Create .yaks directory if it doesn't exist
+  mkdir -p "$YAK_DIR"
+
+  # First, fetch from origin to get latest remote state
+  git fetch origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+
+  # Create a temporary directory to merge local and remote yaks
+  local sync_dir=$(mktemp -d)
+  trap "rm -rf '$sync_dir'" EXIT
+
+  # Extract remote yaks to sync_dir if they exist (using archive to avoid index)
+  if git rev-parse refs/notes/yaks > /dev/null 2>&1; then
+    git archive refs/notes/yaks | tar -x -C "$sync_dir" 2>/dev/null || true
+  fi
+
+  # Merge local yaks into sync_dir (overwrites remote yaks with same name)
+  if [ -d "$YAK_DIR" ] && [ "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    cp -r "$YAK_DIR"/. "$sync_dir"/
+  fi
+
+  # Initialize temp repo and commit
+  git -C "$sync_dir" init --quiet
+  (cd "$sync_dir" && \
+    git add -A && \
+    git config user.email "yak@sync" && \
+    git config user.name "Yak Sync" && \
+    git commit --allow-empty -m "Sync yaks" --no-verify --quiet)
+
+  # Get the parent commit (current refs/notes/yaks)
+  local parent_commit=""
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    parent_commit=$(git rev-parse refs/notes/yaks 2>/dev/null)
+  fi
+
+  # Fetch the commit from temp repo into main repo
+  git fetch "$sync_dir" HEAD >/dev/null 2>&1
+
+  # Create a new commit on refs/notes/yaks with proper parent
+  if [ -n "$parent_commit" ] && git rev-parse "$parent_commit" >/dev/null 2>&1; then
+    local temp_commit=$(git rev-parse FETCH_HEAD 2>/dev/null)
+    local tree=$(git rev-parse "$temp_commit^{tree}" 2>/dev/null)
+    local new_commit=$(git commit-tree "$tree" -p "$parent_commit" -m "Sync yaks" 2>/dev/null)
+    git update-ref refs/notes/yaks "$new_commit"
+  else
+    git update-ref refs/notes/yaks FETCH_HEAD
+  fi
+
+  # Push refs/notes/yaks to origin
+  git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+
+  # Extract final yaks back to YAK_DIR (using archive to avoid index)
+  rm -rf "$YAK_DIR"
+  mkdir -p "$YAK_DIR"
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git archive refs/notes/yaks | tar -x -C "$YAK_DIR" 2>/dev/null || true
+  fi
+
+  rm -rf "$sync_dir"
+}
+
+# Migrate old done files to state files
+migrate_done_to_state
+
+case "$1" in
+  --help|"")
+    show_help
+    ;;
+  add)
+    shift
+    add_yak "$@"
+    ;;
+  list|ls)
+    list_yaks
+    ;;
+  done)
+    shift
+    done_yak "$@"
+    ;;
+  rm)
+    shift
+    remove_yak "$@"
+    ;;
+  prune)
+    prune_yaks
+    ;;
+  move|mv)
+    shift
+    move_yak "$@"
+    ;;
+  context)
+    shift
+    context_yak "$@"
+    ;;
+  completions)
+    shift
+    completions "$@"
+    ;;
+  sync)
+    sync_yaks
+    ;;
+  *)
+    show_help
+    ;;
+esac
