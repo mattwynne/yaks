@@ -21,4 +21,14 @@ Describe 'yx completions install'
     The output should include ".zshrc"
     The output should include "completions/yx.zsh"
   End
+
+  It 'fails gracefully when unable to write to rc file'
+    SHELL="/bin/bash"
+    HOME="/nonexistent"
+    When run yx completions install
+    The status should equal 1
+    The error should include "Failed to write"
+    The error should include "add the following line manually"
+    The error should include "source"
+  End
 End

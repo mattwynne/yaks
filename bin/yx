@@ -387,18 +387,25 @@ install_completions() {
   fi
 
   # Check if already installed
-  if [ -f "$rc_file" ] && grep -q "source.*$completion_file" "$rc_file"; then
+  if [ -f "$rc_file" ] && grep -q "source.*$completion_file" "$rc_file" 2>/dev/null; then
     echo "Completions already installed in $rc_file"
     return 0
   fi
 
-  # Add source line to rc file
-  echo "" >> "$rc_file"
-  echo "# yx completion" >> "$rc_file"
-  echo "source $completion_path" >> "$rc_file"
-
-  echo "Installed completions to $rc_file"
-  echo "Run 'source $rc_file' or restart your shell to enable completions"
+  # Try to add source line to rc file
+  if echo "" >> "$rc_file" 2>/dev/null && \
+     echo "# yx completion" >> "$rc_file" 2>/dev/null && \
+     echo "source $completion_path" >> "$rc_file" 2>/dev/null; then
+    echo "Installed completions to $rc_file"
+    echo "Run 'source $rc_file' or restart your shell to enable completions"
+  else
+    echo "Error: Failed to write to $rc_file" >&2
+    echo "" >&2
+    echo "Please add the following line manually to $rc_file:" >&2
+    echo "" >&2
+    echo "  source $completion_path" >&2
+    return 1
+  fi
 }
 
 completions() {
