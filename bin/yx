@@ -45,7 +45,7 @@ log_command() {
   git -C "$temp_dir" config user.name "$user_name"
   git -C "$temp_dir" config user.email "$user_email"
 
-  git -C "$temp_dir" commit --allow-empty -m "$commit_message" --quiet
+  git -C "$temp_dir" commit --allow-empty -m "$commit_message" --no-verify --quiet
 
   # Get the tree from the temp commit
   local tree=$(git -C "$temp_dir" rev-parse HEAD^{tree})
@@ -229,18 +229,24 @@ remove_yak() {
   require_yak "$yak_name" || exit 1
   local yak_path="$YAK_DIR/$yak_name"
   rm -rf "$yak_path"
+  log_command "rm $yak_name"
 }
 
 prune_yaks() {
   if [ -d "$YAK_DIR" ]; then
+    local pruned=false
     for yak_dir in "$YAK_DIR"/*; do
       if [ -d "$yak_dir" ] && [ -f "$yak_dir/state" ]; then
         local state=$(cat "$yak_dir/state")
         if [ "$state" = "done" ]; then
           rm -rf "$yak_dir"
+          pruned=true
         fi
       fi
     done
+    if [ "$pruned" = "true" ]; then
+      log_command "prune"
+    fi
   fi
 }
 
@@ -253,6 +259,7 @@ move_yak() {
   local new_path="$YAK_DIR/$new_name"
   validate_yak_name "$new_name" || exit 1
   mv "$old_path" "$new_path"
+  log_command "move $old_name $new_name"
 }
 
 context_yak() {
@@ -282,6 +289,7 @@ context_yak() {
       # stdin is piped, read from stdin
       cat > "$yak_path/context.md"
     fi
+    log_command "context $yak_name"
   fi
 }
 
