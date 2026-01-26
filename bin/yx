@@ -344,64 +344,118 @@ sync_yaks() {
     exit 1
   fi
 
-  # Create .yaks directory if it doesn't exist
-  mkdir -p "$YAK_DIR"
-
-  # First, fetch from origin to get latest remote state
-  git fetch origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
-
-  # Create a temporary directory to merge local and remote yaks
-  local sync_dir=$(mktemp -d)
-  trap "rm -rf '$sync_dir'" EXIT
-
-  # Extract remote yaks to sync_dir if they exist (using archive to avoid index)
-  if git rev-parse refs/notes/yaks > /dev/null 2>&1; then
-    git archive refs/notes/yaks | tar -x -C "$sync_dir" 2>/dev/null || true
-  fi
-
-  # Merge local yaks into sync_dir (overwrites remote yaks with same name)
-  if [ -d "$YAK_DIR" ] && [ "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
-    cp -r "$YAK_DIR"/. "$sync_dir"/
-  fi
-
-  # Initialize temp repo and commit
-  git -C "$sync_dir" init --quiet
-  (cd "$sync_dir" && \
-    git add -A && \
-    git config user.email "yak@sync" && \
-    git config user.name "Yak Sync" && \
-    git commit --allow-empty -m "Sync yaks" --no-verify --quiet)
-
-  # Get the parent commit (current refs/notes/yaks)
-  local parent_commit=""
+  # Check if local state needs to be committed
+  local local_ref=""
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    parent_commit=$(git rev-parse refs/notes/yaks 2>/dev/null)
+    local_ref=$(git rev-parse refs/notes/yaks)
+
+    # Check if .yaks differs from what's in refs/notes/yaks
+    if [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+      # Create temp dir with current .yaks content
+      local check_dir=$(mktemp -d)
+      trap "rm -rf '$check_dir'" RETURN
+      cp -r "$YAK_DIR"/. "$check_dir"/
+
+      # Extract ref content to compare
+      local ref_dir=$(mktemp -d)
+      git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
+
+      # Compare (diff returns non-zero if different)
+      if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
+        log_command "sync"
+        local_ref=$(git rev-parse refs/notes/yaks)
+      fi
+
+      rm -rf "$ref_dir"
+    fi
+  elif [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    # No ref exists but we have local yaks, commit them
+    log_command "sync"
+    local_ref=$(git rev-parse refs/notes/yaks 2>/dev/null || echo "")
   fi
 
-  # Fetch the commit from temp repo into main repo
-  git fetch "$sync_dir" HEAD >/dev/null 2>&1
+  # Fetch remote refs/notes/yaks
+  git fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
-  # Create a new commit on refs/notes/yaks with proper parent
-  if [ -n "$parent_commit" ] && git rev-parse "$parent_commit" >/dev/null 2>&1; then
-    local temp_commit=$(git rev-parse FETCH_HEAD 2>/dev/null)
-    local tree=$(git rev-parse "$temp_commit^{tree}" 2>/dev/null)
-    local new_commit=$(git commit-tree "$tree" -p "$parent_commit" -m "Sync yaks" 2>/dev/null)
-    git update-ref refs/notes/yaks "$new_commit"
-  else
-    git update-ref refs/notes/yaks FETCH_HEAD
+  # Check if we have a remote
+  local remote_ref=""
+  if git rev-parse refs/remotes/origin/yaks >/dev/null 2>&1; then
+    remote_ref=$(git rev-parse refs/remotes/origin/yaks)
   fi
 
-  # Push refs/notes/yaks to origin
-  git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+  # Merge logic: last-write-wins (local overwrites remote on conflict)
+  if [ -z "$local_ref" ] && [ -n "$remote_ref" ]; then
+    # No local, just use remote
+    git update-ref refs/notes/yaks "$remote_ref"
+  elif [ -n "$local_ref" ] && [ -z "$remote_ref" ]; then
+    # No remote, just push local (handled below)
+    :
+  elif [ -n "$local_ref" ] && [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
+    # Both exist and differ - merge by combining both trees
+    # Use timestamp to determine which is more recent (last-write-wins)
+    local local_time=$(git log -1 --format=%ct "$local_ref" 2>/dev/null)
+    local remote_time=$(git log -1 --format=%ct "$remote_ref" 2>/dev/null)
 
-  # Extract final yaks back to YAK_DIR (using archive to avoid index)
+    local merge_dir=$(mktemp -d)
+    local newer_dir=$(mktemp -d)
+    local older_dir=$(mktemp -d)
+    trap "rm -rf '$merge_dir' '$newer_dir' '$older_dir'" RETURN
+
+    # Determine which is newer
+    if [ "$local_time" -gt "$remote_time" ]; then
+      # Local is newer
+      git archive "$local_ref" | tar -x -C "$newer_dir" 2>/dev/null || true
+      git archive "$remote_ref" | tar -x -C "$older_dir" 2>/dev/null || true
+    else
+      # Remote is newer or same age
+      git archive "$remote_ref" | tar -x -C "$newer_dir" 2>/dev/null || true
+      git archive "$local_ref" | tar -x -C "$older_dir" 2>/dev/null || true
+    fi
+
+    # Start with older state (gets yaks from both)
+    if [ -d "$older_dir" ] && [ "$(ls -A "$older_dir" 2>/dev/null)" ]; then
+      cp -r "$older_dir"/. "$merge_dir"/
+    fi
+
+    # Overlay newer state (newer wins on conflicts)
+    if [ -d "$newer_dir" ] && [ "$(ls -A "$newer_dir" 2>/dev/null)" ]; then
+      cp -r "$newer_dir"/. "$merge_dir"/
+    fi
+
+    # Create commit from merged state
+    git -C "$merge_dir" init --quiet
+    git -C "$merge_dir" add -A
+    git -C "$merge_dir" config user.name "Yak Sync"
+    git -C "$merge_dir" config user.email "yak@sync"
+    git -C "$merge_dir" commit -m "Merge state" --no-verify --quiet 2>/dev/null || true
+
+    local merged_tree=$(git -C "$merge_dir" rev-parse HEAD^{tree})
+
+    # Fetch tree into main repo
+    git fetch "$merge_dir" HEAD >/dev/null 2>&1
+
+    # Create merge commit
+    local merge_commit=$(git commit-tree "$merged_tree" \
+      -p "$local_ref" \
+      -p "$remote_ref" \
+      -m "Merge yaks")
+    git update-ref refs/notes/yaks "$merge_commit"
+  fi
+
+  # Push to origin
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+  fi
+
+  # Extract final state to .yaks
   rm -rf "$YAK_DIR"
   mkdir -p "$YAK_DIR"
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
     git archive refs/notes/yaks | tar -x -C "$YAK_DIR" 2>/dev/null || true
   fi
 
-  rm -rf "$sync_dir"
+  # Clean up remote tracking ref
+  git update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
 }
 
 # Migrate old done files to state files

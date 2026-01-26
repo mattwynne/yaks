@@ -69,4 +69,26 @@ Describe 'yx sync'
     The output should include "user1 yak"
     The output should include "user2 yak"
   End
+
+  It 'syncs done --undo operations correctly'
+    # User1 adds and marks a yak as done, then syncs
+    YAK_PATH="$USER1/.yaks" "$YX_BIN" add "test yak"
+    YAK_PATH="$USER1/.yaks" "$YX_BIN" done "test yak"
+    sh -c "cd '$USER1' && YAK_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+
+    # User2 syncs and should see it as done
+    sh -c "cd '$USER2' && YAK_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
+    result1=$(sh -c "YAK_PATH='$USER2/.yaks' '$YX_BIN' ls")
+    echo "$result1" | grep -q "\[x\] test yak" || exit 1
+
+    # User1 undoes it and syncs again
+    YAK_PATH="$USER1/.yaks" "$YX_BIN" done --undo "test yak"
+    sh -c "cd '$USER1' && YAK_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+
+    # User2 syncs and should now see it as todo
+    sh -c "cd '$USER2' && YAK_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
+
+    When call sh -c "YAK_PATH='$USER2/.yaks' '$YX_BIN' ls"
+    The output should include "[ ] test yak"
+  End
 End
