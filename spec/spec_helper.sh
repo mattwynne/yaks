@@ -9,6 +9,11 @@
 # This prevents pre-commit hooks (like git-mit) from interfering with test setup
 export GIT_CONFIG_PARAMETERS="'core.hooksPath=/dev/null'"
 
+# Prevent tests from polluting the main repository's git refs
+# Set GIT_CEILING_DIRECTORIES to stop git from finding the main repo
+# when tests use temp directories
+export GIT_CEILING_DIRECTORIES="$(pwd)"
+
 # This callback function will be invoked only once before loading specfiles.
 spec_helper_precheck() {
   # Available functions: info, warn, error, abort, setenv, unsetenv
@@ -25,4 +30,9 @@ spec_helper_loaded() {
 spec_helper_configure() {
   # Available functions: import, before_each, after_each, before_all, after_all
   : import 'support/custom_matcher'
+
+  # Run all tests from a temp directory to prevent git pollution
+  # Add bin to PATH so tests can call yx directly
+  before_all 'TEST_PROJECT_DIR=$(pwd) && export PATH="$TEST_PROJECT_DIR/bin:$PATH" && TEST_WORK_DIR=$(mktemp -d) && cd "$TEST_WORK_DIR"'
+  after_all 'cd "$TEST_PROJECT_DIR" && rm -rf "$TEST_WORK_DIR"'
 }

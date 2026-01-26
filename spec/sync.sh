@@ -1,8 +1,5 @@
 Describe 'yx sync'
   setup_repos() {
-    # Get absolute path to yx command (shellspec runs from project root)
-    YX_BIN="$(pwd)/bin/yx"
-
     # Create origin repo
     ORIGIN=$(mktemp -d)
     git -C "$ORIGIN" init --bare --quiet
@@ -33,8 +30,8 @@ Describe 'yx sync'
   AfterEach 'cleanup_repos'
 
   It 'pushes yaks to origin'
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" add "test yak"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER1/.yaks" "yx" add "test yak"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     # Check that refs/notes/yaks exists in origin
     When call git -C "$ORIGIN" show-ref refs/notes/yaks
@@ -44,52 +41,52 @@ Describe 'yx sync'
 
   It 'pulls yaks from origin'
     # User1 adds a yak and syncs
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" add "shared yak"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER1/.yaks" "yx" add "shared yak"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     # User2 syncs and should get the yak
-    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
 
-    When call sh -c "YAKS_PATH='$USER2/.yaks' '$YX_BIN' ls"
+    When call sh -c "YAKS_PATH='$USER2/.yaks' yx ls"
     The output should include "shared yak"
   End
 
   It 'merges yaks from multiple users'
     # User1 adds a yak
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" add "user1 yak"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER1/.yaks" "yx" add "user1 yak"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     # User2 adds a different yak
-    YAKS_PATH="$USER2/.yaks" "$YX_BIN" add "user2 yak"
-    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER2/.yaks" "yx" add "user2 yak"
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
 
     # User1 syncs again and should have both
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
-    When call sh -c "YAKS_PATH='$USER1/.yaks' '$YX_BIN' ls"
+    When call sh -c "YAKS_PATH='$USER1/.yaks' yx ls"
     The output should include "user1 yak"
     The output should include "user2 yak"
   End
 
   It 'syncs done --undo operations correctly'
     # User1 adds and marks a yak as done, then syncs
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" add "test yak"
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" done "test yak"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER1/.yaks" "yx" add "test yak"
+    YAKS_PATH="$USER1/.yaks" "yx" done "test yak"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     # User2 syncs and should see it as done
-    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
-    result1=$(sh -c "YAKS_PATH='$USER2/.yaks' '$YX_BIN' ls")
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
+    result1=$(sh -c "YAKS_PATH='$USER2/.yaks' yx ls")
     echo "$result1" | grep -q "\[x\] test yak" || exit 1
 
     # User1 undoes it and syncs again
-    YAKS_PATH="$USER1/.yaks" "$YX_BIN" done --undo "test yak"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' '$YX_BIN' sync" 2>&1
+    YAKS_PATH="$USER1/.yaks" "yx" done --undo "test yak"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     # User2 syncs and should now see it as todo
-    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' '$YX_BIN' sync" 2>&1
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
 
-    When call sh -c "YAKS_PATH='$USER2/.yaks' '$YX_BIN' ls"
+    When call sh -c "YAKS_PATH='$USER2/.yaks' yx ls"
     The output should include "[ ] test yak"
   End
 End

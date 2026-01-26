@@ -2,7 +2,6 @@ Describe 'yx sync push'
   It 'can push refs/notes/yaks to bare repo'
     ORIGIN=$(mktemp -d)
     REPO=$(mktemp -d)
-    YX_BIN="$(pwd)/bin/yx"
 
     # Set up bare origin and clone
     git -C "$ORIGIN" init --bare --quiet
@@ -16,9 +15,9 @@ Describe 'yx sync push'
     git -C "$REPO" push -u origin main --quiet
 
     # Add a yak and sync
-    YAKS_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
+    YAKS_PATH="$REPO/.yaks" "yx" add "test yak"
     cd "$REPO"
-    YAKS_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
+    YAKS_PATH="$REPO/.yaks" "yx" sync 2>&1
 
     # Check if refs/notes/yaks exists in origin
     When call git -C "$ORIGIN" show-ref refs/notes/yaks
