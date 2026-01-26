@@ -278,7 +278,7 @@ sync_yaks() {
     git add -A && \
     git config user.email "yak@sync" && \
     git config user.name "Yak Sync" && \
-    git commit --allow-empty -m "Sync yaks" --quiet)
+    git commit --allow-empty -m "Sync yaks" --no-verify --quiet)
 
   # Get the parent commit (current refs/notes/yaks)
   local parent_commit=""

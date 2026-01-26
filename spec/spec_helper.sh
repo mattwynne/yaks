@@ -5,6 +5,10 @@
 # so it is better to set them here.
 # set -eu
 
+# Disable git hooks for all test repositories
+# This prevents pre-commit hooks (like git-mit) from interfering with test setup
+export GIT_CONFIG_PARAMETERS="'core.hooksPath=/dev/null'"
+
 # This callback function will be invoked only once before loading specfiles.
 spec_helper_precheck() {
   # Available functions: info, warn, error, abort, setenv, unsetenv
