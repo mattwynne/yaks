@@ -352,7 +352,63 @@ context_yak() {
   fi
 }
 
+install_completions() {
+  local dry_run=false
+  if [ "$1" = "--dry-run" ]; then
+    dry_run=true
+  fi
+
+  # Detect shell from $SHELL environment variable
+  local shell=""
+  local rc_file=""
+  local completion_file=""
+
+  if [[ "$SHELL" == *"zsh"* ]]; then
+    shell="zsh"
+    rc_file="$HOME/.zshrc"
+    completion_file="completions/yx.zsh"
+  elif [[ "$SHELL" == *"bash"* ]]; then
+    shell="bash"
+    rc_file="$HOME/.bashrc"
+    completion_file="completions/yx.bash"
+  else
+    echo "Error: Could not detect shell (bash or zsh)" >&2
+    return 1
+  fi
+
+  # Get absolute path to completions directory
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local completion_path="$script_dir/$completion_file"
+
+  if [ "$dry_run" = true ]; then
+    echo "Would add to $rc_file:"
+    echo "source $completion_path"
+    return 0
+  fi
+
+  # Check if already installed
+  if [ -f "$rc_file" ] && grep -q "source.*$completion_file" "$rc_file"; then
+    echo "Completions already installed in $rc_file"
+    return 0
+  fi
+
+  # Add source line to rc file
+  echo "" >> "$rc_file"
+  echo "# yx completion" >> "$rc_file"
+  echo "source $completion_path" >> "$rc_file"
+
+  echo "Installed completions to $rc_file"
+  echo "Run 'source $rc_file' or restart your shell to enable completions"
+}
+
 completions() {
+  # Handle install subcommand
+  if [ "$1" = "install" ]; then
+    shift
+    install_completions "$@"
+    return
+  fi
+
   # Output yak names for shell completion
   local cmd="$1"
   local flag="$2"
