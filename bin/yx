@@ -2,6 +2,68 @@
 
 YAK_DIR="${YAK_PATH:-.yaks}"
 
+migrate_done_to_state() {
+  if [ ! -d "$YAK_DIR" ]; then
+    return 0
+  fi
+
+  # Find all done files and convert them to state files
+  while IFS= read -r done_file; do
+    local yak_dir=$(dirname "$done_file")
+    echo "done" > "$yak_dir/state"
+    rm -f "$done_file"
+  done < <(find "$YAK_DIR" -type f -name "done")
+}
+
+log_command() {
+  # Only commit if we're in a git repository
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    return 0
+  fi
+
+  # Skip if YAK_DIR doesn't exist or is empty
+  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    return 0
+  fi
+
+  local commit_message="$*"
+
+  # Create a temp directory for the commit
+  local temp_dir=$(mktemp -d)
+  trap "rm -rf '$temp_dir'" RETURN
+
+  # Copy yaks to temp dir
+  cp -r "$YAK_DIR"/. "$temp_dir"/
+
+  # Initialize temp repo and create commit
+  git -C "$temp_dir" init --quiet
+  git -C "$temp_dir" add -A
+
+  # Get git user info from main repo or use defaults
+  local user_name=$(git config user.name 2>/dev/null || echo "Yak User")
+  local user_email=$(git config user.email 2>/dev/null || echo "yak@local")
+  git -C "$temp_dir" config user.name "$user_name"
+  git -C "$temp_dir" config user.email "$user_email"
+
+  git -C "$temp_dir" commit --allow-empty -m "$commit_message" --no-verify --quiet
+
+  # Get the tree from the temp commit
+  local tree=$(git -C "$temp_dir" rev-parse HEAD^{tree})
+
+  # Fetch objects from temp repo into main repo
+  git fetch "$temp_dir" HEAD >/dev/null 2>&1
+
+  # Get parent commit if refs/notes/yaks exists
+  local parent_args=""
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    parent_args="-p $(git rev-parse refs/notes/yaks)"
+  fi
+
+  # Create commit on refs/notes/yaks with proper parent
+  local new_commit=$(git commit-tree $tree $parent_args -m "$commit_message")
+  git update-ref refs/notes/yaks "$new_commit"
+}
+
 validate_yak_name() {
   local name="$1"
   # Reject characters that are invalid on POSIX or Windows: \ : * ? | < > "
@@ -40,7 +102,12 @@ list_yaks() {
     local display_name=$(basename "$yak_name")
     local yak_dir="$YAK_DIR/$yak_name"
 
-    if [ -f "$yak_dir/done" ]; then
+    local state="todo"
+    if [ -f "$yak_dir/state" ]; then
+      state=$(cat "$yak_dir/state")
+    fi
+
+    if [ "$state" = "done" ]; then
       echo -e "\e[90m${indent}- [x] $display_name\e[0m"
     else
       echo "${indent}- [ ] $display_name"
@@ -71,8 +138,11 @@ list_yaks() {
 
       # Get done status (0 = done, 1 = undone)
       local done_flag=1
-      if [ -f "$full_path/done" ]; then
-        done_flag=0
+      if [ -f "$full_path/state" ]; then
+        local state=$(cat "$full_path/state")
+        if [ "$state" = "done" ]; then
+          done_flag=0
+        fi
       fi
 
       printf "%d\t%015d\t%s\t%s\n" "$done_flag" "$mtime" "$child" "$child"
@@ -123,14 +193,18 @@ add_yak() {
       fi
       validate_yak_name "$line" || exit 1
       mkdir -p "$YAK_DIR/$line"
+      echo "todo" > "$YAK_DIR/$line/state"
       touch "$YAK_DIR/$line/context.md"
+      log_command "add $line"
     done
   else
     # Single yak mode
     local yak_name="$*"
     validate_yak_name "$yak_name" || exit 1
     mkdir -p "$YAK_DIR/$yak_name"
+    echo "todo" > "$YAK_DIR/$yak_name/state"
     touch "$YAK_DIR/$yak_name/context.md"
+    log_command "add $yak_name"
   fi
 }
 
@@ -139,12 +213,14 @@ done_yak() {
     local yak_name="${*:2}"
     require_yak "$yak_name" || exit 1
     local yak_path="$YAK_DIR/$yak_name"
-    rm -f "$yak_path/done"
+    echo "todo" > "$yak_path/state"
+    log_command "done --undo $yak_name"
   else
     local yak_name="$*"
     require_yak "$yak_name" || exit 1
     local yak_path="$YAK_DIR/$yak_name"
-    touch "$yak_path/done"
+    echo "done" > "$yak_path/state"
+    log_command "done $yak_name"
   fi
 }
 
@@ -153,15 +229,24 @@ remove_yak() {
   require_yak "$yak_name" || exit 1
   local yak_path="$YAK_DIR/$yak_name"
   rm -rf "$yak_path"
+  log_command "rm $yak_name"
 }
 
 prune_yaks() {
   if [ -d "$YAK_DIR" ]; then
+    local pruned=false
     for yak_dir in "$YAK_DIR"/*; do
-      if [ -d "$yak_dir" ] && [ -f "$yak_dir/done" ]; then
-        rm -rf "$yak_dir"
+      if [ -d "$yak_dir" ] && [ -f "$yak_dir/state" ]; then
+        local state=$(cat "$yak_dir/state")
+        if [ "$state" = "done" ]; then
+          rm -rf "$yak_dir"
+          pruned=true
+        fi
       fi
     done
+    if [ "$pruned" = "true" ]; then
+      log_command "prune"
+    fi
   fi
 }
 
@@ -174,6 +259,7 @@ move_yak() {
   local new_path="$YAK_DIR/$new_name"
   validate_yak_name "$new_name" || exit 1
   mv "$old_path" "$new_path"
+  log_command "move $old_name $new_name"
 }
 
 context_yak() {
@@ -203,6 +289,7 @@ context_yak() {
       # stdin is piped, read from stdin
       cat > "$yak_path/context.md"
     fi
+    log_command "context $yak_name"
   fi
 }
 
@@ -217,16 +304,21 @@ completions() {
   # Find all yak directories including nested ones
   while IFS= read -r yak_path; do
     local yak_name="${yak_path#$YAK_DIR/}"
+    local state="todo"
+    if [ -f "$yak_path/state" ]; then
+      state=$(cat "$yak_path/state")
+    fi
+
     case "$cmd" in
       done)
         if [ "$flag" = "--undo" ]; then
           # Only show done yaks
-          if [ -f "$yak_path/done" ]; then
+          if [ "$state" = "done" ]; then
             echo "$yak_name"
           fi
         else
           # Only show incomplete yaks
-          if [ ! -f "$yak_path/done" ]; then
+          if [ "$state" != "done" ]; then
             echo "$yak_name"
           fi
         fi
@@ -252,65 +344,122 @@ sync_yaks() {
     exit 1
   fi
 
-  # Create .yaks directory if it doesn't exist
-  mkdir -p "$YAK_DIR"
-
-  # First, fetch from origin to get latest remote state
-  git fetch origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
-
-  # Create a temporary directory to merge local and remote yaks
-  local sync_dir=$(mktemp -d)
-  trap "rm -rf '$sync_dir'" EXIT
-
-  # Extract remote yaks to sync_dir if they exist (using archive to avoid index)
-  if git rev-parse refs/notes/yaks > /dev/null 2>&1; then
-    git archive refs/notes/yaks | tar -x -C "$sync_dir" 2>/dev/null || true
-  fi
-
-  # Merge local yaks into sync_dir (overwrites remote yaks with same name)
-  if [ -d "$YAK_DIR" ] && [ "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
-    cp -r "$YAK_DIR"/. "$sync_dir"/
-  fi
-
-  # Initialize temp repo and commit
-  git -C "$sync_dir" init --quiet
-  (cd "$sync_dir" && \
-    git add -A && \
-    git config user.email "yak@sync" && \
-    git config user.name "Yak Sync" && \
-    git commit --allow-empty -m "Sync yaks" --no-verify --quiet)
-
-  # Get the parent commit (current refs/notes/yaks)
-  local parent_commit=""
+  # Check if local state needs to be committed
+  local local_ref=""
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    parent_commit=$(git rev-parse refs/notes/yaks 2>/dev/null)
+    local_ref=$(git rev-parse refs/notes/yaks)
+
+    # Check if .yaks differs from what's in refs/notes/yaks
+    if [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+      # Create temp dir with current .yaks content
+      local check_dir=$(mktemp -d)
+      trap "rm -rf '$check_dir'" RETURN
+      cp -r "$YAK_DIR"/. "$check_dir"/
+
+      # Extract ref content to compare
+      local ref_dir=$(mktemp -d)
+      git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
+
+      # Compare (diff returns non-zero if different)
+      if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
+        log_command "sync"
+        local_ref=$(git rev-parse refs/notes/yaks)
+      fi
+
+      rm -rf "$ref_dir"
+    fi
+  elif [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    # No ref exists but we have local yaks, commit them
+    log_command "sync"
+    local_ref=$(git rev-parse refs/notes/yaks 2>/dev/null || echo "")
   fi
 
-  # Fetch the commit from temp repo into main repo
-  git fetch "$sync_dir" HEAD >/dev/null 2>&1
+  # Fetch remote refs/notes/yaks
+  git fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
-  # Create a new commit on refs/notes/yaks with proper parent
-  if [ -n "$parent_commit" ] && git rev-parse "$parent_commit" >/dev/null 2>&1; then
-    local temp_commit=$(git rev-parse FETCH_HEAD 2>/dev/null)
-    local tree=$(git rev-parse "$temp_commit^{tree}" 2>/dev/null)
-    local new_commit=$(git commit-tree "$tree" -p "$parent_commit" -m "Sync yaks" 2>/dev/null)
-    git update-ref refs/notes/yaks "$new_commit"
-  else
-    git update-ref refs/notes/yaks FETCH_HEAD
+  # Check if we have a remote
+  local remote_ref=""
+  if git rev-parse refs/remotes/origin/yaks >/dev/null 2>&1; then
+    remote_ref=$(git rev-parse refs/remotes/origin/yaks)
   fi
 
-  # Push refs/notes/yaks to origin
-  git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+  # Merge logic: last-write-wins (local overwrites remote on conflict)
+  if [ -z "$local_ref" ] && [ -n "$remote_ref" ]; then
+    # No local, just use remote
+    git update-ref refs/notes/yaks "$remote_ref"
+  elif [ -n "$local_ref" ] && [ -z "$remote_ref" ]; then
+    # No remote, just push local (handled below)
+    :
+  elif [ -n "$local_ref" ] && [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
+    # Both exist and differ - merge by combining both trees
+    # Use timestamp to determine which is more recent (last-write-wins)
+    local local_time=$(git log -1 --format=%ct "$local_ref" 2>/dev/null)
+    local remote_time=$(git log -1 --format=%ct "$remote_ref" 2>/dev/null)
 
-  # Extract final yaks back to YAK_DIR (using archive to avoid index)
+    local merge_dir=$(mktemp -d)
+    local newer_dir=$(mktemp -d)
+    local older_dir=$(mktemp -d)
+    trap "rm -rf '$merge_dir' '$newer_dir' '$older_dir'" RETURN
+
+    # Determine which is newer
+    if [ "$local_time" -gt "$remote_time" ]; then
+      # Local is newer
+      git archive "$local_ref" | tar -x -C "$newer_dir" 2>/dev/null || true
+      git archive "$remote_ref" | tar -x -C "$older_dir" 2>/dev/null || true
+    else
+      # Remote is newer or same age
+      git archive "$remote_ref" | tar -x -C "$newer_dir" 2>/dev/null || true
+      git archive "$local_ref" | tar -x -C "$older_dir" 2>/dev/null || true
+    fi
+
+    # Start with older state (gets yaks from both)
+    if [ -d "$older_dir" ] && [ "$(ls -A "$older_dir" 2>/dev/null)" ]; then
+      cp -r "$older_dir"/. "$merge_dir"/
+    fi
+
+    # Overlay newer state (newer wins on conflicts)
+    if [ -d "$newer_dir" ] && [ "$(ls -A "$newer_dir" 2>/dev/null)" ]; then
+      cp -r "$newer_dir"/. "$merge_dir"/
+    fi
+
+    # Create commit from merged state
+    git -C "$merge_dir" init --quiet
+    git -C "$merge_dir" add -A
+    git -C "$merge_dir" config user.name "Yak Sync"
+    git -C "$merge_dir" config user.email "yak@sync"
+    git -C "$merge_dir" commit -m "Merge state" --no-verify --quiet 2>/dev/null || true
+
+    local merged_tree=$(git -C "$merge_dir" rev-parse HEAD^{tree})
+
+    # Fetch tree into main repo
+    git fetch "$merge_dir" HEAD >/dev/null 2>&1
+
+    # Create merge commit
+    local merge_commit=$(git commit-tree "$merged_tree" \
+      -p "$local_ref" \
+      -p "$remote_ref" \
+      -m "Merge yaks")
+    git update-ref refs/notes/yaks "$merge_commit"
+  fi
+
+  # Push to origin
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+  fi
+
+  # Extract final state to .yaks
   rm -rf "$YAK_DIR"
   mkdir -p "$YAK_DIR"
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
     git archive refs/notes/yaks | tar -x -C "$YAK_DIR" 2>/dev/null || true
   fi
 
-  rm -rf "$sync_dir"
+  # Clean up remote tracking ref
+  git update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
 }
+
+# Migrate old done files to state files
+migrate_done_to_state
 
 case "$1" in
   --help|"")

@@ -71,4 +71,18 @@ Describe 'yx done'
     The line 1 should equal "- [ ] parent"
     The line 2 should equal $'\e[90m  - [x] child\e[0m'
   End
+
+  It 'migrates old done files to state files'
+    When run sh -c "
+      yx add 'old yak'
+      # Simulate old format by creating done file directly
+      touch \"\$YAK_PATH/old yak/done\"
+      rm -f \"\$YAK_PATH/old yak/state\"
+      # Any yx command should trigger migration
+      yx list
+      # Check that state file now exists
+      [ -f \"\$YAK_PATH/old yak/state\" ] && cat \"\$YAK_PATH/old yak/state\"
+    "
+    The output should include "done"
+  End
 End
