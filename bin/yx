@@ -393,43 +393,59 @@ sync_yaks() {
     exit 1
   fi
 
-  # Check if local state needs to be committed
-  local local_ref=""
-  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    local_ref=$(git rev-parse refs/notes/yaks)
-
-    # Check if .yaks differs from what's in refs/notes/yaks
-    if [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
-      # Create temp dir with current .yaks content
-      local check_dir=$(mktemp -d)
-      trap "rm -rf '$check_dir'" RETURN
-      cp -r "$YAK_DIR"/. "$check_dir"/
-
-      # Extract ref content to compare
-      local ref_dir=$(mktemp -d)
-      git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
-
-      # Compare (diff returns non-zero if different)
-      if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
-        log_command "sync"
-        local_ref=$(git rev-parse refs/notes/yaks)
-      fi
-
-      rm -rf "$ref_dir"
-    fi
-  elif [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
-    # No ref exists but we have local yaks, commit them
-    log_command "sync"
-    local_ref=$(git rev-parse refs/notes/yaks 2>/dev/null || echo "")
-  fi
-
-  # Fetch remote refs/notes/yaks
+  # Fetch remote refs/notes/yaks FIRST
   git fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
   # Check if we have a remote
   local remote_ref=""
   if git rev-parse refs/remotes/origin/yaks >/dev/null 2>&1; then
     remote_ref=$(git rev-parse refs/remotes/origin/yaks)
+  fi
+
+  # Check local state
+  local local_ref=""
+  local has_local_changes=false
+  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    local_ref=$(git rev-parse refs/notes/yaks)
+
+    # Check if .yaks differs from what's in refs/notes/yaks
+    if [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+      local check_dir=$(mktemp -d)
+      trap "rm -rf '$check_dir'" RETURN
+      cp -r "$YAK_DIR"/. "$check_dir"/
+
+      local ref_dir=$(mktemp -d)
+      git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
+
+      if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
+        has_local_changes=true
+      fi
+
+      rm -rf "$ref_dir"
+    fi
+  elif [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    # No local ref but have .yaks content
+    has_local_changes=true
+  fi
+
+  # If we have local changes and a remote, merge remote into .yaks first
+  if [ "$has_local_changes" = true ] && [ -n "$remote_ref" ]; then
+    local temp_dir=$(mktemp -d)
+    # Extract remote content
+    git archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
+    # Copy local .yaks over it (local files win, but remote files are preserved)
+    cp -r "$YAK_DIR"/. "$temp_dir"/
+    # Replace .yaks with merged content
+    rm -rf "$YAK_DIR"
+    mkdir -p "$YAK_DIR"
+    cp -r "$temp_dir"/. "$YAK_DIR"/
+    rm -rf "$temp_dir"
+  fi
+
+  # Commit local changes if any exist
+  if [ "$has_local_changes" = true ]; then
+    log_command "sync"
+    local_ref=$(git rev-parse refs/notes/yaks)
   fi
 
   # Merge logic: last-write-wins (local overwrites remote on conflict)
@@ -442,10 +458,11 @@ sync_yaks() {
   elif [ -n "$local_ref" ] && [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
     # Both exist and differ - use git merge-tree to merge them
     # Use --allow-unrelated-histories to handle cases where users independently create yaks
-    local merged_tree=$(git merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>/dev/null)
+    local merged_tree=$(git merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>&1)
+    local merge_status=$?
 
     # Check if merge succeeded
-    if [ $? -eq 0 ] && [ -n "$merged_tree" ]; then
+    if [ $merge_status -eq 0 ] && [ -n "$merged_tree" ]; then
       # Create merge commit
       local merge_commit=$(git commit-tree "$merged_tree" \
         -p "$local_ref" \
