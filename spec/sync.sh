@@ -39,6 +39,7 @@ Describe 'yx sync'
     # Check that refs/notes/yaks exists in origin
     When call git -C "$ORIGIN" show-ref refs/notes/yaks
     The status should be success
+    The stdout should be present
   End
 
   It 'pulls yaks from origin'

@@ -28,6 +28,7 @@ Describe 'yx sync - unit tests'
 
     When call git -C "$REPO" rev-parse refs/notes/yaks
     The status should be success
+    The stdout should be present
   End
 
   It 'stores yak directory in refs/notes/yaks'
