@@ -12,7 +12,10 @@ devenv.local.yaml
 # yaks data directory
 .yaks
 
+# Claude Code (ignore local settings but track docs and skills)
 .claude
+!.claude/CLAUDE.md
+!.claude/skills
 
 # worktrees
 .worktrees

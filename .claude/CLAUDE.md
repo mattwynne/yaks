@@ -74,6 +74,8 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 
 **ALWAYS use a worktree when working on a yak. NEVER work directly on main.**
 
+**This is a team tool** - multiple people/agents may be working simultaneously, pushing to main and syncing yaks.
+
 When the user asks you to pick up a yak, follow this workflow EXACTLY:
 
 ### Yak Workflow Checklist
