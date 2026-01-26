@@ -74,14 +74,22 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 
 **ALWAYS use a worktree when working on a yak. NEVER work directly on main.**
 
-When the user asks you to pick up a yak, follow this workflow:
+When the user asks you to pick up a yak, follow this workflow EXACTLY:
 
-1. **Create an isolated worktree** using the `yak-worktree-workflow` skill (or manually via `git worktree add`)
-2. **Read the yak context first** with `yx context --show <yak-name>`
-3. **Ask for clarification** if the context is empty or unclear - do not assume
-4. **Do the work** in the isolated worktree (run tests, make changes, commit)
-5. **Merge back to main** only when the work is complete and verified
-6. **Mark the yak as done** only AFTER the code is merged to main
+### Yak Workflow Checklist
+
+- [ ] **Create worktree**: Use `git worktree add .worktrees/<branch-name> -b <branch-name>`
+- [ ] **Read yak context**: Run `yx context --show <yak-name>` to understand the task
+- [ ] **Ask for clarification**: If context is empty or unclear, ask the user - do not assume
+- [ ] **Do the work**: In the worktree, run tests, make changes, commit
+- [ ] **Verify tests pass**: Run `shellspec` to ensure all tests are green
+- [ ] **Switch to main**: `cd` back to the main repository directory
+- [ ] **Merge to main**: `git merge --no-ff <branch-name> -m "Merge <branch>: <description>"`
+- [ ] **Delete worktree**: `git worktree remove .worktrees/<branch-name>`
+- [ ] **Delete branch**: `git branch -d <branch-name>`
+- [ ] **Mark yak done**: Run `yx done <yak-name>` ONLY after merge and cleanup
+
+**CRITICAL**: NEVER mark a yak as done until AFTER merging to main and deleting the worktree. The order matters.
 
 This applies to ALL yak work, regardless of how "simple" the change appears. No exceptions.
 
