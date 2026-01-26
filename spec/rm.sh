@@ -1,6 +1,6 @@
 Describe 'yx rm'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'removes a yak by name'
     When run sh -c "

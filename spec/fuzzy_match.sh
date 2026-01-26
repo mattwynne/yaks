@@ -1,6 +1,6 @@
 Describe 'fuzzy match on yak names'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'matches a yak by unique substring'
     When run sh -c "

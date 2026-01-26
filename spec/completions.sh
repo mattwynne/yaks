@@ -1,6 +1,6 @@
 Describe 'yx completions'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'outputs nothing when no yaks exist'
     When run yx completions

@@ -1,6 +1,6 @@
 Describe 'yx move'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'renames a yak'
     When run sh -c "
@@ -61,6 +61,16 @@ Describe 'yx move'
   It 'moves a flat yak into a nested position'
     When run sh -c "
       yx add 'parent'
+      yx add 'standalone'
+      yx move 'standalone' 'parent/child'
+      yx list
+    "
+    The line 1 should equal "- [ ] parent"
+    The line 2 should equal "  - [ ] child"
+  End
+
+  It 'implicitly creates parent yaks when moving'
+    When run sh -c "
       yx add 'standalone'
       yx move 'standalone' 'parent/child'
       yx list

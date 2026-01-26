@@ -1,6 +1,6 @@
 Describe 'yx context'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'sets context from stdin (default)'
     When run sh -c "

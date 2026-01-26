@@ -315,6 +315,28 @@ move_yak() {
   local old_path="$YAKS_PATH/$resolved_old"
   local new_path="$YAKS_PATH/$new_name"
   validate_yak_name "$new_name" || exit 1
+
+  # Create parent yaks if they don't exist
+  local parent_dir=$(dirname "$new_name")
+  if [ "$parent_dir" != "." ]; then
+    # Split the parent path and create each level as a yak
+    local current_path=""
+    IFS='/' read -ra PARTS <<< "$parent_dir"
+    for part in "${PARTS[@]}"; do
+      if [ -z "$current_path" ]; then
+        current_path="$part"
+      else
+        current_path="$current_path/$part"
+      fi
+      local yak_path="$YAKS_PATH/$current_path"
+      if [ ! -d "$yak_path" ]; then
+        mkdir -p "$yak_path"
+        echo "todo" > "$yak_path/state"
+        touch "$yak_path/context.md"
+      fi
+    done
+  fi
+
   mv "$old_path" "$new_path"
   log_command "move $resolved_old $new_name"
 }
