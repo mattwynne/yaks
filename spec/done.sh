@@ -1,6 +1,6 @@
 Describe 'yx done'
-  BeforeEach 'export YAK_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAK_PATH"'
+  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
+  AfterEach 'rm -rf "$YAKS_PATH"'
 
   It 'marks a yak as done'
     When run sh -c "
@@ -76,12 +76,12 @@ Describe 'yx done'
     When run sh -c "
       yx add 'old yak'
       # Simulate old format by creating done file directly
-      touch \"\$YAK_PATH/old yak/done\"
-      rm -f \"\$YAK_PATH/old yak/state\"
+      touch \"\$YAKS_PATH/old yak/done\"
+      rm -f \"\$YAKS_PATH/old yak/state\"
       # Any yx command should trigger migration
       yx list
       # Check that state file now exists
-      [ -f \"\$YAK_PATH/old yak/state\" ] && cat \"\$YAK_PATH/old yak/state\"
+      [ -f \"\$YAKS_PATH/old yak/state\" ] && cat \"\$YAKS_PATH/old yak/state\"
     "
     The output should include "done"
   End

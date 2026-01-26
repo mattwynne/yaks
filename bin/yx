@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-YAK_DIR="${YAK_PATH:-.yaks}"
+YAKS_PATH="${YAKS_PATH:-.yaks}"
 
 migrate_done_to_state() {
-  if [ ! -d "$YAK_DIR" ]; then
+  if [ ! -d "$YAKS_PATH" ]; then
     return 0
   fi
 
@@ -12,7 +12,7 @@ migrate_done_to_state() {
     local yak_dir=$(dirname "$done_file")
     echo "done" > "$yak_dir/state"
     rm -f "$done_file"
-  done < <(find "$YAK_DIR" -type f -name "done")
+  done < <(find "$YAKS_PATH" -type f -name "done")
 }
 
 log_command() {
@@ -21,8 +21,8 @@ log_command() {
     return 0
   fi
 
-  # Skip if YAK_DIR doesn't exist or is empty
-  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+  # Skip if YAKS_PATH doesn't exist or is empty
+  if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
     return 0
   fi
 
@@ -33,7 +33,7 @@ log_command() {
   trap "rm -rf '$temp_dir'" RETURN
 
   # Copy yaks to temp dir
-  cp -r "$YAK_DIR"/. "$temp_dir"/
+  cp -r "$YAKS_PATH"/. "$temp_dir"/
 
   # Initialize temp repo and create commit
   git -C "$temp_dir" init --quiet
@@ -76,10 +76,10 @@ validate_yak_name() {
 }
 
 find_all_yaks() {
-  if [ ! -d "$YAK_DIR" ]; then
+  if [ ! -d "$YAKS_PATH" ]; then
     return 0
   fi
-  find "$YAK_DIR" -mindepth 1 -type d
+  find "$YAKS_PATH" -mindepth 1 -type d
 }
 
 is_yak_done() {
@@ -96,7 +96,7 @@ find_yak() {
   local search_term="$1"
 
   # First try exact match
-  if [ -d "$YAK_DIR/$search_term" ]; then
+  if [ -d "$YAKS_PATH/$search_term" ]; then
     echo "$search_term"
     return 0
   fi
@@ -104,7 +104,7 @@ find_yak() {
   # Try fuzzy match - find all yaks containing the search term
   local matches=()
   while IFS= read -r yak_path; do
-    local yak_name="${yak_path#$YAK_DIR/}"
+    local yak_name="${yak_path#$YAKS_PATH/}"
     if [[ "$yak_name" == *"$search_term"* ]]; then
       matches+=("$yak_name")
     fi
@@ -144,7 +144,7 @@ require_yak() {
 }
 
 list_yaks() {
-  if [ ! -d "$YAK_DIR" ] || [ -z "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+  if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
     echo "You have no yaks. Are you done?"
     return
   fi
@@ -158,7 +158,7 @@ list_yaks() {
       indent=$(printf '  %.0s' $(seq 1 $depth))
     fi
     local display_name=$(basename "$yak_name")
-    local yak_dir="$YAK_DIR/$yak_name"
+    local yak_dir="$YAKS_PATH/$yak_name"
 
     local state="todo"
     if [ -f "$yak_dir/state" ]; then
@@ -177,12 +177,12 @@ list_yaks() {
     local parent_dir="$1"
 
     # Find immediate children (not recursive)
-    local children=$(cd "$YAK_DIR" && find "$parent_dir" -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||')
+    local children=$(cd "$YAKS_PATH" && find "$parent_dir" -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||')
 
     # Sort children by: done status (done first), then mtime (oldest first)
     local sorted_children=$(echo "$children" | while read -r child; do
       [ -z "$child" ] && continue
-      local full_path="$YAK_DIR/$child"
+      local full_path="$YAKS_PATH/$child"
 
       # Get mtime - portable across macOS and Linux
       local mtime
@@ -244,24 +244,24 @@ add_yak() {
   if [ -z "$1" ]; then
     # Interactive mode
     echo "Enter yaks (empty line to finish):"
-    mkdir -p "$YAK_DIR"
+    mkdir -p "$YAKS_PATH"
     while IFS= read -r line; do
       if [ -z "$line" ]; then
         break
       fi
       validate_yak_name "$line" || exit 1
-      mkdir -p "$YAK_DIR/$line"
-      echo "todo" > "$YAK_DIR/$line/state"
-      touch "$YAK_DIR/$line/context.md"
+      mkdir -p "$YAKS_PATH/$line"
+      echo "todo" > "$YAKS_PATH/$line/state"
+      touch "$YAKS_PATH/$line/context.md"
       log_command "add $line"
     done
   else
     # Single yak mode
     local yak_name="$*"
     validate_yak_name "$yak_name" || exit 1
-    mkdir -p "$YAK_DIR/$yak_name"
-    echo "todo" > "$YAK_DIR/$yak_name/state"
-    touch "$YAK_DIR/$yak_name/context.md"
+    mkdir -p "$YAKS_PATH/$yak_name"
+    echo "todo" > "$YAKS_PATH/$yak_name/state"
+    touch "$YAKS_PATH/$yak_name/context.md"
     log_command "add $yak_name"
   fi
 }
@@ -271,14 +271,14 @@ done_yak() {
     local yak_name="${*:2}"
     local resolved_name
     resolved_name=$(require_yak "$yak_name") || exit 1
-    local yak_path="$YAK_DIR/$resolved_name"
+    local yak_path="$YAKS_PATH/$resolved_name"
     echo "todo" > "$yak_path/state"
     log_command "done --undo $resolved_name"
   else
     local yak_name="$*"
     local resolved_name
     resolved_name=$(require_yak "$yak_name") || exit 1
-    local yak_path="$YAK_DIR/$resolved_name"
+    local yak_path="$YAKS_PATH/$resolved_name"
     echo "done" > "$yak_path/state"
     log_command "done $resolved_name"
   fi
@@ -288,7 +288,7 @@ remove_yak() {
   local yak_name="$*"
   local resolved_name
   resolved_name=$(require_yak "$yak_name") || exit 1
-  local yak_path="$YAK_DIR/$resolved_name"
+  local yak_path="$YAKS_PATH/$resolved_name"
   rm -rf "$yak_path"
   log_command "rm $resolved_name"
 }
@@ -312,8 +312,8 @@ move_yak() {
   local new_name="$*"
   local resolved_old
   resolved_old=$(require_yak "$old_name") || exit 1
-  local old_path="$YAK_DIR/$resolved_old"
-  local new_path="$YAK_DIR/$new_name"
+  local old_path="$YAKS_PATH/$resolved_old"
+  local new_path="$YAKS_PATH/$new_name"
   validate_yak_name "$new_name" || exit 1
   mv "$old_path" "$new_path"
   log_command "move $resolved_old $new_name"
@@ -325,7 +325,7 @@ context_yak() {
     local yak_name="${*:2}"
     local resolved_name
     resolved_name=$(require_yak "$yak_name") || exit 1
-    local yak_path="$YAK_DIR/$resolved_name"
+    local yak_path="$YAKS_PATH/$resolved_name"
     echo "$resolved_name"
     if [ -f "$yak_path/context.md" ]; then
       echo
@@ -340,7 +340,7 @@ context_yak() {
     fi
     local resolved_name
     resolved_name=$(require_yak "$yak_name") || exit 1
-    local yak_path="$YAK_DIR/$resolved_name"
+    local yak_path="$YAKS_PATH/$resolved_name"
     if [ -t 0 ]; then
       # stdin is a terminal, open editor
       ${EDITOR:-vi} "$yak_path/context.md"
@@ -422,7 +422,7 @@ completions() {
 
   # Find all yak directories including nested ones
   while IFS= read -r yak_path; do
-    local yak_name="${yak_path#$YAK_DIR/}"
+    local yak_name="${yak_path#$YAKS_PATH/}"
     local state="todo"
     if [ -f "$yak_path/state" ]; then
       state=$(cat "$yak_path/state")
@@ -479,10 +479,10 @@ sync_yaks() {
     local_ref=$(git rev-parse refs/notes/yaks)
 
     # Check if .yaks differs from what's in refs/notes/yaks
-    if [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+    if [ -d "$YAKS_PATH" ] && [ -n "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
       local check_dir=$(mktemp -d)
       trap "rm -rf '$check_dir'" RETURN
-      cp -r "$YAK_DIR"/. "$check_dir"/
+      cp -r "$YAKS_PATH"/. "$check_dir"/
 
       local ref_dir=$(mktemp -d)
       git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
@@ -493,7 +493,7 @@ sync_yaks() {
 
       rm -rf "$ref_dir"
     fi
-  elif [ -d "$YAK_DIR" ] && [ -n "$(ls -A "$YAK_DIR" 2>/dev/null)" ]; then
+  elif [ -d "$YAKS_PATH" ] && [ -n "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
     # No local ref but have .yaks content
     has_local_changes=true
   fi
@@ -504,11 +504,11 @@ sync_yaks() {
     # Extract remote content
     git archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
     # Copy local .yaks over it (local files win, but remote files are preserved)
-    cp -r "$YAK_DIR"/. "$temp_dir"/
+    cp -r "$YAKS_PATH"/. "$temp_dir"/
     # Replace .yaks with merged content
-    rm -rf "$YAK_DIR"
-    mkdir -p "$YAK_DIR"
-    cp -r "$temp_dir"/. "$YAK_DIR"/
+    rm -rf "$YAKS_PATH"
+    mkdir -p "$YAKS_PATH"
+    cp -r "$temp_dir"/. "$YAKS_PATH"/
     rm -rf "$temp_dir"
   fi
 
@@ -560,10 +560,10 @@ sync_yaks() {
   fi
 
   # Extract final state to .yaks
-  rm -rf "$YAK_DIR"
-  mkdir -p "$YAK_DIR"
+  rm -rf "$YAKS_PATH"
+  mkdir -p "$YAKS_PATH"
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    git archive refs/notes/yaks | tar -x -C "$YAK_DIR" 2>/dev/null || true
+    git archive refs/notes/yaks | tar -x -C "$YAKS_PATH" 2>/dev/null || true
   fi
 
   # Clean up remote tracking ref

@@ -16,9 +16,9 @@ Describe 'yx sync does not pollute working tree or index'
     git -C "$REPO" push -u origin main --quiet
 
     # Add a yak and sync
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
     cd "$REPO"
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
 
     # Check that nothing is staged (no files in index except what was already there)
     # .yaks/ will show as untracked, which is expected and correct
@@ -46,9 +46,9 @@ Describe 'yx sync does not pollute working tree or index'
     git -C "$REPO" push -u origin main --quiet
 
     # Add a yak and sync
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
     cd "$REPO"
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
 
     # Check that no yak directories appear at root (like claim/)
     # The bug we're preventing had directories like "claim/" at root instead of ".yaks/claim/"

@@ -16,9 +16,9 @@ Describe 'yx sync push'
     git -C "$REPO" push -u origin main --quiet
 
     # Add a yak and sync
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" add "test yak"
     cd "$REPO"
-    YAK_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
+    YAKS_PATH="$REPO/.yaks" "$YX_BIN" sync 2>&1
 
     # Check if refs/notes/yaks exists in origin
     When call git -C "$ORIGIN" show-ref refs/notes/yaks
