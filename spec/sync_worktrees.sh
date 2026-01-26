@@ -1,0 +1,87 @@
+Describe 'yx sync with git worktrees'
+  setup_repos() {
+    # Get absolute path to yx command
+    YX_BIN="$(pwd)/bin/yx"
+
+    # Create origin repo
+    ORIGIN=$(mktemp -d)
+    git -C "$ORIGIN" init --bare --quiet
+
+    # Create main repo
+    MAIN=$(mktemp -d)
+    git -C "$MAIN" init --quiet
+    git -C "$MAIN" remote add origin "$ORIGIN"
+    git -C "$MAIN" config user.email "main@example.com"
+    git -C "$MAIN" config user.name "Main User"
+    echo "# Test Repo" > "$MAIN/README.md"
+    git -C "$MAIN" add README.md
+    git -C "$MAIN" commit -m "Initial commit" --quiet
+    git -C "$MAIN" push -u origin main --quiet
+
+    # Create two worktrees
+    WORKTREE_A="$MAIN/.worktrees/worktree-a"
+    WORKTREE_B="$MAIN/.worktrees/worktree-b"
+    git -C "$MAIN" worktree add "$WORKTREE_A" -b worktree-a --quiet 2>&1
+    git -C "$MAIN" worktree add "$WORKTREE_B" -b worktree-b --quiet 2>&1
+  }
+
+  cleanup_repos() {
+    # Clean up worktrees first
+    if [ -d "$MAIN" ]; then
+      git -C "$MAIN" worktree remove --force "$WORKTREE_A" 2>/dev/null || true
+      git -C "$MAIN" worktree remove --force "$WORKTREE_B" 2>/dev/null || true
+    fi
+    rm -rf "$ORIGIN" "$MAIN"
+  }
+
+  BeforeEach 'setup_repos'
+  AfterEach 'cleanup_repos'
+
+  It 'syncs yaks from worktree A to worktree B'
+    # Add yak in worktree A and sync
+    YAK_PATH="$WORKTREE_A/.yaks" "$YX_BIN" add "yak from A"
+    sh -c "cd '$WORKTREE_A' && YAK_PATH='$WORKTREE_A/.yaks' '$YX_BIN' sync" 2>&1
+
+    # Sync in worktree B should fetch the yak
+    sh -c "cd '$WORKTREE_B' && YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' sync" 2>&1
+
+    When call sh -c "YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' ls"
+    The output should include "yak from A"
+  End
+
+  It 'merges yaks from different worktrees'
+    # Add different yaks in each worktree
+    YAK_PATH="$WORKTREE_A/.yaks" "$YX_BIN" add "yak A"
+    YAK_PATH="$WORKTREE_B/.yaks" "$YX_BIN" add "yak B"
+
+    # Sync worktree A first
+    sh -c "cd '$WORKTREE_A' && YAK_PATH='$WORKTREE_A/.yaks' '$YX_BIN' sync" 2>&1
+
+    # Sync worktree B (should merge both yaks)
+    sh -c "cd '$WORKTREE_B' && YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' sync" 2>&1
+
+    # Both yaks should be in worktree B
+    When call sh -c "YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' ls"
+    The output should include "yak A"
+    The output should include "yak B"
+  End
+
+  It 'handles concurrent edits with last-write-wins'
+    # Add same yak name in both worktrees
+    YAK_PATH="$WORKTREE_A/.yaks" "$YX_BIN" add "shared yak"
+    YAK_PATH="$WORKTREE_B/.yaks" "$YX_BIN" add "shared yak"
+
+    # Mark done in A, leave todo in B
+    YAK_PATH="$WORKTREE_A/.yaks" "$YX_BIN" done "shared yak"
+
+    # Sync A first
+    sh -c "cd '$WORKTREE_A' && YAK_PATH='$WORKTREE_A/.yaks' '$YX_BIN' sync" 2>&1
+
+    # Sync B (will overwrite with todo state - last write wins)
+    sh -c "cd '$WORKTREE_B' && YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' sync" 2>&1
+
+    # Should be todo (B's state won)
+    When call sh -c "YAK_PATH='$WORKTREE_B/.yaks' '$YX_BIN' ls"
+    The output should include "[ ] shared yak"
+  End
+End
