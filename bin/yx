@@ -144,6 +144,13 @@ list_yaks() {
     shift 2
   fi
 
+  # Parse only option
+  local only=""
+  if [ "$1" = "--only" ]; then
+    only="$2"
+    shift 2
+  fi
+
   if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
     # In plain/raw format, output nothing (for shell completions)
     # In markdown format, show friendly message
@@ -154,6 +161,34 @@ list_yaks() {
       return
     fi
   fi
+
+  # Helper function to check if a yak should be displayed based on only filter
+  should_display_yak() {
+    local yak_name="$1"
+    local yak_dir="$YAKS_PATH/$yak_name"
+
+    # If no filter, show all
+    if [ -z "$only" ]; then
+      return 0
+    fi
+
+    local state="todo"
+    if [ -f "$yak_dir/state" ]; then
+      state=$(cat "$yak_dir/state")
+    fi
+
+    case "$only" in
+      not-done)
+        [ "$state" != "done" ]
+        ;;
+      done)
+        [ "$state" = "done" ]
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+  }
 
   # Helper function to display a yak in markdown format
   display_yak_markdown() {
@@ -231,7 +266,9 @@ list_yaks() {
     # Display each child and recurse
     while IFS= read -r child; do
       [ -z "$child" ] && continue
-      display_yak "$child"
+      if should_display_yak "$child"; then
+        display_yak "$child"
+      fi
       list_dir "$child"
     done <<< "$sorted_children"
   }
@@ -245,23 +282,27 @@ show_help() {
 Usage: yx <command> [arguments]
 
 Commands:
-  add <name>              Add a new yak
-  list, ls [--format FMT] List all yaks
+  add <name>                      Add a new yak
+  list, ls [--format FMT]         List all yaks
+           [--only STATE]
                           --format: Output format
                                     markdown (or md): Checkbox format (default)
                                     plain (or raw): Simple list of names
-  context [--show] <name> Edit context (uses \$EDITOR) or set from stdin
+                          --only: Show only yaks in a specific state
+                                  not-done: Show only incomplete yaks
+                                  done: Show only completed yaks
+  context [--show] <name>         Edit context (uses \$EDITOR) or set from stdin
                           --show: Display yak with context
                           --edit: Edit context (default)
-  done <name>             Mark a yak as done
-  done --undo <name>      Unmark a yak as done
-  rm <name>               Remove a yak by name
-  move <old> <new>        Rename a yak
-  mv <old> <new>          Alias for move
-  prune                   Remove all done yaks
-  sync                    Push and pull yaks to/from origin via git ref
-  completions [cmd]       Output yak names for shell completion
-  --help                  Show this help message
+  done <name>                     Mark a yak as done
+  done --undo <name>              Unmark a yak as done
+  rm <name>                       Remove a yak by name
+  move <old> <new>                Rename a yak
+  mv <old> <new>                  Alias for move
+  prune                           Remove all done yaks
+  sync                            Push and pull yaks to/from origin via git ref
+  completions [cmd]               Output yak names for shell completion
+  --help                          Show this help message
 EOF
 }
 

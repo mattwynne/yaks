@@ -37,12 +37,12 @@ _yx() {
                     if [[ ${words[(I)--undo]} -gt 0 ]]; then
                         # Complete with done yaks
                         local -a done_yaks
-                        done_yaks=(${(f)"$(yx completions done --undo 2>/dev/null)"})
+                        done_yaks=(${(f)"$(yx ls --format plain --only done 2>/dev/null)"})
                         _describe -t yaks 'done yaks' done_yaks
                     else
                         # Offer --undo flag and incomplete yaks
                         local -a incomplete_yaks
-                        incomplete_yaks=(${(f)"$(yx completions done 2>/dev/null)"})
+                        incomplete_yaks=(${(f)"$(yx ls --format plain --only not-done 2>/dev/null)"})
                         _alternative \
                             'flags:flags:(--undo)' \
                             'yaks:incomplete yaks:_describe -t yaks "incomplete yaks" incomplete_yaks'
@@ -51,13 +51,13 @@ _yx() {
                 rm|move|mv)
                     # Complete with all yaks
                     local -a all_yaks
-                    all_yaks=(${(f)"$(yx completions 2>/dev/null)"})
+                    all_yaks=(${(f)"$(yx ls --format plain 2>/dev/null)"})
                     _describe -t yaks 'yaks' all_yaks
                     ;;
                 context)
                     # Offer --show, --edit flags and yak names
                     local -a all_yaks
-                    all_yaks=(${(f)"$(yx completions 2>/dev/null)"})
+                    all_yaks=(${(f)"$(yx ls --format plain 2>/dev/null)"})
                     _alternative \
                         'flags:flags:(--show --edit)' \
                         'yaks:yaks:_describe -t yaks "yaks" all_yaks'
