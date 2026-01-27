@@ -1,3 +1,5 @@
+eliminate .yaks
+
 Eliminate the `.yaks/` filesystem directory and use git plumbing commands directly.
 
 ## Architecture Change
@@ -20,23 +22,7 @@ Every directory in the git tree IS a yak. We can list all yaks simply:
 git ls-tree -r -t refs/notes/yaks | grep '^040000 tree' | cut -f2
 ```
 
-**Format breakdown:**
-- `-r` = recursive
-- `-t` = show tree entries (directories) when recursing
-- Output format: `040000 tree <hash><TAB>path`
-- `040000` = git file mode for directory (octal)
-- `grep '^040000 tree'` = filter to only directories
-- `cut -f2` = extract path (field 2, tab-delimited)
-- Handles spaces in names correctly
-
-**No need for:**
-- `state` files for discovery (still needed for todo/done status)
-- `.yak` marker files
-- Complex awk/sed parsing
-
 ## Mikado Method Progress
-
-Applied the Mikado Method to discover dependencies by trying naive implementations and reverting when they break.
 
 ### Experiment 1: Replace find_all_yaks() directly
 
@@ -46,75 +32,86 @@ Applied the Mikado Method to discover dependencies by trying naive implementatio
 - 2 in completions (filtering done/not-done)
 - 4 in prune (removing done yaks)
 
-**Discovery:** `find_all_yaks()` returns yak names ("Fix bug") but downstream code expects full paths ("$YAKS_PATH/Fix bug")
+**Discovery:** Downstream code expects paths but git returns names
 
 **Blockers identified:**
-- `is_yak_done()` expects paths, needs to work with names
-- Other functions expect paths
+- is_yak_done() expects paths
+- prune_yaks() expects paths  
+- completions() expects paths
 
-### Experiment 2: Make is_yak_done work with names
+**Resolution:** ✅ All blockers fixed and merged!
 
-**Attempt:** Changed `is_yak_done()` to read from git:
-```bash
-is_yak_done() {
-  local yak_name="$1"
-  local state=$(git show "refs/notes/yaks:$yak_name/state" 2>/dev/null)
-  [ "$state" = "done" ]
-}
-```
+### Experiment 2: Fix the blockers
 
-**Result:** Down to 4 test failures (completions tests now pass!)
-- All 4 failures in prune command
+**Changes made:**
+- ✅ is_yak_done() now reads from git and accepts names
+- ✅ prune_yaks() converts paths to names
+- ✅ completions() reads from git and works with names  
+- ✅ find_all_yaks() uses git ls-tree
 
-**Discovery:** `prune_yaks()` also expects paths:
-```bash
-prune_yaks() {
-  while IFS= read -r yak_path; do
-    if is_yak_done "$yak_path"; then
-      local yak_name="${yak_path#$YAKS_PATH/}"  # Tries to strip path prefix
-      remove_yak "$yak_name"
-    fi
-  done < <(find_all_yaks)
-}
-```
+**Result:** All 105 tests pass!
 
-**New blocker:** `prune_yaks()` needs to work with names instead of paths
+### Experiment 3: Remove filesystem writes in add_yak()
+
+**Attempt:** Commented out `mkdir`/`echo`/`touch` in `add_yak_single()`
+
+**Result:** 68 failures out of 105 tests
+
+**Discovery:** Many functions still depend on .yaks existing:
+- log_command() requires .yaks to stage changes
+- context_yak() reads/writes to .yaks files
+- mark_yak_done() writes state files to .yaks
+- remove_yak() removes .yaks directories
+- move_yak() moves .yaks directories
+- list_yaks() likely reads from .yaks
+- sync functions extract/copy .yaks
+
+**New blockers identified:**
+- Need to rewrite log_command() to work without .yaks
+- Need git-based context read/write
+- Need git-based state updates
+- Need to handle all write operations via git trees
 
 ## Current Mikado Graph
 
 ```
-eliminate .yaks (BLOCKED - tried, 6 failures)
-├─ make functions use yak names not paths (not yet attempted)
-└─ make is_yak_done work with git (BLOCKED - tried, 4 failures)
-   └─ make prune_yaks work with yak names (LEAF - should try next)
+eliminate .yaks (BLOCKED - 68 test failures when filesystem writes removed)
+├─ make find_all_yaks use git (DONE ✅)
+├─ make is_yak_done work with git (DONE ✅)
+├─ make prune_yaks work with names (DONE ✅)
+├─ make completions work with git (DONE ✅)
+└─ make write operations use git directly (BLOCKED - not attempted)
+   ├─ rewrite log_command to not require .yaks (LEAF)
+   ├─ make context_yak read/write via git (LEAF)
+   ├─ make mark_yak_done update git tree (LEAF)
+   ├─ make remove_yak update git tree (LEAF)
+   ├─ make move_yak update git tree (LEAF)
+   └─ remove extract_yaks_to_working_dir from sync (LEAF)
 ```
 
 ## Next Steps
 
-1. Try "make prune_yaks work with yak names" (leaf node)
-2. If it succeeds, try "make is_yak_done work with git" again
-3. Continue discovering and working through dependencies
+The core blocker is **log_command()** - it currently:
+1. Uses GIT_WORK_TREE=$YAKS_PATH  
+2. Stages .yaks contents
+3. Commits to refs/notes/yaks
 
-## Environment Variables
+Need to rewrite it to:
+1. Read current tree from refs/notes/yaks
+2. Modify tree using git mktree  
+3. Create commit with new tree
 
-**Remove:**
-- `YAKS_PATH` - no more filesystem directory to point to
-
-**Use standard git:**
-- `GIT_DIR` - standard git environment variable for test isolation
-- Production: unset, git auto-discovers from `$PWD`
-- Tests: `GIT_DIR="$test_repo/.git"` for isolation
+Once log_command works without .yaks, we can update other write operations.
 
 ## Benefits
 
 - Single source of truth
-- Simpler sync logic (no extraction after merge)
-- No duplication/consistency issues
-- Still fast (git plumbing is efficient ~11ms)
-- Cleaner architecture
+- Simpler sync logic (no extraction)
+- No duplication/consistency issues  
+- Still fast (git plumbing ~11ms)
 
 ## Trade-offs
 
-- Can't do `cat .yaks/claim/context.md` (must use `yx context --show claim`)
-- Slightly less "Unix-y" (everything through CLI)
-- But: follows git's own model (working dir vs committed state)
+- Can't `cat .yaks/claim/context.md`
+- Must use CLI for all operations
+- Follows git's model (working dir vs committed state)
