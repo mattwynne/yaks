@@ -85,4 +85,14 @@ Describe 'yx done'
     "
     The output should include "done"
   End
+
+  It 'errors when marking a parent yak as done with incomplete children'
+    When run sh -c "
+      yx add 'parent'
+      yx add 'parent/child'
+      yx done 'parent'
+    "
+    The error should include "Error: cannot mark 'parent' as done - it has incomplete children"
+    The status should be failure
+  End
 End
