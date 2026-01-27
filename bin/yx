@@ -2,6 +2,12 @@
 
 YAKS_PATH="${YAKS_PATH:-.yaks}"
 
+# Convert YAKS_PATH to absolute path if relative
+case "$YAKS_PATH" in
+  /*) ;; # Already absolute
+  *) YAKS_PATH="$PWD/$YAKS_PATH" ;;
+esac
+
 migrate_done_to_state() {
   if [ ! -d "$YAKS_PATH" ]; then
     return 0
@@ -28,30 +34,14 @@ log_command() {
 
   local commit_message="$*"
 
-  # Create a temp directory for the commit
-  local temp_dir=$(mktemp -d)
-  trap "rm -rf '$temp_dir'" RETURN
+  # Use a temporary index to avoid touching the main index
+  local temp_index=$(mktemp)
+  trap "rm -f '$temp_index'" RETURN
 
-  # Copy yaks to temp dir
-  cp -r "$YAKS_PATH"/. "$temp_dir"/
-
-  # Initialize temp repo and create commit
-  git -C "$temp_dir" init --quiet
-  git -C "$temp_dir" add -A
-
-  # Get git user info from main repo or use defaults
-  local user_name=$(git config user.name 2>/dev/null || echo "Yak User")
-  local user_email=$(git config user.email 2>/dev/null || echo "yak@local")
-  git -C "$temp_dir" config user.name "$user_name"
-  git -C "$temp_dir" config user.email "$user_email"
-
-  git -C "$temp_dir" commit --allow-empty -m "$commit_message" --no-verify --quiet
-
-  # Get the tree from the temp commit
-  local tree=$(git -C "$temp_dir" rev-parse HEAD^{tree})
-
-  # Fetch objects from temp repo into main repo
-  git fetch "$temp_dir" HEAD >/dev/null 2>&1
+  # Create tree from YAKS_PATH by treating it as the work tree root
+  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git read-tree --empty
+  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git add .
+  local tree=$(GIT_INDEX_FILE="$temp_index" git write-tree)
 
   # Get parent commit if refs/notes/yaks exists
   local parent_args=""
@@ -62,6 +52,9 @@ log_command() {
   # Create commit on refs/notes/yaks with proper parent
   local new_commit=$(git commit-tree $tree $parent_args -m "$commit_message")
   git update-ref refs/notes/yaks "$new_commit"
+
+  # Cleanup
+  unset GIT_INDEX_FILE
 }
 
 validate_yak_name() {
