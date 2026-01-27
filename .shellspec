@@ -2,6 +2,7 @@
 --pattern "*.sh"
 --shell bash
 --format documentation
+--jobs 8
 
 ## Default kcov (coverage) options
 # --kcov-options "--include-path=. --path-strip-level=1"
