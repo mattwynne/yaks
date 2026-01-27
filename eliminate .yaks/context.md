@@ -34,6 +34,67 @@ git ls-tree -r -t refs/notes/yaks | grep '^040000 tree' | cut -f2
 - `.yak` marker files
 - Complex awk/sed parsing
 
+## Mikado Method Progress
+
+Applied the Mikado Method to discover dependencies by trying naive implementations and reverting when they break.
+
+### Experiment 1: Replace find_all_yaks() directly
+
+**Attempt:** Changed `find_all_yaks()` to use `git ls-tree -r -t` instead of filesystem `find`
+
+**Result:** 6 test failures
+- 2 in completions (filtering done/not-done)
+- 4 in prune (removing done yaks)
+
+**Discovery:** `find_all_yaks()` returns yak names ("Fix bug") but downstream code expects full paths ("$YAKS_PATH/Fix bug")
+
+**Blockers identified:**
+- `is_yak_done()` expects paths, needs to work with names
+- Other functions expect paths
+
+### Experiment 2: Make is_yak_done work with names
+
+**Attempt:** Changed `is_yak_done()` to read from git:
+```bash
+is_yak_done() {
+  local yak_name="$1"
+  local state=$(git show "refs/notes/yaks:$yak_name/state" 2>/dev/null)
+  [ "$state" = "done" ]
+}
+```
+
+**Result:** Down to 4 test failures (completions tests now pass!)
+- All 4 failures in prune command
+
+**Discovery:** `prune_yaks()` also expects paths:
+```bash
+prune_yaks() {
+  while IFS= read -r yak_path; do
+    if is_yak_done "$yak_path"; then
+      local yak_name="${yak_path#$YAKS_PATH/}"  # Tries to strip path prefix
+      remove_yak "$yak_name"
+    fi
+  done < <(find_all_yaks)
+}
+```
+
+**New blocker:** `prune_yaks()` needs to work with names instead of paths
+
+## Current Mikado Graph
+
+```
+eliminate .yaks (BLOCKED - tried, 6 failures)
+├─ make functions use yak names not paths (not yet attempted)
+└─ make is_yak_done work with git (BLOCKED - tried, 4 failures)
+   └─ make prune_yaks work with yak names (LEAF - should try next)
+```
+
+## Next Steps
+
+1. Try "make prune_yaks work with yak names" (leaf node)
+2. If it succeeds, try "make is_yak_done work with git" again
+3. Continue discovering and working through dependencies
+
 ## Environment Variables
 
 **Remove:**
@@ -43,22 +104,6 @@ git ls-tree -r -t refs/notes/yaks | grep '^040000 tree' | cut -f2
 - `GIT_DIR` - standard git environment variable for test isolation
 - Production: unset, git auto-discovers from `$PWD`
 - Tests: `GIT_DIR="$test_repo/.git"` for isolation
-
-## Key Changes
-
-1. **Remove `YAKS_PATH` entirely**
-2. **Rewrite operations to use git plumbing:**
-   - `list_yaks()` - use `git ls-tree -r -t` to list directories
-   - `add_yak()` - use `git mktree` + `git commit-tree`
-   - `context_yak()` - read via `git show`, write via tree update
-   - `is_yak_done()` - read `state` file via `git show`
-   - `sync_yaks()` - simplified (no extraction step!)
-   - `log_command()` - simplified (no filesystem snapshot needed)
-
-3. **Remove filesystem operations:**
-   - No more `extract_yaks_to_working_dir()`
-   - No more `mkdir -p "$YAKS_PATH/$yak_name"`
-   - No more `echo "todo" > "$YAKS_PATH/$yak_name/state"`
 
 ## Benefits
 
