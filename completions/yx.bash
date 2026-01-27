@@ -20,25 +20,25 @@ _yx_completions() {
             # Check if --undo flag is present
             if [[ " ${COMP_WORDS[@]} " =~ " --undo " ]]; then
                 # After --undo, complete with done yaks
-                COMPREPLY=($(compgen -W "$(yx completions done --undo 2>/dev/null)" -- "$cur"))
+                COMPREPLY=($(compgen -W "$(yx ls --format plain --only done 2>/dev/null)" -- "$cur"))
             elif [ "$prev" = "done" ] && [ "$cur" = "--" ]; then
                 # Offer --undo flag
                 COMPREPLY=($(compgen -W "--undo" -- "$cur"))
             else
                 # Complete with incomplete yaks
-                COMPREPLY=($(compgen -W "$(yx completions done 2>/dev/null)" -- "$cur"))
+                COMPREPLY=($(compgen -W "$(yx ls --format plain --only not-done 2>/dev/null)" -- "$cur"))
             fi
             ;;
         rm|context|move|mv)
             # Complete with all yaks
-            COMPREPLY=($(compgen -W "$(yx completions 2>/dev/null)" -- "$cur"))
+            COMPREPLY=($(compgen -W "$(yx ls --format plain 2>/dev/null)" -- "$cur"))
             ;;
         context)
             # Offer --show and --edit flags
             if [ "$prev" = "context" ]; then
-                COMPREPLY=($(compgen -W "--show --edit $(yx completions 2>/dev/null)" -- "$cur"))
+                COMPREPLY=($(compgen -W "--show --edit $(yx ls --format plain 2>/dev/null)" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "$(yx completions 2>/dev/null)" -- "$cur"))
+                COMPREPLY=($(compgen -W "$(yx ls --format plain 2>/dev/null)" -- "$cur"))
             fi
             ;;
     esac

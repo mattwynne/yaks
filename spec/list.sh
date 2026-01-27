@@ -123,4 +123,35 @@ Describe 'yx list'
     When run yx ls --format plain
     The output should equal ''
   End
+
+  It 'supports --only not-done to show only incomplete yaks'
+    When run sh -c "
+      yx add 'incomplete task' && sleep 0.1 &&
+      yx add 'done task' &&
+      yx done 'done task' &&
+      yx ls --format plain --only not-done
+    "
+    The output should equal "incomplete task"
+  End
+
+  It 'supports --only done to show only completed yaks'
+    When run sh -c "
+      yx add 'incomplete task' && sleep 0.1 &&
+      yx add 'done task' &&
+      yx done 'done task' &&
+      yx ls --format plain --only done
+    "
+    The output should equal "done task"
+  End
+
+  It 'shows all yaks when no --only filter is specified'
+    When run sh -c "
+      yx add 'done task' && sleep 0.1 &&
+      yx add 'incomplete task' &&
+      yx done 'done task' &&
+      yx ls --format plain
+    "
+    The line 1 should equal "done task"
+    The line 2 should equal "incomplete task"
+  End
 End
