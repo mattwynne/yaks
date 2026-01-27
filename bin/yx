@@ -21,8 +21,8 @@ log_command() {
     return 0
   fi
 
-  # Skip if YAKS_PATH doesn't exist or is empty
-  if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
+  # Skip if YAKS_PATH doesn't exist
+  if [ ! -d "$YAKS_PATH" ]; then
     return 0
   fi
 
@@ -294,16 +294,12 @@ remove_yak() {
 }
 
 prune_yaks() {
-  local pruned=false
   while IFS= read -r yak_path; do
     if is_yak_done "$yak_path"; then
-      rm -rf "$yak_path"
-      pruned=true
+      local yak_name="${yak_path#$YAKS_PATH/}"
+      remove_yak "$yak_name"
     fi
   done < <(find_all_yaks)
-  if [ "$pruned" = "true" ]; then
-    log_command "prune"
-  fi
 }
 
 move_yak() {
