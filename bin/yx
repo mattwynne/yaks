@@ -801,6 +801,15 @@ sync_yaks() {
 
 migrate_done_to_state
 
+# Check if we're in a git repository (except for help commands)
+if [ "$1" != "--help" ] && [ -n "$1" ]; then
+  if ! is_git_repository; then
+    echo "Error: not in a git repository" >&2
+    echo "yx must be run from within a git repository" >&2
+    exit 1
+  fi
+fi
+
 case "$1" in
   --help|"")
     show_help

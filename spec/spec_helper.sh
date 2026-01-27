@@ -33,6 +33,7 @@ spec_helper_configure() {
 
   # Run all tests from a temp directory to prevent git pollution
   # Add bin to PATH so tests can call yx directly
-  before_all 'TEST_PROJECT_DIR=$(pwd) && export PATH="$TEST_PROJECT_DIR/bin:$PATH" && TEST_WORK_DIR=$(mktemp -d) && cd "$TEST_WORK_DIR"'
+  # Initialize a git repo in the test work dir since yx requires it
+  before_all 'TEST_PROJECT_DIR=$(pwd) && export PATH="$TEST_PROJECT_DIR/bin:$PATH" && TEST_WORK_DIR=$(mktemp -d) && cd "$TEST_WORK_DIR" && git init --quiet && git config user.email "test@example.com" && git config user.name "Test User"'
   after_all 'cd "$TEST_PROJECT_DIR" && rm -rf "$TEST_WORK_DIR"'
 }
