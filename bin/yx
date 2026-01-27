@@ -137,13 +137,26 @@ require_yak() {
 }
 
 list_yaks() {
-  if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
-    echo "You have no yaks. Are you done?"
-    return
+  # Parse format option
+  local format="markdown"
+  if [ "$1" = "--format" ]; then
+    format="$2"
+    shift 2
   fi
 
-  # Helper function to display a yak with proper indentation
-  display_yak() {
+  if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
+    # In plain/raw format, output nothing (for shell completions)
+    # In markdown format, show friendly message
+    if [ "$format" = "plain" ] || [ "$format" = "raw" ]; then
+      return
+    else
+      echo "You have no yaks. Are you done?"
+      return
+    fi
+  fi
+
+  # Helper function to display a yak in markdown format
+  display_yak_markdown() {
     local yak_name="$1"
     local depth=$(echo "$yak_name" | tr -cd '/' | wc -c | xargs)
     local indent=""
@@ -164,6 +177,22 @@ list_yaks() {
       echo "${indent}- [ ] $display_name"
     fi
   }
+
+  # Helper function to display a yak in plain format
+  display_yak_plain() {
+    local yak_name="$1"
+    echo "$yak_name"
+  }
+
+  # Select display function based on format
+  case "$format" in
+    plain|raw)
+      display_yak() { display_yak_plain "$@"; }
+      ;;
+    markdown|md|*)
+      display_yak() { display_yak_markdown "$@"; }
+      ;;
+  esac
 
   # Recursive function to list yaks in a directory
   list_dir() {
@@ -217,7 +246,10 @@ Usage: yx <command> [arguments]
 
 Commands:
   add <name>              Add a new yak
-  list, ls                List all yaks
+  list, ls [--format FMT] List all yaks
+                          --format: Output format
+                                    markdown (or md): Checkbox format (default)
+                                    plain (or raw): Simple list of names
   context [--show] <name> Edit context (uses \$EDITOR) or set from stdin
                           --show: Display yak with context
                           --edit: Edit context (default)
@@ -586,7 +618,8 @@ case "$1" in
     add_yak "$@"
     ;;
   list|ls)
-    list_yaks
+    shift
+    list_yaks "$@"
     ;;
   done)
     shift
