@@ -72,4 +72,14 @@ Describe 'log_command'
     "
     The output should equal "done --undo test yak"
   End
+
+  It 'logs removal even when YAKS_PATH becomes empty'
+    When run sh -c "
+      cd \"\$TEST_REPO\"
+      yx add 'only yak'
+      yx rm 'only yak'
+      git log refs/notes/yaks -1 --format=%s
+    "
+    The output should equal "rm only yak"
+  End
 End
