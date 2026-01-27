@@ -801,6 +801,15 @@ sync_yaks() {
 
 migrate_done_to_state
 
+# Check if git is available (except for help commands)
+if [ "$1" != "--help" ] && [ -n "$1" ]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "Error: git command not found" >&2
+    echo "yx requires git to be installed" >&2
+    exit 1
+  fi
+fi
+
 # Check if we're in a git repository (except for help commands)
 if [ "$1" != "--help" ] && [ -n "$1" ]; then
   if ! is_git_repository; then
