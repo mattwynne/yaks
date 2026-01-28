@@ -819,6 +819,15 @@ if [ "$1" != "--help" ] && [ -n "$1" ]; then
   fi
 fi
 
+# Check if .yaks folder is gitignored (except for help commands)
+if [ "$1" != "--help" ] && [ -n "$1" ]; then
+  if ! git check-ignore -q .yaks; then
+    echo "Error: .yaks folder is not gitignored" >&2
+    echo "Please add .yaks to your .gitignore file" >&2
+    exit 1
+  fi
+fi
+
 case "$1" in
   --help|"")
     show_help

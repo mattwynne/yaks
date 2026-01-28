@@ -10,6 +10,7 @@ Describe 'yx sync with git worktrees'
     git -C "$MAIN" remote add origin "$ORIGIN"
     git -C "$MAIN" config user.email "main@example.com"
     git -C "$MAIN" config user.name "Main User"
+    setup_gitignore_for_yaks "$MAIN"
     echo "# Test Repo" > "$MAIN/README.md"
     git -C "$MAIN" add README.md
     git -C "$MAIN" commit -m "Initial commit" --quiet

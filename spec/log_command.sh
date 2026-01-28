@@ -4,6 +4,7 @@ Describe 'log_command'
     git -C "$TEST_REPO" init --quiet
     git -C "$TEST_REPO" config user.email "test@example.com"
     git -C "$TEST_REPO" config user.name "Test User"
+    setup_gitignore_for_yaks "$TEST_REPO"
     export YAKS_PATH="$TEST_REPO/.yaks"
   }
 

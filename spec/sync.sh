@@ -10,6 +10,7 @@ Describe 'yx sync'
     git -C "$USER1" remote add origin "$ORIGIN"
     git -C "$USER1" config user.email "user1@example.com"
     git -C "$USER1" config user.name "User 1"
+    setup_gitignore_for_yaks "$USER1"
     echo "# Test Repo" > "$USER1/README.md"
     git -C "$USER1" add README.md
     git -C "$USER1" commit -m "Initial commit" --quiet

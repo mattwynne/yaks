@@ -9,6 +9,7 @@ Describe 'yx sync push'
     git -C "$REPO" remote add origin "$ORIGIN"
     git -C "$REPO" config user.email "test@example.com"
     git -C "$REPO" config user.name "Test"
+    setup_gitignore_for_yaks "$REPO"
     echo "test" > "$REPO/README.md"
     git -C "$REPO" add README.md
     git -C "$REPO" commit -m "init" --quiet
