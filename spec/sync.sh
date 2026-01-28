@@ -134,4 +134,38 @@ Describe 'yx sync'
     When call echo "$result1"
     The output should include "[x] conflict yak"
   End
+
+  It 'does not restore pruned yaks after sync'
+    # User1 adds some yaks and marks them done
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak 1'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak 2'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'active yak'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak 1'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak 2'"
+
+    # User1 syncs to push to origin
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
+
+    # Verify done yaks are present
+    result1=$(sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls")
+    echo "$result1" | grep -q "done yak 1" || exit 1
+    echo "$result1" | grep -q "done yak 2" || exit 1
+
+    # User1 prunes done yaks
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx prune"
+
+    # Verify done yaks are gone
+    result2=$(sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls")
+    echo "$result2" | grep -q "done yak 1" && exit 1
+    echo "$result2" | grep -q "done yak 2" && exit 1
+    echo "$result2" | grep -q "active yak" || exit 1
+
+    # User1 syncs again - done yaks should NOT come back
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
+
+    When call sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls"
+    The output should not include "done yak 1"
+    The output should not include "done yak 2"
+    The output should include "active yak"
+  End
 End
