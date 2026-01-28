@@ -800,15 +800,29 @@ sync_yaks() {
   fi
 
   if [ "$has_local_changes" = true ] && [ -n "$remote_ref" ]; then
+    # Rebase-style: overlay local changes on remote base (local wins)
     merge_remote_into_local_yaks "$remote_ref"
-  fi
 
-  if [ "$has_local_changes" = true ]; then
+    # Commit with remote as parent to create linear history
+    local temp_index=$(mktemp)
+    trap "rm -f '$temp_index'" RETURN
+
+    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git read-tree --empty
+    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git add .
+    local tree=$(GIT_INDEX_FILE="$temp_index" git write-tree)
+
+    local new_commit=$(git commit-tree $tree -p "$remote_ref" -m "sync")
+    git update-ref refs/notes/yaks "$new_commit"
+
+    unset GIT_INDEX_FILE
+    # Skip merge_local_and_remote - we've rebased on top of remote
+  elif [ "$has_local_changes" = true ]; then
+    # Local changes but no remote - just commit local
     log_command "sync"
-    local_ref=$(git rev-parse refs/notes/yaks)
+  else
+    # No local changes - use standard merge logic to pull remote
+    merge_local_and_remote "$local_ref" "$remote_ref"
   fi
-
-  merge_local_and_remote "$local_ref" "$remote_ref"
 
   if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
     git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
