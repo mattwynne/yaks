@@ -1,10 +1,7 @@
 Describe 'yx sync - unit tests'
   setup_repo() {
     REPO=$(mktemp -d)
-    git -C "$REPO" init --quiet
-    git -C "$REPO" config user.email "test@example.com"
-    git -C "$REPO" config user.name "Test User"
-    setup_gitignore_for_yaks "$REPO"
+    setup_test_repo "$REPO"
     echo "# Test" > "$REPO/README.md"
     git -C "$REPO" add README.md
     git -C "$REPO" commit -m "Initial commit" --quiet

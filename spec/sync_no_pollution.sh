@@ -5,11 +5,7 @@ Describe 'yx sync does not pollute working tree or index'
 
     # Set up bare origin and clone
     git -C "$ORIGIN" init --bare --quiet
-    git -C "$REPO" init --quiet
-    git -C "$REPO" remote add origin "$ORIGIN"
-    git -C "$REPO" config user.email "test@example.com"
-    git -C "$REPO" config user.name "Test"
-    setup_gitignore_for_yaks "$REPO"
+    setup_test_repo "$REPO" "test@example.com" "Test" "$ORIGIN"
     echo "test" > "$REPO/README.md"
     git -C "$REPO" add README.md
     git -C "$REPO" commit -m "init" --quiet
@@ -35,11 +31,7 @@ Describe 'yx sync does not pollute working tree or index'
 
     # Set up bare origin and clone
     git -C "$ORIGIN" init --bare --quiet
-    git -C "$REPO" init --quiet
-    git -C "$REPO" remote add origin "$ORIGIN"
-    git -C "$REPO" config user.email "test@example.com"
-    git -C "$REPO" config user.name "Test"
-    setup_gitignore_for_yaks "$REPO"
+    setup_test_repo "$REPO" "test@example.com" "Test" "$ORIGIN"
     echo "test" > "$REPO/README.md"
     git -C "$REPO" add README.md
     git -C "$REPO" commit -m "init" --quiet

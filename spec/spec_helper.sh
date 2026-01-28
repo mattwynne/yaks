@@ -14,8 +14,35 @@ export GIT_CONFIG_PARAMETERS="'core.hooksPath=/dev/null'"
 # when tests use temp directories
 export GIT_CEILING_DIRECTORIES="$(pwd)"
 
+# Helper function to set up a git test repository
+# Usage: setup_test_repo /path/to/repo [user_email] [user_name] [origin_url]
+# Arguments:
+#   repo_path: Path where the repo should be created
+#   user_email: Git user email (default: "test@example.com")
+#   user_name: Git user name (default: "Test User")
+#   origin_url: Optional origin remote URL
+setup_test_repo() {
+  local repo_path="$1"
+  local user_email="${2:-test@example.com}"
+  local user_name="${3:-Test User}"
+  local origin_url="${4:-}"
+
+  git -C "$repo_path" init --quiet
+  git -C "$repo_path" config user.email "$user_email"
+  git -C "$repo_path" config user.name "$user_name"
+
+  if [ -n "$origin_url" ]; then
+    git -C "$repo_path" remote add origin "$origin_url"
+  fi
+
+  echo ".yaks" > "$repo_path/.gitignore"
+  git -C "$repo_path" add .gitignore
+  git -C "$repo_path" commit --quiet -m "Add .gitignore"
+}
+
 # Helper function to set up gitignore for .yaks in a repo
 # Usage: setup_gitignore_for_yaks /path/to/repo
+# Deprecated: Use setup_test_repo() instead for new code
 setup_gitignore_for_yaks() {
   local repo_path="$1"
   echo ".yaks" > "$repo_path/.gitignore"
@@ -41,10 +68,7 @@ setup_test_environment() {
   export PATH="$TEST_PROJECT_DIR/bin:$PATH"
   TEST_WORK_DIR=$(mktemp -d)
   cd "$TEST_WORK_DIR"
-  git init --quiet
-  git config user.email "test@example.com"
-  git config user.name "Test User"
-  setup_gitignore_for_yaks "."
+  setup_test_repo "."
 }
 
 # Clean up test environment

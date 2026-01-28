@@ -6,11 +6,7 @@ Describe 'yx sync with git worktrees'
 
     # Create main repo
     MAIN=$(mktemp -d)
-    git -C "$MAIN" init --quiet
-    git -C "$MAIN" remote add origin "$ORIGIN"
-    git -C "$MAIN" config user.email "main@example.com"
-    git -C "$MAIN" config user.name "Main User"
-    setup_gitignore_for_yaks "$MAIN"
+    setup_test_repo "$MAIN" "main@example.com" "Main User" "$ORIGIN"
     echo "# Test Repo" > "$MAIN/README.md"
     git -C "$MAIN" add README.md
     git -C "$MAIN" commit -m "Initial commit" --quiet

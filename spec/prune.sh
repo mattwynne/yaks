@@ -62,10 +62,7 @@ Describe 'yx prune'
   Describe 'logging'
     setup_test() {
       export TEST_REPO=$(mktemp -d)
-      git -C "$TEST_REPO" init --quiet
-      git -C "$TEST_REPO" config user.email "test@example.com"
-      git -C "$TEST_REPO" config user.name "Test User"
-      setup_gitignore_for_yaks "$TEST_REPO"
+      setup_test_repo "$TEST_REPO"
       export YAKS_PATH="$TEST_REPO/.yaks"
     }
 

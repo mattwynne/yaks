@@ -6,11 +6,7 @@ Describe 'yx sync'
 
     # Create user1 repo
     USER1=$(mktemp -d)
-    git -C "$USER1" init --quiet
-    git -C "$USER1" remote add origin "$ORIGIN"
-    git -C "$USER1" config user.email "user1@example.com"
-    git -C "$USER1" config user.name "User 1"
-    setup_gitignore_for_yaks "$USER1"
+    setup_test_repo "$USER1" "user1@example.com" "User 1" "$ORIGIN"
     echo "# Test Repo" > "$USER1/README.md"
     git -C "$USER1" add README.md
     git -C "$USER1" commit -m "Initial commit" --quiet
