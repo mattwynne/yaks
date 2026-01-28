@@ -135,37 +135,27 @@ Describe 'yx sync'
     The output should include "[x] conflict yak"
   End
 
-  It 'does not restore pruned yaks after sync'
-    # User1 adds some yaks and marks them done
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak 1'"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak 2'"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'active yak'"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak 1'"
-    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak 2'"
-
-    # User1 syncs to push to origin
+  It 'does not restore pruned yaks after sync with divergent remote'
+    # Setup: Both users add yaks
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak'"
     sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
-    # Verify done yaks are present
-    result1=$(sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls")
-    echo "$result1" | grep -q "done yak 1" || exit 1
-    echo "$result1" | grep -q "done yak 2" || exit 1
+    # User2 syncs to get the done yak
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
 
-    # User1 prunes done yaks
+    # User1 prunes locally (removes done yak from working dir and creates new commit)
     sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx prune"
 
-    # Verify done yaks are gone
-    result2=$(sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls")
-    echo "$result2" | grep -q "done yak 1" && exit 1
-    echo "$result2" | grep -q "done yak 2" && exit 1
-    echo "$result2" | grep -q "active yak" || exit 1
+    # Meanwhile, User2 adds a different yak and syncs (creates divergence)
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx add 'user2 yak'"
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
 
-    # User1 syncs again - done yaks should NOT come back
+    # Now User1 syncs - this should merge but NOT bring back done yak
     sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
 
     When call sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls"
-    The output should not include "done yak 1"
-    The output should not include "done yak 2"
-    The output should include "active yak"
+    The output should not include "done yak"
+    The output should include "user2 yak"
   End
 End

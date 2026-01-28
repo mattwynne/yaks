@@ -1,5 +1,8 @@
 # Yaks - A non-linear TODO list for humans and robots
 
+> It is in the doing of the work that we discover the work that we must do
+> -- Woody Zuill, https://agilemaxims.com
+
 Yaks is CLI tool for managing Yak Maps - a TODO list of nested goals - designed for teams of humans and robots working on software projects together.
 
 A Yak Map is basically the same as a [Mikado Graph](https://mikadomethod.info) or a [Discovery Tree](https://www.fastagile.io/method/product-mapping-and-discovery-trees). But I like calling it a Yak Map.
