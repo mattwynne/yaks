@@ -1,6 +1,6 @@
 Describe 'yx add'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'adds a yak'
     When run yx add "Fix the bug"

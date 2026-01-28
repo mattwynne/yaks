@@ -1,6 +1,6 @@
 Describe 'yx prune'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'removes all done yaks'
     When run sh -c "
@@ -63,7 +63,7 @@ Describe 'yx prune'
     setup_test() {
       export TEST_REPO=$(mktemp -d)
       setup_test_repo "$TEST_REPO"
-      export YAKS_PATH="$TEST_REPO/.yaks"
+      export GIT_PATH="$TEST_REPO"
     }
 
     cleanup_test() {

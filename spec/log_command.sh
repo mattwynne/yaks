@@ -2,7 +2,7 @@ Describe 'log_command'
   setup_test() {
     export TEST_REPO=$(mktemp -d)
     setup_test_repo "$TEST_REPO"
-    export YAKS_PATH="$TEST_REPO/.yaks"
+    export GIT_PATH="$TEST_REPO"
   }
 
   cleanup_test() {

@@ -1,6 +1,6 @@
 Describe 'fuzzy match on yak names'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'matches a yak by unique substring'
     When run sh -c "

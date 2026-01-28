@@ -33,49 +33,49 @@ Describe 'yx sync with git worktrees'
 
   It 'syncs yaks from worktree A to worktree B'
     # Add yak in worktree A and sync
-    YAKS_PATH="$WORKTREE_A/.yaks" "yx" add "yak from A"
-    sh -c "cd '$WORKTREE_A' && YAKS_PATH='$WORKTREE_A/.yaks' 'yx' sync" 2>&1
+    GIT_PATH="$WORKTREE_A" "yx" add "yak from A"
+    sh -c "cd '$WORKTREE_A' && GIT_PATH='$WORKTREE_A' 'yx' sync" 2>&1
 
     # Sync in worktree B should fetch the yak
-    sh -c "cd '$WORKTREE_B' && YAKS_PATH='$WORKTREE_B/.yaks' 'yx' sync" 2>&1
+    sh -c "cd '$WORKTREE_B' && GIT_PATH='$WORKTREE_B' 'yx' sync" 2>&1
 
-    When call sh -c "YAKS_PATH='$WORKTREE_B/.yaks' 'yx' ls"
+    When call sh -c "GIT_PATH='$WORKTREE_B' 'yx' ls"
     The output should include "yak from A"
   End
 
   It 'merges yaks from different worktrees'
     # Add different yaks in each worktree
-    YAKS_PATH="$WORKTREE_A/.yaks" "yx" add "yak A"
-    YAKS_PATH="$WORKTREE_B/.yaks" "yx" add "yak B"
+    GIT_PATH="$WORKTREE_A" "yx" add "yak A"
+    GIT_PATH="$WORKTREE_B" "yx" add "yak B"
 
     # Sync worktree A first
-    sh -c "cd '$WORKTREE_A' && YAKS_PATH='$WORKTREE_A/.yaks' 'yx' sync" 2>&1
+    sh -c "cd '$WORKTREE_A' && GIT_PATH='$WORKTREE_A' 'yx' sync" 2>&1
 
     # Sync worktree B (should merge both yaks)
-    sh -c "cd '$WORKTREE_B' && YAKS_PATH='$WORKTREE_B/.yaks' 'yx' sync" 2>&1
+    sh -c "cd '$WORKTREE_B' && GIT_PATH='$WORKTREE_B' 'yx' sync" 2>&1
 
     # Both yaks should be in worktree B
-    When call sh -c "YAKS_PATH='$WORKTREE_B/.yaks' 'yx' ls"
+    When call sh -c "GIT_PATH='$WORKTREE_B' 'yx' ls"
     The output should include "yak A"
     The output should include "yak B"
   End
 
   It 'handles concurrent edits with last-write-wins'
     # Add same yak name in both worktrees
-    YAKS_PATH="$WORKTREE_A/.yaks" "yx" add "shared yak"
-    YAKS_PATH="$WORKTREE_B/.yaks" "yx" add "shared yak"
+    GIT_PATH="$WORKTREE_A" "yx" add "shared yak"
+    GIT_PATH="$WORKTREE_B" "yx" add "shared yak"
 
     # Mark done in A, leave todo in B
-    YAKS_PATH="$WORKTREE_A/.yaks" "yx" done "shared yak"
+    GIT_PATH="$WORKTREE_A" "yx" done "shared yak"
 
     # Sync A first
-    sh -c "cd '$WORKTREE_A' && YAKS_PATH='$WORKTREE_A/.yaks' 'yx' sync" 2>&1
+    sh -c "cd '$WORKTREE_A' && GIT_PATH='$WORKTREE_A' 'yx' sync" 2>&1
 
     # Sync B (will overwrite with todo state - last write wins)
-    sh -c "cd '$WORKTREE_B' && YAKS_PATH='$WORKTREE_B/.yaks' 'yx' sync" 2>&1
+    sh -c "cd '$WORKTREE_B' && GIT_PATH='$WORKTREE_B' 'yx' sync" 2>&1
 
     # Should be todo (B's state won)
-    When call sh -c "YAKS_PATH='$WORKTREE_B/.yaks' 'yx' ls"
+    When call sh -c "GIT_PATH='$WORKTREE_B' 'yx' ls"
     The output should include "[ ] shared yak"
   End
 End

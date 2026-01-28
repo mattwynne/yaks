@@ -1,6 +1,6 @@
 Describe 'yx rm'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'removes a yak by name'
     When run sh -c "

@@ -77,6 +77,21 @@ teardown_test_environment() {
   rm -rf "$TEST_WORK_DIR"
 }
 
+# Set up an isolated test repo for a single test
+# This creates a fresh git repo in a temp directory for each test
+setup_isolated_repo() {
+  export TEST_REPO=$(mktemp -d)
+  setup_test_repo "$TEST_REPO"
+  export GIT_PATH="$TEST_REPO"
+}
+
+# Clean up isolated test repo
+teardown_isolated_repo() {
+  rm -rf "$TEST_REPO"
+  unset TEST_REPO
+  unset GIT_PATH
+}
+
 # This callback function will be invoked after core modules has been loaded.
 spec_helper_configure() {
   # Available functions: import, before_each, after_each, before_all, after_all

@@ -1,6 +1,6 @@
 Describe 'yx done'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'marks a yak as done'
     When run sh -c "
@@ -76,12 +76,12 @@ Describe 'yx done'
     When run sh -c "
       yx add 'old yak'
       # Simulate old format by creating done file directly
-      touch \"\$YAKS_PATH/old yak/done\"
-      rm -f \"\$YAKS_PATH/old yak/state\"
+      touch \"\$GIT_PATH/.yaks/old yak/done\"
+      rm -f \"\$GIT_PATH/.yaks/old yak/state\"
       # Any yx command should trigger migration
       yx list
       # Check that state file now exists
-      [ -f \"\$YAKS_PATH/old yak/state\" ] && cat \"\$YAKS_PATH/old yak/state\"
+      [ -f \"\$GIT_PATH/.yaks/old yak/state\" ] && cat \"\$GIT_PATH/.yaks/old yak/state\"
     "
     The output should include "done"
   End

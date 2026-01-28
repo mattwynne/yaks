@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-YAKS_PATH="${YAKS_PATH:-.yaks}"
+GIT_PATH="${GIT_PATH:-.}"
 
 convert_to_absolute_path() {
   local path="$1"
@@ -10,7 +10,8 @@ convert_to_absolute_path() {
   esac
 }
 
-YAKS_PATH=$(convert_to_absolute_path "$YAKS_PATH")
+GIT_PATH=$(convert_to_absolute_path "$GIT_PATH")
+YAKS_PATH="$GIT_PATH/.yaks"
 
 convert_done_file_to_state() {
   local done_file="$1"
@@ -30,7 +31,7 @@ migrate_done_to_state() {
 }
 
 is_git_repository() {
-  git rev-parse --git-dir > /dev/null 2>&1
+  git -C "$GIT_PATH" rev-parse --git-dir > /dev/null 2>&1
 }
 
 yaks_path_exists() {
@@ -46,17 +47,17 @@ log_command() {
   local temp_index=$(mktemp)
   trap "rm -f '$temp_index'" RETURN
 
-  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git read-tree --empty
-  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git add .
-  local tree=$(GIT_INDEX_FILE="$temp_index" git write-tree)
+  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_PATH" read-tree --empty
+  GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_PATH" add .
+  local tree=$(GIT_INDEX_FILE="$temp_index" git -C "$GIT_PATH" write-tree)
 
   local parent_args=""
-  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    parent_args="-p $(git rev-parse refs/notes/yaks)"
+  if git -C "$GIT_PATH" rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    parent_args="-p $(git -C "$GIT_PATH" rev-parse refs/notes/yaks)"
   fi
 
-  local new_commit=$(git commit-tree $tree $parent_args -m "$commit_message")
-  git update-ref refs/notes/yaks "$new_commit"
+  local new_commit=$(git -C "$GIT_PATH" commit-tree $tree $parent_args -m "$commit_message")
+  git -C "$GIT_PATH" update-ref refs/notes/yaks "$new_commit"
 
   unset GIT_INDEX_FILE
 }
@@ -636,7 +637,7 @@ completions() {
 }
 
 has_origin_remote() {
-  git remote get-url origin > /dev/null 2>&1
+  git -C "$GIT_PATH" remote get-url origin > /dev/null 2>&1
 }
 
 check_git_setup() {
@@ -673,7 +674,7 @@ detect_local_changes() {
   cp -r "$YAKS_PATH"/. "$check_dir"/
 
   local ref_dir=$(mktemp -d)
-  git archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
+  git -C "$GIT_PATH" archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
 
   if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
     rm -rf "$ref_dir"
@@ -686,7 +687,7 @@ detect_local_changes() {
 
 use_remote_only() {
   local remote_ref="$1"
-  git update-ref refs/notes/yaks "$remote_ref"
+  git -C "$GIT_PATH" update-ref refs/notes/yaks "$remote_ref"
 }
 
 create_merge_commit() {
@@ -694,18 +695,18 @@ create_merge_commit() {
   local remote_ref="$2"
   local merged_tree="$3"
 
-  local merge_commit=$(git commit-tree "$merged_tree" \
+  local merge_commit=$(git -C "$GIT_PATH" commit-tree "$merged_tree" \
     -p "$local_ref" \
     -p "$remote_ref" \
     -m "Merge yaks")
-  git update-ref refs/notes/yaks "$merge_commit"
+  git -C "$GIT_PATH" update-ref refs/notes/yaks "$merge_commit"
 }
 
 merge_with_git_merge_tree() {
   local local_ref="$1"
   local remote_ref="$2"
 
-  local merged_tree=$(git merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>&1)
+  local merged_tree=$(git -C "$GIT_PATH" merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>&1)
   local merge_status=$?
 
   if [ $merge_status -eq 0 ] && [ -n "$merged_tree" ]; then
@@ -720,7 +721,7 @@ merge_with_git_merge_tree() {
 is_ancestor() {
   local ancestor="$1"
   local descendant="$2"
-  git merge-base --is-ancestor "$ancestor" "$descendant" 2>/dev/null
+  git -C "$GIT_PATH" merge-base --is-ancestor "$ancestor" "$descendant" 2>/dev/null
 }
 
 merge_local_and_remote() {
@@ -758,27 +759,27 @@ merge_local_and_remote() {
 extract_yaks_to_working_dir() {
   rm -rf "$YAKS_PATH"
   mkdir -p "$YAKS_PATH"
-  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    git archive refs/notes/yaks | tar -x -C "$YAKS_PATH" 2>/dev/null || true
+  if git -C "$GIT_PATH" rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git -C "$GIT_PATH" archive refs/notes/yaks | tar -x -C "$YAKS_PATH" 2>/dev/null || true
   fi
 }
 
 get_remote_ref() {
-  if git rev-parse refs/remotes/origin/yaks >/dev/null 2>&1; then
-    git rev-parse refs/remotes/origin/yaks
+  if git -C "$GIT_PATH" rev-parse refs/remotes/origin/yaks >/dev/null 2>&1; then
+    git -C "$GIT_PATH" rev-parse refs/remotes/origin/yaks
   fi
 }
 
 get_local_ref() {
-  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    git rev-parse refs/notes/yaks
+  if git -C "$GIT_PATH" rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git -C "$GIT_PATH" rev-parse refs/notes/yaks
   fi
 }
 
 merge_remote_into_local_yaks() {
   local remote_ref="$1"
   local temp_dir=$(mktemp -d)
-  git archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
+  git -C "$GIT_PATH" archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
   cp -r "$YAKS_PATH"/. "$temp_dir"/
   rm -rf "$YAKS_PATH"
   mkdir -p "$YAKS_PATH"
@@ -789,7 +790,7 @@ merge_remote_into_local_yaks() {
 sync_yaks() {
   check_git_setup || exit 1
 
-  git fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
+  git -C "$GIT_PATH" fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
   local remote_ref=$(get_remote_ref)
   local local_ref=$(get_local_ref)
@@ -807,12 +808,12 @@ sync_yaks() {
     local temp_index=$(mktemp)
     trap "rm -f '$temp_index'" RETURN
 
-    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git read-tree --empty
-    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git add .
-    local tree=$(GIT_INDEX_FILE="$temp_index" git write-tree)
+    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_PATH" read-tree --empty
+    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_PATH" add .
+    local tree=$(GIT_INDEX_FILE="$temp_index" git -C "$GIT_PATH" write-tree)
 
-    local new_commit=$(git commit-tree $tree -p "$remote_ref" -m "sync")
-    git update-ref refs/notes/yaks "$new_commit"
+    local new_commit=$(git -C "$GIT_PATH" commit-tree $tree -p "$remote_ref" -m "sync")
+    git -C "$GIT_PATH" update-ref refs/notes/yaks "$new_commit"
 
     unset GIT_INDEX_FILE
     # Skip merge_local_and_remote - we've rebased on top of remote
@@ -824,13 +825,13 @@ sync_yaks() {
     merge_local_and_remote "$local_ref" "$remote_ref"
   fi
 
-  if git rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    git push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
+  if git -C "$GIT_PATH" rev-parse refs/notes/yaks >/dev/null 2>&1; then
+    git -C "$GIT_PATH" push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
   fi
 
   extract_yaks_to_working_dir
 
-  git update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
+  git -C "$GIT_PATH" update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
 }
 
 migrate_done_to_state
@@ -855,7 +856,7 @@ fi
 
 # Check if .yaks folder is gitignored (except for help commands)
 if [ "$1" != "--help" ] && [ -n "$1" ]; then
-  if ! git check-ignore -q .yaks; then
+  if ! git -C "$GIT_PATH" check-ignore -q .yaks; then
     echo "Error: .yaks folder is not gitignored" >&2
     echo "Please add .yaks to your .gitignore file" >&2
     exit 1

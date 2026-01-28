@@ -1,6 +1,6 @@
 Describe 'yx completions'
-  BeforeEach 'export YAKS_PATH=$(mktemp -d)'
-  AfterEach 'rm -rf "$YAKS_PATH"'
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'teardown_isolated_repo'
 
   It 'outputs nothing when no yaks exist'
     When run yx completions
