@@ -1,79 +1,45 @@
 Eliminate the `.yaks/` filesystem directory and use git plumbing commands directly.
 
-## Current Status
+## CRITICAL DISCOVERY: Context Command Blocking Everything! 🚨
 
-**Phase 1: Infrastructure - COMPLETE ✅**
-- ✅ log_command --tree mode merged to main
+After making add_yak write to git, discovered workflow is BROKEN:
+- ✅ add_yak creates yaks in git
+- ❌ context command expects .yaks filesystem
+- ❌ Can't document work, add nested yaks, or collaborate
 
-**Phase 2: WRITE Operations - IN PROGRESS ⬜**
+**IMMEDIATE ACTION REQUIRED: Fix context_yak FIRST**
 
-## Updated Mikado Graph (After mark_yak_done Attempt)
+## Updated Mikado Graph (After Multiple Discoveries)
 
 ```
 eliminate .yaks
 │
-├─ READ operations ✅ COMPLETE
-│
-└─ WRITE operations (discovering dependencies...)
+└─ WRITE operations
    │
-   ├─ make add_yak write via git ✅ DONE
+   ├─ make add_yak ✅ DONE (but revealed blocker)
    │
-   ├─ make remove_yak update via git (LEAF - READY)
-   │  Status: Not started
-   │  Complexity: Low - just delete tree entries
+   ├─ make context_yak (CRITICAL BLOCKER! 🔥)
+   │  Status: Must do IMMEDIATELY
+   │  Why: Workflow broken without it
+   │  Blocks: Everything else
    │
-   ├─ make context_yak read/write via git (LEAF - READY)
-   │  Status: Not started  
-   │  Complexity: Low - just update context blob
+   ├─ make remove_yak (BLOCKED by context)
+   │  Can't document work without context
    │
-   ├─ make mark_yak_done update via git (BLOCKED ❌)
-   │  Status: Attempted, reverted
-   │  Blockers discovered:
-   │    - has_incomplete_children() needs git
-   │    - mark_yak_done_recursively() needs git
-   │    - find_yak fuzzy matching broken with nested paths
-   │  Come back after simpler operations work
+   ├─ make mark_yak_done (BLOCKED by context + 4 others)
+   │  Multiple blockers discovered
    │
-   ├─ make move_yak update via git (LEAF - READY?)
-   │  Status: Not started
-   │  Complexity: Medium - tree manipulation + path changes
-   │
-   └─ rewrite log_command (PARTIALLY COMPLETE)
-      ✅ Phase 1: --tree infrastructure
-      ⬜ Phase 2: Migrate all callers
-      ⬜ Phase 3: Simplify to tree-only
+   └─ make move_yak (BLOCKED by context)
 ```
 
-## Next Actions (Mikado Method)
-
-Pick a TRUE leaf node - one with no hidden dependencies:
-
-**Option 1: remove_yak (RECOMMENDED)**
-- Simplest operation
-- Just delete entries from tree
-- No validation logic needed
-- Tests are straightforward
-
-**Option 2: context_yak**  
-- Also simple - just update one blob
-- Preserve existing tree structure
-- Two modes: read (show) and write (edit)
-
-**DO NOT work on:**
-- mark_yak_done (has blockers)
-- move_yak (until we understand tree manipulation better)
-
-## Mikado Lessons Learned
+## Mikado Lessons Learned (Updated)
 
 1. ✅ Always check dependencies before claiming "leaf node"
 2. ✅ Revert when blockers discovered
 3. ✅ Update map with new information
-4. ✅ Keep useful artifacts (unit tests) for future work
+4. ✅ **Integration matters more than individual functions**
+5. ✅ **Workflow breakage is highest priority**
 
-## Benefits
+## Next Action
 
-- Single source of truth in git
-- No filesystem duplication  
-- Simpler sync logic
-- Faster operations
-- Better for concurrent access
+**Work on context_yak immediately - it's blocking everything**
