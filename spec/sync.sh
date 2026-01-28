@@ -134,4 +134,28 @@ Describe 'yx sync'
     When call echo "$result1"
     The output should include "[x] conflict yak"
   End
+
+  It 'does not restore pruned yaks after sync with divergent remote'
+    # Setup: Both users add yaks
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx add 'done yak'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx done 'done yak'"
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
+
+    # User2 syncs to get the done yak
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
+
+    # User1 prunes locally (removes done yak from working dir and creates new commit)
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx prune"
+
+    # Meanwhile, User2 adds a different yak and syncs (creates divergence)
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx add 'user2 yak'"
+    sh -c "cd '$USER2' && YAKS_PATH='$USER2/.yaks' yx sync" 2>&1
+
+    # Now User1 syncs - this should merge but NOT bring back done yak
+    sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx sync" 2>&1
+
+    When call sh -c "cd '$USER1' && YAKS_PATH='$USER1/.yaks' yx ls"
+    The output should not include "done yak"
+    The output should include "user2 yak"
+  End
 End

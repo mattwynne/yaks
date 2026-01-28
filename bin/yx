@@ -717,6 +717,12 @@ merge_with_git_merge_tree() {
   fi
 }
 
+is_ancestor() {
+  local ancestor="$1"
+  local descendant="$2"
+  git merge-base --is-ancestor "$ancestor" "$descendant" 2>/dev/null
+}
+
 merge_local_and_remote() {
   local local_ref="$1"
   local remote_ref="$2"
@@ -731,6 +737,20 @@ merge_local_and_remote() {
   fi
 
   if [ -n "$local_ref" ] && [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
+    # Check if local is ahead of remote (fast-forward case)
+    if is_ancestor "$remote_ref" "$local_ref"; then
+      # Local is ahead, just use it (no merge needed)
+      return
+    fi
+
+    # Check if remote is ahead of local (fast-forward case)
+    if is_ancestor "$local_ref" "$remote_ref"; then
+      # Remote is ahead, use it
+      use_remote_only "$remote_ref"
+      return
+    fi
+
+    # Neither is ahead - do a merge
     merge_with_git_merge_tree "$local_ref" "$remote_ref"
   fi
 }
