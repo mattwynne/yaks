@@ -60,28 +60,14 @@ Describe 'yx prune'
   End
 
   Describe 'logging'
-    setup_test() {
-      export TEST_REPO=$(mktemp -d)
-      setup_test_repo "$TEST_REPO"
-      export GIT_PATH="$TEST_REPO"
-    }
-
-    cleanup_test() {
-      rm -rf "$TEST_REPO"
-    }
-
-    BeforeEach 'setup_test'
-    AfterEach 'cleanup_test'
-
     It 'logs each yak removal individually'
       When run sh -c "
-        cd \"\$TEST_REPO\"
         yx add 'Fix the bug'
         yx add 'Write docs'
         yx done 'Fix the bug'
         yx done 'Write docs'
         yx prune
-        git log refs/notes/yaks --oneline
+        git -C \"\$TEST_REPO\" log refs/notes/yaks --oneline
       "
       The output should include "rm Fix the bug"
       The output should include "rm Write docs"
