@@ -10,6 +10,7 @@ pub struct GitAdapter {
 }
 
 impl GitAdapter {
+    #[must_use]
     pub fn new(work_tree: PathBuf, yaks_path: PathBuf) -> Self {
         Self {
             work_tree,
@@ -106,7 +107,7 @@ impl GitRepository for GitAdapter {
     }
 
     fn check_ignore(&self, path: &str) -> Result<bool> {
-        Ok(self.run_git_success(&["check-ignore", "-q", path])?)
+        self.run_git_success(&["check-ignore", "-q", path])
     }
 
     fn log_command(&self, message: &str) -> Result<()> {
@@ -126,7 +127,7 @@ impl GitRepository for GitAdapter {
         let mut commit_args = vec!["commit-tree", &tree];
         let parent_args;
         if let Some(parent) = self.get_local_ref()? {
-            parent_args = format!("-p{}", parent);
+            parent_args = format!("-p{parent}");
             commit_args.push(&parent_args);
         }
         commit_args.extend(&["-m", message]);
@@ -156,7 +157,7 @@ impl GitRepository for GitAdapter {
         ]);
 
         let remote_ref = self.get_remote_ref()?;
-        let local_ref = self.get_local_ref()?;
+        let _local_ref = self.get_local_ref()?;
 
         if self.yaks_path_has_content() && remote_ref.is_some() {
             self.log_command("sync")?;

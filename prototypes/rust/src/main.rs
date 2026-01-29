@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use yx::adapters::{FilesystemStorage, GitAdapter, TerminalFormatter};
 use yx::ports::{OutputFormat, YakFilter};
 use yx::YakApp;
@@ -63,7 +63,7 @@ fn get_work_tree() -> PathBuf {
         .unwrap_or_else(|_| env::current_dir().expect("Failed to get current directory"))
 }
 
-fn get_yaks_path(work_tree: &PathBuf) -> PathBuf {
+fn get_yaks_path(work_tree: &Path) -> PathBuf {
     work_tree.join(".yaks")
 }
 
@@ -87,8 +87,7 @@ fn run() -> Result<()> {
 
     if cli.command.is_none() {
         println!(
-            "{}",
-            r#"Usage: yx <command> [arguments]
+            "Usage: yx <command> [arguments]
 
 Commands:
   add <name>                      Add a new yak
@@ -111,7 +110,7 @@ Commands:
   prune                           Remove all done yaks
   sync                            Push and pull yaks to/from origin via git ref
   completions [cmd]               Output yak names for shell completion
-  --help                          Show this help message"#
+  --help                          Show this help message"
         );
         return Ok(());
     }
@@ -178,7 +177,7 @@ Commands:
 
             let completions = app.completions(cmd.as_deref(), flag.as_deref())?;
             for completion in completions {
-                println!("{}", completion);
+                println!("{completion}");
             }
             return Ok(());
         }
@@ -189,7 +188,7 @@ Commands:
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("{}", e);
+        eprintln!("{e}");
         std::process::exit(1);
     }
 }

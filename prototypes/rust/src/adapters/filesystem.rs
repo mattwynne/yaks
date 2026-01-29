@@ -10,6 +10,7 @@ pub struct FilesystemStorage {
 }
 
 impl FilesystemStorage {
+    #[must_use]
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
     }
@@ -26,21 +27,21 @@ impl FilesystemStorage {
         self.yak_path(name).join("context.md")
     }
 
-    fn read_state(&self, yak_path: &Path) -> YakState {
+    fn read_state(yak_path: &Path) -> YakState {
         let state_file = yak_path.join("state");
         if let Ok(content) = fs::read_to_string(state_file) {
-            YakState::from_str(&content)
+            content.parse().unwrap_or(YakState::Todo)
         } else {
             YakState::Todo
         }
     }
 
-    fn read_context(&self, yak_path: &Path) -> String {
+    fn read_context(yak_path: &Path) -> String {
         let context_file = yak_path.join("context.md");
         fs::read_to_string(context_file).unwrap_or_default()
     }
 
-    fn get_mtime(&self, path: &Path) -> std::time::SystemTime {
+    fn get_mtime(path: &Path) -> std::time::SystemTime {
         fs::metadata(path)
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
@@ -83,7 +84,7 @@ impl FilesystemStorage {
         match matches.len() {
             0 => Ok(None),
             1 => Ok(Some(matches[0].clone())),
-            _ => bail!("Error: yak name '{}' is ambiguous", search_term),
+            _ => bail!("Error: yak name '{search_term}' is ambiguous"),
         }
     }
 
@@ -100,7 +101,7 @@ impl FilesystemStorage {
             .filter_entry(|e| e.file_type().is_dir())
         {
             let entry = entry?;
-            let state = self.read_state(entry.path());
+            let state = Self::read_state(entry.path());
             if state != YakState::Done {
                 return Ok(true);
             }
@@ -133,7 +134,7 @@ impl FilesystemStorage {
         Ok(())
     }
 
-    fn migrate_done_file(&mut self, yak_path: &Path) -> Result<()> {
+    fn migrate_done_file(yak_path: &Path) -> Result<()> {
         let done_file = yak_path.join("done");
         if done_file.exists() {
             fs::write(yak_path.join("state"), "done")?;
@@ -150,7 +151,7 @@ impl YakStorage for FilesystemStorage {
 
         let yak_path = self.yak_path(name);
         fs::create_dir_all(&yak_path)
-            .context(format!("Failed to create directory for yak '{}'", name))?;
+            .context(format!("Failed to create directory for yak '{name}'"))?;
 
         fs::write(self.state_file(name), "todo")?;
         fs::write(self.context_file(name), "")?;
@@ -179,9 +180,9 @@ impl YakStorage for FilesystemStorage {
                 .to_string_lossy()
                 .to_string();
 
-            let state = self.read_state(path);
-            let context = self.read_context(path);
-            let mtime = self.get_mtime(path);
+            let state = Self::read_state(path);
+            let context = Self::read_context(path);
+            let mtime = Self::get_mtime(path);
 
             yaks.push(
                 Yak::new(name)
@@ -200,9 +201,9 @@ impl YakStorage for FilesystemStorage {
             return Ok(None);
         }
 
-        let state = self.read_state(&yak_path);
-        let context = self.read_context(&yak_path);
-        let mtime = self.get_mtime(&yak_path);
+        let state = Self::read_state(&yak_path);
+        let context = Self::read_context(&yak_path);
+        let mtime = Self::get_mtime(&yak_path);
 
         Ok(Some(
             Yak::new(name.to_string())
@@ -215,12 +216,11 @@ impl YakStorage for FilesystemStorage {
     fn update_state(&mut self, name: &str, state: YakState) -> Result<()> {
         let resolved_name = self
             .find_yak(name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{name}' not found"))?;
 
         if state == YakState::Done && self.has_incomplete_children(&resolved_name)? {
             bail!(
-                "Error: cannot mark '{}' as done - it has incomplete children",
-                resolved_name
+                "Error: cannot mark '{resolved_name}' as done - it has incomplete children"
             );
         }
 
@@ -239,7 +239,7 @@ impl YakStorage for FilesystemStorage {
         // Otherwise resolve it
         let resolved_name = self
             .find_yak(name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{name}' not found"))?;
 
         let yak_path = self.yak_path(&resolved_name);
         fs::remove_dir_all(yak_path)?;
@@ -249,7 +249,7 @@ impl YakStorage for FilesystemStorage {
     fn set_context(&mut self, name: &str, context: &str) -> Result<()> {
         let resolved_name = self
             .find_yak(name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{name}' not found"))?;
 
         fs::write(self.context_file(&resolved_name), context)?;
         Ok(())
@@ -258,15 +258,15 @@ impl YakStorage for FilesystemStorage {
     fn get_context(&self, name: &str) -> Result<String> {
         let resolved_name = self
             .find_yak(name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{name}' not found"))?;
 
-        Ok(self.read_context(&self.yak_path(&resolved_name)))
+        Ok(Self::read_context(&self.yak_path(&resolved_name)))
     }
 
     fn rename(&mut self, old_name: &str, new_name: &str) -> Result<()> {
         let resolved_old = self
             .find_yak(old_name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", old_name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{old_name}' not found"))?;
 
         validate_yak_name(new_name)?;
         self.ensure_parent_yaks(new_name)?;
@@ -288,7 +288,7 @@ impl YakStorage for FilesystemStorage {
     fn update_state_recursive(&mut self, name: &str, state: YakState) -> Result<()> {
         let resolved_name = self
             .find_yak(name)?
-            .ok_or_else(|| anyhow!("Error: yak '{}' not found", name))?;
+            .ok_or_else(|| anyhow!("Error: yak '{name}' not found"))?;
 
         self.update_state_recursively(&resolved_name, state)
     }
@@ -304,7 +304,7 @@ impl YakStorage for FilesystemStorage {
             .filter_entry(|e| e.file_type().is_dir())
         {
             let entry = entry?;
-            self.migrate_done_file(entry.path())?;
+            Self::migrate_done_file(entry.path())?;
         }
 
         Ok(())

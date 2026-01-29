@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YakState {
@@ -6,14 +7,19 @@ pub enum YakState {
     Done,
 }
 
-impl YakState {
-    pub fn from_str(s: &str) -> Self {
-        match s.trim() {
+impl FromStr for YakState {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim() {
             "done" => YakState::Done,
             _ => YakState::Todo,
-        }
+        })
     }
+}
 
+impl YakState {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             YakState::Todo => "todo",

@@ -4,12 +4,19 @@ use std::cmp::Ordering;
 
 pub struct TerminalFormatter;
 
+impl Default for TerminalFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TerminalFormatter {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
-    fn sort_yaks(&self, yaks: &mut [Yak]) {
+    fn sort_yaks(yaks: &mut [Yak]) {
         yaks.sort_by(|a, b| {
             let a_parent = a.parent().unwrap_or_else(|| ".".to_string());
             let b_parent = b.parent().unwrap_or_else(|| ".".to_string());
@@ -26,22 +33,22 @@ impl TerminalFormatter {
         });
     }
 
-    fn format_markdown_yak(&self, yak: &Yak) -> String {
+    fn format_markdown_yak(yak: &Yak) -> String {
         let depth = yak.depth();
         let indent = "  ".repeat(depth);
         let display_name = yak.basename();
 
         match yak.state {
-            YakState::Done => format!("\x1b[90m{}- [x] {}\x1b[0m", indent, display_name),
-            YakState::Todo => format!("{}- [ ] {}", indent, display_name),
+            YakState::Done => format!("\x1b[90m{indent}- [x] {display_name}\x1b[0m"),
+            YakState::Todo => format!("{indent}- [ ] {display_name}"),
         }
     }
 
-    fn format_plain_yak(&self, yak: &Yak) -> String {
+    fn format_plain_yak(yak: &Yak) -> String {
         yak.name.clone()
     }
 
-    fn should_display(&self, yak: &Yak, filter: &YakFilter) -> bool {
+    fn should_display(yak: &Yak, filter: &YakFilter) -> bool {
         match filter {
             YakFilter::All => true,
             YakFilter::NotDone => yak.state != YakState::Done,
@@ -57,14 +64,14 @@ impl OutputFormatter for TerminalFormatter {
         }
 
         let mut sorted_yaks: Vec<Yak> = yaks.to_vec();
-        self.sort_yaks(&mut sorted_yaks);
+        Self::sort_yaks(&mut sorted_yaks);
 
         let filtered: Vec<String> = sorted_yaks
             .iter()
-            .filter(|y| self.should_display(y, &filter))
+            .filter(|y| Self::should_display(y, &filter))
             .map(|y| match format {
-                OutputFormat::Markdown => self.format_markdown_yak(y),
-                OutputFormat::Plain => self.format_plain_yak(y),
+                OutputFormat::Markdown => Self::format_markdown_yak(y),
+                OutputFormat::Plain => Self::format_plain_yak(y),
             })
             .collect();
 

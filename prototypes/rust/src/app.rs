@@ -34,7 +34,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
     pub fn add(&mut self, name: Option<String>) -> Result<()> {
         if let Some(name) = name {
             self.storage.add(&name)?;
-            self.git.log_command(&format!("add {}", name))?;
+            self.git.log_command(&format!("add {name}"))?;
         } else {
             println!("Enter yaks (empty line to finish):");
             let stdin = io::stdin();
@@ -45,7 +45,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
                 }
                 validate_yak_name(&line)?;
                 self.storage.add(&line)?;
-                self.git.log_command(&format!("add {}", line))?;
+                self.git.log_command(&format!("add {line}"))?;
             }
         }
         Ok(())
@@ -75,11 +75,11 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
             .unwrap_or_else(|| name.to_string());
 
         let cmd = if recursive {
-            format!("done --recursive {}", resolved_name)
+            format!("done --recursive {resolved_name}")
         } else if undo {
-            format!("done --undo {}", resolved_name)
+            format!("done --undo {resolved_name}")
         } else {
-            format!("done {}", resolved_name)
+            format!("done {resolved_name}")
         };
 
         self.git.log_command(&cmd)?;
@@ -93,7 +93,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
             .context("Yak not found")?;
 
         self.storage.remove(name)?;
-        self.git.log_command(&format!("rm {}", resolved_name))?;
+        self.git.log_command(&format!("rm {resolved_name}"))?;
         Ok(())
     }
 
@@ -120,7 +120,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
 
         self.storage.rename(old_name, new_name)?;
         self.git
-            .log_command(&format!("move {} {}", resolved_old, new_name))?;
+            .log_command(&format!("move {resolved_old} {new_name}"))?;
         Ok(())
     }
 
@@ -128,12 +128,12 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
         let resolved_name = self
             .storage
             .find_yak(name)?
-            .context(format!("Error: yak '{}' not found", name))?;
+            .context(format!("Error: yak '{name}' not found"))?;
 
         let yak = self
             .storage
             .get(&resolved_name)?
-            .context(format!("Error: yak '{}' not found", name))?;
+            .context(format!("Error: yak '{name}' not found"))?;
 
         Ok(self.formatter.format_yak_with_context(&yak))
     }
@@ -142,7 +142,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
         let resolved_name = self
             .storage
             .find_yak(name)?
-            .context(format!("Error: yak '{}' not found", name))?;
+            .context(format!("Error: yak '{name}' not found"))?;
 
         if let Some(content) = context {
             self.storage.set_context(&resolved_name, &content)?;
@@ -156,7 +156,7 @@ impl<S: YakStorage, G: GitRepository, O: OutputFormatter> YakApp<S, G, O> {
             self.storage.set_context(&resolved_name, &content)?;
         }
 
-        self.git.log_command(&format!("context {}", resolved_name))?;
+        self.git.log_command(&format!("context {resolved_name}"))?;
         Ok(())
     }
 
