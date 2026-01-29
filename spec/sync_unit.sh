@@ -29,7 +29,7 @@ Describe 'yx sync - unit tests'
 
   It 'stores yak directory in refs/notes/yaks'
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
-    echo "some context" > "$REPO/.yaks/test yak/context.md"
+    echo "some context" | GIT_WORK_TREE="$REPO" "yx" context "test yak"
 
     cd "$REPO"
     git remote add origin "$REPO"

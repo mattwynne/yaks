@@ -34,12 +34,6 @@ is_git_repository() {
   git -C "$GIT_WORK_TREE" rev-parse --git-dir > /dev/null 2>&1
 }
 
-get_git_dir_for_yaks_path() {
-  # Find the git directory for the repository containing YAKS_PATH
-  local yaks_parent=$(dirname "$YAKS_PATH")
-  git -C "$yaks_parent" rev-parse --git-dir 2>/dev/null
-}
-
 yaks_path_exists() {
   [ -d "$YAKS_PATH" ]
 }
@@ -666,20 +660,18 @@ yaks_path_has_content() {
   [ -d "$YAKS_PATH" ] && [ -n "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]
 }
 
-verify_yaks_invariant() {
+has_uncommitted_yak_changes() {
   local local_ref="$1"
 
-  # If no ref exists yet, .yaks can have any content (first sync)
   if [ -z "$local_ref" ]; then
-    return 0
+    yaks_path_has_content
+    return
   fi
 
-  # If no yaks, that's fine
   if ! yaks_path_has_content; then
-    return 0
+    return 1
   fi
 
-  # Verify .yaks matches refs/notes/yaks
   local check_dir=$(mktemp -d)
   trap "rm -rf '$check_dir'" RETURN
   cp -r "$YAKS_PATH"/. "$check_dir"/
@@ -688,17 +680,12 @@ verify_yaks_invariant() {
   git -C "$GIT_WORK_TREE" archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
 
   if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
-    echo "DEBUG: Diff output:" >&2
-    diff -r "$check_dir" "$ref_dir" >&2 || true
     rm -rf "$ref_dir"
-    echo "ERROR: Unexpected changes detected in .yaks folder" >&2
-    echo "The .yaks folder should only be modified through yx commands." >&2
-    echo "Run 'yx sync' to reset .yaks, or investigate the discrepancy." >&2
-    return 1
+    return 0
   fi
 
   rm -rf "$ref_dir"
-  return 0
+  return 1
 }
 
 use_remote_only() {
@@ -792,32 +779,44 @@ get_local_ref() {
   fi
 }
 
+merge_remote_into_local_yaks() {
+  local remote_ref="$1"
+  local temp_dir=$(mktemp -d)
+  git -C "$GIT_WORK_TREE" archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
+  cp -r "$YAKS_PATH"/. "$temp_dir"/
+  rm -rf "$YAKS_PATH"
+  mkdir -p "$YAKS_PATH"
+  cp -r "$temp_dir"/. "$YAKS_PATH"/
+  rm -rf "$temp_dir"
+}
+
 sync_yaks() {
   check_git_setup || exit 1
-
-  local local_ref=$(get_local_ref)
-
-  # If .yaks has content but no ref exists, create initial commit
-  if [ -z "$local_ref" ] && yaks_path_has_content; then
-    log_command "sync"
-    local_ref=$(get_local_ref)
-  fi
-
-  # Verify .yaks matches refs/notes/yaks (enforces invariant)
-  verify_yaks_invariant "$local_ref" || exit 1
 
   git -C "$GIT_WORK_TREE" fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
   local remote_ref=$(get_remote_ref)
+  local local_ref=$(get_local_ref)
 
-  # Merge at git ref level only
+  # If we have local uncommitted changes AND a remote, merge files first
+  if has_uncommitted_yak_changes "$local_ref" && [ -n "$remote_ref" ]; then
+    merge_remote_into_local_yaks "$remote_ref"
+  fi
+
+  # Commit any uncommitted changes in .yaks (including merged state)
+  if has_uncommitted_yak_changes "$local_ref"; then
+    log_command "sync"
+    local_ref=$(get_local_ref)
+  fi
+
+  # Merge at git ref level
   merge_local_and_remote "$local_ref" "$remote_ref"
 
   if git -C "$GIT_WORK_TREE" rev-parse refs/notes/yaks >/dev/null 2>&1; then
     git -C "$GIT_WORK_TREE" push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
   fi
 
-  # Extract final result to .yaks
+  # Extract final result to .yaks (maintains invariant)
   extract_yaks_to_working_dir
 
   git -C "$GIT_WORK_TREE" update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
