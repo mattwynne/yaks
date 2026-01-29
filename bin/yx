@@ -60,6 +60,9 @@ log_command() {
   git -C "$GIT_WORK_TREE" update-ref refs/notes/yaks "$new_commit"
 
   unset GIT_INDEX_FILE
+
+  # Maintain invariant: refresh .yaks from refs/notes/yaks
+  extract_yaks_to_working_dir
 }
 
 validate_yak_name() {
@@ -657,7 +660,7 @@ yaks_path_has_content() {
   [ -d "$YAKS_PATH" ] && [ -n "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]
 }
 
-detect_local_changes() {
+has_uncommitted_yak_changes() {
   local local_ref="$1"
 
   if [ -z "$local_ref" ]; then
@@ -795,40 +798,25 @@ sync_yaks() {
   local remote_ref=$(get_remote_ref)
   local local_ref=$(get_local_ref)
 
-  local has_local_changes=false
-  if detect_local_changes "$local_ref"; then
-    has_local_changes=true
-  fi
-
-  if [ "$has_local_changes" = true ] && [ -n "$remote_ref" ]; then
-    # Rebase-style: overlay local changes on remote base (local wins)
+  # If we have local uncommitted changes AND a remote, merge files first
+  if has_uncommitted_yak_changes "$local_ref" && [ -n "$remote_ref" ]; then
     merge_remote_into_local_yaks "$remote_ref"
-
-    # Commit with remote as parent to create linear history
-    local temp_index=$(mktemp)
-    trap "rm -f '$temp_index'" RETURN
-
-    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_WORK_TREE" read-tree --empty
-    GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_WORK_TREE" add .
-    local tree=$(GIT_INDEX_FILE="$temp_index" git -C "$GIT_WORK_TREE" write-tree)
-
-    local new_commit=$(git -C "$GIT_WORK_TREE" commit-tree $tree -p "$remote_ref" -m "sync")
-    git -C "$GIT_WORK_TREE" update-ref refs/notes/yaks "$new_commit"
-
-    unset GIT_INDEX_FILE
-    # Skip merge_local_and_remote - we've rebased on top of remote
-  elif [ "$has_local_changes" = true ]; then
-    # Local changes but no remote - just commit local
-    log_command "sync"
-  else
-    # No local changes - use standard merge logic to pull remote
-    merge_local_and_remote "$local_ref" "$remote_ref"
   fi
+
+  # Commit any uncommitted changes in .yaks (including merged state)
+  if has_uncommitted_yak_changes "$local_ref"; then
+    log_command "sync"
+    local_ref=$(get_local_ref)
+  fi
+
+  # Merge at git ref level
+  merge_local_and_remote "$local_ref" "$remote_ref"
 
   if git -C "$GIT_WORK_TREE" rev-parse refs/notes/yaks >/dev/null 2>&1; then
     git -C "$GIT_WORK_TREE" push origin refs/notes/yaks:refs/notes/yaks 2>/dev/null || true
   fi
 
+  # Extract final result to .yaks (maintains invariant)
   extract_yaks_to_working_dir
 
   git -C "$GIT_WORK_TREE" update-ref -d refs/remotes/origin/yaks 2>/dev/null || true
