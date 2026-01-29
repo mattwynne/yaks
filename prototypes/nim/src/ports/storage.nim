@@ -1,10 +1,17 @@
 ## Storage port - defines interface for yak persistence
+##
+## This port defines the abstract interface for yak storage operations,
+## following the hexagonal architecture pattern. Concrete implementations
+## (adapters) can store yaks in different backends while the domain logic
+## remains unchanged.
 
 import ../domain/types
 
 type
   YakStorage* = ref object of RootObj
-    ## Abstract storage interface following hexagonal architecture
+    ## Abstract storage interface for yak persistence.
+    ##
+    ## Implementations must override all methods with concrete behavior.
 
 method findAll*(self: YakStorage): seq[Yak] {.base.} =
   ## Find all yaks in storage

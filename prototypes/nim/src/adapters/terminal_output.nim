@@ -1,13 +1,22 @@
 ## Terminal output adapter - implements OutputPort for console display
+##
+## This adapter renders yaks to the terminal using:
+## - ANSI color codes for styling
+## - Hierarchical indentation
+## - Checkbox-style markdown format
 
 import ../domain/types
 import ../ports/output
-import std/[strutils, algorithm, sequtils, terminal]
+import std/[strutils, algorithm]
 
 type
   TerminalOutput* = ref object of OutputPort
+    ## Terminal-based implementation of OutputPort.
+    ##
+    ## Renders output using ANSI escape codes and UTF-8 characters.
 
 proc newTerminalOutput*(): TerminalOutput =
+  ## Creates a new TerminalOutput adapter
   TerminalOutput()
 
 proc getDepth(name: string): int =
@@ -16,9 +25,9 @@ proc getDepth(name: string): int =
 proc getDisplayName(name: string): string =
   let parts = name.split('/')
   if parts.len > 0:
-    parts[^1]
+    return parts[^1]
   else:
-    name
+    return name
 
 proc getParent(name: string): string =
   ## Get the parent path of a yak, or "" if top-level
@@ -28,9 +37,9 @@ proc getParent(name: string): string =
   return parts[0..^2].join("/")
 
 proc displayYakMarkdown(yak: Yak) =
-  let depth = getDepth(yak.name)
+  let depth = yak.name.getDepth()
   let indent = "  ".repeat(depth)
-  let displayName = getDisplayName(yak.name)
+  let displayName = yak.name.getDisplayName()
 
   if yak.state == Done:
     # Use ANSI code \e[90m for grey color
@@ -65,7 +74,7 @@ proc displayHierarchy(yaks: seq[Yak], parent: string,
   # Get children of this parent
   var children: seq[Yak] = @[]
   for yak in yaks:
-    if getParent(yak.name) == parent:
+    if yak.name.getParent() == parent:
       # Apply filter
       case filter
       of NotDone:

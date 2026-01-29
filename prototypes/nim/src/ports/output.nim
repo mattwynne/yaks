@@ -1,18 +1,25 @@
 ## Output port - defines interface for user-facing output
+##
+## This port defines how the application displays information to users,
+## allowing different output implementations (terminal, GUI, etc.) without
+## changing the core business logic.
 
 import ../domain/types
 
 type
   OutputFormat* = enum
-    Markdown
-    Plain
+    ## Display format for yak listings
+    Markdown  ## Checkbox-style markdown format
+    Plain     ## Simple list of names
 
   OutputFilter* = enum
-    All
-    NotDone
-    OnlyDone
+    ## Filter for which yaks to display
+    All        ## Show all yaks
+    NotDone    ## Show only incomplete yaks
+    OnlyDone   ## Show only completed yaks
 
   OutputPort* = ref object of RootObj
+    ## Abstract interface for displaying information to users
 
 method displayYaks*(self: OutputPort, yaks: seq[Yak], format: OutputFormat,
                     filter: OutputFilter) {.base.} =

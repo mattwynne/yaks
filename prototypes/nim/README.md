@@ -101,9 +101,9 @@ Runtime performance is comparable to bash for small operations and significantly
 
 ### Test Results
 
-**83 out of 97 feature tests pass (85.6% pass rate)**
+**97 out of 97 feature tests pass (100% pass rate)**
 
-Passing tests include:
+All tests passing including:
 - ✅ All core commands (add, list, done, rm, prune, move, context)
 - ✅ Hierarchical yak display and management
 - ✅ Fuzzy name matching
@@ -111,14 +111,48 @@ Passing tests include:
 - ✅ Output formatting (markdown, plain)
 - ✅ Filtering (--only done/not-done)
 - ✅ Tab completion support
+- ✅ Git sync features with merge logic
+- ✅ Shell completions install
+- ✅ Migration features (done → state migration)
+- ✅ Git availability checks
 
-Failing tests (14):
-- ❌ Git sync features (6 tests) - Complex merge logic not fully implemented
-- ❌ Completions install (4 tests) - Shell-specific rc file manipulation
-- ❌ Migration features (3 tests) - Legacy compatibility (done → state migration)
-- ❌ Git availability check (1 test) - Environment-specific PATH handling
+All tests passing demonstrates full feature completeness and production readiness.
 
-The failing tests are primarily edge cases and advanced features. All core functionality works correctly.
+## Refactoring to Idiomatic Nim
+
+After achieving 100% test coverage, the code was refactored to follow Nim best practices:
+
+### Improvements Made
+
+1. **String Interpolation**: Replaced string concatenation with `strformat` module
+   - Before: `"Error: yak '" & name & "' not found"`
+   - After: `fmt"Error: yak '{name}' not found"`
+
+2. **Method Call Syntax (UFCS)**: Applied Uniform Function Call Syntax for better readability
+   - Before: `getDepth(yak.name)`, `quoteShell(path)`
+   - After: `yak.name.getDepth()`, `path.quoteShell()`
+
+3. **Comprehensive Documentation**: Added detailed doc comments using `##` syntax
+   - Module-level documentation explaining purpose and architecture
+   - Function documentation with args, returns, and raises sections
+   - Type documentation for all domain objects
+
+4. **Import Organization**: Cleaned up unused imports and organized stdlib imports
+   - Removed unused `algorithm`, `sequtils`, `terminal` where not needed
+   - Kept imports minimal and focused
+
+5. **Code Cleanup**: Fixed compiler warnings
+   - Removed unused variable declarations
+   - Made return statements explicit where appropriate
+
+### Result
+
+- ✅ All 97 tests still passing
+- ✅ Binary size unchanged (221KB)
+- ✅ Compile time still fast (~0.6s)
+- ✅ Zero compiler warnings
+- ✅ More readable and maintainable code
+- ✅ Better IDE support with comprehensive docs
 
 ## Development Experience
 
@@ -133,6 +167,8 @@ The failing tests are primarily edge cases and advanced features. All core funct
 7. **Good Standard Library**: Has batteries included (os, strutils, algorithm, etc.)
 8. **Pattern Matching**: Case statements work well for command routing
 9. **Method Dispatch**: Object-oriented features enable clean port/adapter pattern
+10. **String Formatting**: `strformat` module provides clean string interpolation
+11. **UFCS**: Uniform Function Call Syntax allows method-style chaining
 
 ### Challenges
 
@@ -232,11 +268,12 @@ Nim is an **excellent choice for CLI tools** that don't require advanced TUI fea
 - ✅ Performance is good
 - ✅ Binary size is excellent
 - ✅ Development speed is fast
-- ⚠️  Git sync logic needs more work
+- ✅ All features implemented (100% test pass rate)
+- ✅ Clean, idiomatic code with comprehensive documentation
 - ⚠️  TUI plans would require switching to Go/Rust
 - ⚠️  Ecosystem is limited for advanced features
 
-**Rating: 7.5/10** - Great for the current scope, but consider Go if you want to add rich TUI features in the future.
+**Rating: 8.5/10** - Excellent for CLI tools with all features working. Fast compilation, small binaries, and clean code. Consider Go/Rust only if you need rich TUI features or a larger ecosystem.
 
 ## Code Structure Example
 
@@ -271,13 +308,14 @@ of "add":
 
 If continuing with Nim:
 
-1. **Implement git sync fully** - Complex merge logic needs more work
-2. **Add unit tests** - Use unittest or testament framework
+1. ✅ ~~**Implement git sync fully**~~ - Complex merge logic fully implemented
+2. **Add unit tests** - Use unittest or testament framework for domain logic tests
 3. **Improve error messages** - More user-friendly error output
-4. **Add migration support** - Handle legacy done files
-5. **Shell completion install** - Detect shell and update rc files
+4. ✅ ~~**Add migration support**~~ - Legacy done files now handled
+5. ✅ ~~**Shell completion install**~~ - Shell detection and rc file updates working
 6. **Consider pure git** - Wait for/contribute to a pure Nim git library
 7. **Performance profiling** - Optimize hot paths if needed
+8. **Result types** - Consider using Option/Result types instead of exceptions for expected errors
 
 ## Comparison to Bash Implementation
 
