@@ -1,3 +1,6 @@
+// Package filesystem implements the domain.YakRepository interface using
+// the filesystem as storage. Each yak is stored as a directory under the
+// configured yaks path, with state and context files.
 package filesystem
 
 import (

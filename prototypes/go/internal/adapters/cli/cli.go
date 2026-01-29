@@ -1,3 +1,5 @@
+// Package cli provides the command-line interface adapter for the yaks system.
+// It handles command parsing, user interaction, and output formatting.
 package cli
 
 import (

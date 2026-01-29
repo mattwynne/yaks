@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mattwynne/yaks/internal/adapters/cli"
 	"github.com/mattwynne/yaks/internal/adapters/filesystem"
@@ -73,18 +74,6 @@ func main() {
 }
 
 func isGitIgnored(gitWorkTree, path string) bool {
-	// Create a temp file in .yaks to check
-	testPath := filepath.Join(gitWorkTree, path, ".test")
-	os.MkdirAll(filepath.Dir(testPath), 0755)
-	os.WriteFile(testPath, []byte("test"), 0644)
-	defer os.Remove(testPath)
-
-	// Use git check-ignore
-	cmd := fmt.Sprintf("cd %s && git check-ignore -q %s", gitWorkTree, path)
-	if err := os.Chdir(gitWorkTree); err != nil {
-		return false
-	}
-
 	// Simple check: see if .gitignore exists and contains .yaks
 	gitignorePath := filepath.Join(gitWorkTree, ".gitignore")
 	content, err := os.ReadFile(gitignorePath)
@@ -92,23 +81,7 @@ func isGitIgnored(gitWorkTree, path string) bool {
 		return false
 	}
 
-	for _, line := range []string{".yaks", ".yaks/", "/.yaks", "/.yaks/"} {
-		for _, gitignoreLine := range []byte(content) {
-			if string(gitignoreLine) == line {
-				return true
-			}
-		}
-	}
-
-	// Check via git
-	_ = cmd // silence unused warning
-	// For simplicity, just check if .gitignore contains .yaks
-	return contains(string(content), ".yaks")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[:len(substr)] == substr || contains(s[1:], substr)))
+	return strings.Contains(string(content), ".yaks")
 }
 
 func migrateOldDoneFiles(yaksPath string) {
@@ -116,7 +89,7 @@ func migrateOldDoneFiles(yaksPath string) {
 		return
 	}
 
-	filepath.Walk(yaksPath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(yaksPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -124,8 +97,8 @@ func migrateOldDoneFiles(yaksPath string) {
 		if !info.IsDir() && info.Name() == "done" {
 			yakDir := filepath.Dir(path)
 			stateFile := filepath.Join(yakDir, "state")
-			os.WriteFile(stateFile, []byte("done"), 0644)
-			os.Remove(path)
+			_ = os.WriteFile(stateFile, []byte("done"), 0644)
+			_ = os.Remove(path)
 		}
 
 		return nil

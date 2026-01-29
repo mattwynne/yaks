@@ -1,3 +1,6 @@
+// Package domain defines the core business logic and interfaces for the yaks system.
+// It contains domain entities (Yak), business rules (validation), and port interfaces
+// (YakRepository, GitSync) that adapters must implement.
 package domain
 
 import (
@@ -28,7 +31,7 @@ func ValidateYakName(name string) error {
 	// Check for forbidden characters: \ : * ? | < > "
 	forbidden := regexp.MustCompile(`[\\:*?|<>"]`)
 	if forbidden.MatchString(name) {
-		return fmt.Errorf("Invalid yak name: contains forbidden characters (\\ : * ? | < > \")")
+		return fmt.Errorf("invalid yak name: contains forbidden characters (\\ : * ? | < > \")")
 	}
 	return nil
 }
@@ -106,10 +109,10 @@ func (f *FuzzyMatcher) FindYak(searchTerm string, yaks []Yak) (string, error) {
 	}
 
 	if len(matches) == 0 {
-		return "", fmt.Errorf("Error: yak '%s' not found", searchTerm)
+		return "", fmt.Errorf("yak '%s' not found", searchTerm)
 	} else if len(matches) == 1 {
 		return matches[0], nil
 	} else {
-		return "", fmt.Errorf("Error: yak name '%s' is ambiguous", searchTerm)
+		return "", fmt.Errorf("yak name '%s' is ambiguous", searchTerm)
 	}
 }

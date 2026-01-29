@@ -1,3 +1,5 @@
+// Package terminal provides output formatting utilities for the CLI,
+// including markdown and plain text formatters with ANSI color support.
 package terminal
 
 import (

@@ -1,3 +1,6 @@
+// Package git implements the domain.GitSync interface using git commands.
+// It provides synchronization of yaks through git refs/notes/yaks, allowing
+// distributed collaboration on task lists.
 package git
 
 import (
@@ -104,11 +107,11 @@ func (s *Sync) LogCommand(message string) error {
 // Sync performs push/pull synchronization
 func (s *Sync) Sync() error {
 	if !s.IsGitRepository() {
-		return fmt.Errorf("Error: not in a git repository")
+		return fmt.Errorf("not in a git repository")
 	}
 
 	if !s.HasOriginRemote() {
-		return fmt.Errorf("Error: no origin remote configured")
+		return fmt.Errorf("no origin remote configured")
 	}
 
 	// Fetch remote yaks
