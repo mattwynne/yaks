@@ -1,14 +1,25 @@
 ## Filesystem storage adapter - implements YakStorage using directory structure
+##
+## This adapter implements yak storage using the filesystem:
+## - Each yak is a directory: .yaks/yak-name/
+## - State is stored in: .yaks/yak-name/state
+## - Context is stored in: .yaks/yak-name/context.md
+## - Hierarchy is represented via directory nesting
 
 import ../domain/types
 import ../ports/storage
-import std/[os, times, strutils, sequtils, algorithm]
+import std/[os, times, strutils, strformat]
 
 type
   FilesystemStorage* = ref object of YakStorage
-    basePath*: string
+    ## Filesystem-based implementation of YakStorage
+    basePath*: string  ## Root directory for yak storage (usually .yaks)
 
 proc newFilesystemStorage*(basePath: string): FilesystemStorage =
+  ## Creates a new FilesystemStorage adapter.
+  ##
+  ## Args:
+  ##   basePath: Root directory for yak storage (e.g., ".yaks")
   result = FilesystemStorage(basePath: basePath)
 
 proc getYakPath(self: FilesystemStorage, name: string): string =
@@ -60,7 +71,7 @@ method findAll*(self: FilesystemStorage): seq[Yak] =
 method findByName*(self: FilesystemStorage, name: string): Yak =
   let yakPath = self.getYakPath(name)
   if not dirExists(yakPath):
-    raise newException(NotFoundError, "Yak not found: " & name)
+    raise newException(NotFoundError, fmt"Yak not found: {name}")
 
   let statePath = self.getStatePath(name)
   let contextPath = self.getContextPath(name)

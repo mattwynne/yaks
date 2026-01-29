@@ -1,8 +1,14 @@
 ## Git port - defines interface for git operations
+##
+## This port defines the abstract interface for git-related operations,
+## allowing the domain logic to interact with git without depending on
+## a specific implementation.
 
 type
   GitRepository* = ref object of RootObj
-    ## Abstract git interface
+    ## Abstract interface for git repository operations.
+    ##
+    ## Implementations handle git command logging and synchronization.
 
 method isRepository*(self: GitRepository): bool {.base.} =
   raise newException(CatchableError, "Not implemented")

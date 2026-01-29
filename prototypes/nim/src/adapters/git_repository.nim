@@ -1,19 +1,32 @@
 ## Git repository adapter - implements GitRepository using git commands
+##
+## This adapter implements git operations by shelling out to the git CLI.
+## It handles:
+## - Command logging via git refs/notes/yaks
+## - Synchronization with remote repositories
+## - Repository and gitignore validation
 
 import ../ports/git
-import std/[osproc, strutils, os, tempfiles]
+import std/[osproc, strutils, os, tempfiles, strformat]
 
 type
   ShellGitRepository* = ref object of GitRepository
-    workTree*: string
+    ## Shell-based implementation of GitRepository.
+    ##
+    ## Executes git commands via shell to interact with the repository.
+    workTree*: string  ## Path to the git working tree
 
 proc newShellGitRepository*(workTree: string): ShellGitRepository =
+  ## Creates a new ShellGitRepository adapter.
+  ##
+  ## Args:
+  ##   workTree: Path to the git working tree
   ShellGitRepository(workTree: workTree)
 
 proc runGit(self: ShellGitRepository, args: string): (string, int) =
   ## Run a git command and return (output, exitCode)
-  let cmd = "git -C " & quoteShell(self.workTree) & " " & args
-  let (output, exitCode) = execCmdEx(cmd)
+  let cmd = fmt"git -C {self.workTree.quoteShell()} {args}"
+  let (output, exitCode) = cmd.execCmdEx()
   return (output.strip(), exitCode)
 
 method isRepository*(self: ShellGitRepository): bool =
@@ -25,7 +38,7 @@ method hasOrigin*(self: ShellGitRepository): bool =
   return exitCode == 0
 
 method checkIgnored*(self: ShellGitRepository, path: string): bool =
-  let (_, exitCode) = self.runGit("check-ignore -q " & path)
+  let (_, exitCode) = self.runGit(fmt"check-ignore -q {path}")
   return exitCode == 0
 
 method logCommand*(self: ShellGitRepository, message: string) =
@@ -41,37 +54,27 @@ method logCommand*(self: ShellGitRepository, message: string) =
 
   try:
     # Read tree into temp index
-    discard execCmd("GIT_INDEX_FILE=" & quoteShell(tmpPath) &
-                   " GIT_WORK_TREE=" & quoteShell(yaksPath) &
-                   " git -C " & quoteShell(self.workTree) &
-                   " read-tree --empty")
+    discard execCmd(fmt"GIT_INDEX_FILE={quoteShell(tmpPath)} GIT_WORK_TREE={quoteShell(yaksPath)} git -C {quoteShell(self.workTree)} read-tree --empty")
 
     # Add all files
-    discard execCmd("GIT_INDEX_FILE=" & quoteShell(tmpPath) &
-                   " GIT_WORK_TREE=" & quoteShell(yaksPath) &
-                   " git -C " & quoteShell(self.workTree) &
-                   " add .")
+    discard execCmd(fmt"GIT_INDEX_FILE={quoteShell(tmpPath)} GIT_WORK_TREE={quoteShell(yaksPath)} git -C {quoteShell(self.workTree)} add .")
 
     # Write tree
-    let (tree, _) = execCmdEx("GIT_INDEX_FILE=" & quoteShell(tmpPath) &
-                              " git -C " & quoteShell(self.workTree) &
-                              " write-tree")
+    let (tree, _) = execCmdEx(fmt"GIT_INDEX_FILE={quoteShell(tmpPath)} git -C {quoteShell(self.workTree)} write-tree")
 
     # Check for parent
     var parentArgs = ""
     let (_, checkCode) = self.runGit("rev-parse refs/notes/yaks")
     if checkCode == 0:
       let (parentSha, _) = self.runGit("rev-parse refs/notes/yaks")
-      parentArgs = "-p " & parentSha.strip()
+      parentArgs = fmt"-p {parentSha.strip()}"
 
     # Commit tree
-    let commitCmd = "commit-tree " & tree.strip() &
-                   " " & parentArgs &
-                   " -m " & quoteShell(message)
+    let commitCmd = fmt"commit-tree {tree.strip()} {parentArgs} -m {quoteShell(message)}"
     let (newCommit, _) = self.runGit(commitCmd)
 
     # Update ref
-    discard self.runGit("update-ref refs/notes/yaks " & newCommit.strip())
+    discard self.runGit(fmt"update-ref refs/notes/yaks {newCommit.strip()}")
   except:
     discard
 
@@ -99,8 +102,7 @@ method sync*(self: ShellGitRepository) =
     let tmpDir = createTempDir("yaks_merge_", "")
     defer: removeDir(tmpDir)
 
-    discard self.runGit("archive " & remoteRef.strip() &
-                       " | tar -x -C " & quoteShell(tmpDir))
+    discard self.runGit(fmt"archive {remoteRef.strip()} | tar -x -C {quoteShell(tmpDir)}")
 
     # Copy local on top
     if dirExists(yaksPath):
@@ -120,15 +122,14 @@ method sync*(self: ShellGitRepository) =
 
   elif not hasLocalChanges and remoteCode == 0:
     # Just use remote
-    discard self.runGit("update-ref refs/notes/yaks " & remoteRef.strip())
+    discard self.runGit(fmt"update-ref refs/notes/yaks {remoteRef.strip()}")
 
   # Extract to working directory
   if localCode == 0:
     if dirExists(yaksPath):
       removeDir(yaksPath)
     createDir(yaksPath)
-    discard self.runGit("archive refs/notes/yaks | tar -x -C " &
-                       quoteShell(yaksPath))
+    discard self.runGit(fmt"archive refs/notes/yaks | tar -x -C {quoteShell(yaksPath)}")
 
   # Push to origin
   if localCode == 0:

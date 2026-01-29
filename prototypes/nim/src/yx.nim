@@ -1,8 +1,8 @@
 ## Main CLI entry point - wires adapters to domain logic
 
-import std/[os, strutils, rdstdin, terminal]
+import std/[os, strutils, rdstdin, terminal, strformat]
 import domain/[types, services]
-import ports/[storage, git, output]
+import ports/output
 import adapters/[filesystem_storage, git_repository, terminal_output]
 
 proc getWorkTree(): string =
@@ -154,11 +154,11 @@ proc main() =
         if stdin.isatty():
           # Use editor
           let editor = getEnv("EDITOR", "vi")
-          let (resolvedName, currentContext) = service.getContext(name)
-          let tempFile = getTempDir() / "yak_context_" & $getCurrentProcessId() & ".md"
+          let (_, currentContext) = service.getContext(name)
+          let tempFile = getTempDir() / fmt"yak_context_{getCurrentProcessId()}.md"
           writeFile(tempFile, currentContext)
 
-          let exitCode = execShellCmd(editor & " " & quoteShell(tempFile))
+          let exitCode = execShellCmd(fmt"{editor} {quoteShell(tempFile)}")
           if exitCode == 0:
             let newContext = readFile(tempFile)
             service.updateContext(name, newContext)
