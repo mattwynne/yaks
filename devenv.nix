@@ -5,11 +5,12 @@
   env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = with pkgs; [ 
+  packages = with pkgs; [
     shellspec
     bats
     nim
-    git 
+    git
+    zig
   ];
 
   # https://devenv.sh/languages/
