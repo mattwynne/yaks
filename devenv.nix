@@ -14,7 +14,7 @@
   ];
 
   # https://devenv.sh/languages/
-  # languages.rust.enable = true;
+  languages.go.enable = true;
 
   # https://devenv.sh/processes/
   # processes.dev.exec = "${lib.getExe pkgs.watchexec} -n -- ls -la";
@@ -22,15 +22,10 @@
   # https://devenv.sh/services/
   # services.postgres.enable = true;
 
-  # https://devenv.sh/scripts/
-  scripts.yo.exec = ''
-    echo hello from $GREET
-  '';
-
   # https://devenv.sh/basics/
   enterShell = ''
-    yo            # Run scripts directly
-    git --version # Use packages
+    echo "Go development environment loaded"
+    go version
   '';
 
   # https://devenv.sh/tasks/
