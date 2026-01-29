@@ -370,6 +370,51 @@ For now, the bash implementation is working well. Consider Go when you're ready 
    - Suggestions for fixes
    - Context-aware help
 
+## Code Quality Improvements
+
+The codebase has been refactored to follow idiomatic Go patterns and best practices:
+
+### Refactoring Applied
+
+1. **Package Documentation**
+   - Added comprehensive package-level documentation to all packages
+   - Follows Go convention: `// Package name does...`
+   - Helps godoc generate useful documentation
+
+2. **Error Message Conventions**
+   - Fixed error capitalization (lowercase per Go style guide)
+   - Error messages should not be capitalized unless starting with proper noun
+   - Passes `staticcheck` linting
+
+3. **Simplified main.go**
+   - Removed recursive `contains()` function
+   - Replaced with idiomatic `strings.Contains`
+   - Simplified `isGitIgnored` function
+   - Added explicit error ignoring with `_ =` where appropriate
+
+4. **Code Analysis**
+   - Passes `go fmt` (formatting)
+   - Passes `go vet` (suspicious constructs)
+   - Passes `staticcheck` (additional static analysis)
+   - All 97 tests remain passing
+
+### Go Best Practices Followed
+
+- Clean hexagonal architecture with clear dependency direction
+- Idiomatic error handling (explicit checks, not exceptions)
+- Proper use of `defer` for resource cleanup
+- Short variable names in limited scope
+- Clear separation between domain logic and infrastructure
+- Interface-based design for testability and flexibility
+
+### What Was NOT Changed
+
+Deliberately avoided over-engineering:
+- **No context.Context**: CLI operations are quick and user-initiated
+- **No error wrapping chains**: CLI errors are already clear at source
+- **Kept switch statement**: More readable than map-based routing for commands
+- **Maintained test compatibility**: 100% backward compatible with existing tests
+
 ## Conclusion
 
 This Go prototype successfully demonstrates that yaks can be implemented with clean hexagonal architecture. All 97 feature tests pass, proving functional equivalence with the bash version.
