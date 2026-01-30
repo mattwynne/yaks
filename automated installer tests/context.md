@@ -6,28 +6,32 @@ Those tests should be runnable locally or in CI.
 
 The script needs some affordances for short-circuiting download of a release, and for skipping interactive inputs.
 
-## Status: Implementation Plan Created
+## Status: Implementation In Progress
 
-**Plan Location:** `docs/plans/2026-01-29-automated-installer-tests.md`
+**Plan Location:** `.worktrees/automated-installer-tests/docs/plans/2026-01-29-automated-installer-tests.md`
 
 **Current State:**
 - ✓ Brainstormed and validated design
 - ✓ Created worktree at `.worktrees/automated-installer-tests`
 - ✓ Built release artifact (release/yx.zip)
-- ✓ Created test infrastructure (test in RED state)
+- ✓ Created test infrastructure
 - ✓ Created detailed implementation plan
+- ✓ **Task 1 COMPLETE: Fixed test expectation (commit 890801b)**
+  - Updated spec/features/install.sh to expect success
+  - Added smoke tests (yx --help, yx add foo, yx ls)
+  - Test runs and fails as expected (YX_SOURCE not supported yet)
 
-**Implementation Plan Summary:**
-1. Fix test expectation (expect success + smoke tests)
-2. Add env var support for prompts (YX_SHELL_CHOICE, YX_AUTO_COMPLETE)
-3. Add YX_SOURCE with zip handling (main refactor)
-4. Verify with local release
-5. Run full test suite
-6. Clean up unused files
-7. Update documentation
+**Implementation Progress:**
+- [x] Task 1: Fix Test Expectation
+- [ ] Task 2: Add Environment Variable Support for Prompts
+- [ ] Task 3: Add YX_SOURCE with Zip Handling
+- [ ] Task 4: Test with Local Release (Verification)
+- [ ] Task 5: Run Full Test Suite
+- [ ] Task 6: Clean Up Unused Files
+- [ ] Task 7: Update Documentation
 
 **Next Steps:**
-Use superpowers:executing-plans or superpowers:subagent-driven-development to implement the plan task-by-task.
+Task 2 is ready to implement - add YX_SHELL_CHOICE and YX_AUTO_COMPLETE support to install.sh.
 
 **Success Criteria:**
 - shellspec spec/features/install.sh passes
