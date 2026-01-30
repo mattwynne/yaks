@@ -1,107 +1,67 @@
 # Automated Installer Tests
 
-## Goal
-Create automated tests for install.sh that can run in CI and test different scenarios:
-- Different shells (bash, zsh)
-- Different package managers/installation methods
-- Different distros
-- Interactive prompt handling
+## Design Overview
 
-## Approach: ShellSpec + Docker
-Since we already use ShellSpec for testing yx itself, extend it to test the installer.
+Create automated tests for install.sh that run in Docker and verify the installer works end-to-end with functional smoke tests.
 
-**Phase 1: ShellSpec Tests (START HERE)**
-1. Add non-interactive mode to install.sh via environment variables:
-   - YX_SHELL_CHOICE (1=zsh, 2=bash)
-   - YX_AUTO_COMPLETE (y/n)
-   - YX_SOURCE (allow specifying a local path for release artefacts instead of downloading)
-2. Create spec/install_spec.sh
-3. Create spec/support/docker/ with container for Ubuntu
-4. basic test in spec/install_spec.sh that runs the install script on the docker image and verifies that you can run a few smoke tests using the installed yx binary. (e.g. `git init . && yx add foo && yx ls`)
+## Goals
 
-**Phase 2: Docker Multi-Distro Testing**
-- Create test/docker/ with containers for Ubuntu, Debian, Alpine, and different shells (bash, zsh)
-- Wrapper script test/test-all-distros.sh
-3. Test core scenarios with all distros
+- Test install.sh in realistic environment (Docker containers)
+- Use local release artifacts for fast, deterministic tests
+- Verify installer actually works (not just that files get copied)
+- Enable non-interactive testing via environment variables
 
-**Phase 3: CI Integration**
-- GitHub Actions workflow
-- Matrix strategy (shells × distros)
-- Test both local and GitHub download modes
+## Design Decisions
 
-**Phase 4: Interactive Testing (Optional)**
-- Expect scripts for /dev/tty prompt testing
-- Edge cases (invalid input, EOF)
+### 1. Simplify install.sh with YX_SOURCE
 
-### Key Testing Patterns
+**Current state**: install.sh has branching logic (local vs download)
 
-**Isolated Test Setup:**
-```bash
-setup() {
-  TEST_HOME=$(mktemp -d)
-  export HOME="$TEST_HOME"
-  export PATH="$TEST_HOME/.local/bin:$PATH"
-}
-```
+**New approach**: Always work from a zip file:
+- `YX_SOURCE` environment variable points to zip (local path or URL)
+- Default: `https://github.com/mattwynne/yaks/releases/download/latest/yx.zip`
+- Simpler, more consistent, easier to test
 
-**Test Matrix:**
-- Shells: bash, zsh
-- Install locations: /usr/local/bin (writable), ~/.local/bin (fallback)
-- Sources: local repo vs GitHub download
-- Prompts: shell choice, completion setup
-- PATH scenarios: already in PATH vs not
+### 2. Environment Variables
 
-**Docker Testing Example:**
-```bash
-for shell in bash zsh; do
-  docker run --rm -v $(pwd):/app -w /app ubuntu:22.04 bash -c "
-    apt-get update -qq && apt-get install -y -qq curl $shell
-    export YX_SHELL_CHOICE=2 YX_AUTO_COMPLETE=n
-    ./install.sh
-    yx --help
-  "
-done
-```
+Three environment variables for non-interactive mode:
+- **YX_SOURCE**: Path or URL to yx.zip (default: latest GitHub release)
+- **YX_SHELL_CHOICE**: 1 for zsh, 2 for bash (if unset: prompt)
+- **YX_AUTO_COMPLETE**: y or n (if unset: prompt)
 
-### Handling Interactive Prompts
+### 3. Test Strategy
 
-Our install.sh uses `/dev/tty` for prompts (lines 43, 96), which bypasses stdin.
+**Phase 1**: Minimal happy path
+- One test: Ubuntu 22.04, bash, no auto-complete
+- Uses local release zip (fast, no network)
+- Functional verification with smoke tests: `yx --help`, `yx add`, `yx ls`
 
-**Solution**: Add environment variable support:
-```bash
-if [ -n "$YX_SHELL_CHOICE" ]; then
-    SHELL_CHOICE="$YX_SHELL_CHOICE"
-else
-    read -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE </dev/tty
-fi
-```
+### 4. Implementation Order (TDD)
 
-Alternative: Use Expect scripts for testing actual interactive behavior.
+1. Update docker_helpers.sh to set YX_SOURCE
+2. Run test - expect failure
+3. Add zip handling to install.sh
+4. Expand test to run smoke tests
+5. Add env var support for prompts
+6. Remove old conditional logic
+7. Test passes
 
-### CI/CD Integration
+## install.sh Changes
 
-GitHub Actions matrix example:
-```yaml
-strategy:
-  matrix:
-    shell: [bash, zsh]
-    distro: [ubuntu:22.04, ubuntu:24.04, debian:12]
-```
+1. Add YX_SOURCE with zip handling (download if URL, copy if local)
+2. Extract zip to temp dir
+3. Install from extracted files
+4. Check env vars before prompting (YX_SHELL_CHOICE, YX_AUTO_COMPLETE)
+5. Remove old `if [ -f "bin/yx" ]` conditional
 
-### Real-World Examples
-- NVM: Multi-shell testing with GitHub Actions
-- Rustup: Docker for Linux distro testing
-- Homebrew: Extensive CI with containers
+## Test Structure
 
-## Implementation Priority
+- `spec/features/install.sh`: Expand to run smoke tests
+- `spec/support/docker_helpers.sh`: Update to set YX_SOURCE
 
-1. Add env var support to install.sh (non-breaking change)
-2. Create basic ShellSpec tests in spec/install_spec.sh
-3. Add Docker Compose setup for multi-distro testing
-4. Add GitHub Actions workflow
-5. (Optional) Add Expect scripts for interactive testing
+## Success Criteria
 
-## References
-- ShellSpec: https://shellspec.info/
-- BATS: https://github.com/bats-core/bats-core
-- Docker testing patterns: https://www.linux.com/training-tutorials/testing-simple-scripts-docker-container/
+- `shellspec spec/features/install.sh` passes
+- Test runs in Docker with local release zip
+- Smoke tests verify yx commands work
+- install.sh works for real users (downloads from GitHub latest by default)
