@@ -1,7 +1,7 @@
 Describe 'install.sh'
   It 'installs yx from release zip and runs smoke tests'
     run_install() {
-      docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR"
+      docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR" 2>/dev/null
 
       docker run --rm \
         -v "$TEST_PROJECT_DIR:/workspace" \
