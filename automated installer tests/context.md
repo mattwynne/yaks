@@ -1,27 +1,37 @@
 # Automated Installer Tests
 
-Goal: We want to be able to run automated tests of our users' install.sh script.
+## Current Status: Optimizing test performance
 
-Those tests should be runnable locally or in CI.
+Tests are working but slow due to apt-get operations running on every test.
 
-The script needs some affordances for short-circuiting download of a release, and for skipping interactive inputs.
+## Plan: Docker Base Image
 
-## Status: COMPLETE
+**Problem:** apt-get update/install runs on every test execution, making tests slow.
 
-**Plan Location:** `.worktrees/automated-installer-tests/docs/plans/2026-01-29-automated-installer-tests.md`
+**Solution:** Pre-built Docker image with dependencies baked in.
 
-**All Tasks Completed:**
-- ✓ Task 1: Fixed test expectation (commit 890801b)
-- ✓ Task 2: Added environment variable support (commit 8ff5b88)
-- ✓ Task 3: Added YX_SOURCE with zip handling (commits 0b9c4e3, 332923b)
-- ✓ Task 4: Tested with local release (verified via automated test)
-- ✓ Task 5: Ran full test suite (install.sh test passes, 2 pre-existing failures unrelated)
-- ✓ Task 6: Cleaned up unused files (commit d5533de)
-- ✓ Task 7: Updated documentation (commit 3b53755)
+### Design
 
-**Success Criteria Met:**
-- ✓ shellspec spec/features/install.sh passes
-- ✓ Install.sh works with local zip and GitHub download
-- ✓ Documentation updated with environment variables
+1. **Dockerfile** (`spec/features/Dockerfile.installer-test`):
+```dockerfile
+FROM ubuntu:22.04
 
-**Ready to merge to main.**
+RUN apt-get update && \
+    apt-get install -y curl bash unzip git
+```
+
+2. **Test changes** (`spec/features/install.sh`):
+   - Add `docker build -t yx-installer-test-base` before docker run
+   - Change base image from `ubuntu:22.04` to `yx-installer-test-base`
+   - Remove apt-get commands from test script
+   - Remove output suppression for visibility
+
+### Performance
+- First run: Same as current (builds image)
+- Subsequent runs: Fast (cached layers)
+- Rebuilds only when Dockerfile changes
+
+### Implementation Steps
+1. Create Dockerfile
+2. Update test to build and use the image
+3. Run test to verify
