@@ -7,23 +7,22 @@ Create automated tests for install.sh that can run in CI and test different scen
 - Different distros
 - Interactive prompt handling
 
-## Research Findings
-
-### Recommended Approach: ShellSpec + Docker
+## Approach: ShellSpec + Docker
 Since we already use ShellSpec for testing yx itself, extend it to test the installer.
 
 **Phase 1: ShellSpec Tests (START HERE)**
 1. Add non-interactive mode to install.sh via environment variables:
    - YX_SHELL_CHOICE (1=zsh, 2=bash)
    - YX_AUTO_COMPLETE (y/n)
-   - YX_TEST_MODE (use local files, skip curl)
+   - YX_SOURCE (allow specifying a local path for release artefacts instead of downloading)
 2. Create spec/install_spec.sh
-3. Test core scenarios with temp directories
+3. Create spec/support/docker/ with container for Ubuntu
+4. basic test in spec/install_spec.sh that runs the install script on the docker image and verifies that you can run a few smoke tests using the installed yx binary. (e.g. `git init . && yx add foo && yx ls`)
 
 **Phase 2: Docker Multi-Distro Testing**
-- Create test/docker/ with containers for Ubuntu, Debian, Alpine
-- Docker Compose for parallel testing
+- Create test/docker/ with containers for Ubuntu, Debian, Alpine, and different shells (bash, zsh)
 - Wrapper script test/test-all-distros.sh
+3. Test core scenarios with all distros
 
 **Phase 3: CI Integration**
 - GitHub Actions workflow
@@ -93,32 +92,6 @@ strategy:
 - NVM: Multi-shell testing with GitHub Actions
 - Rustup: Docker for Linux distro testing
 - Homebrew: Extensive CI with containers
-
-### Tools Considered
-
-**ShellSpec** ⭐ RECOMMENDED
-- Already in use for yx tests
-- Cross-shell support (bash, zsh, dash, POSIX)
-- BDD-style syntax
-- Built-in mocking
-- CI integration
-
-**BATS**
-- Alternative to ShellSpec
-- More Bash-specific
-- Simpler syntax
-- Good community support
-
-**Expect**
-- For interactive prompt testing
-- Handles /dev/tty
-- More complex to maintain
-
-**Docker**
-- Essential for distro testing
-- Isolated environments
-- CI-friendly
-- Reproducible
 
 ## Implementation Priority
 
