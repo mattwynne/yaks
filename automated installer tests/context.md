@@ -20,10 +20,14 @@ The script needs some affordances for short-circuiting download of a release, an
   - Updated spec/features/install.sh to expect success
   - Added smoke tests (yx --help, yx add foo, yx ls)
   - Test runs and fails as expected (YX_SOURCE not supported yet)
+- ✓ **Task 2 COMPLETE: Add Environment Variable Support (commit 8ff5b88)**
+  - Added YX_SHELL_CHOICE env var to skip shell choice prompt
+  - Added YX_AUTO_COMPLETE env var to skip auto-complete prompt
+  - Install.sh now supports non-interactive mode for testing
 
 **Implementation Progress:**
 - [x] Task 1: Fix Test Expectation
-- [ ] Task 2: Add Environment Variable Support for Prompts
+- [x] Task 2: Add Environment Variable Support for Prompts
 - [ ] Task 3: Add YX_SOURCE with Zip Handling
 - [ ] Task 4: Test with Local Release (Verification)
 - [ ] Task 5: Run Full Test Suite
@@ -31,7 +35,7 @@ The script needs some affordances for short-circuiting download of a release, an
 - [ ] Task 7: Update Documentation
 
 **Next Steps:**
-Task 2 is ready to implement - add YX_SHELL_CHOICE and YX_AUTO_COMPLETE support to install.sh.
+Task 3 is ready to implement - add YX_SOURCE support with zip handling to replace local/download branching.
 
 **Success Criteria:**
 - shellspec spec/features/install.sh passes
