@@ -9,6 +9,7 @@ Describe 'install.sh'
         -e YX_SOURCE="/workspace/release/yx.zip" \
         -e YX_SHELL_CHOICE="2" \
         -e YX_AUTO_COMPLETE="n" \
+        -e NO_COLOR="1" \
         yx-installer-test-base \
         bash -c '
           ./install.sh
@@ -21,7 +22,7 @@ Describe 'install.sh'
           echo ".yaks" > .gitignore
           yx add foo
           yx ls
-        ' | sed 's/\x1b\[[0-9;]*m//g'
+        '
     }
     When call run_install
     The status should be success
@@ -71,6 +72,7 @@ Commands:
   --help                          Show this help message
 - [ ] foo
 EOF
-)"
+)
+"
   End
 End

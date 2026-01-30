@@ -2,10 +2,17 @@
 set -e
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+if [ -n "$NO_COLOR" ]; then
+  RED=''
+  GREEN=''
+  YELLOW=''
+  NC=''
+else
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[1;33m'
+  NC='\033[0m'
+fi
 
 echo "Installing yx (yaks CLI)..."
 
