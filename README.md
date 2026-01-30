@@ -51,7 +51,7 @@ environment variables to skip interactive prompts:
 Example:
 
 ```bash
-YX_SOURCE=./release/yx.zip \
+YX_SOURCE=./result/yx.zip \
   YX_SHELL_CHOICE=2 \
   YX_AUTO_COMPLETE=n \
   ./install.sh

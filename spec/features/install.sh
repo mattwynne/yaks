@@ -2,12 +2,17 @@
 Describe 'install.sh'
   It 'installs yx from release zip and runs smoke tests'
     run_install() {
+      # Copy zip from nix result symlink to a real file for Docker
+      temp_zip=$(mktemp)
+      cp "$TEST_PROJECT_DIR/result/yx.zip" "$temp_zip"
+
       docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR" 2>/dev/null
 
       docker run --rm \
         -v "$TEST_PROJECT_DIR:/workspace" \
+        -v "$temp_zip:/tmp/yx.zip" \
         -w /workspace \
-        -e YX_SOURCE="/workspace/release/yx.zip" \
+        -e YX_SOURCE="/tmp/yx.zip" \
         -e YX_SHELL_CHOICE="2" \
         -e YX_AUTO_COMPLETE="n" \
         -e NO_COLOR="1" \
@@ -24,6 +29,8 @@ Describe 'install.sh'
           yx add foo
           yx ls
         '
+
+      rm -f "$temp_zip"
     }
     When call run_install
     The status should be success

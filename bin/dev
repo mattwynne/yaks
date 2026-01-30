@@ -2,8 +2,7 @@
 # @cmd Create a release zip file
 # @alias r
 release() {
-  mkdir -p ./release
-  zip -r ./release/yx.zip bin/yx completions/
+  nix build
 }
 
 # @cmd Run shellcheck on all shell files

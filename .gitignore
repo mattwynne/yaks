@@ -20,5 +20,5 @@ devenv.local.yaml
 # worktrees
 .worktrees
 
-# release artifacts
-release/
+# nix build artifacts
+result
