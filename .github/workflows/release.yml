@@ -10,8 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v24
+      - name: Install argc
+        run: nix-env -iA nixpkgs.argc
       - name: Build release
-        run: nix develop -c dev release
+        run: bin/dev release
       - name: Publish to latest
         uses: softprops/action-gh-release@v1
         with:
