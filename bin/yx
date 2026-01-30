@@ -656,7 +656,7 @@ completions() {
         echo "$yak_name"
         ;;
     esac
-  done < <(find_all_yaks)
+  done < <(find_all_yaks) | sort
 }
 
 has_origin_remote() {
