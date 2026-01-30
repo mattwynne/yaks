@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 Describe 'install.sh'
   It 'installs yx from release zip and runs smoke tests'
-    Skip if "Running in CI without release zip" [ "$CI" = "true" ]
     run_install() {
       docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR" 2>/dev/null
 

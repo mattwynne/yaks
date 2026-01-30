@@ -15,5 +15,7 @@ jobs:
           name: devenv
       - name: Install devenv
         run: nix profile install --accept-flake-config github:cachix/devenv/latest
+      - name: Build release for installer test
+        run: devenv shell bin/dev release
       - name: Run tests
         run: devenv shell shellspec
