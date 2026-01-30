@@ -18,6 +18,7 @@ Describe 'install.sh'
           git init -q .
           git config user.email "test@example.com"
           git config user.name "Test"
+          echo ".yaks" > .gitignore
           yx add foo
           yx ls
         '
