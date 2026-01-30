@@ -36,6 +36,27 @@ curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | ba
    source completions/yx.bash
    ```
 
+### Automated/Non-Interactive Installation
+
+For automated installations (CI, testing, scripts), use
+environment variables to skip interactive prompts:
+
+- `YX_SOURCE` - Path or URL to yx.zip (default: latest
+  GitHub release)
+- `YX_SHELL_CHOICE` - Shell for completions: `1` (zsh)
+  or `2` (bash)
+- `YX_AUTO_COMPLETE` - Auto-add to shell config: `y` or
+  `n`
+
+Example:
+
+```bash
+YX_SOURCE=./release/yx.zip \
+  YX_SHELL_CHOICE=2 \
+  YX_AUTO_COMPLETE=n \
+  ./install.sh
+```
+
 ### Development Setup
 
 Uses direnv to automatically configure PATH and completions:
@@ -70,6 +91,19 @@ Uses [ShellSpec](https://shellspec.info/) for testing:
 ```bash
 shellspec
 ```
+
+### Installer Tests
+
+The installer is tested in a Docker container to verify
+end-to-end installation:
+
+```bash
+shellspec spec/features/install.sh
+```
+
+This test runs install.sh in a clean Ubuntu 22.04
+container using a local release zip, then runs smoke
+tests to verify the installation works.
 
 ## License
 
