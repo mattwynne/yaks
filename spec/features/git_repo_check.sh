@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx git repository check'
   It 'shows error when run outside a git repository'
     temp_dir=$(mktemp -d)

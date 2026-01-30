@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx git availability check'
   It 'shows error when git command is not available'
     # Create a temp directory with only yx and essential tools, but not git

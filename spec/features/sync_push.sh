@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx sync push'
   It 'can push refs/notes/yaks to bare repo'
     ORIGIN=$(mktemp -d)
@@ -13,7 +14,7 @@ Describe 'yx sync push'
 
     # Add a yak and sync
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
-    cd "$REPO"
+    cd "$REPO" || return
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
 
     # Check if refs/notes/yaks exists in origin

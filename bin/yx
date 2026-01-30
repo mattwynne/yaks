@@ -15,7 +15,8 @@ YAKS_PATH="$GIT_WORK_TREE/.yaks"
 
 convert_done_file_to_state() {
   local done_file="$1"
-  local yak_dir=$(dirname "$done_file")
+  local yak_dir
+  yak_dir=$(dirname "$done_file")
   echo "done" > "$yak_dir/state"
   rm -f "$done_file"
 }
@@ -44,19 +45,24 @@ log_command() {
 
   local commit_message="$*"
 
-  local temp_index=$(mktemp)
-  trap "rm -f '$temp_index'" RETURN
+  local temp_index
+  temp_index=$(mktemp)
+  trap 'rm -f "$temp_index"' RETURN
 
+  # shellcheck disable=SC2097,SC2098
   GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_WORK_TREE" read-tree --empty
+  # shellcheck disable=SC2097,SC2098
   GIT_INDEX_FILE="$temp_index" GIT_WORK_TREE="$YAKS_PATH" git -C "$GIT_WORK_TREE" add .
-  local tree=$(GIT_INDEX_FILE="$temp_index" git -C "$GIT_WORK_TREE" write-tree)
+  local tree
+  tree=$(GIT_INDEX_FILE="$temp_index" git -C "$GIT_WORK_TREE" write-tree)
 
-  local parent_args=""
+  local parent_args=()
   if git -C "$GIT_WORK_TREE" rev-parse refs/notes/yaks >/dev/null 2>&1; then
-    parent_args="-p $(git -C "$GIT_WORK_TREE" rev-parse refs/notes/yaks)"
+    parent_args=(-p "$(git -C "$GIT_WORK_TREE" rev-parse refs/notes/yaks)")
   fi
 
-  local new_commit=$(git -C "$GIT_WORK_TREE" commit-tree $tree $parent_args -m "$commit_message")
+  local new_commit
+  new_commit=$(git -C "$GIT_WORK_TREE" commit-tree "$tree" "${parent_args[@]}" -m "$commit_message")
   git -C "$GIT_WORK_TREE" update-ref refs/notes/yaks "$new_commit"
 
   unset GIT_INDEX_FILE
@@ -84,7 +90,8 @@ find_all_yaks() {
 is_yak_done() {
   local yak_path="$1"
   if [ -f "$yak_path/state" ]; then
-    local state=$(cat "$yak_path/state")
+    local state
+    state=$(cat "$yak_path/state")
     [ "$state" = "done" ]
   else
     return 1
@@ -104,7 +111,7 @@ try_fuzzy_match() {
   local search_term="$1"
   local matches=()
   while IFS= read -r yak_path; do
-    local yak_name="${yak_path#$YAKS_PATH/}"
+    local yak_name="${yak_path#"$YAKS_PATH"/}"
     if [[ "$yak_name" == *"$search_term"* ]]; then
       matches+=("$yak_name")
     fi
@@ -128,10 +135,12 @@ find_yak() {
 }
 
 capture_output_and_status() {
-  local temp_file=$(mktemp)
+  local temp_file
+  temp_file=$(mktemp)
   "$@" > "$temp_file"
   local status=$?
-  local output=$(cat "$temp_file")
+  local output
+  output=$(cat "$temp_file")
   rm -f "$temp_file"
   echo "$output"
   return $status
@@ -172,7 +181,8 @@ get_mtime() {
 get_sort_priority() {
   local yak_path="$1"
   if [ -f "$yak_path/state" ]; then
-    local state=$(cat "$yak_path/state")
+    local state
+    state=$(cat "$yak_path/state")
     if [ "$state" = "done" ]; then
       echo "0"
       return
@@ -186,8 +196,10 @@ sort_yaks() {
   echo "$children" | while read -r child; do
     [ -z "$child" ] && continue
     local full_path="$YAKS_PATH/$child"
-    local mtime=$(get_mtime "$full_path")
-    local priority=$(get_sort_priority "$full_path")
+    local mtime
+    mtime=$(get_mtime "$full_path")
+    local priority
+    priority=$(get_sort_priority "$full_path")
     printf "%d\t%015d\t%s\t%s\n" "$priority" "$mtime" "$child" "$child"
   done | sort -t$'\t' -k1,1n -k2,2n -k3,3 | cut -f4-
 }
@@ -260,12 +272,14 @@ list_yaks() {
 
   display_yak_markdown() {
     local yak_name="$1"
-    local depth=$(echo "$yak_name" | tr -cd '/' | wc -c | xargs)
+    local depth
+    depth=$(echo "$yak_name" | tr -cd '/' | wc -c | xargs)
     local indent=""
     if [ "$depth" -gt 0 ]; then
-      indent=$(printf '  %.0s' $(seq 1 $depth))
+      indent=$(printf '  %.0s' $(seq 1 "$depth"))
     fi
-    local display_name=$(basename "$yak_name")
+    local display_name
+    display_name=$(basename "$yak_name")
     local yak_dir="$YAKS_PATH/$yak_name"
 
     local state="todo"
@@ -297,8 +311,10 @@ list_yaks() {
   list_dir() {
     local parent_dir="$1"
 
-    local children=$(cd "$YAKS_PATH" && find "$parent_dir" -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||')
-    local sorted_children=$(sort_yaks "$children")
+    local children
+    children=$(cd "$YAKS_PATH" && find "$parent_dir" -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||')
+    local sorted_children
+    sorted_children=$(sort_yaks "$children")
 
     while IFS= read -r child; do
       [ -z "$child" ] && continue
@@ -401,7 +417,7 @@ mark_yak_done_recursively() {
 
   # Recursively mark all children as done
   while IFS= read -r child_path; do
-    local child_name="${child_path#$YAKS_PATH/}"
+    local child_name="${child_path#"$YAKS_PATH"/}"
     mark_yak_done_recursively "$child_name"
   done < <(find "$yak_path" -mindepth 1 -maxdepth 1 -type d)
 }
@@ -449,7 +465,7 @@ remove_yak() {
 prune_yaks() {
   while IFS= read -r yak_path; do
     if is_yak_done "$yak_path"; then
-      local yak_name="${yak_path#$YAKS_PATH/}"
+      local yak_name="${yak_path#"$YAKS_PATH"/}"
       remove_yak "$yak_name"
     fi
   done < <(find_all_yaks)
@@ -457,7 +473,8 @@ prune_yaks() {
 
 ensure_parent_yaks_exist() {
   local new_name="$1"
-  local parent_dir=$(dirname "$new_name")
+  local parent_dir
+  parent_dir=$(dirname "$new_name")
 
   if [ "$parent_dir" = "." ]; then
     return 0
@@ -568,11 +585,14 @@ install_completions() {
     return 1
   fi
 
-  local rc_file=$(get_shell_rc_file "$shell")
-  local completion_file=$(get_completion_file "$shell")
+  local rc_file
+  rc_file=$(get_shell_rc_file "$shell")
+  local completion_file
+  completion_file=$(get_completion_file "$shell")
 
   # Get absolute path to completions directory
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   local completion_path="$script_dir/$completion_file"
 
   if [ "$dry_run" = true ]; then
@@ -614,7 +634,7 @@ completions() {
   local flag="$2"
 
   while IFS= read -r yak_path; do
-    local yak_name="${yak_path#$YAKS_PATH/}"
+    local yak_name="${yak_path#"$YAKS_PATH"/}"
     local state="todo"
     if [ -f "$yak_path/state" ]; then
       state=$(cat "$yak_path/state")
@@ -672,11 +692,13 @@ has_uncommitted_yak_changes() {
     return 1
   fi
 
-  local check_dir=$(mktemp -d)
-  trap "rm -rf '$check_dir'" RETURN
+  local check_dir
+  check_dir=$(mktemp -d)
+  trap 'rm -rf "$check_dir"' RETURN
   cp -r "$YAKS_PATH"/. "$check_dir"/
 
-  local ref_dir=$(mktemp -d)
+  local ref_dir
+  ref_dir=$(mktemp -d)
   git -C "$GIT_WORK_TREE" archive "$local_ref" | tar -x -C "$ref_dir" 2>/dev/null || true
 
   if ! diff -r "$check_dir" "$ref_dir" >/dev/null 2>&1; then
@@ -698,7 +720,8 @@ create_merge_commit() {
   local remote_ref="$2"
   local merged_tree="$3"
 
-  local merge_commit=$(git -C "$GIT_WORK_TREE" commit-tree "$merged_tree" \
+  local merge_commit
+  merge_commit=$(git -C "$GIT_WORK_TREE" commit-tree "$merged_tree" \
     -p "$local_ref" \
     -p "$remote_ref" \
     -m "Merge yaks")
@@ -709,7 +732,8 @@ merge_with_git_merge_tree() {
   local local_ref="$1"
   local remote_ref="$2"
 
-  local merged_tree=$(git -C "$GIT_WORK_TREE" merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>&1)
+  local merged_tree
+  merged_tree=$(git -C "$GIT_WORK_TREE" merge-tree --write-tree --allow-unrelated-histories "$local_ref" "$remote_ref" 2>&1)
   local merge_status=$?
 
   if [ $merge_status -eq 0 ] && [ -n "$merged_tree" ]; then
@@ -781,7 +805,8 @@ get_local_ref() {
 
 merge_remote_into_local_yaks() {
   local remote_ref="$1"
-  local temp_dir=$(mktemp -d)
+  local temp_dir
+  temp_dir=$(mktemp -d)
   git -C "$GIT_WORK_TREE" archive "$remote_ref" | tar -x -C "$temp_dir" 2>/dev/null || true
   cp -r "$YAKS_PATH"/. "$temp_dir"/
   rm -rf "$YAKS_PATH"
@@ -795,8 +820,10 @@ sync_yaks() {
 
   git -C "$GIT_WORK_TREE" fetch origin refs/notes/yaks:refs/remotes/origin/yaks 2>/dev/null || true
 
-  local remote_ref=$(get_remote_ref)
-  local local_ref=$(get_local_ref)
+  local remote_ref
+  remote_ref=$(get_remote_ref)
+  local local_ref
+  local_ref=$(get_local_ref)
 
   # If we have local uncommitted changes AND a remote, merge files first
   if has_uncommitted_yak_changes "$local_ref" && [ -n "$remote_ref" ]; then

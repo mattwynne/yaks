@@ -12,6 +12,7 @@
     git
     zig
     argc
+    shellcheck
   ];
 
   # https://devenv.sh/languages/

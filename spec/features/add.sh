@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx add'
   BeforeEach 'setup_isolated_repo'
   AfterEach 'teardown_isolated_repo'

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx sync does not pollute working tree or index'
   It 'does not add files to git index'
     ORIGIN=$(mktemp -d)
@@ -13,7 +14,7 @@ Describe 'yx sync does not pollute working tree or index'
 
     # Add a yak and sync
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
-    cd "$REPO"
+    cd "$REPO" || return
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
 
     # Check that nothing is staged (no files in index except what was already there)
@@ -39,7 +40,7 @@ Describe 'yx sync does not pollute working tree or index'
 
     # Add a yak and sync
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
-    cd "$REPO"
+    cd "$REPO" || return
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
 
     # Check that no yak directories appear at root (like claim/)

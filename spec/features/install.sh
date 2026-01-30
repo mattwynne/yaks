@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'install.sh'
   It 'installs yx from release zip and runs smoke tests'
     run_install() {

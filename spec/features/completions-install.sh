@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx completions install'
   It 'shows help when no shell detected'
     SHELL="/bin/unknown"

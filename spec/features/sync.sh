@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# shellcheck disable=SC1010,SC2034
 Describe 'yx sync'
   setup_repos() {
     # Create origin repo

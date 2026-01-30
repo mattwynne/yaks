@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'fuzzy match on yak names'
   BeforeEach 'setup_isolated_repo'
   AfterEach 'teardown_isolated_repo'

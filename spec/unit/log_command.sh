@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'log_command'
   BeforeEach 'setup_isolated_repo'
   AfterEach 'teardown_isolated_repo'

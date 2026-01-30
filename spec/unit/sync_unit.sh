@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx sync - unit tests'
   setup_repo() {
     REPO=$(mktemp -d)
@@ -17,7 +18,7 @@ Describe 'yx sync - unit tests'
   It 'creates refs/notes/yaks when yak exists'
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
 
-    cd "$REPO"
+    cd "$REPO" || return
     # Mock origin to avoid push/fetch errors
     git remote add origin "$REPO"
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
@@ -31,7 +32,7 @@ Describe 'yx sync - unit tests'
     GIT_WORK_TREE="$REPO" "yx" add "test yak"
     echo "some context" | GIT_WORK_TREE="$REPO" "yx" context "test yak"
 
-    cd "$REPO"
+    cd "$REPO" || return
     git remote add origin "$REPO"
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
 
@@ -43,7 +44,7 @@ Describe 'yx sync - unit tests'
   It 'extracts yaks from refs/notes/yaks after sync'
     GIT_WORK_TREE="$REPO" "yx" add "original yak"
 
-    cd "$REPO"
+    cd "$REPO" || return
     git remote add origin "$REPO"
     GIT_WORK_TREE="$REPO" "yx" sync 2>&1
 

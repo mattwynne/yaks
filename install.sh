@@ -50,7 +50,7 @@ fi
 if [ -n "$YX_SHELL_CHOICE" ]; then
     SHELL_CHOICE="$YX_SHELL_CHOICE"
 else
-    read -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE </dev/tty
+    read -r -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE </dev/tty
     SHELL_CHOICE="${SHELL_CHOICE:-$DEFAULT_CHOICE}"
 fi
 
@@ -139,9 +139,11 @@ if [ -f "$SHELL_CONFIG" ]; then
         fi
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "" >> "$SHELL_CONFIG"
-            echo "# yx completion" >> "$SHELL_CONFIG"
-            echo "source $COMPLETION_DIR/yx" >> "$SHELL_CONFIG"
+            {
+                echo ""
+                echo "# yx completion"
+                echo "source $COMPLETION_DIR/yx"
+            } >> "$SHELL_CONFIG"
             echo -e "${GREEN}✓${NC} Added completion to $SHELL_CONFIG"
             echo "Restart your shell or run: source $SHELL_CONFIG"
         fi

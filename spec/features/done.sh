@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# shellcheck disable=SC1010
 Describe 'yx done'
   BeforeEach 'setup_isolated_repo'
   AfterEach 'teardown_isolated_repo'

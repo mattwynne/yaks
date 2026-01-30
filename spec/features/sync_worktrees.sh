@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# shellcheck disable=SC1010
 Describe 'yx sync with git worktrees'
   setup_repos() {
     # Create origin repo

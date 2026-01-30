@@ -1,4 +1,4 @@
-# shellcheck shell=sh
+# shellcheck shell=bash
 
 # Defining variables and functions here will affect all specfiles.
 # Change shell options inside a function may cause different behavior,
@@ -12,7 +12,8 @@ export GIT_CONFIG_PARAMETERS="'core.hooksPath=/dev/null'"
 # Prevent tests from polluting the main repository's git refs
 # Set GIT_CEILING_DIRECTORIES to stop git from finding the main repo
 # when tests use temp directories
-export GIT_CEILING_DIRECTORIES="$(pwd)"
+GIT_CEILING_DIRECTORIES="$(pwd)"
+export GIT_CEILING_DIRECTORIES
 
 # Helper function to set up a git test repository
 # Usage: setup_test_repo /path/to/repo [user_email] [user_name] [origin_url]
@@ -67,20 +68,21 @@ setup_test_environment() {
   TEST_PROJECT_DIR=$(pwd)
   export PATH="$TEST_PROJECT_DIR/bin:$PATH"
   TEST_WORK_DIR=$(mktemp -d)
-  cd "$TEST_WORK_DIR"
+  cd "$TEST_WORK_DIR" || return
   setup_test_repo "."
 }
 
 # Clean up test environment
 teardown_test_environment() {
-  cd "$TEST_PROJECT_DIR"
+  cd "$TEST_PROJECT_DIR" || return
   rm -rf "$TEST_WORK_DIR"
 }
 
 # Set up an isolated test repo for a single test
 # This creates a fresh git repo in a temp directory for each test
 setup_isolated_repo() {
-  export TEST_REPO=$(mktemp -d)
+  TEST_REPO=$(mktemp -d)
+  export TEST_REPO
   setup_test_repo "$TEST_REPO"
   export GIT_WORK_TREE="$TEST_REPO"
 }

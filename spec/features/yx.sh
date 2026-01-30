@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 Describe 'yx'
   It 'shows help when run with --help'
     When run yx --help
