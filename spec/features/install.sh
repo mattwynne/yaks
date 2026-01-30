@@ -1,17 +1,17 @@
 Describe 'install.sh'
   It 'installs yx from release zip and runs smoke tests'
     run_install() {
+      docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR"
+
       docker run --rm \
         -v "$TEST_PROJECT_DIR:/workspace" \
         -w /workspace \
         -e YX_SOURCE="/workspace/release/yx.zip" \
         -e YX_SHELL_CHOICE="2" \
         -e YX_AUTO_COMPLETE="n" \
-        ubuntu:22.04 \
+        yx-installer-test-base \
         bash -c '
-          apt-get update -qq 2>/dev/null
-          apt-get install -y -qq curl bash unzip git 2>/dev/null
-          ./install.sh 2>&1
+          ./install.sh
           echo "=== Smoke tests ==="
           yx --help
           cd /tmp
