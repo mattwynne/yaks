@@ -40,8 +40,12 @@ if [ "$DETECTED_SHELL" = "zsh" ]; then
 else
     DEFAULT_CHOICE="2"
 fi
-read -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE </dev/tty
-SHELL_CHOICE="${SHELL_CHOICE:-$DEFAULT_CHOICE}"
+if [ -n "$YX_SHELL_CHOICE" ]; then
+    SHELL_CHOICE="$YX_SHELL_CHOICE"
+else
+    read -p "Choice [$DEFAULT_CHOICE]: " SHELL_CHOICE </dev/tty
+    SHELL_CHOICE="${SHELL_CHOICE:-$DEFAULT_CHOICE}"
+fi
 
 if [ "$SHELL_CHOICE" = "1" ]; then
     INSTALL_SHELL="zsh"
@@ -93,7 +97,11 @@ if [ -f "$SHELL_CONFIG" ]; then
         echo ""
         echo "    source $COMPLETION_DIR/yx"
         echo ""
-        read -p "Add it now? [y/N] " -n 1 -r </dev/tty
+        if [ -n "$YX_AUTO_COMPLETE" ]; then
+            REPLY="$YX_AUTO_COMPLETE"
+        else
+            read -p "Add it now? [y/N] " -n 1 -r </dev/tty
+        fi
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo "" >> "$SHELL_CONFIG"
