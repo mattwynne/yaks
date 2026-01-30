@@ -70,20 +70,48 @@ else
     SHELL_CONFIG="$HOME/.bashrc"
 fi
 
-# Download or copy files
-if [ -f "bin/yx" ]; then
-    # Running from repo
-    echo "Installing from local repository..."
-    cp bin/yx "$BIN_DIR/yx"
-    chmod +x "$BIN_DIR/yx"
-    cp "completions/$COMPLETION_FILE" "$COMPLETION_DIR/yx"
+# Set up source and temp directory
+SOURCE="${YX_SOURCE:-https://github.com/mattwynne/yaks/releases/download/latest/yx.zip}"
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+echo "Downloading release..."
+
+# Download or copy zip file
+if [[ "$SOURCE" =~ ^https?:// ]]; then
+    # Download from URL
+    if ! curl -fsSL "$SOURCE" -o "$TEMP_DIR/yx.zip"; then
+        echo -e "${RED}Error: Failed to download from $SOURCE${NC}"
+        exit 1
+    fi
 else
-    # Download from GitHub
-    echo "Downloading from GitHub..."
-    REPO_URL="https://raw.githubusercontent.com/mattwynne/yaks/main"
-    curl -fsSL "$REPO_URL/bin/yx" -o "$BIN_DIR/yx"
-    chmod +x "$BIN_DIR/yx"
-    curl -fsSL "$REPO_URL/completions/$COMPLETION_FILE" -o "$COMPLETION_DIR/yx"
+    # Copy local file
+    if [ ! -f "$SOURCE" ]; then
+        echo -e "${RED}Error: File not found: $SOURCE${NC}"
+        exit 1
+    fi
+    cp "$SOURCE" "$TEMP_DIR/yx.zip"
+fi
+
+# Extract zip
+if ! unzip -q "$TEMP_DIR/yx.zip" -d "$TEMP_DIR"; then
+    echo -e "${RED}Error: Failed to extract zip file${NC}"
+    exit 1
+fi
+
+# Verify expected structure
+if [ ! -f "$TEMP_DIR/bin/yx" ]; then
+    echo -e "${RED}Error: Invalid zip - bin/yx not found${NC}"
+    exit 1
+fi
+
+# Install files
+cp "$TEMP_DIR/bin/yx" "$BIN_DIR/yx"
+chmod +x "$BIN_DIR/yx"
+
+# Install completion file
+if [ -f "$TEMP_DIR/completions/$COMPLETION_FILE" ]; then
+    cp "$TEMP_DIR/completions/$COMPLETION_FILE" "$COMPLETION_DIR/yx"
 fi
 
 echo -e "${GREEN}✓${NC} Installed yx to $BIN_DIR/yx"
