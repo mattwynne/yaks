@@ -1,5 +1,11 @@
 # Automated Installer Tests
 
+Goal: We want to be able to run automated tests of our users' install.sh script.
+
+Those tests should be runnable locally or in CI.
+
+The script needs some affordances for short-circuiting download of a release, and for skipping interactive inputs.
+
 ## Status: Implementation Plan Created
 
 **Plan Location:** `docs/plans/2026-01-29-automated-installer-tests.md`
