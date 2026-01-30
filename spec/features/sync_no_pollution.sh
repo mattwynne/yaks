@@ -5,7 +5,7 @@ Describe 'yx sync does not pollute working tree or index'
     REPO=$(mktemp -d)
 
     # Set up bare origin and clone
-    git -C "$ORIGIN" init --bare --quiet
+    setup_bare_repo "$ORIGIN"
     setup_test_repo "$REPO" "test@example.com" "Test" "$ORIGIN"
     echo "test" > "$REPO/README.md"
     git -C "$REPO" add README.md
@@ -31,7 +31,7 @@ Describe 'yx sync does not pollute working tree or index'
     REPO=$(mktemp -d)
 
     # Set up bare origin and clone
-    git -C "$ORIGIN" init --bare --quiet
+    setup_bare_repo "$ORIGIN"
     setup_test_repo "$REPO" "test@example.com" "Test" "$ORIGIN"
     echo "test" > "$REPO/README.md"
     git -C "$REPO" add README.md

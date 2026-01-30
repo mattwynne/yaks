@@ -4,7 +4,7 @@ Describe 'yx sync with git worktrees'
   setup_repos() {
     # Create origin repo
     ORIGIN=$(mktemp -d)
-    git -C "$ORIGIN" init --bare --quiet
+    setup_bare_repo "$ORIGIN"
 
     # Create main repo
     MAIN=$(mktemp -d)

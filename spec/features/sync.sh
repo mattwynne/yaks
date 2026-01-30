@@ -4,7 +4,7 @@ Describe 'yx sync'
   setup_repos() {
     # Create origin repo
     ORIGIN=$(mktemp -d)
-    git -C "$ORIGIN" init --bare --quiet
+    setup_bare_repo "$ORIGIN"
 
     # Create user1 repo
     USER1=$(mktemp -d)
