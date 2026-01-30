@@ -33,3 +33,6 @@ Tests use temporary repos with `git init` and try to push to `main` branch befor
 - Investigate test setup in spec files (particularly setup_repos function)
 - Fix git repo initialization to work in CI environment
 - Ensure initial commits exist before push attempts
+
+## Ways of working
+Work in a branch, and push to that branch so as not to clutter up the `main` branch as you iterate on the CI runs.
