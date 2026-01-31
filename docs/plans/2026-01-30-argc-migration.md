@@ -19,7 +19,7 @@
 
 ## Current Status (2026-01-31)
 
-**Progress:** Phase 2 complete - Infrastructure ready, 2 commands migrated
+**Progress:** Phase 3 in progress - 3 commands migrated (add, list, done/finish)
 
 **Test Status:** ✅ 111/111 tests passing (100%)
 
@@ -29,6 +29,7 @@
 - ✅ Task 3: Add argc bootstrap to bin/yx
 - ✅ Task 5: Migrate add command to argc
 - ✅ Task 6: Migrate list command to argc
+- ✅ Task 7: Migrate done command to argc (using "finish" with "done" as alias)
 - ✅ Bug fix: Fixed symlink resolution for library path
 - ✅ Refactor: Extracted `yaks_lib()` helper function
 
@@ -36,10 +37,9 @@
 - ⏸️ Task 4: Migrate --help command (deferred until commands are defined)
 
 **In Progress:**
-- 🔄 Batch 3: Migrating remaining commands (done, rm, prune, move, context, sync, completions)
+- 🔄 Task 8: Migrate remaining simple commands (rm, prune, move, context, sync, completions)
 
 **Remaining:**
-- Task 7: Migrate done command
 - Task 8: Migrate remaining simple commands (rm, prune, move, context, sync, completions)
 - Task 9: Remove case statement fallbacks
 - Task 10: Update completions for argc
@@ -95,6 +95,22 @@ add() {
   fi
 }
 ```
+
+### 5. Done Command Naming Convention
+**Decision:** Use `finish()` function name with `@alias done`
+**Rationale:** User specified to use "finish" with "done" as an alias
+**Implementation:**
+```bash
+# @cmd Mark a yak as done
+# @alias done
+# @flag --undo Unmark a done yak
+# @flag --recursive Mark all children as done too
+# @arg name* The yak name
+finish() {
+  # implementation
+}
+```
+**Benefit:** CLI users can still use `yx done` command, but the function name is more bash-friendly (avoids reserved word "done")
 
 ---
 
@@ -744,9 +760,13 @@ EOF
 
 ---
 
-### Task 7: Migrate done Command to Argc
+### Task 7: Migrate done Command to Argc ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `6508ef9`)
 
 **Goal:** Migrate the `done` command with its --undo and --recursive flags.
+
+**Note:** Implemented using `finish()` function name with `@alias done` per user instructions.
 
 **Files:**
 - Modify: `bin/yx`
