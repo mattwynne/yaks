@@ -1,7 +1,9 @@
 ## Status: Minimal Argc Proof-of-Concept - 18/109 Tests Passing
 
+**Working Branch:** `.worktrees/dx-argc` (branch: `dx-argc`)
+
 **Reality Check:**
-- 69 line minimal argc implementation
+- 69 line minimal argc implementation at `.worktrees/dx-argc/bin/yx`
 - Only 2 commands implemented: `add` (basic), `list` (basic)
 - 18/109 tests passing (16%), NOT 106/108
 - Proof that argc integration works, but far from complete
