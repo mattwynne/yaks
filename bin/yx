@@ -52,6 +52,65 @@ finish() {
   fi
 }
 
+# @cmd Remove a yak
+# @alias rm
+# @arg name* The yak name
+remove() {
+  migrate_done_to_state
+  check_git_requirements
+  remove_yak "${argc_name[*]}"
+}
+
+# @cmd Remove all done yaks
+prune() {
+  migrate_done_to_state
+  check_git_requirements
+  prune_yaks
+}
+
+# @cmd Rename a yak
+# @alias mv
+# @arg old! The old yak name
+# @arg new! The new yak name
+move() {
+  migrate_done_to_state
+  check_git_requirements
+  move_yak "$argc_old" "$argc_new"
+}
+
+# @cmd Edit or show yak context
+# @flag --show Display yak with context
+# @flag --edit Edit context (default)
+# @arg name* The yak name
+context() {
+  migrate_done_to_state
+  check_git_requirements
+
+  local yak_name="${argc_name[*]}"
+
+  if [ "${argc_show:-0}" = "1" ]; then
+    show_yak_context "$yak_name"
+  else
+    edit_yak_context "$yak_name"
+  fi
+}
+
+# @cmd Push and pull yaks to/from origin via git ref
+sync() {
+  migrate_done_to_state
+  check_git_requirements
+  sync_yaks
+}
+
+# @cmd Output yak names for shell completion
+# @arg cmd The command being completed
+# @arg flag Optional flag being completed
+completions() {
+  migrate_done_to_state
+  check_git_requirements
+  completions_impl "$argc_cmd" "${argc_flag:-}"
+}
+
 # Find a file relative to yx installation directory (resolving symlinks)
 yaks_lib() {
   local relative_path="$1"
@@ -158,25 +217,67 @@ case "$1" in
     done_yak "$@"
     ;;
   rm)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     shift
     remove_yak "$@"
     ;;
   prune)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     prune_yaks
     ;;
   move|mv)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     shift
     move_yak "$@"
     ;;
   context)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     shift
     context_yak "$@"
     ;;
   completions)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     shift
-    completions "$@"
+    completions_impl "$@"
     ;;
   sync)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     sync_yaks
     ;;
   *)

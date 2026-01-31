@@ -652,7 +652,7 @@ install_completions() {
   fi
 }
 
-completions() {
+completions_impl() {
   if [ "$1" = "install" ]; then
     shift
     install_completions "$@"
