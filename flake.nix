@@ -24,10 +24,21 @@
 
             src = ./.;
 
-            nativeBuildInputs = [ pkgs.zip ];
+            nativeBuildInputs = [ pkgs.zip pkgs.argc ];
 
             buildPhase = ''
-              zip -r yx.zip bin/yx completions/
+              mkdir -p release-bundle/bin
+              mkdir -p release-bundle/lib
+              mkdir -p release-bundle/completions
+
+              cp bin/yx release-bundle/bin/
+              cp lib/yaks.sh release-bundle/lib/
+              cp ${pkgs.argc}/bin/argc release-bundle/lib/
+              cp -r completions/* release-bundle/completions/
+
+              cd release-bundle
+              zip -r ../yx.zip .
+              cd ..
             '';
 
             installPhase = ''
