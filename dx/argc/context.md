@@ -19,12 +19,12 @@
 
 ### Remaining Work (39 tests)
 
-- completions (9 tests)
-- sync (14 tests)
 - log_command (7 tests)
+- sync (14 tests)
 - git checks (3 tests)
 - helper functions (2 tests)
 - help/usage (3 tests)
 - installer (1 test)
+- completions (9 tests)
 
 **CRITICAL:** DO NOT merge until all 109 tests pass!
