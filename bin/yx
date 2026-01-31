@@ -33,7 +33,9 @@ list() {
 }
 
 # Source library functions
-YX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve symlinks to find the real yx location
+YX_REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+YX_DIR="$(cd "$(dirname "$YX_REAL_PATH")/.." && pwd)"
 if [ -f "$YX_DIR/lib/yaks.sh" ]; then
   # shellcheck source=../lib/yaks.sh
   source "$YX_DIR/lib/yaks.sh"
