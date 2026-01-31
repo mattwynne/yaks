@@ -1,6 +1,7 @@
-# Yaks - A non-linear TODO list for humans and robots
+# Yaks - An iterative, emergent, non-linear TODO list for humans and robots
 
 > It is in the doing of the work that we discover the work that we must do
+> 
 > -- Woody Zuill, https://agilemaxims.com
 
 Yaks is CLI tool for managing Yak Maps - a TODO list of nested goals - designed for teams of humans and robots working on software projects together.
