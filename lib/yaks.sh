@@ -226,40 +226,6 @@ sort_yaks() {
   done | sort -t$'\t' -k1,1n -k2,2n -k3,3 | cut -f4-
 }
 
-parse_format_option() {
-  if [ "$1" = "--format" ]; then
-    echo "$2"
-    return 2
-  else
-    echo "markdown"
-    return 0
-  fi
-}
-
-parse_only_option() {
-  if [ "$1" = "--only" ]; then
-    echo "$2"
-    return 2
-  else
-    echo ""
-    return 0
-  fi
-}
-
-list_yaks() {
-  local format
-  format=$(parse_format_option "$@")
-  local shift_count=$?
-  shift $shift_count
-
-  local only
-  only=$(parse_only_option "$@")
-  shift_count=$?
-  shift $shift_count
-
-  list_yaks_impl "$format" "$only"
-}
-
 list_yaks_impl() {
   local format="$1"
   local only="$2"
@@ -357,35 +323,6 @@ list_yaks_impl() {
   list_dir "."
 }
 
-show_help() {
-  cat <<EOF
-Usage: yx <command> [arguments]
-
-Commands:
-  add <name>                      Add a new yak
-  list, ls [--format FMT]         List all yaks
-           [--only STATE]
-                          --format: Output format
-                                    markdown (or md): Checkbox format (default)
-                                    plain (or raw): Simple list of names
-                          --only: Show only yaks in a specific state
-                                  not-done: Show only incomplete yaks
-                                  done: Show only completed yaks
-  context [--show] <name>         Edit context (uses \$EDITOR) or set from stdin
-                          --show: Display yak with context
-                          --edit: Edit context (default)
-  done <name>                     Mark a yak as done
-  done --undo <name>              Unmark a yak as done
-  rm <name>                       Remove a yak by name
-  move <old> <new>                Rename a yak
-  mv <old> <new>                  Alias for move
-  prune                           Remove all done yaks
-  sync                            Push and pull yaks to/from origin via git ref
-  completions [cmd]               Output yak names for shell completion
-  --help                          Show this help message
-EOF
-}
-
 add_yak_interactive() {
   echo "Enter yaks (empty line to finish):"
   mkdir -p "$YAKS_PATH"
@@ -408,14 +345,6 @@ add_yak_single() {
   echo "todo" > "$YAKS_PATH/$yak_name/state"
   touch "$YAKS_PATH/$yak_name/context.md"
   log_command "add $yak_name"
-}
-
-add_yak() {
-  if [ -z "$1" ]; then
-    add_yak_interactive
-  else
-    add_yak_single "$@"
-  fi
 }
 
 has_incomplete_children() {
@@ -565,18 +494,6 @@ edit_yak_context() {
     cat > "$yak_path/context.md"
   fi
   log_command "context $resolved_name"
-}
-
-context_yak() {
-  if [ "$1" = "--show" ]; then
-    shift
-    show_yak_context "$@"
-  else
-    if [ "$1" = "--edit" ]; then
-      shift
-    fi
-    edit_yak_context "$@"
-  fi
 }
 
 detect_user_shell() {

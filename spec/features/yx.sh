@@ -2,19 +2,19 @@
 Describe 'yx'
   It 'shows help when run with --help'
     When run yx --help
-    The output should include "Usage:"
+    The error should include "USAGE:"
     The status should be success
   End
 
   It 'shows help when run with no arguments'
     When run yx
-    The output should include "Usage:"
+    The error should include "USAGE:"
     The status should be success
   End
 
   It 'shows help for invalid subcommands'
     When run yx woop
-    The output should include "Usage:"
-    The status should be success
+    The error should include "error:"
+    The status should be failure
   End
 End

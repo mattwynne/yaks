@@ -128,9 +128,6 @@ else
   exit 1
 fi
 
-# Argc integration bootstrap - function definitions
-# This allows gradual migration to argc-based commands
-
 # Find argc relative to yx installation
 find_argc() {
   local argc_path="$(yaks_lib lib/argc)"
@@ -148,139 +145,13 @@ find_argc() {
 # Note: Argc evaluation will be added incrementally as commands migrate
 # For now, this just sets up the infrastructure
 
-migrate_done_to_state
-
-# Check if git is available (except for help commands)
-if [ "$1" != "--help" ] && [ -n "$1" ]; then
-  if ! command -v git >/dev/null 2>&1; then
-    echo "Error: git command not found" >&2
-    echo "yx requires git to be installed" >&2
-    exit 1
-  fi
+# Find and execute argc
+argc_bin=$(find_argc)
+if [ $? -ne 0 ]; then
+  echo "Error: argc not found" >&2
+  echo "Please ensure argc is installed" >&2
+  exit 1
 fi
 
-# Check if we're in a git repository (except for help commands)
-if [ "$1" != "--help" ] && [ -n "$1" ]; then
-  if ! is_git_repository; then
-    echo "Error: not in a git repository" >&2
-    echo "yx must be run from within a git repository" >&2
-    exit 1
-  fi
-fi
-
-# Check if .yaks folder is gitignored (except for help commands)
-if [ "$1" != "--help" ] && [ -n "$1" ]; then
-  if ! git -C "$GIT_WORK_TREE" check-ignore -q .yaks; then
-    echo "Error: .yaks folder is not gitignored" >&2
-    echo "Please add .yaks to your .gitignore file" >&2
-    exit 1
-  fi
-fi
-
-case "$1" in
-  --help|"")
-    # For now, use old help until commands are migrated to argc
-    # Argc help will be enabled once @cmd annotations are added
-    show_help
-    ;;
-  add)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    add_yak "$@"
-    ;;
-  list|ls)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    list_yaks "$@"
-    ;;
-  done)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    done_yak "$@"
-    ;;
-  rm)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    remove_yak "$@"
-    ;;
-  prune)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    prune_yaks
-    ;;
-  move|mv)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    move_yak "$@"
-    ;;
-  context)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    context_yak "$@"
-    ;;
-  completions)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    shift
-    completions_impl "$@"
-    ;;
-  sync)
-    # Try argc first
-    argc_bin=$(find_argc)
-    if [ $? -eq 0 ]; then
-      eval "$("$argc_bin" --argc-eval "$0" "$@")"
-      exit $?
-    fi
-    # Fallback
-    sync_yaks
-    ;;
-  *)
-    show_help
-    ;;
-esac
+# Argc integration - evaluates commands defined above
+eval "$("$argc_bin" --argc-eval "$0" "$@")"
