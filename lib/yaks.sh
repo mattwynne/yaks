@@ -257,6 +257,13 @@ list_yaks() {
   shift_count=$?
   shift $shift_count
 
+  list_yaks_impl "$format" "$only"
+}
+
+list_yaks_impl() {
+  local format="$1"
+  local only="$2"
+
   if [ ! -d "$YAKS_PATH" ] || [ -z "$(ls -A "$YAKS_PATH" 2>/dev/null)" ]; then
     if [ "$format" = "plain" ] || [ "$format" = "raw" ]; then
       return

@@ -15,6 +15,23 @@ add() {
   fi
 }
 
+# @cmd List all yaks
+# @alias ls
+# @option --format[markdown|md|plain|raw] Output format (default: markdown)
+# @option --only[done|not-done] Filter by completion status
+list() {
+  migrate_done_to_state
+  check_git_requirements
+
+  # Parse format
+  local format="${argc_format:-markdown}"
+
+  # Parse only filter
+  local only="${argc_only:-}"
+
+  list_yaks_impl "$format" "$only"
+}
+
 # Source library functions
 YX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -f "$YX_DIR/lib/yaks.sh" ]; then
@@ -93,6 +110,13 @@ case "$1" in
     add_yak "$@"
     ;;
   list|ls)
+    # Try argc first
+    argc_bin=$(find_argc)
+    if [ $? -eq 0 ]; then
+      eval "$("$argc_bin" --argc-eval "$0" "$@")"
+      exit $?
+    fi
+    # Fallback
     shift
     list_yaks "$@"
     ;;
