@@ -17,9 +17,92 @@
 
 ---
 
-## Phase 1: Preparation & Infrastructure
+## Current Status (2026-01-31)
 
-### Task 1: Extract Library Functions
+**Progress:** Phase 2 complete - Infrastructure ready, 2 commands migrated
+
+**Test Status:** ✅ 111/111 tests passing (100%)
+
+**Completed:**
+- ✅ Task 1: Extract library functions to lib/yaks.sh
+- ✅ Task 2: Update nix flake to bundle argc
+- ✅ Task 3: Add argc bootstrap to bin/yx
+- ✅ Task 5: Migrate add command to argc
+- ✅ Task 6: Migrate list command to argc
+- ✅ Bug fix: Fixed symlink resolution for library path
+- ✅ Refactor: Extracted `yaks_lib()` helper function
+
+**Deferred:**
+- ⏸️ Task 4: Migrate --help command (deferred until commands are defined)
+
+**In Progress:**
+- 🔄 Batch 3: Migrating remaining commands (done, rm, prune, move, context, sync, completions)
+
+**Remaining:**
+- Task 7: Migrate done command
+- Task 8: Migrate remaining simple commands (rm, prune, move, context, sync, completions)
+- Task 9: Remove case statement fallbacks
+- Task 10: Update completions for argc
+- Task 11: Update documentation
+
+---
+
+## Key Learnings & Changes
+
+### 1. Symlink Resolution Issue
+**Problem:** Test failures when yx invoked via symlink - couldn't find lib/yaks.sh
+**Root Cause:** `${BASH_SOURCE[0]}` points to symlink location, not real file
+**Solution:** Use `readlink -f` / `realpath` to resolve symlinks before calculating paths
+**Commits:** `521744f`, `fabff26`
+
+### 2. Helper Function Extraction
+**Problem:** Duplicate symlink resolution logic in multiple places
+**Solution:** Extracted `yaks_lib()` function for finding bundled resources
+**Benefits:**
+- Single source of truth for path resolution
+- Reusable for any bundled resource
+- Cleaner code (removed SHOUTY_CASE variables)
+
+### 3. Test Fixes Required
+**Issues Found:**
+- install.sh didn't copy lib/ directory to installation
+- completions return code not propagated
+- Function definitions after case statement caused exit code issues
+
+**Fixes Applied:**
+- Updated install.sh to copy lib/ directory
+- Fixed completions() wrapper to return proper exit codes
+- Moved function definitions before case statement
+
+### 4. Command Migration Pattern
+**Pattern Established:**
+1. Add `@cmd` annotation with `@arg`/`@flag`/`@option` declarations
+2. Create wrapper function that calls library implementation
+3. Update case statement: try argc first, fallback to old implementation
+4. All tests must pass before committing
+
+**Example:**
+```bash
+# @cmd Add a new yak
+# @arg name* The yak name
+add() {
+  migrate_done_to_state
+  check_git_requirements
+  if [ ${#argc_name[@]} -eq 0 ]; then
+    add_yak_interactive
+  else
+    add_yak_single "${argc_name[@]}"
+  fi
+}
+```
+
+---
+
+## Phase 1: Preparation & Infrastructure ✅ COMPLETE
+
+### Task 1: Extract Library Functions ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `0c61417`)
 
 **Goal:** Create a separate library file with all reusable functions, leaving only command routing and argc integration in bin/yx.
 
@@ -169,7 +252,9 @@ EOF
 
 ---
 
-### Task 2: Update Nix Flake for Argc
+### Task 2: Update Nix Flake for Argc ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `1f99d55`)
 
 **Goal:** Update flake.nix to include argc in the release bundle, stealing the approach from the argc branch.
 
@@ -242,9 +327,11 @@ EOF
 
 ---
 
-## Phase 2: Hybrid Architecture Setup
+## Phase 2: Hybrid Architecture Setup ✅ COMPLETE
 
-### Task 3: Add Argc Bootstrap to bin/yx
+### Task 3: Add Argc Bootstrap to bin/yx ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `afc906f`, later refactored in `fabff26`)
 
 **Goal:** Add argc integration at the bottom of bin/yx while preserving the existing case statement for backward compatibility.
 
@@ -332,11 +419,15 @@ EOF
 
 ---
 
-## Phase 3: First Command Migration
+## Phase 3: First Command Migration 🔄 IN PROGRESS
 
-### Task 4: Migrate --help Command to Argc
+### Task 4: Migrate --help Command to Argc ⏸️ DEFERRED
+
+**Status:** ⏸️ Deferred until after Task 8 - argc needs @cmd annotations to generate useful help
 
 **Goal:** Migrate the simplest command (--help) to argc as a proof of concept. This establishes the pattern for other commands.
+
+**Note:** Argc generates help from @cmd annotations. Without commands defined, help output is minimal. Will revisit after remaining commands are migrated.
 
 **Files:**
 - Modify: `bin/yx`
@@ -427,7 +518,9 @@ EOF
 
 ---
 
-### Task 5: Migrate add Command to Argc
+### Task 5: Migrate add Command to Argc ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `fee16bf`)
 
 **Goal:** Migrate the `add` command to use argc's argument parsing while keeping existing add_yak functions.
 
@@ -549,7 +642,9 @@ EOF
 
 ---
 
-### Task 6: Migrate list Command to Argc
+### Task 6: Migrate list Command to Argc ✅ COMPLETE
+
+**Status:** ✅ Completed (commit `3209cdb`)
 
 **Goal:** Migrate the `list` command with its options (--format, --only) to argc.
 
