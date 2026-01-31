@@ -74,20 +74,6 @@ Describe 'yx done'
     The line 2 should equal $'\e[90m  - [x] child\e[0m'
   End
 
-  It 'migrates old done files to state files'
-    When run sh -c "
-      yx add 'old yak'
-      # Simulate old format by creating done file directly
-      touch \"\$GIT_WORK_TREE/.yaks/old yak/done\"
-      rm -f \"\$GIT_WORK_TREE/.yaks/old yak/state\"
-      # Any yx command should trigger migration
-      yx list
-      # Check that state file now exists
-      [ -f \"\$GIT_WORK_TREE/.yaks/old yak/state\" ] && cat \"\$GIT_WORK_TREE/.yaks/old yak/state\"
-    "
-    The output should include "done"
-  End
-
   It 'errors when marking a parent yak as done with incomplete children'
     When run sh -c "
       yx add 'parent'

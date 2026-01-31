@@ -25,4 +25,10 @@ lint() {
   return $exit_code
 }
 
+# @cmd Run tests (shellspec)
+# @alias t
+test() {
+  shellspec
+}
+
 eval "$(argc --argc-eval "$0" "$@")"

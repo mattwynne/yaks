@@ -5,7 +5,6 @@
 # @cmd Add a new yak
 # @arg name* The yak name (space-separated words)
 add() {
-  migrate_done_to_state
   check_git_requirements
 
   if [ ${#argc_name[@]} -eq 0 ]; then
@@ -20,7 +19,6 @@ add() {
 # @option --format[markdown|md|plain|raw] Output format (default: markdown)
 # @option --only[done|not-done] Filter by completion status
 list() {
-  migrate_done_to_state
   check_git_requirements
 
   # Parse format
@@ -38,7 +36,6 @@ list() {
 # @flag --recursive Mark all children as done too
 # @arg name* The yak name
 finish() {
-  migrate_done_to_state
   check_git_requirements
 
   local yak_name="${argc_name[*]}"
@@ -56,14 +53,12 @@ finish() {
 # @alias rm
 # @arg name* The yak name
 remove() {
-  migrate_done_to_state
   check_git_requirements
   remove_yak "${argc_name[*]}"
 }
 
 # @cmd Remove all done yaks
 prune() {
-  migrate_done_to_state
   check_git_requirements
   prune_yaks
 }
@@ -73,7 +68,6 @@ prune() {
 # @arg old! The old yak name
 # @arg new! The new yak name
 move() {
-  migrate_done_to_state
   check_git_requirements
   move_yak "$argc_old" "$argc_new"
 }
@@ -83,7 +77,6 @@ move() {
 # @flag --edit Edit context (default)
 # @arg name* The yak name
 context() {
-  migrate_done_to_state
   check_git_requirements
 
   local yak_name="${argc_name[*]}"
@@ -97,7 +90,6 @@ context() {
 
 # @cmd Push and pull yaks to/from origin via git ref
 sync() {
-  migrate_done_to_state
   check_git_requirements
   sync_yaks
 }
@@ -106,7 +98,6 @@ sync() {
 # @arg cmd The command being completed
 # @arg flag Optional flag being completed
 completions() {
-  migrate_done_to_state
   check_git_requirements
   completions_impl "$argc_cmd" "${argc_flag:-}"
 }
@@ -141,9 +132,6 @@ find_argc() {
     return 1
   fi
 }
-
-# Note: Argc evaluation will be added incrementally as commands migrate
-# For now, this just sets up the infrastructure
 
 # Find and execute argc
 argc_bin=$(find_argc)

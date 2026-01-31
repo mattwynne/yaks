@@ -4,5 +4,3 @@ Use your executing-plans skill.
 
 Work until you've finished the first task. Then update the plan with current status and anything you've learned.
 
-When all phases are done, write a file ".done" in the main branch.
-

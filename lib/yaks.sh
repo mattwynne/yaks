@@ -15,24 +15,6 @@ convert_to_absolute_path() {
 GIT_WORK_TREE=$(convert_to_absolute_path "$GIT_WORK_TREE")
 YAKS_PATH="$GIT_WORK_TREE/.yaks"
 
-convert_done_file_to_state() {
-  local done_file="$1"
-  local yak_dir
-  yak_dir=$(dirname "$done_file")
-  echo "done" > "$yak_dir/state"
-  rm -f "$done_file"
-}
-
-migrate_done_to_state() {
-  if [ ! -d "$YAKS_PATH" ]; then
-    return 0
-  fi
-
-  while IFS= read -r done_file; do
-    convert_done_file_to_state "$done_file"
-  done < <(find "$YAKS_PATH" -type f -name "done")
-}
-
 is_git_repository() {
   git -C "$GIT_WORK_TREE" rev-parse --git-dir > /dev/null 2>&1
 }
