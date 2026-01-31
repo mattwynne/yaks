@@ -4,6 +4,8 @@
 
 **Latest Progress:** Implemented log_command function - all 7 tests passing
 
+Read https://github.com/sigoden/argc/blob/main/examples/nested-commands.sh for info on argc nested commands for `yx completions install`
+
 ### Completed Commands (77 tests passing)
 
 **Phase 1: Core Commands** (45 tests) ✅
