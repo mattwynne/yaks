@@ -32,13 +32,18 @@ list() {
   list_yaks_impl "$format" "$only"
 }
 
+# Find a file relative to yx installation directory (resolving symlinks)
+yaks_lib() {
+  local relative_path="$1"
+  local yx_real_path="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  local yx_dir="$(cd "$(dirname "$yx_real_path")/.." && pwd)"
+  echo "$yx_dir/$relative_path"
+}
+
 # Source library functions
-# Resolve symlinks to find the real yx location
-YX_REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
-YX_DIR="$(cd "$(dirname "$YX_REAL_PATH")/.." && pwd)"
-if [ -f "$YX_DIR/lib/yaks.sh" ]; then
+if [ -f "$(yaks_lib lib/yaks.sh)" ]; then
   # shellcheck source=../lib/yaks.sh
-  source "$YX_DIR/lib/yaks.sh"
+  source "$(yaks_lib lib/yaks.sh)"
 else
   echo "Error: Could not find lib/yaks.sh" >&2
   exit 1
@@ -49,8 +54,7 @@ fi
 
 # Find argc relative to yx installation
 find_argc() {
-  local yx_real_path="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
-  local argc_path="$yx_real_path/../lib/argc"
+  local argc_path="$(yaks_lib lib/argc)"
 
   # Use bundled argc if available, otherwise system argc
   if [ -x "$argc_path" ]; then
