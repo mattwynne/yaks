@@ -125,4 +125,6 @@ The remaining list test (hierarchical sort with done children) is complex and ma
 - Refactor to recursive display (cleaner but more time)
 - Move on to other commands and return later
 
+Decision is to refactor to recursive display.
+
 See sub-yaks for specific test debugging if needed.
