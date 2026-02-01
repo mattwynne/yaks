@@ -24,9 +24,10 @@ Core user-facing commands:
 - [ ] rm.md - Todo
 - [ ] prune.md - Todo
 - [ ] move.md - Todo
+- [ ] sync.md - Todo
 
-**Status: 2 of 7 core commands documented (29%)**
+**Status: 2 of 8 core commands documented (25%)**
 
 ## Acceptance Criteria
 
-"Done" means: All 7 core user-facing commands have companion .md files following the done.md pattern.
+"Done" means: All 8 core user-facing commands have companion .md files following the done.md pattern.
