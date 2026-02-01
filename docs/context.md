@@ -14,12 +14,19 @@ Co-locate markdown documentation with test files:
 - Makes documentation easy to discover
 - Separates WHAT (tests) from WHY (docs)
 
-## Progress
+## Progress Checklist
 
-- ✅ Created template by documenting `done` command (spec/features/done.md)
-- 📋 22 total features in spec/features/
-- 🎯 Next: Document remaining core user-facing commands (add, list, context, rm, prune, move)
+Core user-facing commands:
+- [x] done.md - Completed
+- [x] add.md - Completed
+- [ ] list.md - Todo
+- [ ] context.md - Todo
+- [ ] rm.md - Todo
+- [ ] prune.md - Todo
+- [ ] move.md - Todo
+
+**Status: 2 of 7 core commands documented (29%)**
 
 ## Acceptance Criteria
 
-"Done" means: Core user-facing commands (add, done, list, context, rm, prune, move) have companion .md files following the done.md pattern.
+"Done" means: All 7 core user-facing commands have companion .md files following the done.md pattern.
