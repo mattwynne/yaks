@@ -16,18 +16,19 @@ Co-locate markdown documentation with test files:
 
 ## Progress Checklist
 
-Core user-facing commands:
-- [x] done.md - Completed
+Core user-facing commands (all commands from `yx --help`):
 - [x] add.md - Completed
 - [ ] list.md - Todo
-- [ ] context.md - Todo
-- [ ] rm.md - Todo
+- [x] done.md - Completed (command name is "finish", alias "done")
+- [ ] rm.md - Todo (command name is "remove", alias "rm")
 - [ ] prune.md - Todo
-- [ ] move.md - Todo
+- [ ] move.md - Todo (command name is "move", alias "mv")
+- [ ] context.md - Todo
 - [ ] sync.md - Todo
+- [ ] completions.md - Todo
 
-**Status: 2 of 8 core commands documented (25%)**
+**Status: 2 of 9 commands documented (22%)**
 
 ## Acceptance Criteria
 
-"Done" means: All 8 core user-facing commands have companion .md files following the done.md pattern.
+"Done" means: All 9 user-facing commands have companion .md files following the done.md pattern.
