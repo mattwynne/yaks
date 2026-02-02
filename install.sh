@@ -132,14 +132,15 @@ else
     cp "$SOURCE" "$TEMP_DIR/yx.zip"
 fi
 
-# Extract zip
-if ! unzip -q "$TEMP_DIR/yx.zip" -d "$TEMP_DIR"; then
+# Extract zip to a subdirectory
+EXTRACT_DIR="$TEMP_DIR/extracted"
+if ! unzip -q "$TEMP_DIR/yx.zip" -d "$EXTRACT_DIR"; then
     echo -e "${RED}Error: Failed to extract zip file${NC}"
     exit 1
 fi
 
 # Verify expected structure
-if [ ! -f "$TEMP_DIR/bin/yx" ]; then
+if [ ! -f "$EXTRACT_DIR/bin/yx" ]; then
     echo -e "${RED}Error: Invalid zip - bin/yx not found${NC}"
     exit 1
 fi
@@ -147,7 +148,7 @@ fi
 # Install to lib/yaks and symlink binary
 LIB_DIR="$(dirname "$BIN_DIR")/lib/yaks"
 mkdir -p "$LIB_DIR"
-cp -r "$TEMP_DIR/"* "$LIB_DIR/"
+cp -r "$EXTRACT_DIR/"* "$LIB_DIR/"
 ln -sf "$LIB_DIR/bin/yx" "$BIN_DIR/yx"
 
 # Install completion file
