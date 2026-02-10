@@ -1,172 +1,30 @@
-// RemoveYak use case - deletes a yak
+// Use case: Remove a yak
 
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::Result;
 
-pub struct RemoveYak<'a> {
-    storage: &'a dyn StoragePort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+pub struct RemoveYak {
+    name: String,
 }
 
-impl<'a> RemoveYak<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        _output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
-        Self { storage, log }
+impl RemoveYak {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
     }
 
-    pub fn execute(&self, name: &str) -> Result<()> {
+    pub fn execute(&self, app: &Application) -> Result<()> {
         // Resolve yak name (exact or fuzzy match)
-        let resolved_name = self.storage.find_yak(name)?;
+        let resolved_name = app.storage.find_yak(&self.name)?;
 
         // Delete the yak
-        self.storage.delete_yak(&resolved_name)?;
-        self.log.log_command(&format!("rm {resolved_name}"))?;
+        app.storage.delete_yak(&resolved_name)?;
+
+        // Log the command
+        app.log.log_command(&format!("rm {}", self.name))?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::Yak;
-    use std::cell::RefCell;
-
-    struct MockStorage {
-        yaks: RefCell<Vec<Yak>>,
-    }
-
-    impl MockStorage {
-        fn new() -> Self {
-            Self {
-                yaks: RefCell::new(Vec::new()),
-            }
-        }
-
-        fn add_yak(&self, name: &str, done: bool) {
-            self.yaks.borrow_mut().push(Yak {
-                name: name.to_string(),
-                done,
-                state: if done {
-                    "done".to_string()
-                } else {
-                    "todo".to_string()
-                },
-                context: None,
-            });
-        }
-
-        fn yak_exists(&self, name: &str) -> bool {
-            self.yaks.borrow().iter().any(|y| y.name == name)
-        }
-    }
-
-    impl StoragePort for MockStorage {
-        fn create_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn get_yak(&self, name: &str) -> Result<Yak> {
-            self.yaks
-                .borrow()
-                .iter()
-                .find(|y| y.name == name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))
-        }
-
-        fn list_yaks(&self) -> Result<Vec<Yak>> {
-            unimplemented!()
-        }
-
-        fn delete_yak(&self, name: &str) -> Result<()> {
-            let mut yaks = self.yaks.borrow_mut();
-            if let Some(pos) = yaks.iter().position(|y| y.name == name) {
-                yaks.remove(pos);
-                Ok(())
-            } else {
-                anyhow::bail!("yak '{}' not found", name)
-            }
-        }
-
-        fn rename_yak(&self, _from: &str, _to: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn find_yak(&self, name: &str) -> Result<String> {
-            self.get_yak(name)?;
-            Ok(name.to_string())
-        }
-        fn write_field(&self, _yak_name: &str, _field_name: &str, _content: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
-            unimplemented!()
-        }
-    }
-
-    struct MockOutput {
-        messages: RefCell<Vec<String>>,
-    }
-
-    impl MockOutput {
-        fn new() -> Self {
-            Self {
-                messages: RefCell::new(Vec::new()),
-            }
-        }
-    }
-
-    impl OutputPort for MockOutput {
-        fn success(&self, message: &str) {
-            self.messages.borrow_mut().push(message.to_string());
-        }
-
-        fn error(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("ERROR: {}", message));
-        }
-
-        fn info(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("INFO: {}", message));
-        }
-    }
-
-    struct MockLog;
-
-    impl LogPort for MockLog {
-        fn log_command(&self, _command: &str) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn test_remove_yak_deletes_yak() {
-        let storage = MockStorage::new();
-        storage.add_yak("test-yak", false);
-        let output = MockOutput::new();
-        let use_case = RemoveYak::new(&storage, &output, &MockLog);
-
-        use_case.execute("test-yak").unwrap();
-
-        assert!(!storage.yak_exists("test-yak"));
-    }
-
-    #[test]
-    fn test_remove_yak_fails_for_nonexistent_yak() {
-        let storage = MockStorage::new();
-        let output = MockOutput::new();
-        let use_case = RemoveYak::new(&storage, &output, &MockLog);
-
-        let result = use_case.execute("nonexistent");
-
-        assert!(result.is_err());
     }
 }

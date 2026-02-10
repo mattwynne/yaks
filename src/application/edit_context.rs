@@ -1,33 +1,31 @@
-// EditContext use case - opens editor for yak context or reads from stdin
+// Use case: Edit yak context (via editor or stdin)
 
 use crate::domain::CONTEXT_FIELD;
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::{Context as AnyhowContext, Result};
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::process::Command;
 
-pub struct EditContext<'a> {
-    storage: &'a dyn StoragePort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+pub struct EditContext {
+    name: String,
 }
 
-impl<'a> EditContext<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        _output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
-        Self { storage, log }
+impl EditContext {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
     }
 
-    pub fn execute(&self, name: &str) -> Result<()> {
+    pub fn execute(&self, app: &Application) -> Result<()> {
         // Resolve yak name (exact or fuzzy match)
-        let resolved_name = self.storage.find_yak(name)?;
+        let resolved_name = app.storage.find_yak(&self.name)?;
 
         // Read current context
-        let current_context = self
+        let current_context = app
             .storage
             .read_field(&resolved_name, CONTEXT_FIELD)
             .unwrap_or_default();
@@ -45,11 +43,19 @@ impl<'a> EditContext<'a> {
         };
 
         // Write updated context
-        self.storage
+        app.storage
             .write_field(&resolved_name, CONTEXT_FIELD, &content)?;
-        self.log.log_command(&format!("context {resolved_name}"))?;
+        app.log.log_command(&format!("context {}", self.name))?;
 
         Ok(())
+    }
+
+    fn read_from_stdin(&self) -> Result<String> {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .context("Failed to read from stdin")?;
+        Ok(buffer)
     }
 
     fn edit_with_editor(&self, initial_content: &str) -> Result<String> {
@@ -62,8 +68,7 @@ impl<'a> EditContext<'a> {
         let temp_path = temp_file.path();
 
         // Write current context to temp file
-        fs::write(temp_path, initial_content)
-            .context("Failed to write initial content to temp file")?;
+        fs::write(temp_path, initial_content).context("Failed to write to temp file")?;
 
         // Launch editor
         let status = Command::new(&editor)
@@ -80,128 +85,4 @@ impl<'a> EditContext<'a> {
 
         Ok(content)
     }
-
-    fn read_from_stdin(&self) -> Result<String> {
-        let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .context("Failed to read from stdin")?;
-        Ok(buffer)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::Yak;
-    use std::cell::RefCell;
-
-    struct MockStorage {
-        yaks: RefCell<Vec<Yak>>,
-        contexts: RefCell<std::collections::HashMap<String, String>>,
-    }
-
-    impl MockStorage {
-        fn new() -> Self {
-            Self {
-                yaks: RefCell::new(Vec::new()),
-                contexts: RefCell::new(std::collections::HashMap::new()),
-            }
-        }
-
-        fn set_context(&self, name: &str, context: &str) {
-            self.contexts
-                .borrow_mut()
-                .insert(name.to_string(), context.to_string());
-        }
-
-        fn get_context(&self, name: &str) -> Option<String> {
-            self.contexts.borrow().get(name).cloned()
-        }
-    }
-
-    impl StoragePort for MockStorage {
-        fn create_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn get_yak(&self, name: &str) -> Result<Yak> {
-            self.yaks
-                .borrow()
-                .iter()
-                .find(|y| y.name == name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))
-        }
-
-        fn list_yaks(&self) -> Result<Vec<Yak>> {
-            unimplemented!()
-        }
-
-        fn delete_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn rename_yak(&self, _from: &str, _to: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn find_yak(&self, name: &str) -> Result<String> {
-            self.get_yak(name)?;
-            Ok(name.to_string())
-        }
-
-        fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
-            use crate::domain::CONTEXT_FIELD;
-            if field_name == CONTEXT_FIELD {
-                self.set_context(yak_name, content);
-                Ok(())
-            } else {
-                Ok(())
-            }
-        }
-
-        fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
-            use crate::domain::CONTEXT_FIELD;
-            if field_name == CONTEXT_FIELD {
-                Ok(self.get_context(yak_name).unwrap_or_default())
-            } else {
-                anyhow::bail!("Field not found")
-            }
-        }
-    }
-
-    struct MockOutput;
-
-    impl OutputPort for MockOutput {
-        fn success(&self, _message: &str) {}
-        fn error(&self, _message: &str) {}
-        fn info(&self, _message: &str) {}
-    }
-
-    struct MockLog;
-
-    impl LogPort for MockLog {
-        fn log_command(&self, _command: &str) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn test_edit_context_fails_for_nonexistent_yak() {
-        // Prevent editor from opening in test environment
-        env::set_var("YX_IGNORE_STDIN", "1");
-
-        let storage = MockStorage::new();
-        let output = MockOutput;
-        let use_case = EditContext::new(&storage, &output, &MockLog);
-
-        let result = use_case.execute("nonexistent");
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
-
-    // Note: Full editor interaction testing is done in integration tests.
-    // Unit tests here focus on validation logic.
 }

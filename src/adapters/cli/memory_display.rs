@@ -1,11 +1,11 @@
-// In-memory output adapter - for testing only
+// In-memory display adapter - for testing only
 
-use crate::ports::OutputPort;
+use crate::ports::DisplayPort;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 #[allow(dead_code)]
-pub struct InMemoryOutput {
+pub struct InMemoryDisplay {
     // Separate buffers for each output type
     success_messages: Arc<RwLock<Vec<String>>>,
     error_messages: Arc<RwLock<Vec<String>>>,
@@ -13,7 +13,7 @@ pub struct InMemoryOutput {
 }
 
 #[allow(dead_code)]
-impl InMemoryOutput {
+impl InMemoryDisplay {
     pub fn new() -> Self {
         Self {
             success_messages: Arc::new(RwLock::new(Vec::new())),
@@ -59,13 +59,13 @@ impl InMemoryOutput {
     }
 }
 
-impl Default for InMemoryOutput {
+impl Default for InMemoryDisplay {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl OutputPort for InMemoryOutput {
+impl DisplayPort for InMemoryDisplay {
     fn success(&self, message: &str) {
         self.success_messages
             .write()
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_success_message() {
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         output.success("Operation successful");
 
         let messages = output.get_success_messages();
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_error_message() {
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         output.error("Something went wrong");
 
         let messages = output.get_error_messages();
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_info_message() {
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         output.info("Information");
 
         let messages = output.get_info_messages();
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_multiple_messages() {
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         output.success("Success 1");
         output.error("Error 1");
         output.info("Info 1");
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_clear() {
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         output.success("Success");
         output.error("Error");
         output.info("Info");
@@ -154,7 +154,7 @@ mod tests {
     fn test_thread_safety() {
         use std::thread;
 
-        let output = InMemoryOutput::new();
+        let output = InMemoryDisplay::new();
         let mut handles = vec![];
 
         // Spawn multiple threads that write messages

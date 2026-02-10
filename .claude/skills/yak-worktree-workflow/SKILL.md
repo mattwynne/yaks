@@ -66,7 +66,19 @@ Example:
 git worktree add .claude/worktrees/sort-ls-results -b sort-ls-results
 ```
 
-### 4. Switch to the Worktree
+### 4. Mark Yak as WIP and Record Worktree Location
+
+Signal to other agents that you're working on this yak:
+
+```bash
+cd /path/to/main/repo  # Go back to main repo
+yx state "yak name" wip
+yx field "yak name" worktree ".claude/worktrees/descriptive-name"
+```
+
+This prevents other agents from picking up the same yak and helps track where work is happening.
+
+### 5. Switch to the Worktree
 
 ```bash
 cd .claude/worktrees/descriptive-name
@@ -74,7 +86,7 @@ cd .claude/worktrees/descriptive-name
 
 All your work happens here. You're now on an isolated branch.
 
-### 5. Do the Work
+### 6. Do the Work
 
 Follow your normal development process:
 - Write tests (use incremental-tdd skill if applicable)
@@ -84,7 +96,7 @@ Follow your normal development process:
 
 The commits stay on your feature branch, isolated from main.
 
-### 6. Demo Your Work
+### 7. Demo Your Work
 
 **CRITICAL**: Before merging, demonstrate your work to the user.
 
@@ -101,7 +113,7 @@ This lets the user:
 
 **Wait for user approval before proceeding to merge.**
 
-### 7. Merge Back to Main
+### 8. Merge Back to Main
 
 After the user approves the demo, return to the main repo and merge:
 
@@ -110,15 +122,15 @@ cd /path/to/main/repo  # Back to main repo
 git merge descriptive-name
 ```
 
-### 8. Mark the Yak Done
+### 9. Mark the Yak Done
 
 ```bash
 yx done "yak name here"
 ```
 
-Use the exact yak name (with spaces if needed).
+Use the exact yak name (with spaces if needed). This automatically clears the "wip" state.
 
-### 9. Clean Up
+### 10. Clean Up
 
 Remove the worktree and delete the branch:
 
@@ -227,24 +239,29 @@ yx context --show "sort ls results somehow"
 # 3. Create worktree
 git worktree add .claude/worktrees/sort-ls-results -b sort-ls-results
 
-# 4. Switch to worktree
+# 4. Mark as WIP and record worktree location
+cd /path/to/main/repo
+yx state "sort ls results somehow" wip
+yx field "sort ls results somehow" worktree ".claude/worktrees/sort-ls-results"
+
+# 5. Switch to worktree
 cd .claude/worktrees/sort-ls-results
 
-# 5. Do the work (write tests, implement, commit)
+# 6. Do the work (write tests, implement, commit)
 # ... work happens here ...
 
-# 6. Demo the work
+# 7. Demo the work
 # Show test results, example usage, explain changes
 # Wait for user approval
 
-# 7. Return to main and merge (after approval)
+# 8. Return to main and merge (after approval)
 cd ../../..
 git merge sort-ls-results
 
-# 8. Mark done
+# 9. Mark done
 yx done "sort ls results somehow"
 
-# 9. Cleanup
+# 10. Cleanup
 git worktree remove .claude/worktrees/sort-ls-results
 git branch -d sort-ls-results
 ```

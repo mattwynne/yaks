@@ -4,7 +4,7 @@ mod cli;
 mod domain;
 mod ports;
 
-use adapters::cli::ConsoleOutput;
+use adapters::cli::ConsoleDisplay;
 use adapters::log::GitLog;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
@@ -112,11 +112,11 @@ fn main() -> Result<()> {
 
     // Initialize adapters
     let storage = DirectoryStorage::new()?;
-    let output = ConsoleOutput;
+    let display = ConsoleDisplay;
     let log = GitLog::new()?;
 
     // Create command handler with injected dependencies
-    let handler = CommandHandler::new(&storage, &output, &log);
+    let handler = CommandHandler::new(&storage, &display, &log);
 
     match cli.command {
         Commands::Add { name } => {
@@ -160,7 +160,7 @@ fn main() -> Result<()> {
         }
         Commands::Sync => {
             let sync = GitRefSync::new()?;
-            let use_case = SyncYaks::new(&sync, &output);
+            let use_case = SyncYaks::new(&sync, &display);
             use_case.execute()
         }
         Commands::Log => {

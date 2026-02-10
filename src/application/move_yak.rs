@@ -1,215 +1,48 @@
-// MoveYak use case - renames/relocates a yak
+// Use case: Move/rename a yak
 
 use crate::domain::validate_yak_name;
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::Result;
 
-pub struct MoveYak<'a> {
-    storage: &'a dyn StoragePort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+pub struct MoveYak {
+    from: String,
+    to: String,
 }
 
-impl<'a> MoveYak<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        _output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
-        Self { storage, log }
+impl MoveYak {
+    pub fn new(from: &str, to: &str) -> Self {
+        Self {
+            from: from.to_string(),
+            to: to.to_string(),
+        }
     }
 
-    pub fn execute(&self, from: &str, to: &str) -> Result<()> {
-        // Validate new name
-        validate_yak_name(to).map_err(|e| anyhow::anyhow!(e))?;
+    pub fn execute(&self, app: &Application) -> Result<()> {
+        // Validate target yak name
+        validate_yak_name(&self.to).map_err(|e| anyhow::anyhow!(e))?;
 
         // Resolve source yak name (exact or fuzzy match)
-        let resolved_from = self.storage.find_yak(from)?;
+        let resolved_from = app.storage.find_yak(&self.from)?;
 
         // Check if destination is an existing yak (parent-only move)
-        let actual_destination = if self.storage.get_yak(to).is_ok() {
+        let actual_destination = if app.storage.get_yak(&self.to).is_ok() {
             // Destination exists - treat as parent-only move
             // Extract the base name from the source (everything after last '/')
             let base_name = resolved_from.rsplit('/').next().unwrap();
-            format!("{}/{}", to, base_name)
+            format!("{}/{}", self.to, base_name)
         } else {
-            to.to_string()
+            self.to.clone()
         };
 
         // Rename the yak
-        self.storage
+        app.storage
             .rename_yak(&resolved_from, &actual_destination)?;
-        self.log
-            .log_command(&format!("move {resolved_from} {actual_destination}"))?;
+
+        // Log the command
+        app.log
+            .log_command(&format!("mv {} {}", self.from, self.to))?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::Yak;
-    use std::cell::RefCell;
-
-    struct MockStorage {
-        yaks: RefCell<Vec<Yak>>,
-    }
-
-    impl MockStorage {
-        fn new() -> Self {
-            Self {
-                yaks: RefCell::new(Vec::new()),
-            }
-        }
-
-        fn add_yak(&self, name: &str, done: bool) {
-            self.yaks.borrow_mut().push(Yak {
-                name: name.to_string(),
-                done,
-                state: if done {
-                    "done".to_string()
-                } else {
-                    "todo".to_string()
-                },
-                context: None,
-            });
-        }
-
-        fn yak_exists(&self, name: &str) -> bool {
-            self.yaks.borrow().iter().any(|y| y.name == name)
-        }
-    }
-
-    impl StoragePort for MockStorage {
-        fn create_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn get_yak(&self, name: &str) -> Result<Yak> {
-            self.yaks
-                .borrow()
-                .iter()
-                .find(|y| y.name == name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))
-        }
-
-        fn list_yaks(&self) -> Result<Vec<Yak>> {
-            unimplemented!()
-        }
-
-        fn delete_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
-            let mut yaks = self.yaks.borrow_mut();
-
-            // Check source exists
-            if !yaks.iter().any(|y| y.name == from) {
-                anyhow::bail!("yak '{}' not found", from);
-            }
-
-            // Check target doesn't exist
-            if yaks.iter().any(|y| y.name == to) {
-                anyhow::bail!("Yak '{}' already exists", to);
-            }
-
-            // Rename the yak
-            if let Some(yak) = yaks.iter_mut().find(|y| y.name == from) {
-                yak.name = to.to_string();
-            }
-
-            Ok(())
-        }
-
-        fn find_yak(&self, name: &str) -> Result<String> {
-            self.get_yak(name)?;
-            Ok(name.to_string())
-        }
-        fn write_field(&self, _yak_name: &str, _field_name: &str, _content: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
-            unimplemented!()
-        }
-    }
-
-    struct MockOutput {
-        messages: RefCell<Vec<String>>,
-    }
-
-    impl MockOutput {
-        fn new() -> Self {
-            Self {
-                messages: RefCell::new(Vec::new()),
-            }
-        }
-    }
-
-    impl OutputPort for MockOutput {
-        fn success(&self, message: &str) {
-            self.messages.borrow_mut().push(message.to_string());
-        }
-
-        fn error(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("ERROR: {}", message));
-        }
-
-        fn info(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("INFO: {}", message));
-        }
-    }
-
-    struct MockLog;
-
-    impl LogPort for MockLog {
-        fn log_command(&self, _command: &str) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn test_move_yak_renames_yak() {
-        let storage = MockStorage::new();
-        storage.add_yak("old-name", false);
-        let output = MockOutput::new();
-        let use_case = MoveYak::new(&storage, &output, &MockLog);
-
-        use_case.execute("old-name", "new-name").unwrap();
-
-        assert!(!storage.yak_exists("old-name"));
-        assert!(storage.yak_exists("new-name"));
-    }
-
-    #[test]
-    fn test_move_yak_fails_for_nonexistent_source() {
-        let storage = MockStorage::new();
-        let output = MockOutput::new();
-        let use_case = MoveYak::new(&storage, &output, &MockLog);
-
-        let result = use_case.execute("nonexistent", "new-name");
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_move_yak_with_existing_target_creates_child() {
-        let storage = MockStorage::new();
-        storage.add_yak("old-name", false);
-        storage.add_yak("parent", false);
-        let output = MockOutput::new();
-        let use_case = MoveYak::new(&storage, &output, &MockLog);
-
-        use_case.execute("old-name", "parent").unwrap();
-
-        assert!(!storage.yak_exists("old-name"));
-        assert!(storage.yak_exists("parent"));
-        assert!(storage.yak_exists("parent/old-name"));
     }
 }

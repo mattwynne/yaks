@@ -7,7 +7,7 @@ pub mod sync;
 
 // Re-export commonly used adapters for external use
 #[allow(unused_imports)]
-pub use cli::{ConsoleOutput, InMemoryOutput};
+pub use cli::{ConsoleDisplay, InMemoryDisplay};
 #[allow(unused_imports)]
 pub use log::{GitLog, InMemoryLog};
 #[allow(unused_imports)]

@@ -1,6 +1,7 @@
 // Application layer - use cases that orchestrate domain + ports
 
 mod add_yak;
+mod app;
 mod done_yak;
 mod edit_context;
 mod list_yaks;
@@ -14,6 +15,7 @@ mod sync_yaks;
 mod write_field;
 
 pub use add_yak::AddYak;
+pub use app::Application;
 pub use done_yak::DoneYak;
 pub use edit_context::EditContext;
 pub use list_yaks::ListYaks;

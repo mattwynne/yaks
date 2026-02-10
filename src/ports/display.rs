@@ -1,6 +1,6 @@
-// Output port trait - abstraction for displaying results to user
+// Display port trait - abstraction for displaying results to user
 
-pub trait OutputPort {
+pub trait DisplayPort {
     /// Display success message
     #[allow(dead_code)]
     fn success(&self, message: &str);

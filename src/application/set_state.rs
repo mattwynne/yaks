@@ -1,65 +1,65 @@
-// SetState use case - sets the state of a yak
+// Use case: Set the state of a yak
 
 use crate::domain::STATE_FIELD;
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::Result;
 
-pub struct SetState<'a> {
-    storage: &'a dyn StoragePort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+pub struct SetState {
+    name: String,
+    state: String,
 }
 
-impl<'a> SetState<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        _output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
-        Self { storage, log }
+impl SetState {
+    pub fn new(name: &str, state: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            state: state.to_string(),
+        }
     }
 
-    pub fn execute(&self, name: &str, state: &str) -> Result<()> {
-        // Validate state
-        const VALID_STATES: &[&str] = &["todo", "wip", "done"];
-        if !VALID_STATES.contains(&state) {
+    pub fn execute(&self, app: &Application) -> Result<()> {
+        // Validate state value
+        if !["todo", "wip", "done"].contains(&self.state.as_str()) {
             anyhow::bail!(
                 "Invalid state '{}'. Valid states are: todo, wip, done",
-                state
+                self.state
             );
         }
 
         // Resolve yak name (exact or fuzzy match)
-        let resolved_name = self.storage.find_yak(name)?;
+        let resolved_name = app.storage.find_yak(&self.name)?;
 
         // Set the state
-        self.storage
-            .write_field(&resolved_name, STATE_FIELD, state)?;
+        app.storage
+            .write_field(&resolved_name, STATE_FIELD, &self.state)?;
 
         // If child state changes from "todo", set all parents to "wip"
-        if state != "todo" {
-            self.set_parents_to_wip(&resolved_name)?;
+        if self.state != "todo" {
+            self.set_parents_to_wip(app, &resolved_name)?;
         }
 
-        // Log the state change
-        self.log
-            .log_command(&format!("Set state of '{resolved_name}' to '{state}'"))?;
+        // Log the command
+        app.log
+            .log_command(&format!("state {} {}", self.name, self.state))?;
 
         Ok(())
     }
 
-    fn set_parents_to_wip(&self, yak_name: &str) -> Result<()> {
-        // Get all parent yak names from the hierarchy
+    fn set_parents_to_wip(&self, app: &Application, yak_name: &str) -> Result<()> {
         let parts: Vec<&str> = yak_name.split('/').collect();
+        if parts.len() <= 1 {
+            return Ok(()); // No parent
+        }
 
-        // Build parent paths (e.g., "a/b/c" has parents "a" and "a/b")
+        // Build parent path and set to wip
         for i in 1..parts.len() {
-            let parent_name = parts[..i].join("/");
-
-            // Get parent yak
-            if let Ok(parent) = self.storage.get_yak(&parent_name) {
-                // Only set to wip if not already at a different state
-                if parent.state == "todo" {
-                    self.storage.write_field(&parent_name, STATE_FIELD, "wip")?;
+            let parent_path = parts[0..i].join("/");
+            if app.storage.get_yak(&parent_path).is_ok() {
+                // Check current state of parent - only set to wip if it's currently "todo"
+                let parent_yak = app.storage.get_yak(&parent_path)?;
+                if parent_yak.state == "todo" {
+                    app.storage.write_field(&parent_path, STATE_FIELD, "wip")?;
                 }
             }
         }

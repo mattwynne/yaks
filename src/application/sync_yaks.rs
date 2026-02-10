@@ -1,6 +1,6 @@
 // SyncYaks use case - synchronizes yaks via git refs
 
-use crate::ports::{OutputPort, SyncPort};
+use crate::ports::{DisplayPort, SyncPort};
 use anyhow::Result;
 
 pub struct SyncYaks<'a> {
@@ -8,7 +8,7 @@ pub struct SyncYaks<'a> {
 }
 
 impl<'a> SyncYaks<'a> {
-    pub fn new(sync: &'a dyn SyncPort, _output: &'a dyn OutputPort) -> Self {
+    pub fn new(sync: &'a dyn SyncPort, _display: &'a dyn DisplayPort) -> Self {
         Self { sync }
     }
 
@@ -66,7 +66,7 @@ mod tests {
         }
     }
 
-    impl OutputPort for MockOutput {
+    impl DisplayPort for MockOutput {
         fn success(&self, message: &str) {
             self.messages.borrow_mut().push(message.to_string());
         }
@@ -87,8 +87,8 @@ mod tests {
     #[test]
     fn test_sync_calls_sync_port() {
         let sync = MockSync::new();
-        let output = MockOutput::new();
-        let use_case = SyncYaks::new(&sync, &output);
+        let display = MockOutput::new();
+        let use_case = SyncYaks::new(&sync, &display);
 
         use_case.execute().unwrap();
 

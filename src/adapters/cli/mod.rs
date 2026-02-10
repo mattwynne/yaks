@@ -1,10 +1,10 @@
 // CLI adapter - implementation using clap
 
-pub mod memory;
+pub mod memory_display;
 
-pub struct ConsoleOutput;
+pub struct ConsoleDisplay;
 
-impl crate::ports::OutputPort for ConsoleOutput {
+impl crate::ports::DisplayPort for ConsoleDisplay {
     fn success(&self, message: &str) {
         println!("{message}");
     }
@@ -18,4 +18,4 @@ impl crate::ports::OutputPort for ConsoleOutput {
     }
 }
 
-pub use memory::InMemoryOutput;
+pub use memory_display::InMemoryDisplay;

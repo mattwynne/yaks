@@ -1,32 +1,33 @@
-// AddYak use case - creates a new yak
+// Use case: Add a new yak
 
 use crate::domain::{validate_yak_name, CONTEXT_FIELD};
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::{Context as AnyhowContext, Result};
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::process::Command;
 
-pub struct AddYak<'a> {
-    storage: &'a dyn StoragePort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+/// AddYak use case - creates a new yak
+pub struct AddYak {
+    name: String,
 }
 
-impl<'a> AddYak<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        _output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
-        Self { storage, log }
+impl AddYak {
+    /// Create a new AddYak use case with the yak name
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
     }
 
-    pub fn execute(&self, name: &str) -> Result<()> {
+    /// Execute the use case with the application's infrastructure
+    pub fn execute(&self, app: &Application) -> Result<()> {
         // Validate yak name
-        validate_yak_name(name).map_err(|e| anyhow::anyhow!(e))?;
+        validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
 
-        self.storage.create_yak(name)?;
+        app.storage.create_yak(&self.name)?;
 
         // In test mode, skip all interactive behavior (editor launch, stdin reading)
         if env::var("YX_IGNORE_STDIN").is_ok() {
@@ -38,23 +39,24 @@ impl<'a> AddYak<'a> {
                 let mut buffer = String::new();
                 io::stdin().read_to_string(&mut buffer)?;
                 if !buffer.is_empty() {
-                    self.storage.write_field(name, CONTEXT_FIELD, &buffer)?;
+                    app.storage
+                        .write_field(&self.name, CONTEXT_FIELD, &buffer)?;
                 }
             }
             // If no readable data, just create empty yak
         } else {
             // Interactive mode (TTY): open editor with template
-            let template = self.generate_context_template(name)?;
+            let template = self.generate_context_template()?;
             let edited_content = self.edit_with_editor(&template)?;
 
             // Only save if there's actual content (not just the template)
             if !edited_content.trim().is_empty() && edited_content.trim() != template.trim() {
-                self.storage
-                    .write_field(name, CONTEXT_FIELD, &edited_content)?;
+                app.storage
+                    .write_field(&self.name, CONTEXT_FIELD, &edited_content)?;
             }
         }
 
-        self.log.log_command(&format!("add {name}"))?;
+        app.log.log_command(&format!("add {}", self.name))?;
         Ok(())
     }
 
@@ -93,13 +95,13 @@ impl<'a> AddYak<'a> {
         result > 0 && (pollfd.revents & libc::POLLIN) != 0
     }
 
-    fn generate_context_template(&self, name: &str) -> Result<String> {
+    fn generate_context_template(&self) -> Result<String> {
         // Parse the yak hierarchy (e.g., "make tea/add milk/go to shops")
-        let parts: Vec<&str> = name.split('/').collect();
+        let parts: Vec<&str> = self.name.split('/').collect();
 
         if parts.len() == 1 {
             // Simple yak, no parents
-            return Ok(format!("# {}\n\n", name));
+            return Ok(format!("# {}\n\n", self.name));
         }
 
         // Nested yak - generate template with parent chain
@@ -164,132 +166,36 @@ impl<'a> AddYak<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::Yak;
-    use std::cell::RefCell;
-
-    struct MockStorage {
-        created: RefCell<Vec<String>>,
-    }
-
-    impl MockStorage {
-        fn new() -> Self {
-            Self {
-                created: RefCell::new(Vec::new()),
-            }
-        }
-
-        fn was_created(&self, name: &str) -> bool {
-            self.created.borrow().contains(&name.to_string())
-        }
-    }
-
-    impl StoragePort for MockStorage {
-        fn create_yak(&self, name: &str) -> Result<()> {
-            self.created.borrow_mut().push(name.to_string());
-            Ok(())
-        }
-
-        fn get_yak(&self, _name: &str) -> Result<Yak> {
-            unimplemented!()
-        }
-
-        fn list_yaks(&self) -> Result<Vec<Yak>> {
-            unimplemented!()
-        }
-
-        fn delete_yak(&self, _name: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn rename_yak(&self, _from: &str, _to: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn find_yak(&self, _name: &str) -> Result<String> {
-            unimplemented!()
-        }
-
-        fn write_field(&self, _yak_name: &str, _field_name: &str, _content: &str) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
-            unimplemented!()
-        }
-    }
-
-    struct MockOutput {
-        messages: RefCell<Vec<String>>,
-    }
-
-    impl MockOutput {
-        fn new() -> Self {
-            Self {
-                messages: RefCell::new(Vec::new()),
-            }
-        }
-    }
-
-    impl OutputPort for MockOutput {
-        fn success(&self, message: &str) {
-            self.messages.borrow_mut().push(message.to_string());
-        }
-
-        fn error(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("ERROR: {}", message));
-        }
-
-        fn info(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("INFO: {}", message));
-        }
-    }
-
-    struct MockLog;
-
-    impl LogPort for MockLog {
-        fn log_command(&self, _command: &str) -> Result<()> {
-            Ok(())
-        }
-    }
+    use crate::adapters::{InMemoryDisplay, InMemoryLog, InMemoryStorage};
+    use crate::ports::StoragePort;
 
     #[test]
     fn test_add_yak_creates_yak() {
         // Prevent editor from opening in test environment
         env::set_var("YX_IGNORE_STDIN", "1");
 
-        let storage = MockStorage::new();
-        let output = MockOutput::new();
-        let use_case = AddYak::new(&storage, &output, &MockLog);
+        let storage = InMemoryStorage::new();
+        let display = InMemoryDisplay::new();
+        let log = InMemoryLog::new();
+        let app = Application::new(&storage, &display, &log);
 
-        use_case.execute("test-yak").unwrap();
+        let use_case = AddYak::new("test-yak");
+        use_case.execute(&app).unwrap();
 
-        assert!(storage.was_created("test-yak"));
+        assert!(storage.get_yak("test-yak").is_ok());
     }
 
     #[test]
     fn test_generate_context_template_simple_yak() {
-        let storage = MockStorage::new();
-        let output = MockOutput::new();
-        let use_case = AddYak::new(&storage, &output, &MockLog);
-
-        let template = use_case.generate_context_template("simple-yak").unwrap();
-
+        let use_case = AddYak::new("simple-yak");
+        let template = use_case.generate_context_template().unwrap();
         assert_eq!(template, "# simple-yak\n\n");
     }
 
     #[test]
     fn test_generate_context_template_nested_yak() {
-        let storage = MockStorage::new();
-        let output = MockOutput::new();
-        let use_case = AddYak::new(&storage, &output, &MockLog);
-
-        let template = use_case
-            .generate_context_template("make tea/add milk/go to shops")
-            .unwrap();
+        let use_case = AddYak::new("make tea/add milk/go to shops");
+        let template = use_case.generate_context_template().unwrap();
 
         let expected = "# go to shops\n\nWhy?\n\n\
             * We want to *make tea* (see `yx context \"make tea\"`)\n\

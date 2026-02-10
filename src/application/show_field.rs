@@ -1,45 +1,40 @@
-// ShowField use case - reads and displays a custom field
+// Use case: Show a yak field
 
 use crate::domain::validate_field_name;
-use crate::ports::{LogPort, OutputPort, StoragePort};
 use anyhow::Result;
 
-pub struct ShowField<'a> {
-    storage: &'a dyn StoragePort,
-    output: &'a dyn OutputPort,
-    log: &'a dyn LogPort,
+use super::Application;
+
+pub struct ShowField {
+    name: String,
+    field: String,
 }
 
-impl<'a> ShowField<'a> {
-    pub fn new(
-        storage: &'a dyn StoragePort,
-        output: &'a dyn OutputPort,
-        log: &'a dyn LogPort,
-    ) -> Self {
+impl ShowField {
+    pub fn new(name: &str, field: &str) -> Self {
         Self {
-            storage,
-            output,
-            log,
+            name: name.to_string(),
+            field: field.to_string(),
         }
     }
 
-    pub fn execute(&self, yak_name: &str, field_name: &str) -> Result<()> {
+    pub fn execute(&self, app: &Application) -> Result<()> {
         // Validate field name
-        validate_field_name(field_name)?;
+        validate_field_name(&self.field)?;
 
         // Resolve yak name (exact or fuzzy match)
-        let resolved_name = self.storage.find_yak(yak_name)?;
+        let resolved_name = app.storage.find_yak(&self.name)?;
 
         // Read field content
-        let content = self.storage.read_field(&resolved_name, field_name)?;
+        let content = app.storage.read_field(&resolved_name, &self.field)?;
 
         // Output the yak name and content (similar to context --show)
-        self.output
+        app.display
             .info(&format!("{}\n\n{}", resolved_name, content));
 
         // Log the command
-        self.log
-            .log_command(&format!("field {resolved_name} {field_name} --show"))?;
+        app.log
+            .log_command(&format!("field {} {} --show", self.name, self.field))?;
 
         Ok(())
     }
