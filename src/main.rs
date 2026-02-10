@@ -1,5 +1,6 @@
 mod adapters;
 mod application;
+mod cli;
 mod domain;
 mod ports;
 
@@ -8,11 +9,9 @@ use adapters::log::GitLog;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
 use anyhow::Result;
-use application::{
-    AddYak, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState, ShowContext,
-    ShowField, SyncYaks, WriteField,
-};
+use application::SyncYaks;
 use clap::{CommandFactory, Parser};
+use cli::CommandHandler;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -116,61 +115,47 @@ fn main() -> Result<()> {
     let output = ConsoleOutput;
     let log = GitLog::new()?;
 
+    // Create command handler with injected dependencies
+    let handler = CommandHandler::new(&storage, &output, &log);
+
     match cli.command {
         Commands::Add { name } => {
             let name_str = name.join(" ");
-            let use_case = AddYak::new(&storage, &output, &log);
-            use_case.execute(&name_str)
+            handler.handle_add(&name_str)
         }
-        Commands::List { format, only } => {
-            let use_case = ListYaks::new(&storage, &output);
-            use_case.execute(&format, only.as_deref())
-        }
+        Commands::List { format, only } => handler.handle_list(&format, only.as_deref()),
         Commands::Done {
             name,
             undo,
             recursive,
         } => {
             let name_str = name.join(" ");
-            let use_case = DoneYak::new(&storage, &output, &log);
-            use_case.execute(&name_str, undo, recursive)
+            handler.handle_done(&name_str, undo, recursive)
         }
         Commands::Remove { name } => {
             let name_str = name.join(" ");
-            let use_case = RemoveYak::new(&storage, &output, &log);
-            use_case.execute(&name_str)
+            handler.handle_remove(&name_str)
         }
-        Commands::Prune => {
-            let use_case = PruneYaks::new(&storage, &output, &log);
-            use_case.execute()
-        }
-        Commands::Move { from, to } => {
-            let use_case = MoveYak::new(&storage, &output, &log);
-            use_case.execute(&from, &to)
-        }
+        Commands::Prune => handler.handle_prune(),
+        Commands::Move { from, to } => handler.handle_move(&from, &to),
         Commands::Context { name, show } => {
             let name_str = name.join(" ");
             if show {
-                let use_case = ShowContext::new(&storage, &output);
-                use_case.execute(&name_str)
+                handler.handle_context_show(&name_str)
             } else {
-                let use_case = EditContext::new(&storage, &output, &log);
-                use_case.execute(&name_str)
+                handler.handle_context_edit(&name_str)
             }
         }
         Commands::State { name, state } => {
             let name_str = name.join(" ");
-            let use_case = SetState::new(&storage, &output, &log);
-            use_case.execute(&name_str, &state)
+            handler.handle_state(&name_str, &state)
         }
         Commands::Field { name, field, show } => {
             let name_str = name.join(" ");
             if show {
-                let use_case = ShowField::new(&storage, &output, &log);
-                use_case.execute(&name_str, &field)
+                handler.handle_field_show(&name_str, &field)
             } else {
-                let use_case = WriteField::new(&storage, &output, &log);
-                use_case.execute(&name_str, &field)
+                handler.handle_field_write(&name_str, &field)
             }
         }
         Commands::Sync => {
