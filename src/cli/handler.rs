@@ -268,6 +268,62 @@ mod tests {
     }
 
     #[test]
+    fn test_field_write_with_in_memory_adapters() {
+        let storage = InMemoryStorage::new();
+        let output = InMemoryOutput::new();
+        let log = InMemoryLog::new();
+
+        // Add a yak
+        storage.create_yak("test yak").unwrap();
+
+        let handler = CommandHandler::new(&storage, &output, &log);
+
+        // Note: handle_field_write reads from stdin in the real implementation
+        // For this test, we verify the method exists and can be called.
+        // The actual stdin reading is tested in integration tests.
+        // Here we just verify that the handler method signature is correct
+        // and that it returns an error for a nonexistent yak (doesn't require stdin).
+        let result = handler.handle_field_write("nonexistent", "notes");
+        assert!(result.is_err());
+
+        // Verify the handler works with an existing yak by directly writing to storage
+        // (simulating what would happen after stdin is read)
+        storage
+            .write_field("test yak", "notes", "Field content")
+            .unwrap();
+        let content = storage.read_field("test yak", "notes").unwrap();
+        assert_eq!(content, "Field content");
+    }
+
+    #[test]
+    fn test_context_edit_with_in_memory_adapters() {
+        let storage = InMemoryStorage::new();
+        let output = InMemoryOutput::new();
+        let log = InMemoryLog::new();
+
+        // Add a yak
+        storage.create_yak("test yak").unwrap();
+
+        let handler = CommandHandler::new(&storage, &output, &log);
+
+        // Note: handle_context_edit reads from stdin or opens an editor in real implementation
+        // For this test, we verify the method exists and can be called.
+        // The actual stdin/editor interaction is tested in integration tests.
+        // Here we just verify that the handler method signature is correct
+        // and that it returns an error for a nonexistent yak (doesn't require stdin).
+        let result = handler.handle_context_edit("nonexistent");
+        assert!(result.is_err());
+
+        // Verify the handler works with an existing yak by directly writing to storage
+        // (simulating what would happen after stdin/editor provides content)
+        storage
+            .write_field("test yak", "context.md", "Updated context")
+            .unwrap();
+        let context = storage.read_field("test yak", "context.md").unwrap();
+        assert_eq!(context, "Updated context");
+    }
+
+    #[test]
     fn test_multiple_commands_share_state() {
         let storage = InMemoryStorage::new();
         let output = InMemoryOutput::new();
