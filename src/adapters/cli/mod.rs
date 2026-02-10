@@ -1,5 +1,7 @@
 // CLI adapter - implementation using clap
 
+pub mod memory;
+
 pub struct ConsoleOutput;
 
 impl crate::ports::OutputPort for ConsoleOutput {
@@ -15,3 +17,5 @@ impl crate::ports::OutputPort for ConsoleOutput {
         println!("{message}");
     }
 }
+
+pub use memory::InMemoryOutput;

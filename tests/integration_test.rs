@@ -541,7 +541,7 @@ fn test_default_format_is_pretty() {
         .env("YAK_PATH", yak_path)
         .env("YX_IGNORE_STDIN", "1")
         .env("YX_SKIP_GIT_CHECKS", "1")
-        .args(&["add", "test-yak"])
+        .args(["add", "test-yak"])
         .output()
         .unwrap();
 
@@ -550,7 +550,7 @@ fn test_default_format_is_pretty() {
         .env("YAK_PATH", yak_path)
         .env("YX_IGNORE_STDIN", "1")
         .env("YX_SKIP_GIT_CHECKS", "1")
-        .args(&["ls"])
+        .args(["ls"])
         .output()
         .unwrap();
 
