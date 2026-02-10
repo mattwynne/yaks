@@ -208,12 +208,7 @@ fn route_command(handler: &CommandHandler, args: &[&str]) -> Result<()> {
             }
             let name = args[1];
             let field = args[2];
-            // Check for --show flag or default to show
-            if args.len() >= 4 && args[3] == "--show" {
-                handler.handle_field_show(name, field)
-            } else {
-                handler.handle_field_show(name, field)
-            }
+            handler.handle_field_show(name, field)
         }
         _ => anyhow::bail!("Unknown command: {}", args[0]),
     }
