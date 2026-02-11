@@ -17,6 +17,12 @@ impl InMemoryEventStore {
     }
 }
 
+impl Default for InMemoryEventStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventStore for InMemoryEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
         self.events.lock().unwrap().push(event.clone());

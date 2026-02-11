@@ -11,7 +11,15 @@ impl PruneYaks {
     pub fn new() -> Self {
         Self {}
     }
+}
 
+impl Default for PruneYaks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PruneYaks {
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         let yaks = app.store.list_yaks()?;
 
