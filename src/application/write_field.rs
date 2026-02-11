@@ -19,12 +19,9 @@ impl WriteField {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate field name
         validate_field_name(&self.field)?;
-
-        // Resolve yak name (exact or fuzzy match)
-        let resolved_name = app.storage.find_yak(&self.name)?;
 
         // Read content from stdin
         let mut buffer = String::new();
@@ -32,20 +29,14 @@ impl WriteField {
             .read_to_string(&mut buffer)
             .context("Failed to read from stdin")?;
 
-        // Write to field
-        app.storage
-            .write_field(&resolved_name, &self.field, &buffer)?;
-
-        // Log the command
-        app.log
-            .log_command(&format!("field {} {}", self.name, self.field))?;
-
-        Ok(())
+        app.with_yak(&self.name, |yak| {
+            yak.update_field(self.field.clone(), buffer)
+        })
     }
 }
 
 impl UseCase for WriteField {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

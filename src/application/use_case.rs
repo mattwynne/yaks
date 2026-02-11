@@ -11,5 +11,5 @@ use super::Application;
 /// 2. Execute with infrastructure (execute)
 pub trait UseCase {
     /// Execute the use case with the application's infrastructure
-    fn execute(&self, app: &Application) -> Result<()>;
+    fn execute(&self, app: &mut Application) -> Result<()>;
 }

@@ -1,6 +1,5 @@
 // Use case: Add a new yak
 
-use crate::domain::{validate_yak_name, CONTEXT_FIELD};
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -19,25 +18,20 @@ impl AddYak {
     }
 
     /// Execute the use case with the application's infrastructure
-    pub fn execute(&self, app: &Application) -> Result<()> {
-        // Validate yak name
-        validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
+        app.with_new_yak(&self.name, |yak| {
+            // Generate template
+            let template = self.generate_context_template()?;
 
-        app.storage.create_yak(&self.name)?;
-
-        // Generate template for user
-        let template = self.generate_context_template()?;
-
-        // Request content via input port
-        if let Some(content) = app.input.request_content(None, Some(&template))? {
-            if !content.trim().is_empty() {
-                app.storage
-                    .write_field(&self.name, CONTEXT_FIELD, &content)?;
+            // Request content via input port
+            if let Some(content) = app.input.request_content(None, Some(&template))? {
+                if !content.trim().is_empty() {
+                    yak.update_context(content)?;
+                }
             }
-        }
 
-        app.log.log_command(&format!("add {}", self.name))?;
-        Ok(())
+            Ok(())
+        })
     }
 
     fn generate_context_template(&self) -> Result<String> {
@@ -81,7 +75,7 @@ impl AddYak {
 }
 
 impl UseCase for AddYak {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }
@@ -89,21 +83,26 @@ impl UseCase for AddYak {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{InMemoryDisplay, InMemoryInput, InMemoryLog, InMemoryStorage};
-    use crate::ports::StoragePort;
+    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::infrastructure::EventBus;
+    use crate::ports::Store;
 
     #[test]
     fn test_add_yak_creates_yak() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
         let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
         let display = InMemoryDisplay::new();
-        let log = InMemoryLog::new();
         let input = InMemoryInput::new();
-        let app = Application::new(&storage, &display, &log, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
 
         let use_case = AddYak::new("test-yak");
-        use_case.execute(&app).unwrap();
+        use_case.execute(&mut app).unwrap();
 
-        assert!(storage.get_yak("test-yak").is_ok());
+        assert!(Store::yak_exists(&storage, "test-yak"));
     }
 
     #[test]

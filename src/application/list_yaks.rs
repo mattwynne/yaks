@@ -82,10 +82,10 @@ impl ListYaks {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
         let format = self.format.as_str();
         let only = self.only.as_deref();
-        let yaks = app.storage.list_yaks()?;
+        let yaks = app.store.list_yaks()?;
 
         // Normalize format (treat "md" and "raw" as aliases)
         let normalized_format = match format {
@@ -253,9 +253,9 @@ impl ListYaks {
     /// Check if node matches the filter
     fn should_display_node(&self, node: &YakNode, only: Option<&str>) -> bool {
         match only {
-            Some("done") => node.yak.as_ref().map(|y| y.done).unwrap_or(false),
+            Some("done") => node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false),
             Some("not-done") => {
-                !node.yak.as_ref().map(|y| y.done).unwrap_or(false) || node.yak.is_none()
+                !node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false) || node.yak.is_none()
             }
             _ => true,
         }
@@ -345,7 +345,7 @@ impl ListYaks {
 }
 
 impl UseCase for ListYaks {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

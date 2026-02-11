@@ -18,30 +18,30 @@ impl ShowField {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate field name
         validate_field_name(&self.field)?;
 
-        // Resolve yak name (exact or fuzzy match)
-        let resolved_name = app.storage.find_yak(&self.name)?;
+        // Find yak (handles fuzzy matching)
+        let yak_name = app.store.find_yak(&self.name)?;
+
+        // Get yak to display name
+        let yak = app.store.get_yak(&yak_name)?;
 
         // Read field content
-        let content = app.storage.read_field(&resolved_name, &self.field)?;
+        let content = app.store.read_field(&yak_name, &self.field)?;
 
-        // Output the yak name and content (similar to context --show)
-        app.display
-            .info(&format!("{}\n\n{}", resolved_name, content));
-
-        // Log the command
-        app.log
-            .log_command(&format!("field {} {} --show", self.name, self.field))?;
+        // Display yak name and field content
+        app.display.success(&yak.name);
+        app.display.info("");
+        app.display.info(&content);
 
         Ok(())
     }
 }
 
 impl UseCase for ShowField {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

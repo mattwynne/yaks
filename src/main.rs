@@ -1,6 +1,7 @@
 mod adapters;
 mod application;
 mod domain;
+mod infrastructure;
 mod ports;
 
 use adapters::cli::ConsoleDisplay;
@@ -8,12 +9,14 @@ use adapters::input::ConsoleInput;
 use adapters::log::GitLog;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
+use adapters::InMemoryEventStore;
 use anyhow::Result;
 use application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
     ShowContext, ShowField, SyncYaks, WriteField,
 };
 use clap::{CommandFactory, Parser};
+use infrastructure::EventBus;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -112,14 +115,22 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    // Initialize adapters
+    // Initialize event infrastructure
+    let event_store = InMemoryEventStore::new();
+    let mut event_bus = EventBus::new(Box::new(event_store));
+
+    // Initialize storage and register as projection
     let storage = DirectoryStorage::new()?;
+    event_bus.register(Box::new(storage.clone()));
+
+    // Initialize other adapters
     let display = ConsoleDisplay;
     let log = GitLog::new()?;
+    event_bus.register(Box::new(log.clone()));
     let input = ConsoleInput;
 
     // Create application with injected dependencies
-    let app = Application::new(&storage, &display, &log, &input);
+    let mut app = Application::new(&mut event_bus, &storage, &display, &input);
 
     match cli.command {
         Commands::Add { name } => {
