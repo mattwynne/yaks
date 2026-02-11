@@ -1,46 +1,62 @@
 // Yak domain model
 
+use crate::domain::YakEvent;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
     pub name: String,
-    pub done: bool,
-    pub state: String, // New: arbitrary state (e.g., "todo", "wip", "done")
+    pub state: String,
     pub context: Option<String>,
+    pub pending_events: Vec<YakEvent>,
 }
 
 impl Yak {
-    #[allow(dead_code)]
     pub fn new(name: String) -> Self {
-        Self {
-            name,
-            done: false,
+        let mut yak = Self {
+            name: name.clone(),
             state: "todo".to_string(),
             context: None,
-        }
+            pending_events: vec![],
+        };
+
+        yak.pending_events.push(YakEvent::Added { name });
+        yak
     }
 
-    #[allow(dead_code)]
+    pub fn is_done(&self) -> bool {
+        self.state == "done"
+    }
+
     pub fn with_context(mut self, context: String) -> Self {
         self.context = Some(context);
         self
     }
 
-    #[allow(dead_code)]
-    pub fn mark_done(mut self) -> Self {
-        self.done = true;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn mark_undone(mut self) -> Self {
-        self.done = false;
-        self
-    }
-
-    #[allow(dead_code)]
     pub fn with_state(mut self, state: String) -> Self {
         self.state = state;
         self
+    }
+
+    pub fn update_context(&mut self, content: String) -> anyhow::Result<()> {
+        self.context = Some(content.clone());
+        self.pending_events.push(YakEvent::ContextUpdated {
+            name: self.name.clone(),
+            content,
+        });
+        Ok(())
+    }
+
+    pub fn update_state(&mut self, state: String) -> anyhow::Result<()> {
+        self.state = state.clone();
+        self.pending_events.push(YakEvent::StateUpdated {
+            name: self.name.clone(),
+            state,
+        });
+        Ok(())
+    }
+
+    pub fn take_events(&mut self) -> Vec<YakEvent> {
+        std::mem::take(&mut self.pending_events)
     }
 }
 
@@ -77,12 +93,13 @@ pub fn parse_hierarchy(name: &str) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::YakEvent;
 
     #[test]
     fn test_new_yak() {
         let yak = Yak::new("test".to_string());
         assert_eq!(yak.name, "test");
-        assert!(!yak.done);
+        assert!(!yak.is_done());
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, None);
     }
@@ -95,14 +112,17 @@ mod tests {
 
     #[test]
     fn test_mark_done() {
-        let yak = Yak::new("test".to_string()).mark_done();
-        assert!(yak.done);
+        let mut yak = Yak::new("test".to_string());
+        yak.update_state("done".to_string()).unwrap();
+        assert!(yak.is_done());
     }
 
     #[test]
     fn test_mark_undone() {
-        let yak = Yak::new("test".to_string()).mark_done().mark_undone();
-        assert!(!yak.done);
+        let mut yak = Yak::new("test".to_string());
+        yak.update_state("done".to_string()).unwrap();
+        yak.update_state("todo".to_string()).unwrap();
+        assert!(!yak.is_done());
     }
 
     #[test]
@@ -137,5 +157,62 @@ mod tests {
         assert_eq!(parse_hierarchy("dx/rust"), vec!["dx", "rust"]);
         assert_eq!(parse_hierarchy("simple"), vec!["simple"]);
         assert_eq!(parse_hierarchy("a/b/c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_yak_emits_added_event() {
+        let mut yak = Yak::new("test".to_string());
+        let events = yak.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::Added { name } => assert_eq!(name, "test"),
+            _ => panic!("Expected Added event"),
+        }
+    }
+
+    #[test]
+    fn test_yak_is_done_derived_from_state() {
+        let mut yak = Yak::new("test".to_string());
+        assert!(!yak.is_done());
+
+        yak.state = "done".to_string();
+        assert!(yak.is_done());
+    }
+
+    #[test]
+    fn test_yak_update_context_emits_event() {
+        let mut yak = Yak::new("test".to_string());
+        yak.take_events(); // clear creation event
+
+        yak.update_context("new context".to_string()).unwrap();
+        let events = yak.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::ContextUpdated { name, content } => {
+                assert_eq!(name, "test");
+                assert_eq!(content, "new context");
+            }
+            _ => panic!("Expected ContextUpdated event"),
+        }
+    }
+
+    #[test]
+    fn test_yak_update_state_emits_event() {
+        let mut yak = Yak::new("test".to_string());
+        yak.take_events(); // clear creation event
+
+        yak.update_state("wip".to_string()).unwrap();
+        let events = yak.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::StateUpdated { name, state } => {
+                assert_eq!(name, "test");
+                assert_eq!(state, "wip");
+            }
+            _ => panic!("Expected StateUpdated event"),
+        }
     }
 }
