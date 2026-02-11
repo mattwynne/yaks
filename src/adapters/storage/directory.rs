@@ -1,7 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
 use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{EventListener, StoragePort};
+use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -158,7 +158,7 @@ impl StoragePort for DirectoryStorage {
             if let Ok(rel_path) = entry.path().strip_prefix(&self.base_path) {
                 if let Some(name) = rel_path.to_str() {
                     // Only add if we can successfully read it as a yak
-                    if let Ok(yak) = self.get_yak(name) {
+                    if let Ok(yak) = StoragePort::get_yak(self, name) {
                         yaks.push(yak);
                     }
                 }
@@ -209,7 +209,7 @@ impl StoragePort for DirectoryStorage {
         }
 
         // If not found, try fuzzy match on the leaf node only
-        let yaks = self.list_yaks()?;
+        let yaks = StoragePort::list_yaks(self)?;
         let matches: Vec<&Yak> = yaks
             .iter()
             .filter(|yak| {
@@ -276,6 +276,21 @@ impl EventListener for DirectoryStorage {
     }
 }
 
+impl Store for DirectoryStorage {
+    fn get_yak(&self, name: &str) -> Result<Yak> {
+        StoragePort::get_yak(self, name)
+    }
+
+    fn list_yaks(&self) -> Result<Vec<Yak>> {
+        StoragePort::list_yaks(self)
+    }
+
+    fn yak_exists(&self, name: &str) -> bool {
+        let context_file = self.field_path(name, CONTEXT_FIELD);
+        context_file.exists()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,7 +313,7 @@ mod tests {
     fn test_get_yak() {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
-        let yak = storage.get_yak("test-yak").unwrap();
+        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
         assert_eq!(yak.name, "test-yak");
         assert!(!yak.is_done());
     }
@@ -308,7 +323,7 @@ mod tests {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("yak1").unwrap();
         storage.create_yak("yak2").unwrap();
-        let yaks = storage.list_yaks().unwrap();
+        let yaks = StoragePort::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
     }
 
@@ -319,7 +334,7 @@ mod tests {
         storage
             .write_field("test-yak", STATE_FIELD, "done")
             .unwrap();
-        let yak = storage.get_yak("test-yak").unwrap();
+        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
         assert!(yak.is_done());
     }
 
@@ -358,7 +373,7 @@ mod tests {
         assert!(!storage.yak_dir("old-name").exists());
         assert!(storage.yak_dir("new-name").exists());
 
-        let yak = storage.get_yak("new-name").unwrap();
+        let yak = StoragePort::get_yak(&storage, "new-name").unwrap();
         assert_eq!(yak.name, "new-name");
         assert!(yak.is_done());
         assert_eq!(yak.context.unwrap(), "Context text");
@@ -475,7 +490,7 @@ mod tests {
         storage.on_event(&event).unwrap();
 
         assert!(storage.yak_dir("test").exists());
-        let yak = storage.get_yak("test").unwrap();
+        let yak = StoragePort::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "todo");
     }
 
@@ -498,7 +513,7 @@ mod tests {
             })
             .unwrap();
 
-        let yak = storage.get_yak("test").unwrap();
+        let yak = StoragePort::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.context, Some("new context".to_string()));
     }
 
@@ -519,7 +534,71 @@ mod tests {
             })
             .unwrap();
 
-        let yak = storage.get_yak("test").unwrap();
+        let yak = StoragePort::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "wip");
+    }
+
+    #[test]
+    fn test_directory_storage_store_get_yak() {
+        use crate::ports::Store;
+
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test".to_string(),
+            })
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::ContextUpdated {
+                name: "test".to_string(),
+                content: "context".to_string(),
+            })
+            .unwrap();
+
+        let yak = Store::get_yak(&storage, "test").unwrap();
+        assert_eq!(yak.name, "test");
+        assert_eq!(yak.state, "todo");
+        assert_eq!(yak.context, Some("context".to_string()));
+        assert!(yak.pending_events.is_empty());
+    }
+
+    #[test]
+    fn test_directory_storage_store_yak_exists() {
+        use crate::ports::Store;
+
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test".to_string(),
+            })
+            .unwrap();
+
+        assert!(Store::yak_exists(&storage, "test"));
+        assert!(!Store::yak_exists(&storage, "missing"));
+    }
+
+    #[test]
+    fn test_directory_storage_store_list_yaks() {
+        use crate::ports::Store;
+
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test1".to_string(),
+            })
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test2".to_string(),
+            })
+            .unwrap();
+
+        let yaks = Store::list_yaks(&storage).unwrap();
+        assert_eq!(yaks.len(), 2);
     }
 }
