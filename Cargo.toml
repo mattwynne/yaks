@@ -25,6 +25,7 @@ tempfile = "3.15"
 walkdir = "2.5"
 libc = "0.2.180"
 chrono = "0.4"
+serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.15"

@@ -1892,6 +1892,7 @@ dependencies = [
  "git2",
  "libc",
  "regex",
+ "serde",
  "serial_test",
  "tempfile",
  "thiserror",
