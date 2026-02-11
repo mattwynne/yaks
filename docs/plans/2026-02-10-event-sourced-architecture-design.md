@@ -1,7 +1,7 @@
 # Event-Sourced Architecture Design
 
 **Date:** 2026-02-10
-**Status:** Draft
+**Status:** ~~Draft~~ Implemented
 
 ## Overview
 
@@ -569,3 +569,42 @@ These can be addressed as we implement and gain experience with the pattern.
 3. Begin Phase 1: Infrastructure setup
 4. TDD approach: write tests first, then implementation
 5. Incremental commits after each working piece
+
+## Implementation Notes
+
+**Completed:** 2026-02-11
+
+**Changes from design:**
+- Store trait was extended to include `find_yak()` and `read_field()` methods for query operations
+- Added state validation (`validate_state()`) in domain layer - validates against ["todo", "wip", "done"]
+- InMemoryEventStore used initially instead of GitEventStore (GitEventStore integration deferred)
+- Logging (GitLog) not yet integrated as EventListener - requires additional work
+- Parent state management (auto-updating parent to "wip") not yet implemented
+
+**Verification:**
+- ✅ All unit tests passing (93 tests)
+- ✅ Cucumber integration test passing (1 scenario, 4 steps)
+- ⚠️  Shellspec: 107/120 passing (13 failures)
+  - 8 log command tests failing (GitLog not integrated with event sourcing)
+  - 1 prune logging test failing (related to logging)
+  - 2 state tests failing (parent state management not implemented)
+  - 2 sync tests failing (sync functionality may need event-sourced adaptation)
+- ✅ dev lint passes
+- ⚠️  dev check: tests passing, some shellspec failures remain
+
+**Core functionality verified:**
+- Event sourcing with EventBus and InMemoryEventStore working
+- Domain events (Added, Removed, Moved, ContextUpdated, StateUpdated, FieldUpdated) functioning
+- DirectoryStorage acting as both EventListener and Store projection
+- Application closure API (with_yak, with_new_yak) working
+- Field commands (read/write) working
+- State validation working
+- Use cases successfully refactored to event-sourced model
+
+**Next steps:**
+- Integrate GitLog as EventListener for command logging to git notes
+- Implement parent state management (auto-update parent to "wip")
+- Fix remaining sync test failures
+- Consider implementing GitEventStore for true event sourcing persistence
+- Remove shellspec tests once Cucumber conversion complete
+- Consider refactoring storage thread-safety if needed
