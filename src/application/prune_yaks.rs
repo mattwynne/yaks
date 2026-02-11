@@ -1,24 +1,28 @@
-// Use case: Prune all done yaks
+// Use case: Remove all done yaks
 
 use anyhow::Result;
+use crate::domain::YakEvent;
 
 use super::{Application, UseCase};
 
-pub struct PruneYaks;
+pub struct PruneYaks {}
 
 impl PruneYaks {
     pub fn new() -> Self {
-        Self
+        Self {}
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
-        let yaks = app.storage.list_yaks()?;
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
+        let yaks = app.store.list_yaks()?;
 
-        // Remove all done yaks
-        for yak in yaks {
-            if yak.is_done() {
-                app.storage.delete_yak(&yak.name)?;
-                app.log.log_command(&format!("rm {}", yak.name))?;
+        for yak in yaks.iter().filter(|y| y.is_done()) {
+            let mut yak_to_remove = yak.clone();
+            yak_to_remove.pending_events.push(YakEvent::Removed {
+                name: yak_to_remove.name.clone(),
+            });
+
+            for event in yak_to_remove.take_events() {
+                app.event_bus.publish(event)?;
             }
         }
 
@@ -26,14 +30,8 @@ impl PruneYaks {
     }
 }
 
-impl Default for PruneYaks {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl UseCase for PruneYaks {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

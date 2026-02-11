@@ -1,6 +1,5 @@
 // Use case: Mark a yak as done or undone
 
-use crate::domain::STATE_FIELD;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -20,13 +19,39 @@ impl DoneYak {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Resolve yak name (exact or fuzzy match)
-        let resolved_name = app.storage.find_yak(&self.name)?;
+        // Note: Store doesn't have find_yak, so we need to use StoragePort cast
+        // This is a temporary workaround until we add find_yak to a proper port
+        let resolved_name = {
+            let all_yaks = app.store.list_yaks()?;
+            let name = &self.name;
+
+            // Try exact match first
+            if app.store.yak_exists(name) {
+                name.clone()
+            } else {
+                // Fuzzy match on leaf node
+                let matches: Vec<String> = all_yaks
+                    .iter()
+                    .filter(|yak| {
+                        let leaf = yak.name.rsplit('/').next().unwrap_or(&yak.name);
+                        leaf.contains(name)
+                    })
+                    .map(|yak| yak.name.clone())
+                    .collect();
+
+                match matches.len() {
+                    0 => anyhow::bail!("yak '{name}' not found"),
+                    1 => matches[0].clone(),
+                    _ => anyhow::bail!("yak name '{name}' is ambiguous"),
+                }
+            }
+        };
 
         // If marking as done (not undo) and not recursive, check for incomplete children
         if !self.undo && !self.recursive {
-            let all_yaks = app.storage.list_yaks()?;
+            let all_yaks = app.store.list_yaks()?;
             let has_incomplete_children = all_yaks
                 .iter()
                 .any(|yak| yak.name.starts_with(&format!("{resolved_name}/")) && !yak.is_done());
@@ -38,7 +63,7 @@ impl DoneYak {
 
         // If recursive, mark all children as done too
         if self.recursive && !self.undo {
-            let all_yaks = app.storage.list_yaks()?;
+            let all_yaks = app.store.list_yaks()?;
             let children: Vec<String> = all_yaks
                 .iter()
                 .filter(|yak| {
@@ -48,31 +73,20 @@ impl DoneYak {
                 .collect();
 
             for child_name in children {
-                app.storage.write_field(&child_name, STATE_FIELD, "done")?;
+                app.with_yak(&child_name, |yak| yak.update_state("done".to_string()))?;
             }
         } else {
             // Mark just this yak as done/undone
             let new_state = if self.undo { "todo" } else { "done" };
-            app.storage
-                .write_field(&resolved_name, STATE_FIELD, new_state)?;
+            app.with_yak(&resolved_name, |yak| yak.update_state(new_state.to_string()))?;
         }
-
-        // Log the command
-        let command = if self.undo {
-            format!("done --undo {}", self.name)
-        } else if self.recursive {
-            format!("done --recursive {}", self.name)
-        } else {
-            format!("done {}", self.name)
-        };
-        app.log.log_command(&command)?;
 
         Ok(())
     }
 }
 
 impl UseCase for DoneYak {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

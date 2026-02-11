@@ -1,6 +1,5 @@
-// Use case: Edit yak context (via editor or stdin)
+// Use case: Edit a yak's context
 
-use crate::domain::CONTEXT_FIELD;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -16,36 +15,25 @@ impl EditContext {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
-        // Resolve yak name (exact or fuzzy match)
-        let resolved_name = app.storage.find_yak(&self.name)?;
-
-        // Read current context
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
+        // Get current context
         let current_context = app
-            .storage
-            .read_field(&resolved_name, CONTEXT_FIELD)
+            .store
+            .get_yak(&self.name)?
+            .context
             .unwrap_or_default();
 
-        // Request edited content via input port
-        let content =
-            if let Some(edited) = app.input.request_content(Some(&current_context), None)? {
-                edited
-            } else {
-                // No input provided, keep current content
-                current_context
-            };
-
-        // Write updated context
-        app.storage
-            .write_field(&resolved_name, CONTEXT_FIELD, &content)?;
-        app.log.log_command(&format!("context {}", self.name))?;
+        // Request new content via input
+        if let Some(content) = app.input.request_content(Some(&current_context), None)? {
+            app.with_yak(&self.name, |yak| yak.update_context(content))?;
+        }
 
         Ok(())
     }
 }
 
 impl UseCase for EditContext {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }
