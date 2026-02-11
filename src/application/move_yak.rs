@@ -18,37 +18,26 @@ impl MoveYak {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate target yak name
         validate_yak_name(&self.to).map_err(|e| anyhow::anyhow!(e))?;
 
-        // Resolve source yak name (exact or fuzzy match)
-        let resolved_from = app.storage.find_yak(&self.from)?;
-
         // Check if destination is an existing yak (parent-only move)
-        let actual_destination = if app.storage.get_yak(&self.to).is_ok() {
+        let actual_destination = if app.store.yak_exists(&self.to) {
             // Destination exists - treat as parent-only move
             // Extract the base name from the source (everything after last '/')
-            let base_name = resolved_from.rsplit('/').next().unwrap();
+            let base_name = self.from.rsplit('/').next().unwrap();
             format!("{}/{}", self.to, base_name)
         } else {
             self.to.clone()
         };
 
-        // Rename the yak
-        app.storage
-            .rename_yak(&resolved_from, &actual_destination)?;
-
-        // Log the command
-        app.log
-            .log_command(&format!("mv {} {}", self.from, self.to))?;
-
-        Ok(())
+        app.with_yak(&self.from, |yak| yak.move_to(actual_destination))
     }
 }
 
 impl UseCase for MoveYak {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

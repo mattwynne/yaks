@@ -1,7 +1,7 @@
 // In-memory storage adapter - for testing only
 
-use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::StoragePort;
+use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
+use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -82,7 +82,7 @@ impl StoragePort for InMemoryStorage {
         let mut result = Vec::new();
 
         for name in yaks.keys() {
-            if let Ok(yak) = self.get_yak(name) {
+            if let Ok(yak) = StoragePort::get_yak(self, name) {
                 result.push(yak);
             }
         }
@@ -165,6 +165,57 @@ impl StoragePort for InMemoryStorage {
         fields.get(field_name).cloned().ok_or_else(|| {
             anyhow::anyhow!("Failed to read field '{}' for '{}'", field_name, yak_name)
         })
+    }
+}
+
+impl EventListener for InMemoryStorage {
+    fn on_event(&mut self, event: &YakEvent) -> Result<()> {
+        match event {
+            YakEvent::Added { name } => {
+                self.create_yak(name)?;
+                // Set default state
+                self.write_field(name, STATE_FIELD, "todo")?;
+            }
+
+            YakEvent::Removed { name } => {
+                self.delete_yak(name)?;
+            }
+
+            YakEvent::Moved { old_name, new_name } => {
+                self.rename_yak(old_name, new_name)?;
+            }
+
+            YakEvent::ContextUpdated { name, content } => {
+                self.write_field(name, CONTEXT_FIELD, content)?;
+            }
+
+            YakEvent::StateUpdated { name, state } => {
+                self.write_field(name, STATE_FIELD, state)?;
+            }
+
+            YakEvent::FieldUpdated {
+                name,
+                field_name,
+                content,
+            } => {
+                self.write_field(name, field_name, content)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Store for InMemoryStorage {
+    fn get_yak(&self, name: &str) -> Result<Yak> {
+        StoragePort::get_yak(self, name)
+    }
+
+    fn list_yaks(&self) -> Result<Vec<Yak>> {
+        StoragePort::list_yaks(self)
+    }
+
+    fn yak_exists(&self, name: &str) -> bool {
+        self.yaks.read().unwrap().contains_key(name)
     }
 }
 

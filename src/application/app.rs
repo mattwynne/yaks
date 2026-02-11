@@ -1,6 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
-use crate::ports::{DisplayPort, InputPort, LogPort, StoragePort};
+use crate::domain::{validate_yak_name, Yak};
+use crate::infrastructure::EventBus;
+use crate::ports::{DisplayPort, InputPort, Store};
 use anyhow::Result;
 
 use super::UseCase;
@@ -10,35 +12,117 @@ use super::UseCase;
 /// This struct represents the application layer's view of infrastructure.
 /// Use cases are constructed with domain data, then executed with an Application.
 pub struct Application<'a> {
-    pub storage: &'a dyn StoragePort,
+    pub event_bus: &'a mut EventBus,
+    pub store: &'a dyn Store,
     pub display: &'a dyn DisplayPort,
-    pub log: &'a dyn LogPort,
     pub input: &'a dyn InputPort,
 }
 
 impl<'a> Application<'a> {
     pub fn new(
-        storage: &'a dyn StoragePort,
+        event_bus: &'a mut EventBus,
+        store: &'a dyn Store,
         display: &'a dyn DisplayPort,
-        log: &'a dyn LogPort,
         input: &'a dyn InputPort,
     ) -> Self {
         Self {
-            storage,
+            event_bus,
+            store,
             display,
-            log,
             input,
         }
+    }
+
+    pub fn with_yak<F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Yak) -> Result<()>,
+    {
+        let mut yak = self.store.get_yak(name)?;
+        f(&mut yak)?;
+        self.save(&mut yak)?;
+        Ok(())
+    }
+
+    pub fn with_new_yak<F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Yak) -> Result<()>,
+    {
+        validate_yak_name(name).map_err(|e| anyhow::anyhow!(e))?;
+        let mut yak = Yak::new(name.to_string());
+        f(&mut yak)?;
+        self.save(&mut yak)?;
+        Ok(())
+    }
+
+    fn save(&mut self, aggregate: &mut Yak) -> Result<()> {
+        for event in aggregate.take_events() {
+            self.event_bus.publish(event)?;
+        }
+        Ok(())
     }
 
     /// Execute a use case with this application's infrastructure
     ///
     /// # Example
     /// ```ignore
-    /// let app = Application::new(&storage, &display, &log, &input);
+    /// let app = Application::new(&mut event_bus, &store, &display, &input);
     /// app.handle(AddYak::new("my yak"))?;
     /// ```
-    pub fn handle<U: UseCase>(&self, use_case: U) -> Result<()> {
+    pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {
         use_case.execute(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::infrastructure::EventBus;
+    use crate::ports::{EventListener, Store};
+
+    #[test]
+    fn test_application_with_new_yak() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let mut storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+
+        app.with_new_yak("test", |yak| {
+            assert_eq!(yak.name, "test");
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(Store::yak_exists(&storage, "test"));
+    }
+
+    #[test]
+    fn test_application_with_yak() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let mut storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+
+        // Create yak first
+        app.with_new_yak("test", |_| Ok(())).unwrap();
+
+        // Now mutate it
+        app.with_yak("test", |yak| yak.update_state("wip".to_string()))
+            .unwrap();
+
+        let yak = Store::get_yak(&storage, "test").unwrap();
+        assert_eq!(yak.state, "wip");
     }
 }

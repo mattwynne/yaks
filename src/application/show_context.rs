@@ -1,6 +1,5 @@
 // Use case: Show yak context
 
-use crate::domain::CONTEXT_FIELD;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -16,24 +15,19 @@ impl ShowContext {
         }
     }
 
-    pub fn execute(&self, app: &Application) -> Result<()> {
-        // Resolve yak name (exact or fuzzy match)
-        let resolved_name = app.storage.find_yak(&self.name)?;
-
-        // Read context
-        let context = app
-            .storage
-            .read_field(&resolved_name, CONTEXT_FIELD)
-            .unwrap_or_default();
+    pub fn execute(&self, app: &mut Application) -> Result<()> {
+        let yak = app.store.get_yak(&self.name)?;
 
         // Display the header (yak name)
-        app.display.info(&resolved_name);
+        app.display.info(&yak.name);
 
         // Display a blank line if there's content
-        if !context.is_empty() {
-            app.display.info("");
-            // Display the context
-            app.display.info(&context);
+        if let Some(context) = &yak.context {
+            if !context.is_empty() {
+                app.display.info("");
+                // Display the context
+                app.display.info(context);
+            }
         }
 
         Ok(())
@@ -41,7 +35,7 @@ impl ShowContext {
 }
 
 impl UseCase for ShowContext {
-    fn execute(&self, app: &Application) -> Result<()> {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
 }

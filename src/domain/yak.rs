@@ -58,6 +58,28 @@ impl Yak {
     pub fn take_events(&mut self) -> Vec<YakEvent> {
         std::mem::take(&mut self.pending_events)
     }
+
+    pub fn move_to(&mut self, new_name: String) -> anyhow::Result<()> {
+        validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
+
+        let old_name = self.name.clone();
+        self.name = new_name.clone();
+
+        self.pending_events.push(YakEvent::Moved {
+            old_name,
+            new_name,
+        });
+        Ok(())
+    }
+
+    pub fn update_field(&mut self, field_name: String, content: String) -> anyhow::Result<()> {
+        self.pending_events.push(YakEvent::FieldUpdated {
+            name: self.name.clone(),
+            field_name,
+            content,
+        });
+        Ok(())
+    }
 }
 
 /// Validate a yak name
