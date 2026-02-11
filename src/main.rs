@@ -1,17 +1,19 @@
 mod adapters;
 mod application;
-mod cli;
 mod domain;
 mod ports;
 
 use adapters::cli::ConsoleDisplay;
+use adapters::input::ConsoleInput;
 use adapters::log::GitLog;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
 use anyhow::Result;
-use application::SyncYaks;
+use application::{
+    AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
+    ShowContext, ShowField, SyncYaks, WriteField,
+};
 use clap::{CommandFactory, Parser};
-use cli::CommandHandler;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -114,48 +116,49 @@ fn main() -> Result<()> {
     let storage = DirectoryStorage::new()?;
     let display = ConsoleDisplay;
     let log = GitLog::new()?;
+    let input = ConsoleInput;
 
-    // Create command handler with injected dependencies
-    let handler = CommandHandler::new(&storage, &display, &log);
+    // Create application with injected dependencies
+    let app = Application::new(&storage, &display, &log, &input);
 
     match cli.command {
         Commands::Add { name } => {
             let name_str = name.join(" ");
-            handler.handle_add(&name_str)
+            app.handle(AddYak::new(&name_str))
         }
-        Commands::List { format, only } => handler.handle_list(&format, only.as_deref()),
+        Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
         Commands::Done {
             name,
             undo,
             recursive,
         } => {
             let name_str = name.join(" ");
-            handler.handle_done(&name_str, undo, recursive)
+            app.handle(DoneYak::new(&name_str, undo, recursive))
         }
         Commands::Remove { name } => {
             let name_str = name.join(" ");
-            handler.handle_remove(&name_str)
+            app.handle(RemoveYak::new(&name_str))
         }
-        Commands::Prune => handler.handle_prune(),
-        Commands::Move { from, to } => handler.handle_move(&from, &to),
+        Commands::Prune => app.handle(PruneYaks::new()),
+        Commands::Move { from, to } => app.handle(MoveYak::new(&from, &to)),
         Commands::Context { name, show } => {
             let name_str = name.join(" ");
             if show {
-                handler.handle_context_show(&name_str)
+                app.handle(ShowContext::new(&name_str))
             } else {
-                handler.handle_context_edit(&name_str)
+                app.handle(EditContext::new(&name_str))
             }
         }
         Commands::State { name, state } => {
             let name_str = name.join(" ");
-            handler.handle_state(&name_str, &state)
+            app.handle(SetState::new(&name_str, &state))
         }
         Commands::Field { name, field, show } => {
             let name_str = name.join(" ");
             if show {
-                handler.handle_field_show(&name_str, &field)
+                app.handle(ShowField::new(&name_str, &field))
             } else {
-                handler.handle_field_write(&name_str, &field)
+                app.handle(WriteField::new(&name_str, &field))
             }
         }
         Commands::Sync => {

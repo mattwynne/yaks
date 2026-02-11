@@ -4,7 +4,7 @@ use crate::domain::validate_field_name;
 use anyhow::{Context as AnyhowContext, Result};
 use std::io::{self, Read};
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct WriteField {
     name: String,
@@ -41,5 +41,11 @@ impl WriteField {
             .log_command(&format!("field {} {}", self.name, self.field))?;
 
         Ok(())
+    }
+}
+
+impl UseCase for WriteField {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

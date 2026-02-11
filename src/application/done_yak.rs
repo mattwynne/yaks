@@ -3,7 +3,7 @@
 use crate::domain::STATE_FIELD;
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct DoneYak {
     name: String,
@@ -68,5 +68,11 @@ impl DoneYak {
         app.log.log_command(&command)?;
 
         Ok(())
+    }
+}
+
+impl UseCase for DoneYak {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

@@ -1,0 +1,89 @@
+// In-memory input adapter for testing
+
+use crate::ports::InputPort;
+use anyhow::Result;
+use std::cell::RefCell;
+
+/// In-memory input adapter for testing
+///
+/// Returns predefined content without any console interaction.
+/// Useful for unit tests that need to simulate user input.
+#[allow(dead_code)]
+pub struct InMemoryInput {
+    content: RefCell<Option<String>>,
+}
+
+#[allow(dead_code)]
+impl InMemoryInput {
+    /// Create a new InMemoryInput that returns None (no input)
+    pub fn new() -> Self {
+        Self {
+            content: RefCell::new(None),
+        }
+    }
+
+    /// Create a new InMemoryInput with predefined content
+    pub fn with_content(content: String) -> Self {
+        Self {
+            content: RefCell::new(Some(content)),
+        }
+    }
+
+    /// Set the content that will be returned by request_content
+    pub fn set_content(&self, content: Option<String>) {
+        *self.content.borrow_mut() = content;
+    }
+}
+
+impl Default for InMemoryInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InputPort for InMemoryInput {
+    fn request_content(
+        &self,
+        _initial_content: Option<&str>,
+        _template: Option<&str>,
+    ) -> Result<Option<String>> {
+        // Return the predefined content
+        Ok(self.content.borrow().clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_returns_none() {
+        let input = InMemoryInput::new();
+        let result = input.request_content(None, None).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_with_content_returns_content() {
+        let input = InMemoryInput::with_content("test content".to_string());
+        let result = input.request_content(None, None).unwrap();
+        assert_eq!(result, Some("test content".to_string()));
+    }
+
+    #[test]
+    fn test_set_content_updates_content() {
+        let input = InMemoryInput::new();
+        input.set_content(Some("updated".to_string()));
+        let result = input.request_content(None, None).unwrap();
+        assert_eq!(result, Some("updated".to_string()));
+    }
+
+    #[test]
+    fn test_ignores_initial_content_and_template() {
+        let input = InMemoryInput::with_content("predefined".to_string());
+        let result = input
+            .request_content(Some("initial"), Some("template"))
+            .unwrap();
+        assert_eq!(result, Some("predefined".to_string()));
+    }
+}

@@ -67,7 +67,7 @@ impl TreePrefix {
     }
 }
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct ListYaks {
     format: String,
@@ -341,6 +341,12 @@ impl ListYaks {
         } else {
             app.display.info(&message);
         }
+    }
+}
+
+impl UseCase for ListYaks {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }
 

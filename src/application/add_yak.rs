@@ -1,13 +1,9 @@
 // Use case: Add a new yak
 
 use crate::domain::{validate_yak_name, CONTEXT_FIELD};
-use anyhow::{Context as AnyhowContext, Result};
-use std::env;
-use std::fs;
-use std::io::{self, Read};
-use std::process::Command;
+use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 /// AddYak use case - creates a new yak
 pub struct AddYak {
@@ -29,70 +25,19 @@ impl AddYak {
 
         app.storage.create_yak(&self.name)?;
 
-        // In test mode, skip all interactive behavior (editor launch, stdin reading)
-        if env::var("YX_IGNORE_STDIN").is_ok() {
-            // Test mode: just create empty yak
-        } else if !atty::is(atty::Stream::Stdin) {
-            // Non-TTY: Check if stdin has context piped to it
-            if Self::stdin_has_readable_data() {
-                // Read context from stdin
-                let mut buffer = String::new();
-                io::stdin().read_to_string(&mut buffer)?;
-                if !buffer.is_empty() {
-                    app.storage
-                        .write_field(&self.name, CONTEXT_FIELD, &buffer)?;
-                }
-            }
-            // If no readable data, just create empty yak
-        } else {
-            // Interactive mode (TTY): open editor with template
-            let template = self.generate_context_template()?;
-            let edited_content = self.edit_with_editor(&template)?;
+        // Generate template for user
+        let template = self.generate_context_template()?;
 
-            // Only save if there's actual content (not just the template)
-            if !edited_content.trim().is_empty() && edited_content.trim() != template.trim() {
+        // Request content via input port
+        if let Some(content) = app.input.request_content(None, Some(&template))? {
+            if !content.trim().is_empty() {
                 app.storage
-                    .write_field(&self.name, CONTEXT_FIELD, &edited_content)?;
+                    .write_field(&self.name, CONTEXT_FIELD, &content)?;
             }
         }
 
         app.log.log_command(&format!("add {}", self.name))?;
         Ok(())
-    }
-
-    fn stdin_has_readable_data() -> bool {
-        // Defense in depth: double-check YX_IGNORE_STDIN even though execute() already checks it
-        // This provides safety if this method is called from other code paths in the future
-        if env::var("YX_IGNORE_STDIN").is_ok() {
-            return false;
-        }
-
-        use std::os::unix::io::AsRawFd;
-
-        let stdin_fd = io::stdin().as_raw_fd();
-
-        // First check: Is it actually a pipe (FIFO)?
-        let mut stat: libc::stat = unsafe { std::mem::zeroed() };
-        let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
-        if stat_result != 0 || (stat.st_mode & libc::S_IFMT) != libc::S_IFIFO {
-            return false; // Not a pipe, don't try to read
-        }
-
-        // Second check: Is there data available to read?
-        let mut pollfd = libc::pollfd {
-            fd: stdin_fd,
-            events: libc::POLLIN,
-            revents: 0,
-        };
-
-        // Poll with 0 timeout (non-blocking check)
-        let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
-
-        // Return true only if:
-        // 1. It's a pipe (checked above)
-        // 2. Poll succeeded
-        // 3. POLLIN is set (data available)
-        result > 0 && (pollfd.revents & libc::POLLIN) != 0
     }
 
     fn generate_context_template(&self) -> Result<String> {
@@ -133,51 +78,27 @@ impl AddYak {
 
         Ok(template)
     }
+}
 
-    fn edit_with_editor(&self, initial_content: &str) -> Result<String> {
-        // Get editor from environment or default to vi
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-
-        // Create a temporary file with the template
-        let temp_file =
-            tempfile::NamedTempFile::new().context("Failed to create temporary file")?;
-        let temp_path = temp_file.path();
-
-        // Write template to temp file
-        fs::write(temp_path, initial_content).context("Failed to write template to temp file")?;
-
-        // Launch editor
-        let status = Command::new(&editor)
-            .arg(temp_path)
-            .status()
-            .context(format!("Failed to launch editor: {editor}"))?;
-
-        if !status.success() {
-            anyhow::bail!("Editor exited with non-zero status");
-        }
-
-        // Read edited content
-        let content = fs::read_to_string(temp_path).context("Failed to read edited content")?;
-
-        Ok(content)
+impl UseCase for AddYak {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{InMemoryDisplay, InMemoryLog, InMemoryStorage};
+    use crate::adapters::{InMemoryDisplay, InMemoryInput, InMemoryLog, InMemoryStorage};
     use crate::ports::StoragePort;
 
     #[test]
     fn test_add_yak_creates_yak() {
-        // Prevent editor from opening in test environment
-        env::set_var("YX_IGNORE_STDIN", "1");
-
         let storage = InMemoryStorage::new();
         let display = InMemoryDisplay::new();
         let log = InMemoryLog::new();
-        let app = Application::new(&storage, &display, &log);
+        let input = InMemoryInput::new();
+        let app = Application::new(&storage, &display, &log, &input);
 
         let use_case = AddYak::new("test-yak");
         use_case.execute(&app).unwrap();

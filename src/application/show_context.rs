@@ -3,7 +3,7 @@
 use crate::domain::CONTEXT_FIELD;
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct ShowContext {
     name: String,
@@ -37,5 +37,11 @@ impl ShowContext {
         }
 
         Ok(())
+    }
+}
+
+impl UseCase for ShowContext {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

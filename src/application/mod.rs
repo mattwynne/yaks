@@ -12,6 +12,7 @@ mod set_state;
 mod show_context;
 mod show_field;
 mod sync_yaks;
+mod use_case;
 mod write_field;
 
 pub use add_yak::AddYak;
@@ -26,4 +27,5 @@ pub use set_state::SetState;
 pub use show_context::ShowContext;
 pub use show_field::ShowField;
 pub use sync_yaks::SyncYaks;
+pub use use_case::UseCase;
 pub use write_field::WriteField;

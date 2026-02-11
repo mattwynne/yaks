@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct RemoveYak {
     name: String,
@@ -26,5 +26,11 @@ impl RemoveYak {
         app.log.log_command(&format!("rm {}", self.name))?;
 
         Ok(())
+    }
+}
+
+impl UseCase for RemoveYak {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

@@ -3,7 +3,7 @@
 use crate::domain::STATE_FIELD;
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct SetState {
     name: String,
@@ -65,5 +65,11 @@ impl SetState {
         }
 
         Ok(())
+    }
+}
+
+impl UseCase for SetState {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

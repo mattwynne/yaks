@@ -3,7 +3,7 @@
 use crate::domain::validate_field_name;
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct ShowField {
     name: String,
@@ -37,5 +37,11 @@ impl ShowField {
             .log_command(&format!("field {} {} --show", self.name, self.field))?;
 
         Ok(())
+    }
+}
+
+impl UseCase for ShowField {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

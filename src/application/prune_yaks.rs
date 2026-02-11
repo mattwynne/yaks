@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct PruneYaks;
 
@@ -29,5 +29,11 @@ impl PruneYaks {
 impl Default for PruneYaks {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl UseCase for PruneYaks {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

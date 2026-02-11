@@ -3,7 +3,7 @@
 use crate::domain::validate_yak_name;
 use anyhow::Result;
 
-use super::Application;
+use super::{Application, UseCase};
 
 pub struct MoveYak {
     from: String,
@@ -44,5 +44,11 @@ impl MoveYak {
             .log_command(&format!("mv {} {}", self.from, self.to))?;
 
         Ok(())
+    }
+}
+
+impl UseCase for MoveYak {
+    fn execute(&self, app: &Application) -> Result<()> {
+        Self::execute(self, app)
     }
 }

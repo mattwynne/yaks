@@ -1,11 +1,11 @@
-// InProcessWorld - calls CommandHandler directly with in-memory adapters
+// InProcessWorld - calls Application directly with in-memory adapters
 
 use anyhow::Result;
 use cucumber::World as CucumberWorld;
 
 use super::test_world::TestWorld;
-use yx::adapters::{InMemoryDisplay, InMemoryLog, InMemoryStorage};
-use yx::cli::CommandHandler;
+use yx::adapters::{InMemoryDisplay, InMemoryInput, InMemoryLog, InMemoryStorage};
+use yx::application::{AddYak, Application, ListYaks};
 
 #[derive(CucumberWorld)]
 #[world(init = Self::new)]
@@ -13,6 +13,7 @@ pub struct InProcessWorld {
     storage: InMemoryStorage,
     display: InMemoryDisplay,
     log: InMemoryLog,
+    input: InMemoryInput,
     exit_code: i32,
 }
 
@@ -30,22 +31,23 @@ impl InProcessWorld {
             storage: InMemoryStorage::new(),
             display: InMemoryDisplay::new(),
             log: InMemoryLog::new(),
+            input: InMemoryInput::new(),
             exit_code: 0,
         })
     }
 
-    fn handler(&self) -> CommandHandler<'_> {
-        CommandHandler::new(&self.storage, &self.display, &self.log)
+    fn app(&self) -> Application<'_> {
+        Application::new(&self.storage, &self.display, &self.log, &self.input)
     }
 
     fn execute<F>(&mut self, f: F) -> Result<()>
     where
-        F: FnOnce(&CommandHandler) -> Result<()>,
+        F: FnOnce(&Application) -> Result<()>,
     {
         self.display.clear();
 
-        let handler = self.handler();
-        let result = f(&handler);
+        let app = self.app();
+        let result = f(&app);
 
         self.exit_code = if result.is_ok() { 0 } else { 1 };
 
@@ -55,11 +57,11 @@ impl InProcessWorld {
 
 impl TestWorld for InProcessWorld {
     fn add_yak(&mut self, name: &str) -> Result<()> {
-        self.execute(|h| h.handle_add(name))
+        self.execute(|app| app.handle(AddYak::new(name)))
     }
 
     fn list_yaks(&mut self) -> Result<()> {
-        self.execute(|h| h.handle_list("pretty", None))
+        self.execute(|app| app.handle(ListYaks::new("pretty", None)))
     }
 
     fn get_output(&self) -> String {
