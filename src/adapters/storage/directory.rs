@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use walkdir::WalkDir;
 
+#[derive(Clone)]
 pub struct DirectoryStorage {
     base_path: PathBuf,
 }
