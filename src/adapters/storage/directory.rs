@@ -1,7 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
-use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::StoragePort;
+use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
+use crate::ports::{EventListener, StoragePort};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -239,6 +239,43 @@ impl StoragePort for DirectoryStorage {
     }
 }
 
+impl EventListener for DirectoryStorage {
+    fn on_event(&mut self, event: &YakEvent) -> Result<()> {
+        match event {
+            YakEvent::Added { name } => {
+                self.create_yak(name)?;
+                // Set default state
+                self.write_field(name, STATE_FIELD, "todo")?;
+            }
+
+            YakEvent::Removed { name } => {
+                self.delete_yak(name)?;
+            }
+
+            YakEvent::Moved { old_name, new_name } => {
+                self.rename_yak(old_name, new_name)?;
+            }
+
+            YakEvent::ContextUpdated { name, content } => {
+                self.write_field(name, CONTEXT_FIELD, content)?;
+            }
+
+            YakEvent::StateUpdated { name, state } => {
+                self.write_field(name, STATE_FIELD, state)?;
+            }
+
+            YakEvent::FieldUpdated {
+                name,
+                field_name,
+                content,
+            } => {
+                self.write_field(name, field_name, content)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,5 +462,64 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Failed to read field"));
+    }
+
+    #[test]
+    fn test_directory_storage_handles_added_event() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        let event = YakEvent::Added {
+            name: "test".to_string(),
+        };
+
+        storage.on_event(&event).unwrap();
+
+        assert!(storage.yak_dir("test").exists());
+        let yak = storage.get_yak("test").unwrap();
+        assert_eq!(yak.state, "todo");
+    }
+
+    #[test]
+    fn test_directory_storage_handles_context_updated_event() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // First add the yak
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test".to_string(),
+            })
+            .unwrap();
+
+        // Then update context
+        storage
+            .on_event(&YakEvent::ContextUpdated {
+                name: "test".to_string(),
+                content: "new context".to_string(),
+            })
+            .unwrap();
+
+        let yak = storage.get_yak("test").unwrap();
+        assert_eq!(yak.context, Some("new context".to_string()));
+    }
+
+    #[test]
+    fn test_directory_storage_handles_state_updated_event() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added {
+                name: "test".to_string(),
+            })
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::StateUpdated {
+                name: "test".to_string(),
+                state: "wip".to_string(),
+            })
+            .unwrap();
+
+        let yak = storage.get_yak("test").unwrap();
+        assert_eq!(yak.state, "wip");
     }
 }
