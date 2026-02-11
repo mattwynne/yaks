@@ -253,9 +253,9 @@ impl ListYaks {
     /// Check if node matches the filter
     fn should_display_node(&self, node: &YakNode, only: Option<&str>) -> bool {
         match only {
-            Some("done") => node.yak.as_ref().map(|y| y.done).unwrap_or(false),
+            Some("done") => node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false),
             Some("not-done") => {
-                !node.yak.as_ref().map(|y| y.done).unwrap_or(false) || node.yak.is_none()
+                !node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false) || node.yak.is_none()
             }
             _ => true,
         }

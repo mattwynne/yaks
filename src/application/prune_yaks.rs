@@ -16,7 +16,7 @@ impl PruneYaks {
 
         // Remove all done yaks
         for yak in yaks {
-            if yak.done {
+            if yak.is_done() {
                 app.storage.delete_yak(&yak.name)?;
                 app.log.log_command(&format!("rm {}", yak.name))?;
             }

@@ -29,7 +29,7 @@ impl DoneYak {
             let all_yaks = app.storage.list_yaks()?;
             let has_incomplete_children = all_yaks
                 .iter()
-                .any(|yak| yak.name.starts_with(&format!("{resolved_name}/")) && !yak.done);
+                .any(|yak| yak.name.starts_with(&format!("{resolved_name}/")) && !yak.is_done());
 
             if has_incomplete_children {
                 anyhow::bail!("cannot mark '{resolved_name}' as done - it has incomplete children");

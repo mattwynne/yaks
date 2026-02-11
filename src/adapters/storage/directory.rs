@@ -132,13 +132,11 @@ impl StoragePort for DirectoryStorage {
             .to_string();
 
         // Derive done from state
-        let done = state == "done";
-
         Ok(Yak {
             name: name.to_string(),
-            done,
             state,
             context,
+            pending_events: vec![],
         })
     }
 
@@ -265,7 +263,7 @@ mod tests {
         storage.create_yak("test-yak").unwrap();
         let yak = storage.get_yak("test-yak").unwrap();
         assert_eq!(yak.name, "test-yak");
-        assert!(!yak.done);
+        assert!(!yak.is_done());
     }
 
     #[test]
@@ -285,7 +283,7 @@ mod tests {
             .write_field("test-yak", STATE_FIELD, "done")
             .unwrap();
         let yak = storage.get_yak("test-yak").unwrap();
-        assert!(yak.done);
+        assert!(yak.is_done());
     }
 
     #[test]
@@ -325,7 +323,7 @@ mod tests {
 
         let yak = storage.get_yak("new-name").unwrap();
         assert_eq!(yak.name, "new-name");
-        assert!(yak.done);
+        assert!(yak.is_done());
         assert_eq!(yak.context.unwrap(), "Context text");
     }
 

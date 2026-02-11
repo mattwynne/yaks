@@ -2,6 +2,7 @@
 
 pub mod display;
 pub mod event_listener;
+pub mod event_store;
 pub mod input;
 pub mod log;
 pub mod storage;
@@ -10,6 +11,7 @@ pub mod sync;
 
 pub use display::DisplayPort;
 pub use event_listener::EventListener;
+pub use event_store::EventStore;
 pub use input::InputPort;
 pub use log::LogPort;
 pub use storage::StoragePort;
