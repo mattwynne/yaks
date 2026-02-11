@@ -3,7 +3,9 @@ use crate::domain::YakEvent;
 
 pub trait EventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()>;
+    #[allow(dead_code)]
     fn get_events(&self, name: &str) -> Result<Vec<YakEvent>>;
+    #[allow(dead_code)]
     fn get_all_events(&self) -> Result<Vec<YakEvent>>;
 }
 

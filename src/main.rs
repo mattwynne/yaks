@@ -126,6 +126,7 @@ fn main() -> Result<()> {
     // Initialize other adapters
     let display = ConsoleDisplay;
     let log = GitLog::new()?;
+    event_bus.register(Box::new(log.clone()));
     let input = ConsoleInput;
 
     // Create application with injected dependencies

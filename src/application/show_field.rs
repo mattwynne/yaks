@@ -22,16 +22,21 @@ impl ShowField {
         // Validate field name
         validate_field_name(&self.field)?;
 
-        // Note: This use case needs access to StoragePort methods (find_yak, read_field)
-        // that aren't on Store trait. This is a temporary workaround.
-        // TODO: Consider adding field reading to Store trait or creating a separate port
+        // Find yak (handles fuzzy matching)
+        let yak_name = app.store.find_yak(&self.name)?;
 
-        // For now, show a simplified version using Store
-        let _yak = app.store.get_yak(&self.name)?;
+        // Get yak to display name
+        let yak = app.store.get_yak(&yak_name)?;
 
-        // Field reading not yet supported in event-sourced model
-        // This will need to be addressed in future refactoring
-        anyhow::bail!("Field reading not yet implemented in event-sourced model")
+        // Read field content
+        let content = app.store.read_field(&yak_name, &self.field)?;
+
+        // Display yak name and field content
+        app.display.success(&yak.name);
+        app.display.info("");
+        app.display.info(&content);
+
+        Ok(())
     }
 }
 

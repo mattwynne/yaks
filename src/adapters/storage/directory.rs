@@ -123,11 +123,10 @@ impl StoragePort for DirectoryStorage {
         }
 
         // Read context field
-        let context = self.read_field(name, CONTEXT_FIELD).ok();
+        let context = StoragePort::read_field(self, name, CONTEXT_FIELD).ok();
 
         // Read state field, default to "todo" if not present
-        let state = self
-            .read_field(name, STATE_FIELD)
+        let state = StoragePort::read_field(self, name, STATE_FIELD)
             .unwrap_or_else(|_| "todo".to_string())
             .trim()
             .to_string();
@@ -290,6 +289,14 @@ impl Store for DirectoryStorage {
         let context_file = self.field_path(name, CONTEXT_FIELD);
         context_file.exists()
     }
+
+    fn find_yak(&self, name: &str) -> Result<String> {
+        StoragePort::find_yak(self, name)
+    }
+
+    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
+        StoragePort::read_field(self, yak_name, field_name)
+    }
 }
 
 #[cfg(test)]
@@ -354,7 +361,7 @@ mod tests {
         storage
             .write_field("test-yak", CONTEXT_FIELD, "Test context")
             .unwrap();
-        let context = storage.read_field("test-yak", CONTEXT_FIELD).unwrap();
+        let context = StoragePort::read_field(&storage, "test-yak", CONTEXT_FIELD).unwrap();
         assert_eq!(context, "Test context");
     }
 
@@ -405,11 +412,11 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Should match "parent" yak, not "parent/child1"
-        let result = storage.find_yak("parent").unwrap();
+        let result = StoragePort::find_yak(&storage,"parent").unwrap();
         assert_eq!(result, "parent");
 
         // Should match "child1" in "parent/child1"
-        let result = storage.find_yak("child1").unwrap();
+        let result = StoragePort::find_yak(&storage,"child1").unwrap();
         assert_eq!(result, "parent/child1");
     }
 
@@ -419,7 +426,7 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Searching for "parent" should not match "parent/child1"
-        let result = storage.find_yak("parent");
+        let result = StoragePort::find_yak(&storage,"parent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -453,7 +460,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes", "Field content")
             .unwrap();
-        let content = storage.read_field("test-yak", "notes").unwrap();
+        let content = StoragePort::read_field(&storage,"test-yak", "notes").unwrap();
         assert_eq!(content, "Field content");
     }
 
@@ -464,7 +471,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes.txt", "Text file")
             .unwrap();
-        let content = storage.read_field("test-yak", "notes.txt").unwrap();
+        let content = StoragePort::read_field(&storage,"test-yak", "notes.txt").unwrap();
         assert_eq!(content, "Text file");
     }
 
@@ -472,7 +479,7 @@ mod tests {
     fn test_read_nonexistent_field() {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
-        let result = storage.read_field("test-yak", "nonexistent");
+        let result = StoragePort::read_field(&storage,"test-yak", "nonexistent");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

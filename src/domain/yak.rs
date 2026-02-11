@@ -2,6 +2,20 @@
 
 use crate::domain::YakEvent;
 
+const VALID_STATES: &[&str] = &["todo", "wip", "done"];
+
+pub fn validate_state(state: &str) -> Result<(), String> {
+    if VALID_STATES.contains(&state) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Invalid state '{}'. Valid states are: {}",
+            state,
+            VALID_STATES.join(", ")
+        ))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
     pub name: String,
@@ -27,11 +41,13 @@ impl Yak {
         self.state == "done"
     }
 
+    #[allow(dead_code)]
     pub fn with_context(mut self, context: String) -> Self {
         self.context = Some(context);
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_state(mut self, state: String) -> Self {
         self.state = state;
         self
@@ -47,6 +63,7 @@ impl Yak {
     }
 
     pub fn update_state(&mut self, state: String) -> anyhow::Result<()> {
+        validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
         self.state = state.clone();
         self.pending_events.push(YakEvent::StateUpdated {
             name: self.name.clone(),

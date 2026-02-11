@@ -7,7 +7,26 @@ use std::path::PathBuf;
 
 pub struct GitLog {
     repo: Option<Repository>,
+    #[allow(dead_code)]
     yaks_path: PathBuf,
+    git_work_tree: Option<String>,
+}
+
+impl Clone for GitLog {
+    fn clone(&self) -> Self {
+        // Reopen repository from work tree path
+        let repo = if let Some(ref work_tree) = self.git_work_tree {
+            Repository::open(work_tree).ok()
+        } else {
+            None
+        };
+
+        Self {
+            repo,
+            yaks_path: self.yaks_path.clone(),
+            git_work_tree: self.git_work_tree.clone(),
+        }
+    }
 }
 
 impl GitLog {
@@ -20,6 +39,7 @@ impl GitLog {
             return Ok(Self {
                 repo: None,
                 yaks_path: PathBuf::from("/dev/null"), // Dummy path that doesn't exist
+                git_work_tree: None,
             });
         }
 
@@ -41,10 +61,12 @@ impl GitLog {
         Ok(Self {
             repo: Some(repo),
             yaks_path,
+            git_work_tree: Some(git_work_tree),
         })
     }
 
     // Build a tree from .yaks directory
+    #[allow(dead_code)]
     fn build_tree_from_yaks(&self) -> Result<git2::Oid> {
         let repo = self
             .repo
@@ -199,5 +221,38 @@ impl LogPort for GitLog {
         )?;
 
         Ok(())
+    }
+}
+
+use crate::domain::YakEvent;
+use crate::ports::EventListener;
+
+impl EventListener for GitLog {
+    fn on_event(&mut self, event: &YakEvent) -> Result<()> {
+        // Convert YakEvent to command string
+        let command = match event {
+            YakEvent::Added { name } => format!("add {}", name),
+            YakEvent::Removed { name } => format!("rm {}", name),
+            YakEvent::Moved { old_name, new_name } => format!("move {} {}", old_name, new_name),
+            YakEvent::ContextUpdated { name, .. } => format!("context {}", name),
+            YakEvent::StateUpdated { name, state } => {
+                if state == "done" {
+                    format!("done {}", name)
+                } else if state == "todo" {
+                    // TODO: This logs all todo state changes as "done --undo"
+                    // which is incorrect if setting to todo for other reasons
+                    // Consider adding a DoneUndone event for proper semantics
+                    format!("done --undo {}", name)
+                } else {
+                    format!("state {} {}", name, state)
+                }
+            }
+            YakEvent::FieldUpdated { name, field_name, .. } => {
+                format!("field {} {}", name, field_name)
+            }
+        };
+
+        // Log the command using existing log_command implementation
+        self.log_command(&command)
     }
 }

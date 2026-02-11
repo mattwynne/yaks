@@ -37,7 +37,8 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut Yak) -> Result<()>,
     {
-        let mut yak = self.store.get_yak(name)?;
+        let yak_name = self.store.find_yak(name)?;
+        let mut yak = self.store.get_yak(&yak_name)?;
         f(&mut yak)?;
         self.save(&mut yak)?;
         Ok(())
@@ -78,14 +79,14 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::infrastructure::EventBus;
-    use crate::ports::{EventListener, Store};
+    use crate::ports::Store;
 
     #[test]
     fn test_application_with_new_yak() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
-        let mut storage = InMemoryStorage::new();
+        let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
         let display = InMemoryDisplay::new();
@@ -107,7 +108,7 @@ mod tests {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
-        let mut storage = InMemoryStorage::new();
+        let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
         let display = InMemoryDisplay::new();

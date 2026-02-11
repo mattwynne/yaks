@@ -92,7 +92,7 @@ mod tests {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
-        let mut storage = InMemoryStorage::new();
+        let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
         let display = InMemoryDisplay::new();

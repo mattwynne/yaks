@@ -5,6 +5,8 @@ pub trait Store {
     fn get_yak(&self, name: &str) -> Result<Yak>;
     fn list_yaks(&self) -> Result<Vec<Yak>>;
     fn yak_exists(&self, name: &str) -> bool;
+    fn find_yak(&self, name: &str) -> Result<String>;
+    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String>;
 }
 
 #[cfg(test)]
@@ -30,6 +32,18 @@ mod tests {
 
         fn yak_exists(&self, name: &str) -> bool {
             self.yaks.contains_key(name)
+        }
+
+        fn find_yak(&self, name: &str) -> Result<String> {
+            if self.yaks.contains_key(name) {
+                Ok(name.to_string())
+            } else {
+                anyhow::bail!("Yak not found")
+            }
+        }
+
+        fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+            anyhow::bail!("Field reading not implemented in test store")
         }
     }
 

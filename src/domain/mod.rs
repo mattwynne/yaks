@@ -7,5 +7,7 @@ pub mod yak;
 
 #[allow(unused_imports)]
 pub use event::{Event, YakEvent};
+#[allow(unused_imports)]
 pub use field::{validate_field_name, CONTEXT_FIELD, STATE_FIELD};
-pub use yak::{validate_yak_name, Yak};
+#[allow(unused_imports)]
+pub use yak::{validate_state, validate_yak_name, Yak};
