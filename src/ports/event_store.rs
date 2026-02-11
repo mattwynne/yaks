@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::domain::YakEvent;
+use anyhow::Result;
 
 pub trait EventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()>;

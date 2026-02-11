@@ -82,10 +82,8 @@ impl Yak {
         let old_name = self.name.clone();
         self.name = new_name.clone();
 
-        self.pending_events.push(YakEvent::Moved {
-            old_name,
-            new_name,
-        });
+        self.pending_events
+            .push(YakEvent::Moved { old_name, new_name });
         Ok(())
     }
 

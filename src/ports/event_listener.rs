@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::domain::YakEvent;
+use anyhow::Result;
 
 pub trait EventListener {
     fn on_event(&mut self, event: &YakEvent) -> Result<()>;

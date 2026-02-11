@@ -78,7 +78,9 @@ impl DoneYak {
         } else {
             // Mark just this yak as done/undone
             let new_state = if self.undo { "todo" } else { "done" };
-            app.with_yak(&resolved_name, |yak| yak.update_state(new_state.to_string()))?;
+            app.with_yak(&resolved_name, |yak| {
+                yak.update_state(new_state.to_string())
+            })?;
         }
 
         Ok(())

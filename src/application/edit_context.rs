@@ -17,11 +17,7 @@ impl EditContext {
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Get current context
-        let current_context = app
-            .store
-            .get_yak(&self.name)?
-            .context
-            .unwrap_or_default();
+        let current_context = app.store.get_yak(&self.name)?.context.unwrap_or_default();
 
         // Request new content via input
         if let Some(content) = app.input.request_content(Some(&current_context), None)? {

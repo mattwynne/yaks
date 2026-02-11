@@ -412,11 +412,11 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Should match "parent" yak, not "parent/child1"
-        let result = StoragePort::find_yak(&storage,"parent").unwrap();
+        let result = StoragePort::find_yak(&storage, "parent").unwrap();
         assert_eq!(result, "parent");
 
         // Should match "child1" in "parent/child1"
-        let result = StoragePort::find_yak(&storage,"child1").unwrap();
+        let result = StoragePort::find_yak(&storage, "child1").unwrap();
         assert_eq!(result, "parent/child1");
     }
 
@@ -426,7 +426,7 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Searching for "parent" should not match "parent/child1"
-        let result = StoragePort::find_yak(&storage,"parent");
+        let result = StoragePort::find_yak(&storage, "parent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -460,7 +460,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes", "Field content")
             .unwrap();
-        let content = StoragePort::read_field(&storage,"test-yak", "notes").unwrap();
+        let content = StoragePort::read_field(&storage, "test-yak", "notes").unwrap();
         assert_eq!(content, "Field content");
     }
 
@@ -471,7 +471,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes.txt", "Text file")
             .unwrap();
-        let content = StoragePort::read_field(&storage,"test-yak", "notes.txt").unwrap();
+        let content = StoragePort::read_field(&storage, "test-yak", "notes.txt").unwrap();
         assert_eq!(content, "Text file");
     }
 
@@ -479,7 +479,7 @@ mod tests {
     fn test_read_nonexistent_field() {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
-        let result = StoragePort::read_field(&storage,"test-yak", "nonexistent");
+        let result = StoragePort::read_field(&storage, "test-yak", "nonexistent");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

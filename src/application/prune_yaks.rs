@@ -1,7 +1,7 @@
 // Use case: Remove all done yaks
 
-use anyhow::Result;
 use crate::domain::YakEvent;
+use anyhow::Result;
 
 use super::{Application, UseCase};
 

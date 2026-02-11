@@ -247,7 +247,9 @@ impl EventListener for GitLog {
                     format!("state {} {}", name, state)
                 }
             }
-            YakEvent::FieldUpdated { name, field_name, .. } => {
+            YakEvent::FieldUpdated {
+                name, field_name, ..
+            } => {
                 format!("field {} {}", name, field_name)
             }
         };

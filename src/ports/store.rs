@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::domain::Yak;
+use anyhow::Result;
 
 pub trait Store {
     fn get_yak(&self, name: &str) -> Result<Yak>;

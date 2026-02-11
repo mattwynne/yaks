@@ -4,7 +4,9 @@ use anyhow::Result;
 use cucumber::World as CucumberWorld;
 
 use super::test_world::TestWorld;
-use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryLog, InMemoryStorage};
+use yx::adapters::{
+    InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryLog, InMemoryStorage,
+};
 use yx::application::{AddYak, Application, ListYaks};
 use yx::infrastructure::EventBus;
 
