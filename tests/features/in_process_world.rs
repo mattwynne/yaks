@@ -4,9 +4,7 @@ use anyhow::Result;
 use cucumber::World as CucumberWorld;
 
 use super::test_world::TestWorld;
-use yx::adapters::{
-    InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryLog, InMemoryStorage,
-};
+use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
 use yx::application::{AddYak, Application, ListYaks};
 use yx::infrastructure::EventBus;
 
@@ -18,8 +16,6 @@ pub struct InProcessWorld {
     event_bus: EventBus,
     storage: InMemoryStorage,
     display: InMemoryDisplay,
-    #[allow(dead_code)]
-    log: InMemoryLog,
     input: InMemoryInput,
     exit_code: i32,
 }
@@ -45,7 +41,6 @@ impl InProcessWorld {
             event_bus,
             storage,
             display: InMemoryDisplay::new(),
-            log: InMemoryLog::new(),
             input: InMemoryInput::new(),
             exit_code: 0,
         })
