@@ -15,13 +15,11 @@ struct YakNode {
 
 /// Tracks tree drawing state for pretty format
 #[derive(Clone)]
-#[allow(dead_code)] // Will be used in subsequent tasks
 struct TreePrefix {
     /// Accumulated prefix lines from parent levels
     lines: Vec<String>,
 }
 
-#[allow(dead_code)] // Will be used in subsequent tasks
 impl TreePrefix {
     fn new() -> Self {
         Self { lines: Vec::new() }
@@ -33,37 +31,6 @@ impl TreePrefix {
         let continuation = if is_last { "   " } else { "│  " };
         new_lines.push(continuation.to_string());
         Self { lines: new_lines }
-    }
-
-    /// Get the connector for this level (├─ or ╰─)
-    fn get_connector(&self) -> &str {
-        if self.lines.is_empty() {
-            ""
-        } else if self.lines.last().unwrap() == "   " {
-            "╰─ "
-        } else {
-            "├─ "
-        }
-    }
-
-    /// Get the continuation line for children
-    fn get_continuation(&self) -> &str {
-        if self.lines.is_empty() {
-            ""
-        } else {
-            self.lines.last().unwrap()
-        }
-    }
-
-    /// Build full prefix string for displaying this node
-    fn get_full_prefix(&self) -> String {
-        if self.lines.is_empty() {
-            String::new()
-        } else {
-            let parent_lines = &self.lines[..self.lines.len() - 1];
-            let connector = self.get_connector();
-            format!("{}{}", parent_lines.join(""), connector)
-        }
     }
 }
 
