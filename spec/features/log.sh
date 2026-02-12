@@ -66,7 +66,6 @@ Describe 'yx log'
 
   It 'displays context events'
     When run sh -c "
-      unset YX_IGNORE_STDIN
       yx add 'test yak'
       echo 'Some context' | yx context 'test yak'
       yx log
