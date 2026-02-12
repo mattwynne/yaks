@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-#[allow(dead_code)]
 /// Trait for serializing/deserializing individual event types
 pub trait EventFormat {
     /// Tag name for this event (e.g., "Added", "StateUpdated")
@@ -13,7 +12,6 @@ pub trait EventFormat {
         Self: Sized;
 }
 
-#[allow(dead_code)]
 /// Parse space-separated quoted values: `"foo" "bar"` -> `["foo", "bar"]`
 pub fn parse_quoted_values(data: &str) -> Result<Vec<String>> {
     let mut values = Vec::new();

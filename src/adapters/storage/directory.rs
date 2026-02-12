@@ -5,7 +5,9 @@ use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
 use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(test)]
+use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
@@ -95,7 +97,7 @@ impl DirectoryStorage {
     /// Creates a DirectoryStorage initialized from the latest git tree
     /// on refs/notes/yaks. This materializes the tree into the filesystem
     /// so DirectoryStorage can serve reads immediately.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new_from_snapshot(yak_path: &Path, repo: &git2::Repository) -> Result<Self> {
         // Create directory if needed
         std::fs::create_dir_all(yak_path)?;
@@ -112,7 +114,7 @@ impl DirectoryStorage {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn materialize_tree(
         base_path: &Path,
         tree: &git2::Tree,

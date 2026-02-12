@@ -1,7 +1,9 @@
 pub mod git;
+#[cfg(any(test, feature = "test-support"))]
 pub mod memory;
 
 pub use git::GitEventStore;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryEventStore;
 
 #[cfg(test)]

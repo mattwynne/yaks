@@ -22,7 +22,6 @@ pub trait StoragePort {
     /// Find a yak by name or fuzzy match
     /// Returns the exact name if found, or a unique fuzzy match
     /// Returns error if not found or ambiguous
-    #[allow(dead_code)]
     fn find_yak(&self, name: &str) -> Result<String>;
 
     /// Write a field for a yak

@@ -11,8 +11,7 @@ use yx::infrastructure::EventBus;
 #[derive(CucumberWorld)]
 #[world(init = Self::new)]
 pub struct InProcessWorld {
-    #[allow(dead_code)]
-    event_store: InMemoryEventStore,
+    _event_store: InMemoryEventStore,
     event_bus: EventBus,
     storage: InMemoryStorage,
     display: InMemoryDisplay,
@@ -37,7 +36,7 @@ impl InProcessWorld {
         event_bus.register(Box::new(storage.clone()));
 
         Ok(Self {
-            event_store,
+            _event_store: event_store,
             event_bus,
             storage,
             display: InMemoryDisplay::new(),
@@ -76,11 +75,7 @@ impl TestWorld for InProcessWorld {
     }
 
     fn get_output(&self) -> String {
-        let mut output_lines = Vec::new();
-        output_lines.extend(self.display.get_success_messages());
-        output_lines.extend(self.display.get_error_messages());
-        output_lines.extend(self.display.get_info_messages());
-        output_lines.join("\n")
+        self.display.get_all_messages().join("\n")
     }
 
     fn get_exit_code(&self) -> i32 {

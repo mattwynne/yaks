@@ -5,17 +5,24 @@ use crate::domain::YakEvent;
 use crate::ports::EventStore;
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct InMemoryEventStore {
     events: Arc<Mutex<Vec<YakEvent>>>,
 }
 
-#[allow(dead_code)]
 impl InMemoryEventStore {
     pub fn new() -> Self {
         Self {
             events: Arc::new(Mutex::new(vec![])),
         }
+    }
+
+    pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
+        let events = self.events.lock().unwrap();
+        Ok(events
+            .iter()
+            .filter(|e| e.yak_name() == name)
+            .cloned()
+            .collect())
     }
 }
 
@@ -29,15 +36,6 @@ impl EventStore for InMemoryEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
         self.events.lock().unwrap().push(event.clone());
         Ok(())
-    }
-
-    fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
-        let events = self.events.lock().unwrap();
-        Ok(events
-            .iter()
-            .filter(|e| e.yak_name() == name)
-            .cloned()
-            .collect())
     }
 
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {

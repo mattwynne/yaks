@@ -306,8 +306,3 @@ impl UseCase for ListYaks {
         Self::execute(self, app)
     }
 }
-
-// Tests removed - covered by integration tests
-#[cfg(test)]
-#[allow(dead_code)]
-mod _unused_tests {}

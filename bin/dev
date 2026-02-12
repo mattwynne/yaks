@@ -116,7 +116,7 @@ lint() {
 
   echo ""
   echo "Running Rust clippy..."
-  if ! cargo clippy -- -D warnings; then
+  if ! cargo clippy --features test-support -- -D warnings; then
     exit_code=1
   fi
 
@@ -141,7 +141,7 @@ test() {
   echo ""
 
   shellspec
-  cargo test
+  cargo test --features test-support
 }
 
 # @cmd Run mutation tests (unit tests only for speed: ~6min vs ~16min)
