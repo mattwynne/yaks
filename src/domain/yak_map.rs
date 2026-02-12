@@ -16,6 +16,12 @@ pub struct YakMap {
     pending_events: Vec<YakEvent>,
 }
 
+impl Default for YakMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl YakMap {
     #[allow(dead_code)]
     pub fn new() -> Self {
@@ -57,15 +63,20 @@ impl YakMap {
         // Ensure all ancestors exist
         self.ensure_ancestors_exist(&name);
 
-        self.yaks.insert(name.clone(), YakState {
-            state: "todo".to_string(),
-            context: context.clone(),
-        });
+        self.yaks.insert(
+            name.clone(),
+            YakState {
+                state: "todo".to_string(),
+                context: context.clone(),
+            },
+        );
 
-        self.pending_events.push(YakEvent::Added { name: name.clone() });
+        self.pending_events
+            .push(YakEvent::Added { name: name.clone() });
 
         if let Some(content) = context {
-            self.pending_events.push(YakEvent::ContextUpdated { name, content });
+            self.pending_events
+                .push(YakEvent::ContextUpdated { name, content });
         }
 
         Ok(())
@@ -76,10 +87,13 @@ impl YakMap {
 
         for ancestor in get_ancestors(name) {
             if !self.yaks.contains_key(&ancestor) {
-                self.yaks.insert(ancestor.clone(), YakState {
-                    state: "todo".to_string(),
-                    context: None,
-                });
+                self.yaks.insert(
+                    ancestor.clone(),
+                    YakState {
+                        state: "todo".to_string(),
+                        context: None,
+                    },
+                );
                 self.pending_events.push(YakEvent::Added { name: ancestor });
             }
         }
@@ -107,7 +121,7 @@ impl YakMap {
         self.yaks.get_mut(&name).unwrap().state = state.clone();
         self.pending_events.push(YakEvent::StateUpdated {
             name: name.clone(),
-            state
+            state,
         });
 
         // Propagate to ancestors if transitioning from todo
@@ -124,7 +138,8 @@ impl YakMap {
         let children = find_children(parent_name, &self.yaks);
 
         if !children.is_empty() {
-            let incomplete = children.iter()
+            let incomplete = children
+                .iter()
                 .any(|name| self.yaks.get(name).unwrap().state != "done");
 
             if incomplete {
@@ -192,7 +207,7 @@ impl YakMap {
     }
 
     pub fn move_yak(&mut self, old_name: String, new_name: String) -> Result<()> {
-        use crate::domain::{validate_yak_name, find_children};
+        use crate::domain::{find_children, validate_yak_name};
 
         if !self.yaks.contains_key(&old_name) {
             anyhow::bail!("yak '{}' not found", old_name);
@@ -220,10 +235,8 @@ impl YakMap {
         // Move the yak
         if let Some(yak_state) = self.yaks.remove(&old_name) {
             self.yaks.insert(new_name.clone(), yak_state);
-            self.pending_events.push(YakEvent::Moved {
-                old_name,
-                new_name,
-            });
+            self.pending_events
+                .push(YakEvent::Moved { old_name, new_name });
         }
 
         Ok(())
@@ -244,8 +257,8 @@ mod tests {
     // Tests for from_store
     #[test]
     fn test_from_store_empty() {
-        use crate::ports::Store;
         use crate::domain::Yak;
+        use crate::ports::Store;
         use std::collections::HashMap;
 
         struct MockStore {
@@ -254,7 +267,9 @@ mod tests {
 
         impl Store for MockStore {
             fn get_yak(&self, name: &str) -> Result<Yak> {
-                self.yaks.get(name).cloned()
+                self.yaks
+                    .get(name)
+                    .cloned()
                     .ok_or_else(|| anyhow::anyhow!("Yak not found"))
             }
 
@@ -279,7 +294,9 @@ mod tests {
             }
         }
 
-        let store = MockStore { yaks: HashMap::new() };
+        let store = MockStore {
+            yaks: HashMap::new(),
+        };
         let map = YakMap::from_store(&store).unwrap();
 
         assert_eq!(map.yaks.len(), 0);
@@ -288,8 +305,8 @@ mod tests {
 
     #[test]
     fn test_from_store_with_yaks() {
-        use crate::ports::Store;
         use crate::domain::Yak;
+        use crate::ports::Store;
         use std::collections::HashMap;
 
         struct MockStore {
@@ -298,7 +315,9 @@ mod tests {
 
         impl Store for MockStore {
             fn get_yak(&self, name: &str) -> Result<Yak> {
-                self.yaks.get(name).cloned()
+                self.yaks
+                    .get(name)
+                    .cloned()
                     .ok_or_else(|| anyhow::anyhow!("Yak not found"))
             }
 
@@ -348,7 +367,10 @@ mod tests {
 
         assert_eq!(map.yaks.len(), 2);
         assert_eq!(map.yaks.get("test1").unwrap().state, "todo");
-        assert_eq!(map.yaks.get("test1").unwrap().context, Some("context1".to_string()));
+        assert_eq!(
+            map.yaks.get("test1").unwrap().context,
+            Some("context1".to_string())
+        );
         assert_eq!(map.yaks.get("test2").unwrap().state, "wip");
         assert_eq!(map.yaks.get("test2").unwrap().context, None);
         assert_eq!(map.pending_events.len(), 0);
@@ -358,7 +380,7 @@ mod tests {
     fn test_take_events_removes_events() {
         let mut map = YakMap::new();
         map.pending_events.push(YakEvent::Added {
-            name: "test".to_string()
+            name: "test".to_string(),
         });
 
         let events = map.take_events();
@@ -382,9 +404,13 @@ mod tests {
     fn test_add_yak_with_context() {
         let mut map = YakMap::new();
 
-        map.add_yak("test".to_string(), Some("context".to_string())).unwrap();
+        map.add_yak("test".to_string(), Some("context".to_string()))
+            .unwrap();
 
-        assert_eq!(map.yaks.get("test").unwrap().context, Some("context".to_string()));
+        assert_eq!(
+            map.yaks.get("test").unwrap().context,
+            Some("context".to_string())
+        );
     }
 
     #[test]
@@ -405,7 +431,8 @@ mod tests {
     fn test_add_yak_with_context_emits_two_events() {
         let mut map = YakMap::new();
 
-        map.add_yak("test".to_string(), Some("context".to_string())).unwrap();
+        map.add_yak("test".to_string(), Some("context".to_string()))
+            .unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 2);
@@ -458,13 +485,17 @@ mod tests {
     fn test_add_yak_doesnt_recreate_existing_ancestor() {
         let mut map = YakMap::new();
 
-        map.add_yak("parent".to_string(), Some("context".to_string())).unwrap();
+        map.add_yak("parent".to_string(), Some("context".to_string()))
+            .unwrap();
         map.take_events(); // Clear events
 
         map.add_yak("parent/child".to_string(), None).unwrap();
 
         // Parent context should be preserved
-        assert_eq!(map.yaks.get("parent").unwrap().context, Some("context".to_string()));
+        assert_eq!(
+            map.yaks.get("parent").unwrap().context,
+            Some("context".to_string())
+        );
 
         // Only one Added event (for child)
         let events = map.take_events();
@@ -477,7 +508,8 @@ mod tests {
         let mut map = YakMap::new();
         map.add_yak("test".to_string(), None).unwrap();
         map.take_events();
-        map.update_state("test".to_string(), "wip".to_string()).unwrap();
+        map.update_state("test".to_string(), "wip".to_string())
+            .unwrap();
         assert_eq!(map.yaks.get("test").unwrap().state, "wip");
     }
 
@@ -496,7 +528,10 @@ mod tests {
         map.add_yak("parent/child".to_string(), None).unwrap();
         let result = map.update_state("parent".to_string(), "done".to_string());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("children are incomplete"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("children are incomplete"));
     }
 
     #[test]
@@ -504,7 +539,8 @@ mod tests {
         let mut map = YakMap::new();
         map.add_yak("parent".to_string(), None).unwrap();
         map.add_yak("parent/child".to_string(), None).unwrap();
-        map.update_state("parent/child".to_string(), "done".to_string()).unwrap();
+        map.update_state("parent/child".to_string(), "done".to_string())
+            .unwrap();
         let result = map.update_state("parent".to_string(), "done".to_string());
         assert!(result.is_ok());
     }
@@ -515,7 +551,8 @@ mod tests {
         map.add_yak("parent".to_string(), None).unwrap();
         map.add_yak("parent/child".to_string(), None).unwrap();
         map.take_events();
-        map.update_state("parent/child".to_string(), "wip".to_string()).unwrap();
+        map.update_state("parent/child".to_string(), "wip".to_string())
+            .unwrap();
         assert_eq!(map.yaks.get("parent").unwrap().state, "wip");
         assert_eq!(map.yaks.get("parent/child").unwrap().state, "wip");
     }
@@ -525,7 +562,8 @@ mod tests {
         let mut map = YakMap::new();
         map.add_yak("a/b/c".to_string(), None).unwrap();
         map.take_events();
-        map.update_state("a/b/c".to_string(), "wip".to_string()).unwrap();
+        map.update_state("a/b/c".to_string(), "wip".to_string())
+            .unwrap();
         assert_eq!(map.yaks.get("a").unwrap().state, "wip");
         assert_eq!(map.yaks.get("a/b").unwrap().state, "wip");
         assert_eq!(map.yaks.get("a/b/c").unwrap().state, "wip");
@@ -536,9 +574,11 @@ mod tests {
         let mut map = YakMap::new();
         map.add_yak("parent".to_string(), None).unwrap();
         map.add_yak("parent/child".to_string(), None).unwrap();
-        map.update_state("parent/child".to_string(), "wip".to_string()).unwrap();
+        map.update_state("parent/child".to_string(), "wip".to_string())
+            .unwrap();
         map.take_events();
-        map.update_state("parent/child".to_string(), "done".to_string()).unwrap();
+        map.update_state("parent/child".to_string(), "done".to_string())
+            .unwrap();
         let events = map.take_events();
         assert_eq!(events.len(), 1); // Only child event
     }
@@ -550,9 +590,13 @@ mod tests {
         map.add_yak("test".to_string(), None).unwrap();
         map.take_events();
 
-        map.update_context("test".to_string(), "new context".to_string()).unwrap();
+        map.update_context("test".to_string(), "new context".to_string())
+            .unwrap();
 
-        assert_eq!(map.yaks.get("test").unwrap().context, Some("new context".to_string()));
+        assert_eq!(
+            map.yaks.get("test").unwrap().context,
+            Some("new context".to_string())
+        );
     }
 
     #[test]
@@ -561,7 +605,8 @@ mod tests {
         map.add_yak("test".to_string(), None).unwrap();
         map.take_events();
 
-        map.update_context("test".to_string(), "new context".to_string()).unwrap();
+        map.update_context("test".to_string(), "new context".to_string())
+            .unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -636,14 +681,18 @@ mod tests {
     #[test]
     fn test_move_yak_moves_yak() {
         let mut map = YakMap::new();
-        map.add_yak("old".to_string(), Some("context".to_string())).unwrap();
+        map.add_yak("old".to_string(), Some("context".to_string()))
+            .unwrap();
         map.take_events();
 
         map.move_yak("old".to_string(), "new".to_string()).unwrap();
 
         assert!(!map.yaks.contains_key("old"));
         assert!(map.yaks.contains_key("new"));
-        assert_eq!(map.yaks.get("new").unwrap().context, Some("context".to_string()));
+        assert_eq!(
+            map.yaks.get("new").unwrap().context,
+            Some("context".to_string())
+        );
     }
 
     #[test]
@@ -671,7 +720,8 @@ mod tests {
         map.add_yak("old".to_string(), None).unwrap();
         map.take_events();
 
-        map.move_yak("old".to_string(), "a/b/new".to_string()).unwrap();
+        map.move_yak("old".to_string(), "a/b/new".to_string())
+            .unwrap();
 
         assert!(map.yaks.contains_key("a"));
         assert!(map.yaks.contains_key("a/b"));

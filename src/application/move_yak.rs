@@ -32,9 +32,7 @@ impl MoveYak {
             self.to.clone()
         };
 
-        app.with_yak_map(|yak_map| {
-            yak_map.move_yak(self.from.clone(), actual_destination)
-        })
+        app.with_yak_map(|yak_map| yak_map.move_yak(self.from.clone(), actual_destination))
     }
 }
 

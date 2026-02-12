@@ -23,19 +23,12 @@ impl AddYak {
         let template = self.generate_context_template()?;
 
         // Request content via input port
-        let context = if let Some(content) = app.input.request_content(None, Some(&template))? {
-            if !content.trim().is_empty() {
-                Some(content)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let context = app
+            .input
+            .request_content(None, Some(&template))?
+            .filter(|content| !content.trim().is_empty());
 
-        app.with_yak_map(|yak_map| {
-            yak_map.add_yak(self.name.clone(), context)
-        })
+        app.with_yak_map(|yak_map| yak_map.add_yak(self.name.clone(), context))
     }
 
     fn generate_context_template(&self) -> Result<String> {
