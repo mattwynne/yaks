@@ -2,13 +2,13 @@
 Describe 'yx'
   It 'shows help when run with --help'
     When run yx --help
-    The error should include "USAGE:"
+    The output should include "Usage:"
     The status should be success
   End
 
   It 'shows help when run with no arguments'
     When run yx
-    The error should include "USAGE:"
+    The output should include "Usage:"
     The status should be success
   End
 

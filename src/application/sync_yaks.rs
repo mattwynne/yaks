@@ -82,6 +82,19 @@ mod tests {
                 .borrow_mut()
                 .push(format!("INFO: {}", message));
         }
+
+        fn display_yak_pretty(&self, prefix: &str, name: &str, state: &str) {
+            self.messages
+                .borrow_mut()
+                .push(format!("{prefix}{name} [{state}]"));
+        }
+
+        fn display_yak_markdown(&self, depth: usize, name: &str, state: &str) {
+            let indent = "  ".repeat(depth);
+            self.messages
+                .borrow_mut()
+                .push(format!("{indent}- [{state}] {name}"));
+        }
     }
 
     #[test]

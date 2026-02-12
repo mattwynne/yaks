@@ -101,16 +101,10 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    // Check if help was requested (--help or no args)
+    // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
-    if args.len() == 1 || args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
-        let mut cmd = Cli::command();
-        let mut help_output = Vec::new();
-        cmd.write_help(&mut help_output).unwrap();
-        let help_str = String::from_utf8(help_output).unwrap();
-        // Replace "Usage:" with "USAGE:" to match bash version
-        let help_str = help_str.replace("Usage:", "USAGE:");
-        eprintln!("{help_str}");
+    if args.len() == 1 {
+        Cli::command().print_help()?;
         return Ok(());
     }
 

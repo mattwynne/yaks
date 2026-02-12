@@ -270,76 +270,33 @@ impl ListYaks {
         prefix: &TreePrefix,
         is_last: bool,
     ) {
-        let message = match format {
-            "plain" => node.full_path.clone(),
-            "pretty" => {
-                // For pretty format, use ancestor continuations plus this node's connector
-                // prefix.lines[0] represents root level (not drawn, since root has no prefix)
-                // prefix.lines[1..] represent continuations to draw from depth 1 onwards
-                let node_prefix = if prefix.lines.is_empty() {
-                    // Root level (depth 0) - 2 space indent
-                    "  ".to_string()
-                } else if prefix.lines.len() == 1 {
-                    // Depth 1 (direct child of root) - 2 space indent + connector
-                    let connector = if is_last { "╰─ " } else { "├─ " };
-                    format!("  {}", connector)
-                } else {
-                    // Depth 2+ - 2 space indent + continuations + connector
-                    let ancestor_continuations = &prefix.lines[1..];
-                    let connector = if is_last { "╰─ " } else { "├─ " };
-                    format!("  {}{}", ancestor_continuations.join(""), connector)
-                };
-
-                let state = node
-                    .yak
-                    .as_ref()
-                    .map(|y| y.state.as_str())
-                    .unwrap_or("todo");
-
-                match state {
-                    "wip" => {
-                        // Green dot + bold text
-                        format!(
-                            "{}\x1b[32m●\x1b[0m \x1b[1m{}\x1b[0m",
-                            node_prefix, node.name
-                        )
-                    }
-                    "done" => {
-                        // Grey dot + grey strikethrough text
-                        format!(
-                            "{}\x1b[90m●\x1b[0m \x1b[90;9m{}\x1b[0m",
-                            node_prefix, node.name
-                        )
-                    }
-                    _ => {
-                        // Default: white circle + normal text (todo)
-                        format!("{}○ {}", node_prefix, node.name)
-                    }
-                }
-            }
-            _ => {
-                // markdown format (existing logic)
-                let depth = prefix.lines.len();
-                let indent = "  ".repeat(depth);
-                let state = node
-                    .yak
-                    .as_ref()
-                    .map(|y| y.state.as_str())
-                    .unwrap_or("todo");
-                format!("{}- [{}] {}", indent, state, node.name)
-            }
-        };
-
-        // Apply gray color for done yaks in markdown format
         let state = node
             .yak
             .as_ref()
             .map(|y| y.state.as_str())
             .unwrap_or("todo");
-        if state == "done" && format == "markdown" {
-            app.display.info(&format!("\x1b[90m{message}\x1b[0m"));
-        } else {
-            app.display.info(&message);
+
+        match format {
+            "plain" => app.display.info(&node.full_path),
+            "pretty" => {
+                let node_prefix = if prefix.lines.is_empty() {
+                    "  ".to_string()
+                } else if prefix.lines.len() == 1 {
+                    let connector = if is_last { "╰─ " } else { "├─ " };
+                    format!("  {}", connector)
+                } else {
+                    let ancestor_continuations = &prefix.lines[1..];
+                    let connector = if is_last { "╰─ " } else { "├─ " };
+                    format!("  {}{}", ancestor_continuations.join(""), connector)
+                };
+                app.display
+                    .display_yak_pretty(&node_prefix, &node.name, state);
+            }
+            _ => {
+                let depth = prefix.lines.len();
+                app.display
+                    .display_yak_markdown(depth, &node.name, state);
+            }
         }
     }
 }

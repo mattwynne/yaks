@@ -86,6 +86,26 @@ impl DisplayPort for InMemoryDisplay {
             .unwrap()
             .push(message.to_string());
     }
+
+    fn display_yak_pretty(&self, prefix: &str, name: &str, state: &str) {
+        let indicator = match state {
+            "wip" => "●",
+            "done" => "●",
+            _ => "○",
+        };
+        self.info_messages
+            .write()
+            .unwrap()
+            .push(format!("{prefix}{indicator} {name}"));
+    }
+
+    fn display_yak_markdown(&self, depth: usize, name: &str, state: &str) {
+        let indent = "  ".repeat(depth);
+        self.info_messages
+            .write()
+            .unwrap()
+            .push(format!("{indent}- [{state}] {name}"));
+    }
 }
 
 #[cfg(test)]
