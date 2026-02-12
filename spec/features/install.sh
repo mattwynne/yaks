@@ -1,7 +1,10 @@
 # shellcheck shell=bash
 Describe 'install.sh'
+  docker_unavailable() { ! docker info >/dev/null 2>&1; }
+
   It 'installs yx from release zip and runs smoke tests'
     Skip if "release not present: run \`dev release-linux\`" test ! -f "$TEST_PROJECT_DIR/result-linux/yx-linux.zip"
+    Skip if "docker not available" docker_unavailable
     run_install() {
       # Copy zip to a temp location for Docker
       temp_zip=$(mktemp)
