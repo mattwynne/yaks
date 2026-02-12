@@ -21,7 +21,9 @@ impl EditContext {
 
         // Request new content via input
         if let Some(content) = app.input.request_content(Some(&current_context), None)? {
-            app.with_yak(&self.name, |yak| yak.update_context(content))?;
+            app.with_yak_map(|yak_map| {
+                yak_map.update_context(self.name.clone(), content)
+            })?;
         }
 
         Ok(())

@@ -1,6 +1,5 @@
 // Use case: Remove a yak
 
-use crate::domain::YakEvent;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -17,20 +16,9 @@ impl RemoveYak {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        // Verify yak exists first
-        let mut yak = app.store.get_yak(&self.name)?;
-
-        // Emit Removed event
-        yak.pending_events.push(YakEvent::Removed {
-            name: yak.name.clone(),
-        });
-
-        // Publish the event
-        for event in yak.take_events() {
-            app.event_bus.publish(event)?;
-        }
-
-        Ok(())
+        app.with_yak_map(|yak_map| {
+            yak_map.remove_yak(self.name.clone())
+        })
     }
 }
 
