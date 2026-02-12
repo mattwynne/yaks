@@ -26,7 +26,7 @@ pub struct Yak {
 }
 
 impl Yak {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(name: String) -> Self {
         let mut yak = Self {
             name: name.clone(),
@@ -44,19 +44,19 @@ impl Yak {
         self.state == "done"
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_context(mut self, context: String) -> Self {
         self.context = Some(context);
         self
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_state(mut self, state: String) -> Self {
         self.state = state;
         self
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn update_context(&mut self, content: String) -> anyhow::Result<()> {
         self.context = Some(content.clone());
         self.pending_events
@@ -82,7 +82,7 @@ impl Yak {
         std::mem::take(&mut self.pending_events)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn move_to(&mut self, new_name: String) -> anyhow::Result<()> {
         validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
 
@@ -129,8 +129,7 @@ pub fn validate_yak_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Parse hierarchy from yak name (e.g., "dx/rust" -> ["dx", "rust"])
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn parse_hierarchy(name: &str) -> Vec<&str> {
     name.split('/').collect()
 }

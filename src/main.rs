@@ -1,23 +1,17 @@
-mod adapters;
-mod application;
-mod domain;
-mod infrastructure;
-mod ports;
-
-use adapters::cli::ConsoleDisplay;
-use adapters::event_store::GitEventStore;
-use adapters::input::ConsoleInput;
-use adapters::storage::DirectoryStorage;
-use adapters::sync::GitRefSync;
 use anyhow::Result;
-use application::{
+use clap::{CommandFactory, Parser};
+use std::path::PathBuf;
+use yx::adapters::cli::ConsoleDisplay;
+use yx::adapters::event_store::GitEventStore;
+use yx::adapters::input::ConsoleInput;
+use yx::adapters::storage::DirectoryStorage;
+use yx::adapters::sync::GitRefSync;
+use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
     ShowContext, ShowField, SyncYaks, WriteField,
 };
-use clap::{CommandFactory, Parser};
-use infrastructure::EventBus;
-use ports::EventStore;
-use std::path::PathBuf;
+use yx::infrastructure::EventBus;
+use yx::ports::EventStore;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]

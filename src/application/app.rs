@@ -1,6 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
-use crate::domain::{validate_yak_name, Yak, YakMap};
+#[cfg(test)]
+use crate::domain::validate_yak_name;
+use crate::domain::{Yak, YakMap};
 use crate::infrastructure::EventBus;
 use crate::ports::{DisplayPort, InputPort, Store};
 use anyhow::Result;
@@ -44,7 +46,7 @@ impl<'a> Application<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_new_yak<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: FnOnce(&mut Yak) -> Result<()>,

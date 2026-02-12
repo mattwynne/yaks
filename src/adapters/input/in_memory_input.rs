@@ -8,12 +8,10 @@ use std::cell::RefCell;
 ///
 /// Returns predefined content without any console interaction.
 /// Useful for unit tests that need to simulate user input.
-#[allow(dead_code)]
 pub struct InMemoryInput {
     content: RefCell<Option<String>>,
 }
 
-#[allow(dead_code)]
 impl InMemoryInput {
     /// Create a new InMemoryInput that returns None (no input)
     pub fn new() -> Self {

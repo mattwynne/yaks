@@ -4,7 +4,6 @@
 /// Extract parent name from a hierarchical yak name
 /// "parent/child" -> Some("parent")
 /// "root" -> None
-#[allow(dead_code)]
 pub fn get_parent(name: &str) -> Option<String> {
     name.rfind('/').map(|pos| name[..pos].to_string())
 }
@@ -13,7 +12,6 @@ pub fn get_parent(name: &str) -> Option<String> {
 /// "a/b/c" -> ["a/b", "a"]
 /// "parent/child" -> ["parent"]
 /// "root" -> []
-#[allow(dead_code)]
 pub fn get_ancestors(name: &str) -> Vec<String> {
     let mut ancestors = Vec::new();
     let mut current = name.to_string();
@@ -30,13 +28,11 @@ pub fn get_ancestors(name: &str) -> Vec<String> {
 /// "parent/child" is a child of "parent" -> true
 /// "a/b/c" is a child of "a" -> false (a is an ancestor, not direct parent)
 /// "a/b/c" is a child of "a/b" -> true
-#[allow(dead_code)]
 pub fn is_child_of(name: &str, potential_parent: &str) -> bool {
     get_parent(name) == Some(potential_parent.to_string())
 }
 
 /// Find all direct children of a parent in a HashMap of yak names
-#[allow(dead_code)]
 pub fn find_children<T>(
     parent: &str,
     yak_map: &std::collections::HashMap<String, T>,

@@ -6,12 +6,12 @@ pub mod input;
 pub mod storage;
 pub mod sync;
 
-// Re-export commonly used adapters for external use
-#[allow(unused_imports)]
-pub use cli::{ConsoleDisplay, InMemoryDisplay};
-#[allow(unused_imports)]
-pub use event_store::{GitEventStore, InMemoryEventStore};
-#[allow(unused_imports)]
-pub use input::{ConsoleInput, InMemoryInput};
-#[allow(unused_imports)]
-pub use storage::{DirectoryStorage, InMemoryStorage};
+// Re-export test adapters for use in tests across the crate
+#[cfg(any(test, feature = "test-support"))]
+pub use cli::InMemoryDisplay;
+#[cfg(any(test, feature = "test-support"))]
+pub use event_store::InMemoryEventStore;
+#[cfg(any(test, feature = "test-support"))]
+pub use input::InMemoryInput;
+#[cfg(any(test, feature = "test-support"))]
+pub use storage::InMemoryStorage;

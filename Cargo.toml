@@ -7,6 +7,10 @@ description = "DAG-based TODO list CLI for software teams"
 license = "MIT"
 repository = "https://github.com/mattwynne/yaks"
 
+[features]
+default = []
+test-support = []
+
 [lib]
 name = "yx"
 path = "src/lib.rs"

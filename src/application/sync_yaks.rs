@@ -40,14 +40,6 @@ mod tests {
     }
 
     impl SyncPort for MockSync {
-        fn push(&self) -> Result<()> {
-            unimplemented!()
-        }
-
-        fn pull(&self) -> Result<()> {
-            unimplemented!()
-        }
-
         fn sync(&self) -> Result<()> {
             *self.sync_called.borrow_mut() = true;
             Ok(())
@@ -69,12 +61,6 @@ mod tests {
     impl DisplayPort for MockOutput {
         fn success(&self, message: &str) {
             self.messages.borrow_mut().push(message.to_string());
-        }
-
-        fn error(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("ERROR: {}", message));
         }
 
         fn info(&self, message: &str) {

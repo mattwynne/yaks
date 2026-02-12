@@ -1,8 +1,6 @@
 use crate::domain::events::*;
 use crate::domain::YakEvent;
-#[allow(unused_imports)]
 use crate::ports::Store;
-#[allow(unused_imports)]
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -17,14 +15,8 @@ pub struct YakMap {
     pending_events: Vec<YakEvent>,
 }
 
-impl Default for YakMap {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl YakMap {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new() -> Self {
         Self {
             yaks: HashMap::new(),

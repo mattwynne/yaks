@@ -16,7 +16,6 @@ pub enum YakEvent {
 }
 
 impl YakEvent {
-    #[allow(dead_code)]
     pub fn format_message(&self) -> String {
         match self {
             Self::Added(e) => format!("{}: {}", e.event_tag(), e.format_data()),
@@ -28,7 +27,6 @@ impl YakEvent {
         }
     }
 
-    #[allow(dead_code)]
     pub fn parse(message: &str) -> Result<Self> {
         let (tag, data) = message
             .split_once(": ")
@@ -45,7 +43,7 @@ impl YakEvent {
     }
 
     /// Get the yak name this event affects (for filtering)
-    #[allow(dead_code)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn yak_name(&self) -> &str {
         match self {
             Self::Added(e) => &e.name,

@@ -8,13 +8,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct InMemoryStorage {
     // HashMap: yak_name -> HashMap of field_name -> field_content
     yaks: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 }
 
-#[allow(dead_code)]
 impl InMemoryStorage {
     pub fn new() -> Self {
         Self {

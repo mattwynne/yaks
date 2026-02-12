@@ -442,15 +442,6 @@ impl GitRefSync {
 }
 
 impl SyncPort for GitRefSync {
-    fn push(&self) -> Result<()> {
-        self.push_to_remote()
-    }
-
-    fn pull(&self) -> Result<()> {
-        self.fetch_remote()?;
-        self.extract_to_working_dir()
-    }
-
     fn sync(&self) -> Result<()> {
         // Step 1: Fetch remote
         self.fetch_remote()?;

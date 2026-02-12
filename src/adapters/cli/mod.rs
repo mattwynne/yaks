@@ -1,5 +1,6 @@
 // CLI adapter - implementation using clap
 
+#[cfg(any(test, feature = "test-support"))]
 pub mod memory_display;
 
 pub struct ConsoleDisplay;
@@ -7,10 +8,6 @@ pub struct ConsoleDisplay;
 impl crate::ports::DisplayPort for ConsoleDisplay {
     fn success(&self, message: &str) {
         println!("{message}");
-    }
-
-    fn error(&self, message: &str) {
-        eprintln!("Error: {message}");
     }
 
     fn info(&self, message: &str) {
@@ -36,4 +33,5 @@ impl crate::ports::DisplayPort for ConsoleDisplay {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 pub use memory_display::InMemoryDisplay;

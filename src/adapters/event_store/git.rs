@@ -5,12 +5,10 @@ use std::path::Path;
 use crate::domain::YakEvent;
 use crate::ports::EventStore;
 
-#[allow(dead_code)]
 pub struct GitEventStore {
     repo: Repository,
 }
 
-#[allow(dead_code)]
 impl GitEventStore {
     pub fn new(repo_path: &Path) -> Result<Self> {
         let repo = Repository::open(repo_path)
@@ -188,6 +186,17 @@ impl GitEventStore {
     }
 }
 
+#[cfg(test)]
+impl GitEventStore {
+    pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
+        Ok(self
+            .get_all_events()?
+            .into_iter()
+            .filter(|e| e.yak_name() == name)
+            .collect())
+    }
+}
+
 impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
         let current_tree = self.get_current_tree()?;
@@ -215,16 +224,6 @@ impl EventStore for GitEventStore {
         )?;
 
         Ok(())
-    }
-
-    fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
-        // Walk all events and filter by yak name.
-        // Could optimize with git log message grep later.
-        Ok(self
-            .get_all_events()?
-            .into_iter()
-            .filter(|e| e.yak_name() == name)
-            .collect())
     }
 
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {
