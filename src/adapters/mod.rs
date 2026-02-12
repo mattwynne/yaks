@@ -11,7 +11,7 @@ pub mod sync;
 #[allow(unused_imports)]
 pub use cli::{ConsoleDisplay, InMemoryDisplay};
 #[allow(unused_imports)]
-pub use event_store::InMemoryEventStore;
+pub use event_store::{GitEventStore, InMemoryEventStore};
 #[allow(unused_imports)]
 pub use input::{ConsoleInput, InMemoryInput};
 #[allow(unused_imports)]

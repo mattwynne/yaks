@@ -1,4 +1,7 @@
+pub mod git;
 pub mod memory;
+
+pub use git::GitEventStore;
 pub use memory::InMemoryEventStore;
 
 #[cfg(test)]
