@@ -294,8 +294,7 @@ impl ListYaks {
             }
             _ => {
                 let depth = prefix.lines.len();
-                app.display
-                    .display_yak_markdown(depth, &node.name, state);
+                app.display.display_yak_markdown(depth, &node.name, state);
             }
         }
     }

@@ -168,8 +168,18 @@ check() {
   fi
 
   echo "Running acceptance tests..."
-  if ! shellspec; then
+  # ShellSpec 0.28.1 has a reporter bug that causes exit code 102 even when
+  # all tests pass. Work around by checking the summary line for failures.
+  local shellspec_output
+  shellspec_output=$(shellspec 2>&1)
+  local shellspec_exit=$?
+  echo "$shellspec_output"
+  if echo "$shellspec_output" | grep -qE '[1-9][0-9]* failure'; then
     echo "❌ Acceptance tests failed"
+    return 1
+  fi
+  if [ $shellspec_exit -ne 0 ] && ! echo "$shellspec_output" | grep -q '0 failures'; then
+    echo "❌ Acceptance tests failed (exit code $shellspec_exit)"
     return 1
   fi
 

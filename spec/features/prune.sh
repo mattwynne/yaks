@@ -70,8 +70,8 @@ Describe 'yx prune'
         yx prune
         git log refs/notes/yaks --oneline
       "
-      The output should include "rm Fix the bug"
-      The output should include "rm Write docs"
+      The output should include 'Removed: "Fix the bug"'
+      The output should include 'Removed: "Write docs"'
     End
   End
 End

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use git2::Repository;
 use std::path::Path;
 
@@ -14,7 +14,7 @@ pub struct GitEventStore {
 impl GitEventStore {
     pub fn new(repo_path: &Path) -> Result<Self> {
         let repo = Repository::open(repo_path)
-            .with_context(|| format!("Failed to open git repo at {}", repo_path.display()))?;
+            .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
         Ok(Self { repo })
     }
 
