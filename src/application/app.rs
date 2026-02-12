@@ -44,6 +44,7 @@ impl<'a> Application<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn with_new_yak<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: FnOnce(&mut Yak) -> Result<()>,

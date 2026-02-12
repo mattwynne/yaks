@@ -17,6 +17,7 @@ pub struct YakMap {
 }
 
 impl YakMap {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             yaks: HashMap::new(),
@@ -90,7 +91,7 @@ impl YakMap {
         validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
 
         if !self.yaks.contains_key(&name) {
-            anyhow::bail!("Yak '{}' not found", name);
+            anyhow::bail!("yak '{}' not found", name);
         }
 
         // Validate children if marking done
@@ -155,7 +156,7 @@ impl YakMap {
 
     pub fn update_context(&mut self, name: String, context: String) -> Result<()> {
         if !self.yaks.contains_key(&name) {
-            anyhow::bail!("Yak '{}' not found", name);
+            anyhow::bail!("yak '{}' not found", name);
         }
 
         self.yaks.get_mut(&name).unwrap().context = Some(context.clone());
@@ -171,7 +172,7 @@ impl YakMap {
         use crate::domain::find_children;
 
         if !self.yaks.contains_key(&name) {
-            anyhow::bail!("Yak '{}' not found", name);
+            anyhow::bail!("yak '{}' not found", name);
         }
 
         // Prevent removing yak with children (referential integrity)
@@ -194,7 +195,7 @@ impl YakMap {
         use crate::domain::{validate_yak_name, find_children};
 
         if !self.yaks.contains_key(&old_name) {
-            anyhow::bail!("Yak '{}' not found", old_name);
+            anyhow::bail!("yak '{}' not found", old_name);
         }
 
         if self.yaks.contains_key(&new_name) {
