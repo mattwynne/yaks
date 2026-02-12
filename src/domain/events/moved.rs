@@ -2,7 +2,6 @@ use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedEvent {
     pub old_name: String,

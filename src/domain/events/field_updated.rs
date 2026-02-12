@@ -5,7 +5,6 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 /// Note: `content` is NOT serialized in the commit message because it
 /// is stored in the git tree (as a blob). When reading events back
 /// from git, `content` will be empty.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldUpdatedEvent {
     pub name: String,

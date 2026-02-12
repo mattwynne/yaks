@@ -178,6 +178,8 @@ fn main() -> Result<()> {
             use_case.execute()
         }
         Commands::Log => {
+            // TODO: Remove in Task 9 - legacy Event struct
+            /*
             let events = log.read_events()?;
             for event in events {
                 let args_str = event.args.join(" ");
@@ -187,7 +189,10 @@ fn main() -> Result<()> {
                     timestamp_str, event.author, event.operation, args_str
                 );
             }
-            Ok(())
+            */
+            anyhow::bail!(
+                "Log command temporarily disabled (Task 9 will replace with GitEventStore)"
+            )
         }
     }
 }

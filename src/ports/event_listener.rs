@@ -1,5 +1,6 @@
-use crate::domain::YakEvent;
 use anyhow::Result;
+
+use crate::domain::YakEvent;
 
 pub trait EventListener {
     fn on_event(&mut self, event: &YakEvent) -> Result<()>;
@@ -8,6 +9,7 @@ pub trait EventListener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::events::AddedEvent;
 
     struct TestListener {
         events: Vec<YakEvent>,
@@ -24,9 +26,9 @@ mod tests {
     fn test_event_listener_receives_events() {
         let mut listener = TestListener { events: vec![] };
 
-        let event = YakEvent::Added {
+        let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
-        };
+        });
 
         listener.on_event(&event).unwrap();
 

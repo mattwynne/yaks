@@ -12,6 +12,7 @@ pub trait EventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::events::{AddedEvent, ContextUpdatedEvent};
 
     struct InMemoryEventStore {
         events: Vec<YakEvent>,
@@ -27,14 +28,7 @@ mod tests {
             Ok(self
                 .events
                 .iter()
-                .filter(|e| match e {
-                    YakEvent::Added { name: n } => n == name,
-                    YakEvent::Removed { name: n } => n == name,
-                    YakEvent::ContextUpdated { name: n, .. } => n == name,
-                    YakEvent::StateUpdated { name: n, .. } => n == name,
-                    YakEvent::Moved { old_name, .. } => old_name == name,
-                    YakEvent::FieldUpdated { name: n, .. } => n == name,
-                })
+                .filter(|e| e.yak_name() == name)
                 .cloned()
                 .collect())
         }
@@ -48,9 +42,9 @@ mod tests {
     fn test_event_store_append() {
         let mut store = InMemoryEventStore { events: vec![] };
 
-        let event = YakEvent::Added {
+        let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
-        };
+        });
 
         store.append(&event).unwrap();
         let events = store.get_all_events().unwrap();
@@ -64,20 +58,20 @@ mod tests {
         let mut store = InMemoryEventStore { events: vec![] };
 
         store
-            .append(&YakEvent::Added {
+            .append(&YakEvent::Added(AddedEvent {
                 name: "test1".to_string(),
-            })
+            }))
             .unwrap();
         store
-            .append(&YakEvent::Added {
+            .append(&YakEvent::Added(AddedEvent {
                 name: "test2".to_string(),
-            })
+            }))
             .unwrap();
         store
-            .append(&YakEvent::ContextUpdated {
+            .append(&YakEvent::ContextUpdated(ContextUpdatedEvent {
                 name: "test1".to_string(),
                 content: "content".to_string(),
-            })
+            }))
             .unwrap();
 
         let events = store.get_events("test1").unwrap();

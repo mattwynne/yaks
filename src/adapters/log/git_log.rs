@@ -1,5 +1,6 @@
 // Git-based log adapter - commits yak operations to refs/notes/yaks
 
+use crate::domain::events::*;
 use crate::ports::LogPort;
 use anyhow::{Context, Result};
 use git2::Repository;
@@ -123,6 +124,8 @@ impl GitLog {
     }
 
     // Read all events from refs/notes/yaks
+    // TODO: Remove in Task 9 - legacy Event struct
+    /*
     #[allow(dead_code)]
     pub fn read_events(&self) -> Result<Vec<crate::domain::Event>> {
         use chrono::{DateTime, Utc};
@@ -184,6 +187,7 @@ impl GitLog {
 
         Ok(events)
     }
+    */
 }
 
 impl LogPort for GitLog {
@@ -231,11 +235,15 @@ impl EventListener for GitLog {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         // Convert YakEvent to command string
         let command = match event {
-            YakEvent::Added { name } => format!("add {}", name),
-            YakEvent::Removed { name } => format!("rm {}", name),
-            YakEvent::Moved { old_name, new_name } => format!("move {} {}", old_name, new_name),
-            YakEvent::ContextUpdated { name, .. } => format!("context {}", name),
-            YakEvent::StateUpdated { name, state } => {
+            YakEvent::Added(AddedEvent { name }) => format!("add {}", name),
+            YakEvent::Removed(RemovedEvent { name }) => format!("rm {}", name),
+            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
+                format!("move {} {}", old_name, new_name)
+            }
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, .. }) => {
+                format!("context {}", name)
+            }
+            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
                 if state == "done" {
                     format!("done {}", name)
                 } else if state == "todo" {
@@ -247,9 +255,9 @@ impl EventListener for GitLog {
                     format!("state {} {}", name, state)
                 }
             }
-            YakEvent::FieldUpdated {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
                 name, field_name, ..
-            } => {
+            }) => {
                 format!("field {} {}", name, field_name)
             }
         };

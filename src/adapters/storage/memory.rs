@@ -1,5 +1,6 @@
 // In-memory storage adapter - for testing only
 
+use crate::domain::events::*;
 use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
 use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::Result;
@@ -171,33 +172,33 @@ impl StoragePort for InMemoryStorage {
 impl EventListener for InMemoryStorage {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         match event {
-            YakEvent::Added { name } => {
+            YakEvent::Added(AddedEvent { name }) => {
                 self.create_yak(name)?;
                 // Set default state
                 self.write_field(name, STATE_FIELD, "todo")?;
             }
 
-            YakEvent::Removed { name } => {
+            YakEvent::Removed(RemovedEvent { name }) => {
                 self.delete_yak(name)?;
             }
 
-            YakEvent::Moved { old_name, new_name } => {
+            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
                 self.rename_yak(old_name, new_name)?;
             }
 
-            YakEvent::ContextUpdated { name, content } => {
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 self.write_field(name, CONTEXT_FIELD, content)?;
             }
 
-            YakEvent::StateUpdated { name, state } => {
+            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
                 self.write_field(name, STATE_FIELD, state)?;
             }
 
-            YakEvent::FieldUpdated {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
                 name,
                 field_name,
                 content,
-            } => {
+            }) => {
                 self.write_field(name, field_name, content)?;
             }
         }

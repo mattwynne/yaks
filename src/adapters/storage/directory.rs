@@ -1,5 +1,6 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
+use crate::domain::events::*;
 use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
 use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::{Context, Result};
@@ -242,33 +243,33 @@ impl StoragePort for DirectoryStorage {
 impl EventListener for DirectoryStorage {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         match event {
-            YakEvent::Added { name } => {
+            YakEvent::Added(AddedEvent { name }) => {
                 self.create_yak(name)?;
                 // Set default state
                 self.write_field(name, STATE_FIELD, "todo")?;
             }
 
-            YakEvent::Removed { name } => {
+            YakEvent::Removed(RemovedEvent { name }) => {
                 self.delete_yak(name)?;
             }
 
-            YakEvent::Moved { old_name, new_name } => {
+            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
                 self.rename_yak(old_name, new_name)?;
             }
 
-            YakEvent::ContextUpdated { name, content } => {
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 self.write_field(name, CONTEXT_FIELD, content)?;
             }
 
-            YakEvent::StateUpdated { name, state } => {
+            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
                 self.write_field(name, STATE_FIELD, state)?;
             }
 
-            YakEvent::FieldUpdated {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
                 name,
                 field_name,
                 content,
-            } => {
+            }) => {
                 self.write_field(name, field_name, content)?;
             }
         }
@@ -491,9 +492,9 @@ mod tests {
     fn test_directory_storage_handles_added_event() {
         let (mut storage, _temp) = setup_test_storage();
 
-        let event = YakEvent::Added {
+        let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
-        };
+        });
 
         storage.on_event(&event).unwrap();
 
@@ -508,17 +509,17 @@ mod tests {
 
         // First add the yak
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
-            })
+            }))
             .unwrap();
 
         // Then update context
         storage
-            .on_event(&YakEvent::ContextUpdated {
+            .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
                 name: "test".to_string(),
                 content: "new context".to_string(),
-            })
+            }))
             .unwrap();
 
         let yak = StoragePort::get_yak(&storage, "test").unwrap();
@@ -530,16 +531,16 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
-            })
+            }))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::StateUpdated {
+            .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
                 name: "test".to_string(),
                 state: "wip".to_string(),
-            })
+            }))
             .unwrap();
 
         let yak = StoragePort::get_yak(&storage, "test").unwrap();
@@ -553,16 +554,16 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
-            })
+            }))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::ContextUpdated {
+            .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
                 name: "test".to_string(),
                 content: "context".to_string(),
-            })
+            }))
             .unwrap();
 
         let yak = Store::get_yak(&storage, "test").unwrap();
@@ -579,9 +580,9 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
-            })
+            }))
             .unwrap();
 
         assert!(Store::yak_exists(&storage, "test"));
@@ -595,15 +596,15 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test1".to_string(),
-            })
+            }))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::Added {
+            .on_event(&YakEvent::Added(AddedEvent {
                 name: "test2".to_string(),
-            })
+            }))
             .unwrap();
 
         let yaks = Store::list_yaks(&storage).unwrap();
