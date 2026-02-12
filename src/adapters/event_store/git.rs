@@ -236,12 +236,44 @@ impl EventStore for GitEventStore {
         Ok(())
     }
 
-    fn get_events(&self, _name: &str) -> Result<Vec<YakEvent>> {
-        todo!("Implemented in Task 6")
+    fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
+        // Walk all events and filter by yak name.
+        // Could optimize with git log message grep later.
+        Ok(self
+            .get_all_events()?
+            .into_iter()
+            .filter(|e| e.yak_name() == name)
+            .collect())
     }
 
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {
-        todo!("Implemented in Task 6")
+        let Some(latest) = self.get_latest_commit()? else {
+            return Ok(Vec::new());
+        };
+
+        let mut events = Vec::new();
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.push(latest.id())?;
+
+        for oid in revwalk {
+            let oid = oid?;
+            let commit = self.repo.find_commit(oid)?;
+            let message = commit.message().unwrap_or("").trim();
+
+            if message.is_empty() {
+                continue;
+            }
+
+            match YakEvent::parse(message) {
+                Ok(event) => events.push(event),
+                Err(_) => continue, // Skip unparseable commits
+            }
+        }
+
+        // Reverse: revwalk gives newest-first, we want chronological
+        events.reverse();
+        Ok(events)
     }
 }
 
