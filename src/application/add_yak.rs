@@ -19,18 +19,22 @@ impl AddYak {
 
     /// Execute the use case with the application's infrastructure
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        app.with_new_yak(&self.name, |yak| {
-            // Generate template
-            let template = self.generate_context_template()?;
+        // Generate template
+        let template = self.generate_context_template()?;
 
-            // Request content via input port
-            if let Some(content) = app.input.request_content(None, Some(&template))? {
-                if !content.trim().is_empty() {
-                    yak.update_context(content)?;
-                }
+        // Request content via input port
+        let context = if let Some(content) = app.input.request_content(None, Some(&template))? {
+            if !content.trim().is_empty() {
+                Some(content)
+            } else {
+                None
             }
+        } else {
+            None
+        };
 
-            Ok(())
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak(self.name.clone(), context)
         })
     }
 
