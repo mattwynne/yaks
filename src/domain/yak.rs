@@ -25,6 +25,7 @@ pub struct Yak {
 }
 
 impl Yak {
+    #[allow(dead_code)]
     pub fn new(name: String) -> Self {
         let mut yak = Self {
             name: name.clone(),
@@ -53,6 +54,7 @@ impl Yak {
         self
     }
 
+    #[allow(dead_code)]
     pub fn update_context(&mut self, content: String) -> anyhow::Result<()> {
         self.context = Some(content.clone());
         self.pending_events.push(YakEvent::ContextUpdated {
@@ -76,6 +78,7 @@ impl Yak {
         std::mem::take(&mut self.pending_events)
     }
 
+    #[allow(dead_code)]
     pub fn move_to(&mut self, new_name: String) -> anyhow::Result<()> {
         validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
 

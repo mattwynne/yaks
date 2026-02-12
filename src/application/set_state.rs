@@ -18,7 +18,7 @@ impl SetState {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        app.with_yak(&self.name, |yak| yak.update_state(self.state.clone()))
+        app.with_yak_map(|yak_map| yak_map.update_state(self.name.clone(), self.state.clone()))
     }
 }
 

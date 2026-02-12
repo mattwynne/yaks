@@ -48,7 +48,6 @@ Describe 'yx state'
   End
 
   It 'sets parent to wip when child state changes from todo'
-    Skip "Parent state management not yet implemented"
     When run sh -c "
       yx add 'make tea'
       yx add 'make tea/get milk'
@@ -60,7 +59,6 @@ Describe 'yx state'
   End
 
   It 'keeps parent as wip when child is done if other children remain in todo'
-    Skip "Parent state management not yet implemented"
     When run sh -c "
       yx add 'make tea'
       yx add 'make tea/get milk'
