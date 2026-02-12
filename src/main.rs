@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
+use std::path::PathBuf;
 use yx::adapters::cli::ConsoleDisplay;
 use yx::adapters::event_store::GitEventStore;
 use yx::adapters::input::ConsoleInput;
@@ -11,7 +12,6 @@ use yx::application::{
 };
 use yx::infrastructure::EventBus;
 use yx::ports::EventStore;
-use std::path::PathBuf;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]

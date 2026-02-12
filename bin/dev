@@ -184,7 +184,7 @@ check() {
   fi
 
   echo "Running unit tests..."
-  if ! cargo test; then
+  if ! cargo test --features test-support; then
     echo "❌ Unit tests failed"
     return 1
   fi

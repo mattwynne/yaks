@@ -5,9 +5,9 @@ use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
 use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::PathBuf;
 #[cfg(test)]
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use walkdir::WalkDir;
 
