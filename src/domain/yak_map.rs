@@ -132,6 +132,81 @@ impl YakMap {
             }
         }
     }
+
+    pub fn update_context(&mut self, name: String, context: String) -> Result<()> {
+        if !self.yaks.contains_key(&name) {
+            anyhow::bail!("Yak '{}' not found", name);
+        }
+
+        self.yaks.get_mut(&name).unwrap().context = Some(context.clone());
+        self.pending_events.push(YakEvent::ContextUpdated {
+            name,
+            content: context,
+        });
+
+        Ok(())
+    }
+
+    pub fn remove_yak(&mut self, name: String) -> Result<()> {
+        use crate::domain::find_children;
+
+        if !self.yaks.contains_key(&name) {
+            anyhow::bail!("Yak '{}' not found", name);
+        }
+
+        // Prevent removing yak with children (referential integrity)
+        let children = find_children(&name, &self.yaks);
+        if !children.is_empty() {
+            anyhow::bail!(
+                "Cannot remove '{}': it has {} child(ren). Remove children first.",
+                name,
+                children.len()
+            );
+        }
+
+        self.yaks.remove(&name);
+        self.pending_events.push(YakEvent::Removed { name });
+
+        Ok(())
+    }
+
+    pub fn move_yak(&mut self, old_name: String, new_name: String) -> Result<()> {
+        use crate::domain::{validate_yak_name, find_children};
+
+        if !self.yaks.contains_key(&old_name) {
+            anyhow::bail!("Yak '{}' not found", old_name);
+        }
+
+        if self.yaks.contains_key(&new_name) {
+            anyhow::bail!("Yak '{}' already exists", new_name);
+        }
+
+        validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
+
+        // MVP limitation: Fail if moving a yak with children
+        let children = find_children(&old_name, &self.yaks);
+        if !children.is_empty() {
+            anyhow::bail!(
+                "Cannot move '{}': it has {} child(ren). Moving with children is not yet supported.",
+                old_name,
+                children.len()
+            );
+        }
+
+        // Ensure ancestors exist for new location
+        self.ensure_ancestors_exist(&new_name);
+
+        // Move the yak
+        if let Some(yak_state) = self.yaks.remove(&old_name) {
+            self.yaks.insert(new_name.clone(), yak_state);
+            self.pending_events.push(YakEvent::Moved {
+                old_name,
+                new_name,
+            });
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -332,5 +407,174 @@ mod tests {
         map.update_state("parent/child".to_string(), "done".to_string()).unwrap();
         let events = map.take_events();
         assert_eq!(events.len(), 1); // Only child event
+    }
+
+    // Tests for update_context
+    #[test]
+    fn test_update_context_updates_context() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+
+        map.update_context("test".to_string(), "new context".to_string()).unwrap();
+
+        assert_eq!(map.yaks.get("test").unwrap().context, Some("new context".to_string()));
+    }
+
+    #[test]
+    fn test_update_context_emits_event() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+
+        map.update_context("test".to_string(), "new context".to_string()).unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::ContextUpdated { name, content } => {
+                assert_eq!(name, "test");
+                assert_eq!(content, "new context");
+            }
+            _ => panic!("Expected ContextUpdated event"),
+        }
+    }
+
+    #[test]
+    fn test_update_context_fails_for_nonexistent_yak() {
+        let mut map = YakMap::new();
+        let result = map.update_context("nonexistent".to_string(), "context".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    // Tests for remove_yak
+    #[test]
+    fn test_remove_yak_removes_yak() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+
+        map.remove_yak("test".to_string()).unwrap();
+
+        assert!(!map.yaks.contains_key("test"));
+    }
+
+    #[test]
+    fn test_remove_yak_emits_event() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+
+        map.remove_yak("test".to_string()).unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::Removed { name } => assert_eq!(name, "test"),
+            _ => panic!("Expected Removed event"),
+        }
+    }
+
+    #[test]
+    fn test_remove_yak_fails_for_nonexistent_yak() {
+        let mut map = YakMap::new();
+        let result = map.remove_yak("nonexistent".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_remove_yak_fails_if_has_children() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+
+        let result = map.remove_yak("parent".to_string());
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("has"));
+        assert!(err_msg.contains("child"));
+    }
+
+    // Tests for move_yak
+    #[test]
+    fn test_move_yak_moves_yak() {
+        let mut map = YakMap::new();
+        map.add_yak("old".to_string(), Some("context".to_string())).unwrap();
+        map.take_events();
+
+        map.move_yak("old".to_string(), "new".to_string()).unwrap();
+
+        assert!(!map.yaks.contains_key("old"));
+        assert!(map.yaks.contains_key("new"));
+        assert_eq!(map.yaks.get("new").unwrap().context, Some("context".to_string()));
+    }
+
+    #[test]
+    fn test_move_yak_emits_event() {
+        let mut map = YakMap::new();
+        map.add_yak("old".to_string(), None).unwrap();
+        map.take_events();
+
+        map.move_yak("old".to_string(), "new".to_string()).unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::Moved { old_name, new_name } => {
+                assert_eq!(old_name, "old");
+                assert_eq!(new_name, "new");
+            }
+            _ => panic!("Expected Moved event"),
+        }
+    }
+
+    #[test]
+    fn test_move_yak_creates_ancestors() {
+        let mut map = YakMap::new();
+        map.add_yak("old".to_string(), None).unwrap();
+        map.take_events();
+
+        map.move_yak("old".to_string(), "a/b/new".to_string()).unwrap();
+
+        assert!(map.yaks.contains_key("a"));
+        assert!(map.yaks.contains_key("a/b"));
+        assert!(map.yaks.contains_key("a/b/new"));
+    }
+
+    #[test]
+    fn test_move_yak_fails_for_nonexistent_yak() {
+        let mut map = YakMap::new();
+        let result = map.move_yak("nonexistent".to_string(), "new".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_move_yak_fails_if_destination_exists() {
+        let mut map = YakMap::new();
+        map.add_yak("old".to_string(), None).unwrap();
+        map.add_yak("new".to_string(), None).unwrap();
+
+        let result = map.move_yak("old".to_string(), "new".to_string());
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn test_move_yak_fails_if_has_children() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+
+        let result = map.move_yak("parent".to_string(), "newparent".to_string());
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("has"));
+        assert!(err_msg.contains("child"));
     }
 }
