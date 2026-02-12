@@ -63,6 +63,75 @@ impl YakMap {
             }
         }
     }
+
+    pub fn update_state(&mut self, name: String, state: String) -> Result<()> {
+        use crate::domain::validate_state;
+
+        validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
+
+        if !self.yaks.contains_key(&name) {
+            anyhow::bail!("Yak '{}' not found", name);
+        }
+
+        // Validate children if marking done
+        if state == "done" {
+            self.validate_children_complete(&name)?;
+        }
+
+        // Capture old state before updating
+        let old_state = self.yaks.get(&name).unwrap().state.clone();
+        let transitioning_from_todo = old_state == "todo" && state != "todo";
+
+        // Update this yak
+        self.yaks.get_mut(&name).unwrap().state = state.clone();
+        self.pending_events.push(YakEvent::StateUpdated {
+            name: name.clone(),
+            state
+        });
+
+        // Propagate to ancestors if transitioning from todo
+        if transitioning_from_todo {
+            self.propagate_wip_to_ancestors(&name);
+        }
+
+        Ok(())
+    }
+
+    fn validate_children_complete(&self, parent_name: &str) -> Result<()> {
+        use crate::domain::find_children;
+
+        let children = find_children(parent_name, &self.yaks);
+
+        if !children.is_empty() {
+            let incomplete = children.iter()
+                .any(|name| self.yaks.get(name).unwrap().state != "done");
+
+            if incomplete {
+                anyhow::bail!(
+                    "Cannot mark '{}' as done: children are incomplete",
+                    parent_name
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn propagate_wip_to_ancestors(&mut self, child_name: &str) {
+        use crate::domain::get_ancestors;
+
+        for ancestor in get_ancestors(child_name) {
+            if let Some(parent) = self.yaks.get_mut(&ancestor) {
+                if parent.state == "todo" {
+                    parent.state = "wip".to_string();
+                    self.pending_events.push(YakEvent::StateUpdated {
+                        name: ancestor,
+                        state: "wip".to_string(),
+                    });
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -191,5 +260,77 @@ mod tests {
         // Only one Added event (for child)
         let events = map.take_events();
         assert_eq!(events.len(), 1);
+    }
+
+    // Tests for update_state
+    #[test]
+    fn test_update_state_changes_state() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+        map.update_state("test".to_string(), "wip".to_string()).unwrap();
+        assert_eq!(map.yaks.get("test").unwrap().state, "wip");
+    }
+
+    #[test]
+    fn test_update_state_validates_state() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        let result = map.update_state("test".to_string(), "invalid".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_state_prevents_marking_parent_done_with_incomplete_children() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        let result = map.update_state("parent".to_string(), "done".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("children are incomplete"));
+    }
+
+    #[test]
+    fn test_update_state_allows_marking_parent_done_with_all_children_done() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        map.update_state("parent/child".to_string(), "done".to_string()).unwrap();
+        let result = map.update_state("parent".to_string(), "done".to_string());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_state_propagates_to_parent_on_todo_transition() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        map.take_events();
+        map.update_state("parent/child".to_string(), "wip".to_string()).unwrap();
+        assert_eq!(map.yaks.get("parent").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("parent/child").unwrap().state, "wip");
+    }
+
+    #[test]
+    fn test_update_state_propagates_through_multiple_levels() {
+        let mut map = YakMap::new();
+        map.add_yak("a/b/c".to_string(), None).unwrap();
+        map.take_events();
+        map.update_state("a/b/c".to_string(), "wip".to_string()).unwrap();
+        assert_eq!(map.yaks.get("a").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("a/b").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("a/b/c").unwrap().state, "wip");
+    }
+
+    #[test]
+    fn test_update_state_only_propagates_on_todo_transition() {
+        let mut map = YakMap::new();
+        map.add_yak("parent".to_string(), None).unwrap();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        map.update_state("parent/child".to_string(), "wip".to_string()).unwrap();
+        map.take_events();
+        map.update_state("parent/child".to_string(), "done".to_string()).unwrap();
+        let events = map.take_events();
+        assert_eq!(events.len(), 1); // Only child event
     }
 }
