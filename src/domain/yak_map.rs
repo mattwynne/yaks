@@ -1,3 +1,4 @@
+use crate::domain::events::*;
 use crate::domain::YakEvent;
 #[allow(unused_imports)]
 use crate::ports::Store;
@@ -72,11 +73,14 @@ impl YakMap {
         );
 
         self.pending_events
-            .push(YakEvent::Added { name: name.clone() });
+            .push(YakEvent::Added(AddedEvent { name: name.clone() }));
 
         if let Some(content) = context {
             self.pending_events
-                .push(YakEvent::ContextUpdated { name, content });
+                .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
+                    name,
+                    content,
+                }));
         }
 
         Ok(())
@@ -94,7 +98,8 @@ impl YakMap {
                         context: None,
                     },
                 );
-                self.pending_events.push(YakEvent::Added { name: ancestor });
+                self.pending_events
+                    .push(YakEvent::Added(AddedEvent { name: ancestor }));
             }
         }
     }
@@ -119,10 +124,11 @@ impl YakMap {
 
         // Update this yak
         self.yaks.get_mut(&name).unwrap().state = state.clone();
-        self.pending_events.push(YakEvent::StateUpdated {
-            name: name.clone(),
-            state,
-        });
+        self.pending_events
+            .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                name: name.clone(),
+                state,
+            }));
 
         // Propagate to ancestors if transitioning from todo
         if transitioning_from_todo {
@@ -160,10 +166,11 @@ impl YakMap {
             if let Some(parent) = self.yaks.get_mut(&ancestor) {
                 if parent.state == "todo" {
                     parent.state = "wip".to_string();
-                    self.pending_events.push(YakEvent::StateUpdated {
-                        name: ancestor,
-                        state: "wip".to_string(),
-                    });
+                    self.pending_events
+                        .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                            name: ancestor,
+                            state: "wip".to_string(),
+                        }));
                 }
             }
         }
@@ -175,10 +182,11 @@ impl YakMap {
         }
 
         self.yaks.get_mut(&name).unwrap().context = Some(context.clone());
-        self.pending_events.push(YakEvent::ContextUpdated {
-            name,
-            content: context,
-        });
+        self.pending_events
+            .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
+                name,
+                content: context,
+            }));
 
         Ok(())
     }
@@ -201,7 +209,8 @@ impl YakMap {
         }
 
         self.yaks.remove(&name);
-        self.pending_events.push(YakEvent::Removed { name });
+        self.pending_events
+            .push(YakEvent::Removed(RemovedEvent { name }));
 
         Ok(())
     }
@@ -236,7 +245,7 @@ impl YakMap {
         if let Some(yak_state) = self.yaks.remove(&old_name) {
             self.yaks.insert(new_name.clone(), yak_state);
             self.pending_events
-                .push(YakEvent::Moved { old_name, new_name });
+                .push(YakEvent::Moved(MovedEvent { old_name, new_name }));
         }
 
         Ok(())
@@ -379,9 +388,9 @@ mod tests {
     #[test]
     fn test_take_events_removes_events() {
         let mut map = YakMap::new();
-        map.pending_events.push(YakEvent::Added {
+        map.pending_events.push(YakEvent::Added(AddedEvent {
             name: "test".to_string(),
-        });
+        }));
 
         let events = map.take_events();
 
@@ -422,7 +431,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Added { name } => assert_eq!(name, "test"),
+            YakEvent::Added(AddedEvent { name }) => assert_eq!(name, "test"),
             _ => panic!("Expected Added event"),
         }
     }
@@ -437,11 +446,11 @@ mod tests {
 
         assert_eq!(events.len(), 2);
         match &events[0] {
-            YakEvent::Added { name } => assert_eq!(name, "test"),
+            YakEvent::Added(AddedEvent { name }) => assert_eq!(name, "test"),
             _ => panic!("Expected Added event first"),
         }
         match &events[1] {
-            YakEvent::ContextUpdated { name, content } => {
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 assert_eq!(name, "test");
                 assert_eq!(content, "context");
             }
@@ -611,7 +620,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::ContextUpdated { name, content } => {
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 assert_eq!(name, "test");
                 assert_eq!(content, "new context");
             }
@@ -650,7 +659,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Removed { name } => assert_eq!(name, "test"),
+            YakEvent::Removed(RemovedEvent { name }) => assert_eq!(name, "test"),
             _ => panic!("Expected Removed event"),
         }
     }
@@ -706,7 +715,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Moved { old_name, new_name } => {
+            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
                 assert_eq!(old_name, "old");
                 assert_eq!(new_name, "new");
             }

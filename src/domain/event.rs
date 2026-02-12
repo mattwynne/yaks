@@ -1,67 +1,59 @@
 // Event domain model - represents a logged yak operation
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub enum YakEvent {
-    Added {
-        name: String,
-    },
+use super::event_format::EventFormat;
+use super::events::*;
 
-    Removed {
-        name: String,
-    },
-
-    Moved {
-        old_name: String,
-        new_name: String,
-    },
-
-    ContextUpdated {
-        name: String,
-        content: String,
-    },
-
-    StateUpdated {
-        name: String,
-        state: String,
-    },
-
-    FieldUpdated {
-        name: String,
-        field_name: String,
-        content: String,
-    },
-}
-
-// Legacy Event struct - kept for backward compatibility during refactoring
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub struct Event {
-    pub operation: String,
-    pub args: Vec<String>,
-    pub stdin: Option<String>,
-    pub timestamp: DateTime<Utc>,
-    pub author: String,
+pub enum YakEvent {
+    Added(AddedEvent),
+    Removed(RemovedEvent),
+    Moved(MovedEvent),
+    ContextUpdated(ContextUpdatedEvent),
+    StateUpdated(StateUpdatedEvent),
+    FieldUpdated(FieldUpdatedEvent),
 }
 
-impl Event {
+impl YakEvent {
     #[allow(dead_code)]
-    pub fn new(
-        operation: String,
-        args: Vec<String>,
-        stdin: Option<String>,
-        timestamp: DateTime<Utc>,
-        author: String,
-    ) -> Self {
-        Self {
-            operation,
-            args,
-            stdin,
-            timestamp,
-            author,
+    pub fn format_message(&self) -> String {
+        match self {
+            Self::Added(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::Removed(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::Moved(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::ContextUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::StateUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::FieldUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn parse(message: &str) -> Result<Self> {
+        let (tag, data) = message
+            .split_once(": ")
+            .ok_or_else(|| anyhow::anyhow!("Invalid event format: {}", message))?;
+        match tag {
+            "Added" => Ok(Self::Added(AddedEvent::parse_data(data)?)),
+            "Removed" => Ok(Self::Removed(RemovedEvent::parse_data(data)?)),
+            "Moved" => Ok(Self::Moved(MovedEvent::parse_data(data)?)),
+            "ContextUpdated" => Ok(Self::ContextUpdated(ContextUpdatedEvent::parse_data(data)?)),
+            "StateUpdated" => Ok(Self::StateUpdated(StateUpdatedEvent::parse_data(data)?)),
+            "FieldUpdated" => Ok(Self::FieldUpdated(FieldUpdatedEvent::parse_data(data)?)),
+            _ => anyhow::bail!("Unknown event type: {}", tag),
+        }
+    }
+
+    /// Get the yak name this event affects (for filtering)
+    #[allow(dead_code)]
+    pub fn yak_name(&self) -> &str {
+        match self {
+            Self::Added(e) => &e.name,
+            Self::Removed(e) => &e.name,
+            Self::Moved(e) => &e.old_name,
+            Self::ContextUpdated(e) => &e.name,
+            Self::StateUpdated(e) => &e.name,
+            Self::FieldUpdated(e) => &e.name,
         }
     }
 }
@@ -71,46 +63,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_added_event() {
-        let event = YakEvent::Added {
-            name: "test".to_string(),
-        };
-
-        match event {
-            YakEvent::Added { name } => assert_eq!(name, "test"),
-            _ => panic!("Wrong event type"),
-        }
+    fn format_message_added() {
+        let event = YakEvent::Added(AddedEvent {
+            name: "test yak".to_string(),
+        });
+        assert_eq!(event.format_message(), "Added: \"test yak\"");
     }
 
     #[test]
-    fn test_context_updated_event() {
-        let event = YakEvent::ContextUpdated {
-            name: "test".to_string(),
-            content: "context".to_string(),
-        };
-
-        match event {
-            YakEvent::ContextUpdated { name, content } => {
-                assert_eq!(name, "test");
-                assert_eq!(content, "context");
-            }
-            _ => panic!("Wrong event type"),
-        }
-    }
-
-    #[test]
-    fn test_state_updated_event() {
-        let event = YakEvent::StateUpdated {
+    fn format_message_state_updated() {
+        let event = YakEvent::StateUpdated(StateUpdatedEvent {
             name: "test".to_string(),
             state: "wip".to_string(),
-        };
+        });
+        assert_eq!(event.format_message(), "StateUpdated: \"test\" \"wip\"");
+    }
 
-        match event {
-            YakEvent::StateUpdated { name, state } => {
-                assert_eq!(name, "test");
-                assert_eq!(state, "wip");
-            }
-            _ => panic!("Wrong event type"),
-        }
+    #[test]
+    fn parse_roundtrip() {
+        let event = YakEvent::Added(AddedEvent {
+            name: "test".to_string(),
+        });
+        let msg = event.format_message();
+        let parsed = YakEvent::parse(&msg).unwrap();
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn parse_unknown_tag_errors() {
+        assert!(YakEvent::parse("Unknown: \"foo\"").is_err());
+    }
+
+    #[test]
+    fn yak_name_returns_correct_name() {
+        let event = YakEvent::Moved(MovedEvent {
+            old_name: "old".to_string(),
+            new_name: "new".to_string(),
+        });
+        assert_eq!(event.yak_name(), "old");
     }
 }

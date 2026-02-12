@@ -1,5 +1,6 @@
 // Yak domain model
 
+use crate::domain::events::*;
 use crate::domain::YakEvent;
 
 const VALID_STATES: &[&str] = &["todo", "wip", "done"];
@@ -34,7 +35,8 @@ impl Yak {
             pending_events: vec![],
         };
 
-        yak.pending_events.push(YakEvent::Added { name });
+        yak.pending_events
+            .push(YakEvent::Added(AddedEvent { name }));
         yak
     }
 
@@ -57,20 +59,22 @@ impl Yak {
     #[allow(dead_code)]
     pub fn update_context(&mut self, content: String) -> anyhow::Result<()> {
         self.context = Some(content.clone());
-        self.pending_events.push(YakEvent::ContextUpdated {
-            name: self.name.clone(),
-            content,
-        });
+        self.pending_events
+            .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
+                name: self.name.clone(),
+                content,
+            }));
         Ok(())
     }
 
     pub fn update_state(&mut self, state: String) -> anyhow::Result<()> {
         validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
         self.state = state.clone();
-        self.pending_events.push(YakEvent::StateUpdated {
-            name: self.name.clone(),
-            state,
-        });
+        self.pending_events
+            .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                name: self.name.clone(),
+                state,
+            }));
         Ok(())
     }
 
@@ -86,16 +90,17 @@ impl Yak {
         self.name = new_name.clone();
 
         self.pending_events
-            .push(YakEvent::Moved { old_name, new_name });
+            .push(YakEvent::Moved(MovedEvent { old_name, new_name }));
         Ok(())
     }
 
     pub fn update_field(&mut self, field_name: String, content: String) -> anyhow::Result<()> {
-        self.pending_events.push(YakEvent::FieldUpdated {
-            name: self.name.clone(),
-            field_name,
-            content,
-        });
+        self.pending_events
+            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
+                name: self.name.clone(),
+                field_name,
+                content,
+            }));
         Ok(())
     }
 }
@@ -206,7 +211,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Added { name } => assert_eq!(name, "test"),
+            YakEvent::Added(AddedEvent { name }) => assert_eq!(name, "test"),
             _ => panic!("Expected Added event"),
         }
     }
@@ -230,7 +235,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::ContextUpdated { name, content } => {
+            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 assert_eq!(name, "test");
                 assert_eq!(content, "new context");
             }
@@ -248,7 +253,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::StateUpdated { name, state } => {
+            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
                 assert_eq!(name, "test");
                 assert_eq!(state, "wip");
             }

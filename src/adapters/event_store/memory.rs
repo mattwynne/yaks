@@ -5,10 +5,12 @@ use crate::domain::YakEvent;
 use crate::ports::EventStore;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct InMemoryEventStore {
     events: Arc<Mutex<Vec<YakEvent>>>,
 }
 
+#[allow(dead_code)]
 impl InMemoryEventStore {
     pub fn new() -> Self {
         Self {
@@ -33,14 +35,7 @@ impl EventStore for InMemoryEventStore {
         let events = self.events.lock().unwrap();
         Ok(events
             .iter()
-            .filter(|e| match e {
-                YakEvent::Added { name: n } => n == name,
-                YakEvent::Removed { name: n } => n == name,
-                YakEvent::ContextUpdated { name: n, .. } => n == name,
-                YakEvent::StateUpdated { name: n, .. } => n == name,
-                YakEvent::Moved { old_name, .. } => old_name == name,
-                YakEvent::FieldUpdated { name: n, .. } => n == name,
-            })
+            .filter(|e| e.yak_name() == name)
             .cloned()
             .collect())
     }
@@ -53,14 +48,15 @@ impl EventStore for InMemoryEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::events::AddedEvent;
 
     #[test]
     fn test_in_memory_event_store() {
         let mut store = InMemoryEventStore::new();
 
-        let event = YakEvent::Added {
+        let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
-        };
+        });
 
         store.append(&event).unwrap();
         let events = store.get_all_events().unwrap();
