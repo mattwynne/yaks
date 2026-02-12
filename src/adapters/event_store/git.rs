@@ -138,11 +138,8 @@ impl GitEventStore {
             .map(|entry| self.repo.find_tree(entry.id()))
             .transpose()?;
 
-        let new_intermediate = self.set_yak_in_root(
-            intermediate_tree.as_ref(),
-            &rest,
-            subtree_oid,
-        )?;
+        let new_intermediate =
+            self.set_yak_in_root(intermediate_tree.as_ref(), &rest, subtree_oid)?;
 
         let mut root_builder = self.repo.treebuilder(root)?;
         root_builder.insert(intermediate_name, new_intermediate, 0o040000)?;
@@ -162,9 +159,7 @@ impl GitEventStore {
                 self.set_yak_in_root(current_tree, &e.name, Some(yak_tree_oid))
             }
 
-            YakEvent::Removed(e) => {
-                self.set_yak_in_root(current_tree, &e.name, None)
-            }
+            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, &e.name, None),
 
             YakEvent::Moved(e) => {
                 // Get old subtree
@@ -173,33 +168,21 @@ impl GitEventStore {
                     .map(|t| t.id());
 
                 // Remove old, add new
-                let intermediate = self.set_yak_in_root(
-                    current_tree, &e.old_name, None,
-                )?;
+                let intermediate = self.set_yak_in_root(current_tree, &e.old_name, None)?;
                 let intermediate_tree = self.repo.find_tree(intermediate)?;
-                self.set_yak_in_root(
-                    Some(&intermediate_tree),
-                    &e.new_name,
-                    old_subtree_oid,
-                )
+                self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)
             }
 
             YakEvent::ContextUpdated(e) => {
-                self.update_yak_file(
-                    current_tree, &e.name, "context.md", &e.content,
-                )
+                self.update_yak_file(current_tree, &e.name, "context.md", &e.content)
             }
 
             YakEvent::StateUpdated(e) => {
-                self.update_yak_file(
-                    current_tree, &e.name, "state", &e.state,
-                )
+                self.update_yak_file(current_tree, &e.name, "state", &e.state)
             }
 
             YakEvent::FieldUpdated(e) => {
-                self.update_yak_file(
-                    current_tree, &e.name, &e.field_name, &e.content,
-                )
+                self.update_yak_file(current_tree, &e.name, &e.field_name, &e.content)
             }
         }
     }
@@ -209,19 +192,17 @@ impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
         let current_tree = self.get_current_tree()?;
 
-        let tree_oid = self.build_tree_from_event(
-            event,
-            current_tree.as_ref(),
-        )?;
+        let tree_oid = self.build_tree_from_event(event, current_tree.as_ref())?;
         let tree = self.repo.find_tree(tree_oid)?;
 
         let message = event.format_message();
 
         let parent = self.get_latest_commit()?;
-        let parents: Vec<&git2::Commit> =
-            parent.iter().collect();
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
 
-        let sig = self.repo.signature()
+        let sig = self
+            .repo
+            .signature()
             .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
 
         self.repo.commit(
@@ -334,10 +315,7 @@ mod tests {
         // Verify state file
         let state_entry = subtree.get_name("state").unwrap();
         let state_blob = state_entry.to_object(&store.repo).unwrap();
-        let state_content = std::str::from_utf8(
-            state_blob.as_blob().unwrap().content(),
-        )
-        .unwrap();
+        let state_content = std::str::from_utf8(state_blob.as_blob().unwrap().content()).unwrap();
         assert_eq!(state_content, "todo");
     }
 }

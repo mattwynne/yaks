@@ -5,12 +5,11 @@ mod infrastructure;
 mod ports;
 
 use adapters::cli::ConsoleDisplay;
+use adapters::event_store::GitEventStore;
 use adapters::input::ConsoleInput;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
-use adapters::event_store::GitEventStore;
 use anyhow::Result;
-use std::path::PathBuf;
 use application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
     ShowContext, ShowField, SyncYaks, WriteField,
@@ -18,6 +17,7 @@ use application::{
 use clap::{CommandFactory, Parser};
 use infrastructure::EventBus;
 use ports::EventStore;
+use std::path::PathBuf;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
