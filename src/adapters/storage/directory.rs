@@ -5,8 +5,6 @@ use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
 use crate::ports::{EventListener, StoragePort, Store};
 use anyhow::{Context, Result};
 use std::fs;
-#[cfg(test)]
-use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use walkdir::WalkDir;
@@ -91,54 +89,6 @@ impl DirectoryStorage {
             anyhow::bail!("Error: .yaks folder is not gitignored");
         }
 
-        Ok(())
-    }
-
-    /// Creates a DirectoryStorage initialized from the latest git tree
-    /// on refs/notes/yaks. This materializes the tree into the filesystem
-    /// so DirectoryStorage can serve reads immediately.
-    #[cfg(test)]
-    pub fn new_from_snapshot(yak_path: &Path, repo: &git2::Repository) -> Result<Self> {
-        // Create directory if needed
-        std::fs::create_dir_all(yak_path)?;
-
-        // Read latest tree from refs/notes/yaks
-        if let Ok(oid) = repo.refname_to_id("refs/notes/yaks") {
-            let commit = repo.find_commit(oid)?;
-            let tree = commit.tree()?;
-            Self::materialize_tree(yak_path, &tree, repo)?;
-        }
-
-        Ok(Self {
-            base_path: yak_path.to_path_buf(),
-        })
-    }
-
-    #[cfg(test)]
-    fn materialize_tree(
-        base_path: &Path,
-        tree: &git2::Tree,
-        repo: &git2::Repository,
-    ) -> Result<()> {
-        for entry in tree.iter() {
-            let name = entry
-                .name()
-                .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in tree entry"))?;
-            let path = base_path.join(name);
-
-            match entry.kind() {
-                Some(git2::ObjectType::Tree) => {
-                    std::fs::create_dir_all(&path)?;
-                    let subtree = repo.find_tree(entry.id())?;
-                    Self::materialize_tree(&path, &subtree, repo)?;
-                }
-                Some(git2::ObjectType::Blob) => {
-                    let blob = repo.find_blob(entry.id())?;
-                    std::fs::write(&path, blob.content())?;
-                }
-                _ => {}
-            }
-        }
         Ok(())
     }
 
@@ -659,38 +609,5 @@ mod tests {
 
         let yaks = Store::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
-    }
-
-    #[test]
-    fn test_new_from_snapshot() {
-        use crate::adapters::event_store::GitEventStore;
-        use crate::domain::{AddedEvent, YakEvent};
-        use crate::ports::{EventStore, Store};
-        use git2::Repository;
-
-        let tmp = TempDir::new().unwrap();
-        let repo = Repository::init(tmp.path()).unwrap();
-        // Configure git
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "test").unwrap();
-        config.set_str("user.email", "test@test.com").unwrap();
-
-        // Create a GitEventStore and add a yak
-        let mut event_store = GitEventStore::from_repo(Repository::open(tmp.path()).unwrap());
-        event_store
-            .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-            }))
-            .unwrap();
-
-        // Create DirectoryStorage from snapshot
-        let yak_path = tmp.path().join(".yaks");
-        let storage =
-            DirectoryStorage::new_from_snapshot(&yak_path, &Repository::open(tmp.path()).unwrap())
-                .unwrap();
-
-        // Verify yak exists in directory
-        assert!(yak_path.join("test").join("state").exists());
-        assert!(Store::yak_exists(&storage, "test"));
     }
 }

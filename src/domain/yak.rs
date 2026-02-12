@@ -44,29 +44,6 @@ impl Yak {
         self.state == "done"
     }
 
-    #[cfg(test)]
-    pub fn with_context(mut self, context: String) -> Self {
-        self.context = Some(context);
-        self
-    }
-
-    #[cfg(test)]
-    pub fn with_state(mut self, state: String) -> Self {
-        self.state = state;
-        self
-    }
-
-    #[cfg(test)]
-    pub fn update_context(&mut self, content: String) -> anyhow::Result<()> {
-        self.context = Some(content.clone());
-        self.pending_events
-            .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
-                name: self.name.clone(),
-                content,
-            }));
-        Ok(())
-    }
-
     pub fn update_state(&mut self, state: String) -> anyhow::Result<()> {
         validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
         self.state = state.clone();
@@ -80,18 +57,6 @@ impl Yak {
 
     pub fn take_events(&mut self) -> Vec<YakEvent> {
         std::mem::take(&mut self.pending_events)
-    }
-
-    #[cfg(test)]
-    pub fn move_to(&mut self, new_name: String) -> anyhow::Result<()> {
-        validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
-
-        let old_name = self.name.clone();
-        self.name = new_name.clone();
-
-        self.pending_events
-            .push(YakEvent::Moved(MovedEvent { old_name, new_name }));
-        Ok(())
     }
 
     pub fn update_field(&mut self, field_name: String, content: String) -> anyhow::Result<()> {
@@ -130,11 +95,6 @@ pub fn validate_yak_name(name: &str) -> Result<(), String> {
 }
 
 #[cfg(test)]
-pub fn parse_hierarchy(name: &str) -> Vec<&str> {
-    name.split('/').collect()
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::YakEvent;
@@ -146,12 +106,6 @@ mod tests {
         assert!(!yak.is_done());
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, None);
-    }
-
-    #[test]
-    fn test_yak_with_context() {
-        let yak = Yak::new("test".to_string()).with_context("Some context".to_string());
-        assert_eq!(yak.context, Some("Some context".to_string()));
     }
 
     #[test]
@@ -197,13 +151,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_hierarchy() {
-        assert_eq!(parse_hierarchy("dx/rust"), vec!["dx", "rust"]);
-        assert_eq!(parse_hierarchy("simple"), vec!["simple"]);
-        assert_eq!(parse_hierarchy("a/b/c"), vec!["a", "b", "c"]);
-    }
-
-    #[test]
     fn test_yak_emits_added_event() {
         let mut yak = Yak::new("test".to_string());
         let events = yak.take_events();
@@ -222,24 +169,6 @@ mod tests {
 
         yak.state = "done".to_string();
         assert!(yak.is_done());
-    }
-
-    #[test]
-    fn test_yak_update_context_emits_event() {
-        let mut yak = Yak::new("test".to_string());
-        yak.take_events(); // clear creation event
-
-        yak.update_context("new context".to_string()).unwrap();
-        let events = yak.take_events();
-
-        assert_eq!(events.len(), 1);
-        match &events[0] {
-            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
-                assert_eq!(name, "test");
-                assert_eq!(content, "new context");
-            }
-            _ => panic!("Expected ContextUpdated event"),
-        }
     }
 
     #[test]
