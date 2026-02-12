@@ -24,6 +24,26 @@ impl YakMap {
         }
     }
 
+    pub fn from_store(store: &dyn Store) -> Result<Self> {
+        let yaks_list = store.list_yaks()?;
+
+        let mut yaks = HashMap::new();
+        for yak in yaks_list {
+            yaks.insert(
+                yak.name,
+                YakState {
+                    state: yak.state,
+                    context: yak.context,
+                },
+            );
+        }
+
+        Ok(Self {
+            yaks,
+            pending_events: Vec::new(),
+        })
+    }
+
     pub fn take_events(&mut self) -> Vec<YakEvent> {
         std::mem::take(&mut self.pending_events)
     }
@@ -217,6 +237,119 @@ mod tests {
     fn test_new_yak_map_is_empty() {
         let map = YakMap::new();
         assert_eq!(map.yaks.len(), 0);
+        assert_eq!(map.pending_events.len(), 0);
+    }
+
+    // Tests for from_store
+    #[test]
+    fn test_from_store_empty() {
+        use crate::ports::Store;
+        use crate::domain::Yak;
+        use std::collections::HashMap;
+
+        struct MockStore {
+            yaks: HashMap<String, Yak>,
+        }
+
+        impl Store for MockStore {
+            fn get_yak(&self, name: &str) -> Result<Yak> {
+                self.yaks.get(name).cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Yak not found"))
+            }
+
+            fn list_yaks(&self) -> Result<Vec<Yak>> {
+                Ok(self.yaks.values().cloned().collect())
+            }
+
+            fn yak_exists(&self, name: &str) -> bool {
+                self.yaks.contains_key(name)
+            }
+
+            fn find_yak(&self, name: &str) -> Result<String> {
+                if self.yaks.contains_key(name) {
+                    Ok(name.to_string())
+                } else {
+                    anyhow::bail!("Yak not found")
+                }
+            }
+
+            fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+                anyhow::bail!("Not implemented")
+            }
+        }
+
+        let store = MockStore { yaks: HashMap::new() };
+        let map = YakMap::from_store(&store).unwrap();
+
+        assert_eq!(map.yaks.len(), 0);
+        assert_eq!(map.pending_events.len(), 0);
+    }
+
+    #[test]
+    fn test_from_store_with_yaks() {
+        use crate::ports::Store;
+        use crate::domain::Yak;
+        use std::collections::HashMap;
+
+        struct MockStore {
+            yaks: HashMap<String, Yak>,
+        }
+
+        impl Store for MockStore {
+            fn get_yak(&self, name: &str) -> Result<Yak> {
+                self.yaks.get(name).cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Yak not found"))
+            }
+
+            fn list_yaks(&self) -> Result<Vec<Yak>> {
+                Ok(self.yaks.values().cloned().collect())
+            }
+
+            fn yak_exists(&self, name: &str) -> bool {
+                self.yaks.contains_key(name)
+            }
+
+            fn find_yak(&self, name: &str) -> Result<String> {
+                if self.yaks.contains_key(name) {
+                    Ok(name.to_string())
+                } else {
+                    anyhow::bail!("Yak not found")
+                }
+            }
+
+            fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+                anyhow::bail!("Not implemented")
+            }
+        }
+
+        let mut yaks = HashMap::new();
+        yaks.insert(
+            "test1".to_string(),
+            Yak {
+                name: "test1".to_string(),
+                state: "todo".to_string(),
+                context: Some("context1".to_string()),
+                pending_events: vec![],
+            },
+        );
+        yaks.insert(
+            "test2".to_string(),
+            Yak {
+                name: "test2".to_string(),
+                state: "wip".to_string(),
+                context: None,
+                pending_events: vec![],
+            },
+        );
+
+        let store = MockStore { yaks };
+        let map = YakMap::from_store(&store).unwrap();
+
+        assert_eq!(map.yaks.len(), 2);
+        assert_eq!(map.yaks.get("test1").unwrap().state, "todo");
+        assert_eq!(map.yaks.get("test1").unwrap().context, Some("context1".to_string()));
+        assert_eq!(map.yaks.get("test2").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("test2").unwrap().context, None);
         assert_eq!(map.pending_events.len(), 0);
     }
 
