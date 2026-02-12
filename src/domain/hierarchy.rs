@@ -5,12 +5,8 @@
 /// "parent/child" -> Some("parent")
 /// "root" -> None
 #[allow(dead_code)]
-pub fn get_parent(name: &str) -> Option<&str> {
-    if let Some(pos) = name.rfind('/') {
-        Some(&name[..pos])
-    } else {
-        None
-    }
+pub fn get_parent(name: &str) -> Option<String> {
+    name.rfind('/').map(|pos| name[..pos].to_string())
 }
 
 /// Get all ancestors of a name in order from immediate parent to root
@@ -18,12 +14,12 @@ pub fn get_parent(name: &str) -> Option<&str> {
 /// "parent/child" -> ["parent"]
 /// "root" -> []
 #[allow(dead_code)]
-pub fn get_ancestors(name: &str) -> Vec<&str> {
+pub fn get_ancestors(name: &str) -> Vec<String> {
     let mut ancestors = Vec::new();
-    let mut current = name;
+    let mut current = name.to_string();
 
-    while let Some(parent) = get_parent(current) {
-        ancestors.push(parent);
+    while let Some(parent) = get_parent(&current) {
+        ancestors.push(parent.clone());
         current = parent;
     }
 
@@ -36,13 +32,16 @@ pub fn get_ancestors(name: &str) -> Vec<&str> {
 /// "a/b/c" is a child of "a/b" -> true
 #[allow(dead_code)]
 pub fn is_child_of(name: &str, potential_parent: &str) -> bool {
-    get_parent(name) == Some(potential_parent)
+    get_parent(name) == Some(potential_parent.to_string())
 }
 
 /// Find all direct children of a parent in a HashMap of yak names
 #[allow(dead_code)]
-pub fn find_children<T>(parent: &str, names: &std::collections::HashMap<String, T>) -> Vec<String> {
-    names
+pub fn find_children<T>(
+    parent: &str,
+    yak_map: &std::collections::HashMap<String, T>,
+) -> Vec<String> {
+    yak_map
         .keys()
         .filter(|name| is_child_of(name, parent))
         .cloned()
@@ -56,7 +55,7 @@ mod tests {
     // Tests for get_parent()
     #[test]
     fn get_parent_extracts_parent_from_child() {
-        assert_eq!(get_parent("parent/child"), Some("parent"));
+        assert_eq!(get_parent("parent/child"), Some("parent".to_string()));
     }
 
     #[test]
@@ -66,7 +65,7 @@ mod tests {
 
     #[test]
     fn get_parent_handles_nested_hierarchy() {
-        assert_eq!(get_parent("a/b/c"), Some("a/b"));
+        assert_eq!(get_parent("a/b/c"), Some("a/b".to_string()));
     }
 
     #[test]
@@ -78,25 +77,25 @@ mod tests {
     #[test]
     fn get_ancestors_returns_all_ancestors() {
         let ancestors = get_ancestors("a/b/c");
-        assert_eq!(ancestors, vec!["a/b", "a"]);
+        assert_eq!(ancestors, vec!["a/b".to_string(), "a".to_string()]);
     }
 
     #[test]
     fn get_ancestors_returns_direct_parent_for_child() {
         let ancestors = get_ancestors("parent/child");
-        assert_eq!(ancestors, vec!["parent"]);
+        assert_eq!(ancestors, vec!["parent".to_string()]);
     }
 
     #[test]
     fn get_ancestors_returns_empty_for_root() {
         let ancestors = get_ancestors("root");
-        assert_eq!(ancestors, Vec::<&str>::new());
+        assert_eq!(ancestors, Vec::<String>::new());
     }
 
     #[test]
     fn get_ancestors_returns_empty_for_empty_string() {
         let ancestors = get_ancestors("");
-        assert_eq!(ancestors, Vec::<&str>::new());
+        assert_eq!(ancestors, Vec::<String>::new());
     }
 
     // Tests for is_child_of()
@@ -123,13 +122,13 @@ mod tests {
     // Tests for find_children()
     #[test]
     fn find_children_returns_direct_children() {
-        let mut names = std::collections::HashMap::new();
-        names.insert("parent/child1".to_string(), ());
-        names.insert("parent/child2".to_string(), ());
-        names.insert("other/sibling".to_string(), ());
-        names.insert("parent".to_string(), ());
+        let mut yak_map = std::collections::HashMap::new();
+        yak_map.insert("parent/child1".to_string(), ());
+        yak_map.insert("parent/child2".to_string(), ());
+        yak_map.insert("other/sibling".to_string(), ());
+        yak_map.insert("parent".to_string(), ());
 
-        let children = find_children("parent", &names);
+        let children = find_children("parent", &yak_map);
         let mut child_names: Vec<_> = children.iter().map(|s| s.as_str()).collect();
         child_names.sort();
 
@@ -138,20 +137,20 @@ mod tests {
 
     #[test]
     fn find_children_returns_empty_for_no_children() {
-        let mut names = std::collections::HashMap::new();
-        names.insert("other/child".to_string(), ());
+        let mut yak_map = std::collections::HashMap::new();
+        yak_map.insert("other/child".to_string(), ());
 
-        let children = find_children("parent", &names);
+        let children = find_children("parent", &yak_map);
         assert!(children.is_empty());
     }
 
     #[test]
     fn find_children_ignores_nested_descendants() {
-        let mut names = std::collections::HashMap::new();
-        names.insert("parent/child".to_string(), ());
-        names.insert("parent/child/grandchild".to_string(), ());
+        let mut yak_map = std::collections::HashMap::new();
+        yak_map.insert("parent/child".to_string(), ());
+        yak_map.insert("parent/child/grandchild".to_string(), ());
 
-        let children = find_children("parent", &names);
+        let children = find_children("parent", &yak_map);
         assert_eq!(children.len(), 1);
         assert!(children.iter().any(|c| c == "parent/child"));
     }
