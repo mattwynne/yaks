@@ -14,7 +14,7 @@ Describe 'yx log'
       yx add 'test yak'
       yx log
     "
-    The output should include "add test yak"
+    The output should include 'Added: "test yak"'
     The status should be success
   End
 
@@ -24,8 +24,8 @@ Describe 'yx log'
       yx add 'second yak'
       yx log
     "
-    The line 1 of output should include "add first yak"
-    The line 2 of output should include "add second yak"
+    The line 1 of output should include 'Added: "first yak"'
+    The line 2 of output should include 'Added: "second yak"'
     The status should be success
   End
 
@@ -35,8 +35,8 @@ Describe 'yx log'
       yx done 'test yak'
       yx log
     "
-    The line 1 of output should include "add test yak"
-    The line 2 of output should include "done test yak"
+    The line 1 of output should include 'Added: "test yak"'
+    The line 2 of output should include 'StateUpdated: "test yak" "done"'
     The status should be success
   End
 
@@ -47,9 +47,9 @@ Describe 'yx log'
       yx done --undo 'test yak'
       yx log
     "
-    The line 1 of output should include "add test yak"
-    The line 2 of output should include "done test yak"
-    The line 3 of output should include "done --undo test yak"
+    The line 1 of output should include 'Added: "test yak"'
+    The line 2 of output should include 'StateUpdated: "test yak" "done"'
+    The line 3 of output should include 'StateUpdated: "test yak" "todo"'
     The status should be success
   End
 
@@ -59,8 +59,8 @@ Describe 'yx log'
       yx rm 'test yak'
       yx log
     "
-    The line 1 of output should include "add test yak"
-    The line 2 of output should include "rm test yak"
+    The line 1 of output should include 'Added: "test yak"'
+    The line 2 of output should include 'Removed: "test yak"'
     The status should be success
   End
 
@@ -71,28 +71,8 @@ Describe 'yx log'
       echo 'Some context' | yx context 'test yak'
       yx log
     "
-    The line 1 of output should include "add test yak"
-    The line 2 of output should include "context test yak"
-    The status should be success
-  End
-
-  It 'includes timestamp in output'
-    When run sh -c "
-      yx add 'test yak'
-      yx log
-    "
-    # Check for timestamp format YYYY-MM-DD HH:MM:SS
-    The output should match pattern "20*-*-* *:*:* * add test yak"
-    The status should be success
-  End
-
-  It 'includes author in output'
-    When run sh -c "
-      yx add 'test yak'
-      yx log
-    "
-    # Check that author is present (test@example.com from setup)
-    The output should include "test@example.com"
+    The line 1 of output should include 'Added: "test yak"'
+    The line 2 of output should include 'ContextUpdated: "test yak"'
     The status should be success
   End
 End

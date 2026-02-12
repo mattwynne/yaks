@@ -12,12 +12,12 @@ Describe 'log_command'
     The status should be success
   End
 
-  It 'uses structured commit message for add command'
+  It 'uses tagged commit message for add command'
     When run in_test_repo "
       yx add 'test yak'
       git log refs/notes/yaks -1 --format=%s
     "
-    The output should equal "add test yak"
+    The output should equal 'Added: "test yak"'
   End
 
   It 'includes git author in commits'
@@ -37,31 +37,31 @@ Describe 'log_command'
     The output should equal "2"
   End
 
-  It 'done command creates commit with structured message'
+  It 'done command creates commit with tagged message'
     When run in_test_repo "
       yx add 'test yak'
       yx done 'test yak'
       git log refs/notes/yaks -1 --format=%s
     "
-    The output should equal "done test yak"
+    The output should equal 'StateUpdated: "test yak" "done"'
   End
 
-  It 'done --undo command creates commit with structured message'
+  It 'done --undo command creates commit with tagged message'
     When run in_test_repo "
       yx add 'test yak'
       yx done 'test yak'
       yx done --undo 'test yak'
       git log refs/notes/yaks -1 --format=%s
     "
-    The output should equal "done --undo test yak"
+    The output should equal 'StateUpdated: "test yak" "todo"'
   End
 
-  It 'logs removal even when YAKS_PATH becomes empty'
+  It 'logs removal even when yaks path becomes empty'
     When run in_test_repo "
       yx add 'only yak'
       yx rm 'only yak'
       git log refs/notes/yaks -1 --format=%s
     "
-    The output should equal "rm only yak"
+    The output should equal 'Removed: "only yak"'
   End
 End
