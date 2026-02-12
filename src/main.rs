@@ -6,17 +6,18 @@ mod ports;
 
 use adapters::cli::ConsoleDisplay;
 use adapters::input::ConsoleInput;
-use adapters::log::GitLog;
 use adapters::storage::DirectoryStorage;
 use adapters::sync::GitRefSync;
-use adapters::InMemoryEventStore;
+use adapters::event_store::GitEventStore;
 use anyhow::Result;
+use std::path::PathBuf;
 use application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
     ShowContext, ShowField, SyncYaks, WriteField,
 };
 use clap::{CommandFactory, Parser};
 use infrastructure::EventBus;
+use ports::EventStore;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -116,7 +117,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Initialize event infrastructure
-    let event_store = InMemoryEventStore::new();
+    // Determine repo path: GIT_WORK_TREE env var, then current dir
+    let repo_path = std::env::var("GIT_WORK_TREE")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let event_store = GitEventStore::new(&repo_path)?;
     let mut event_bus = EventBus::new(Box::new(event_store));
 
     // Initialize storage and register as projection
@@ -125,8 +130,6 @@ fn main() -> Result<()> {
 
     // Initialize other adapters
     let display = ConsoleDisplay;
-    let log = GitLog::new()?;
-    event_bus.register(Box::new(log.clone()));
     let input = ConsoleInput;
 
     // Create application with injected dependencies
@@ -178,21 +181,15 @@ fn main() -> Result<()> {
             use_case.execute()
         }
         Commands::Log => {
-            // TODO: Remove in Task 9 - legacy Event struct
-            /*
-            let events = log.read_events()?;
+            let repo_path = std::env::var("GIT_WORK_TREE")
+                .map(PathBuf::from)
+                .unwrap_or(std::env::current_dir()?);
+            let reader = GitEventStore::new(&repo_path)?;
+            let events = reader.get_all_events()?;
             for event in events {
-                let args_str = event.args.join(" ");
-                let timestamp_str = event.timestamp.format("%Y-%m-%d %H:%M:%S");
-                println!(
-                    "{} {} {} {}",
-                    timestamp_str, event.author, event.operation, args_str
-                );
+                println!("{}", event.format_message());
             }
-            */
-            anyhow::bail!(
-                "Log command temporarily disabled (Task 9 will replace with GitEventStore)"
-            )
+            Ok(())
         }
     }
 }

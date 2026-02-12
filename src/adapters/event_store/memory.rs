@@ -5,10 +5,12 @@ use crate::domain::YakEvent;
 use crate::ports::EventStore;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct InMemoryEventStore {
     events: Arc<Mutex<Vec<YakEvent>>>,
 }
 
+#[allow(dead_code)]
 impl InMemoryEventStore {
     pub fn new() -> Self {
         Self {

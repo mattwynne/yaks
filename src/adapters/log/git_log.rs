@@ -30,6 +30,7 @@ impl Clone for GitLog {
     }
 }
 
+#[allow(dead_code)]
 impl GitLog {
     pub fn new() -> Result<Self> {
         // Skip git operations if YX_SKIP_GIT_CHECKS is set (for mutation testing and test environments)
