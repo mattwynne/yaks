@@ -24,6 +24,17 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
         "done", "finish", "remove", "rm", "move", "mv", "context", "state", "field",
     ];
 
+    // Flags for each command
+    let command_flags = |cmd: &str| -> Vec<&str> {
+        match cmd {
+            "done" | "finish" => vec!["--undo", "--recursive"],
+            "context" => vec!["--show"],
+            "field" => vec!["--show"],
+            "list" | "ls" => vec!["--format", "--only"],
+            _ => vec![],
+        }
+    };
+
     // If we're completing the first argument (subcommand position)
     if words.len() <= 2 {
         let prefix = if words.len() == 2 { words[1] } else { "" };
@@ -34,11 +45,26 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
             .map(|s| s.to_string())
             .collect()
     } else {
-        // For arguments beyond the subcommand, check if the subcommand takes yak names
+        // For arguments beyond the subcommand
         let subcommand = words[1];
-        if commands_with_yak_args.contains(&subcommand) {
-            let prefix = words.last().unwrap_or(&"");
+        let prefix = words.last().unwrap_or(&"");
+        let mut completions = Vec::new();
 
+        // Get available flags for this command
+        let flags = command_flags(subcommand);
+
+        // Filter out flags that are already present in words
+        let available_flags: Vec<_> = flags
+            .into_iter()
+            .filter(|flag| !words.contains(flag))
+            .filter(|flag| flag.starts_with(prefix))
+            .map(|s| s.to_string())
+            .collect();
+
+        completions.extend(available_flags);
+
+        // If the command takes yak names, also offer yak completions
+        if commands_with_yak_args.contains(&subcommand) {
             // Apply smart filtering for done/finish commands
             let filtered_yaks: Vec<_> = if subcommand == "done" || subcommand == "finish" {
                 // Check if --undo is present in the words
@@ -56,15 +82,17 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
                 yaks.iter().collect()
             };
 
-            filtered_yaks
+            let yak_completions: Vec<String> = filtered_yaks
                 .iter()
                 .map(|(name, _)| *name)
                 .filter(|yak| yak.starts_with(prefix))
                 .map(|s| s.to_string())
-                .collect()
-        } else {
-            vec![]
+                .collect();
+
+            completions.extend(yak_completions);
         }
+
+        completions
     }
 }
 
@@ -153,5 +181,34 @@ mod tests {
         let result = complete_with_state(&["yx", "done", "--undo", ""], yaks);
         assert!(result.contains(&"done-yak".to_string()));
         assert!(!result.contains(&"todo-yak".to_string()));
+    }
+
+    #[test]
+    fn offers_flags_for_done() {
+        let result = complete_with_state(&["yx", "done", "--"], &[]);
+        assert!(result.contains(&"--undo".to_string()));
+        assert!(result.contains(&"--recursive".to_string()));
+    }
+
+    #[test]
+    fn offers_show_flag_for_context() {
+        let result = complete_with_state(&["yx", "context", "--"], &[]);
+        assert!(result.contains(&"--show".to_string()));
+    }
+
+    #[test]
+    fn offers_flags_and_yaks_together() {
+        let yaks = &[("my-yak", false)];
+        let result = complete_with_state(&["yx", "done", ""], yaks);
+        assert!(result.contains(&"my-yak".to_string()));
+        assert!(result.contains(&"--undo".to_string()));
+        assert!(result.contains(&"--recursive".to_string()));
+    }
+
+    #[test]
+    fn filters_flags_by_prefix() {
+        let result = complete_with_state(&["yx", "done", "--u"], &[]);
+        assert!(result.contains(&"--undo".to_string()));
+        assert!(!result.contains(&"--recursive".to_string()));
     }
 }
