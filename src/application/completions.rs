@@ -7,6 +7,8 @@ pub const COMMANDS: &[&str] = &[
     "ls",
     "done",
     "finish",
+    "start",
+    "wip",
     "remove",
     "rm",
     "move",
@@ -25,13 +27,14 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
 
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
-        "done", "finish", "remove", "rm", "move", "mv", "context", "state", "field",
+        "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "context", "state", "field",
     ];
 
     // Flags for each command
     let command_flags = |cmd: &str| -> Vec<&str> {
         match cmd {
-            "done" | "finish" => vec!["--undo", "--recursive"],
+            "done" | "finish" | "start" | "wip" => vec!["--recursive"],
+            "state" => vec!["--recursive"],
             "context" => vec!["--show"],
             "field" => vec!["--show"],
             "list" | "ls" => vec!["--format", "--only"],
@@ -71,16 +74,8 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
         if commands_with_yak_args.contains(&subcommand) {
             // Apply smart filtering for done/finish commands
             let filtered_yaks: Vec<_> = if subcommand == "done" || subcommand == "finish" {
-                // Check if --undo is present in the words
-                let has_undo = words.contains(&"--undo");
-
-                if has_undo {
-                    // Show only done yaks for undo operations
-                    yaks.iter().filter(|(_, is_done)| *is_done).collect()
-                } else {
-                    // Show only incomplete yaks for normal done operations
-                    yaks.iter().filter(|(_, is_done)| !*is_done).collect()
-                }
+                // Show only incomplete yaks for done operations
+                yaks.iter().filter(|(_, is_done)| !*is_done).collect()
             } else {
                 // For other commands, show all yaks
                 yaks.iter().collect()
@@ -180,18 +175,10 @@ mod tests {
     }
 
     #[test]
-    fn done_undo_shows_only_done_yaks() {
-        let yaks = &[("todo-yak", false), ("done-yak", true)];
-        let result = complete_with_state(&["yx", "done", "--undo", ""], yaks);
-        assert!(result.contains(&"done-yak".to_string()));
-        assert!(!result.contains(&"todo-yak".to_string()));
-    }
-
-    #[test]
     fn offers_flags_for_done() {
         let result = complete_with_state(&["yx", "done", "--"], &[]);
-        assert!(result.contains(&"--undo".to_string()));
         assert!(result.contains(&"--recursive".to_string()));
+        assert!(!result.contains(&"--undo".to_string()));
     }
 
     #[test]
@@ -205,14 +192,12 @@ mod tests {
         let yaks = &[("my-yak", false)];
         let result = complete_with_state(&["yx", "done", ""], yaks);
         assert!(result.contains(&"my-yak".to_string()));
-        assert!(result.contains(&"--undo".to_string()));
         assert!(result.contains(&"--recursive".to_string()));
     }
 
     #[test]
     fn filters_flags_by_prefix() {
-        let result = complete_with_state(&["yx", "done", "--u"], &[]);
-        assert!(result.contains(&"--undo".to_string()));
-        assert!(!result.contains(&"--recursive".to_string()));
+        let result = complete_with_state(&["yx", "done", "--r"], &[]);
+        assert!(result.contains(&"--recursive".to_string()));
     }
 }

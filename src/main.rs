@@ -8,7 +8,7 @@ use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
 use yx::application::{
     complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
-    RemoveYak, SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
+    RemoveYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
 use yx::ports::ReadYakStore;
@@ -48,9 +48,16 @@ enum Commands {
     Done {
         /// The yak name (space-separated words)
         name: Vec<String>,
-        #[arg(long)]
-        undo: bool,
         /// Mark yak and all children as done recursively
+        #[arg(long)]
+        recursive: bool,
+    },
+    /// Start working on a yak (set state to wip)
+    #[command(alias = "wip")]
+    Start {
+        /// The yak name (space-separated words)
+        name: Vec<String>,
+        /// Start yak and all children recursively
         #[arg(long)]
         recursive: bool,
     },
@@ -78,6 +85,9 @@ enum Commands {
         name: Vec<String>,
         /// The state to set (e.g., "todo", "wip", "done")
         state: String,
+        /// Apply state change recursively to all descendants
+        #[arg(long)]
+        recursive: bool,
     },
     /// Write or show custom field for a yak
     Field {
@@ -144,13 +154,13 @@ fn main() -> Result<()> {
             app.handle(AddYak::new(&name_str))
         }
         Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
-        Commands::Done {
-            name,
-            undo,
-            recursive,
-        } => {
+        Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
-            app.handle(DoneYak::new(&name_str, undo, recursive))
+            app.handle(DoneYak::new(&name_str, recursive))
+        }
+        Commands::Start { name, recursive } => {
+            let name_str = name.join(" ");
+            app.handle(StartYak::new(&name_str, recursive))
         }
         Commands::Remove { name } => {
             let name_str = name.join(" ");
@@ -166,9 +176,13 @@ fn main() -> Result<()> {
                 app.handle(EditContext::new(&name_str))
             }
         }
-        Commands::State { name, state } => {
+        Commands::State {
+            name,
+            state,
+            recursive,
+        } => {
             let name_str = name.join(" ");
-            app.handle(SetState::new(&name_str, &state))
+            app.handle(SetState::new(&name_str, &state).with_recursive(recursive))
         }
         Commands::Field { name, field, show } => {
             let name_str = name.join(" ");

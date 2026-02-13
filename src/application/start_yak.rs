@@ -1,15 +1,15 @@
-// Use case: Mark a yak as done (sugar for SetState with state="done")
+// Use case: Start a yak (sugar for SetState with state="wip")
 
 use anyhow::Result;
 
 use super::{Application, SetState, UseCase};
 
-pub struct DoneYak {
+pub struct StartYak {
     name: String,
     recursive: bool,
 }
 
-impl DoneYak {
+impl StartYak {
     pub fn new(name: &str, recursive: bool) -> Self {
         Self {
             name: name.to_string(),
@@ -18,13 +18,13 @@ impl DoneYak {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        SetState::new(&self.name, "done")
+        SetState::new(&self.name, "wip")
             .with_recursive(self.recursive)
             .execute(app)
     }
 }
 
-impl UseCase for DoneYak {
+impl UseCase for StartYak {
     fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
     }
