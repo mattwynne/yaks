@@ -14,7 +14,7 @@ use super::UseCase;
 /// This struct represents the application layer's view of infrastructure.
 /// Use cases are constructed with domain data, then executed with an Application.
 pub struct Application<'a> {
-    pub event_bus: &'a mut EventBus,
+    event_bus: &'a mut EventBus,
     pub store: &'a dyn Store,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
