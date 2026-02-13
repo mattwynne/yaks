@@ -11,6 +11,7 @@ use yx::application::{
     SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
+use yx::ports::Store;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -180,8 +181,10 @@ fn main() -> Result<()> {
         Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),
         Commands::Completions { words } => {
-            // Get yak names from storage (for now, pass empty slice)
-            let yak_names: Vec<&str> = vec![];
+            // Get yak names from storage
+            let yaks = storage.list_yaks()?;
+            let yak_name_strings: Vec<String> = yaks.iter().map(|y| y.name.clone()).collect();
+            let yak_names: Vec<&str> = yak_name_strings.iter().map(|s| s.as_str()).collect();
 
             // Convert words to &str slice
             let word_refs: Vec<&str> = words.iter().map(|s| s.as_str()).collect();
