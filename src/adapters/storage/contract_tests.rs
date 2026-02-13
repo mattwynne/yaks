@@ -99,8 +99,7 @@ macro_rules! yak_store_tests {
             store
                 .write_field("test-yak", "notes.txt", "Text file")
                 .unwrap();
-            let content =
-                ReadYakStore::read_field(&store, "test-yak", "notes.txt").unwrap();
+            let content = ReadYakStore::read_field(&store, "test-yak", "notes.txt").unwrap();
             assert_eq!(content, "Text file");
         }
 
