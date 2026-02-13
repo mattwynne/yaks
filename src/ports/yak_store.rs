@@ -1,4 +1,4 @@
-// Read-side storage port - abstraction for yak queries
+// Yak store port traits - read/write abstractions for yak persistence
 
 use crate::domain::Yak;
 use anyhow::Result;
@@ -9,6 +9,20 @@ pub trait ReadYakStore {
     fn yak_exists(&self, name: &str) -> bool;
     fn find_yak(&self, name: &str) -> Result<String>;
     fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String>;
+}
+
+pub trait WriteYakStore {
+    /// Create a new yak
+    fn create_yak(&self, name: &str) -> Result<()>;
+
+    /// Delete a yak
+    fn delete_yak(&self, name: &str) -> Result<()>;
+
+    /// Rename a yak
+    fn rename_yak(&self, from: &str, to: &str) -> Result<()>;
+
+    /// Write a field for a yak
+    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()>;
 }
 
 #[cfg(test)]
