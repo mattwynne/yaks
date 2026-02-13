@@ -93,6 +93,18 @@ macro_rules! yak_store_tests {
         }
 
         #[test]
+        fn write_field_with_dots_in_name() {
+            let (store, _guard) = $create_store;
+            store.create_yak("test-yak").unwrap();
+            store
+                .write_field("test-yak", "notes.txt", "Text file")
+                .unwrap();
+            let content =
+                ReadYakStore::read_field(&store, "test-yak", "notes.txt").unwrap();
+            assert_eq!(content, "Text file");
+        }
+
+        #[test]
         fn write_field_nonexistent_yak_errors() {
             let (store, _guard) = $create_store;
             let result = store.write_field("nonexistent", "field", "content");
