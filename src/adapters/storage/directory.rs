@@ -2,7 +2,7 @@
 
 use crate::domain::events::*;
 use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{EventListener, StoragePort, Store};
+use crate::ports::{EventListener, ReadYakStore, WriteYakStore};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -101,7 +101,7 @@ impl DirectoryStorage {
     }
 }
 
-impl StoragePort for DirectoryStorage {
+impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &str) -> Result<()> {
         let dir = self.yak_dir(name);
         fs::create_dir_all(&dir)
@@ -113,59 +113,6 @@ impl StoragePort for DirectoryStorage {
             .with_context(|| format!("Failed to create context.md for yak: {name}"))?;
 
         Ok(())
-    }
-
-    fn get_yak(&self, name: &str) -> Result<Yak> {
-        let dir = self.yak_dir(name);
-        let context_file = self.field_path(name, CONTEXT_FIELD);
-
-        if !dir.exists() || !context_file.exists() {
-            anyhow::bail!("yak '{name}' not found");
-        }
-
-        // Read context field
-        let context = StoragePort::read_field(self, name, CONTEXT_FIELD).ok();
-
-        // Read state field, default to "todo" if not present
-        let state = StoragePort::read_field(self, name, STATE_FIELD)
-            .unwrap_or_else(|_| "todo".to_string())
-            .trim()
-            .to_string();
-
-        // Derive done from state
-        Ok(Yak {
-            name: name.to_string(),
-            state,
-            context,
-        })
-    }
-
-    fn list_yaks(&self) -> Result<Vec<Yak>> {
-        let mut yaks = Vec::new();
-
-        if !self.base_path.exists() {
-            return Ok(yaks);
-        }
-
-        // Use WalkDir to recursively find all directories (yaks)
-        for entry in WalkDir::new(&self.base_path)
-            .min_depth(1)
-            .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
-        {
-            let entry = entry?;
-            // Get relative path from base_path
-            if let Ok(rel_path) = entry.path().strip_prefix(&self.base_path) {
-                if let Some(name) = rel_path.to_str() {
-                    // Only add if we can successfully read it as a yak
-                    if let Ok(yak) = StoragePort::get_yak(self, name) {
-                        yaks.push(yak);
-                    }
-                }
-            }
-        }
-
-        Ok(yaks)
     }
 
     fn delete_yak(&self, name: &str) -> Result<()> {
@@ -202,6 +149,72 @@ impl StoragePort for DirectoryStorage {
         Ok(())
     }
 
+    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
+        let field_path = self.field_path(yak_name, field_name);
+        fs::write(&field_path, content)
+            .with_context(|| format!("Failed to write field '{field_name}' for '{yak_name}'"))
+    }
+}
+
+impl ReadYakStore for DirectoryStorage {
+    fn get_yak(&self, name: &str) -> Result<Yak> {
+        let dir = self.yak_dir(name);
+        let context_file = self.field_path(name, CONTEXT_FIELD);
+
+        if !dir.exists() || !context_file.exists() {
+            anyhow::bail!("yak '{name}' not found");
+        }
+
+        // Read context field
+        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD).ok();
+
+        // Read state field, default to "todo" if not present
+        let state = ReadYakStore::read_field(self, name, STATE_FIELD)
+            .unwrap_or_else(|_| "todo".to_string())
+            .trim()
+            .to_string();
+
+        // Derive done from state
+        Ok(Yak {
+            name: name.to_string(),
+            state,
+            context,
+        })
+    }
+
+    fn list_yaks(&self) -> Result<Vec<Yak>> {
+        let mut yaks = Vec::new();
+
+        if !self.base_path.exists() {
+            return Ok(yaks);
+        }
+
+        // Use WalkDir to recursively find all directories (yaks)
+        for entry in WalkDir::new(&self.base_path)
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| e.file_type().is_dir())
+        {
+            let entry = entry?;
+            // Get relative path from base_path
+            if let Ok(rel_path) = entry.path().strip_prefix(&self.base_path) {
+                if let Some(name) = rel_path.to_str() {
+                    // Only add if we can successfully read it as a yak
+                    if let Ok(yak) = ReadYakStore::get_yak(self, name) {
+                        yaks.push(yak);
+                    }
+                }
+            }
+        }
+
+        Ok(yaks)
+    }
+
+    fn yak_exists(&self, name: &str) -> bool {
+        let context_file = self.field_path(name, CONTEXT_FIELD);
+        context_file.exists()
+    }
+
     fn find_yak(&self, name: &str) -> Result<String> {
         // First, try exact match - verify it's a real yak (has context.md)
         if self.field_path(name, CONTEXT_FIELD).exists() {
@@ -209,7 +222,7 @@ impl StoragePort for DirectoryStorage {
         }
 
         // If not found, try fuzzy match on the leaf node only
-        let yaks = StoragePort::list_yaks(self)?;
+        let yaks = ReadYakStore::list_yaks(self)?;
         let matches: Vec<&Yak> = yaks
             .iter()
             .filter(|yak| {
@@ -224,12 +237,6 @@ impl StoragePort for DirectoryStorage {
             1 => Ok(matches[0].name.clone()),
             _ => anyhow::bail!("yak name '{name}' is ambiguous"),
         }
-    }
-
-    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
-        let field_path = self.field_path(yak_name, field_name);
-        fs::write(&field_path, content)
-            .with_context(|| format!("Failed to write field '{field_name}' for '{yak_name}'"))
     }
 
     fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
@@ -276,29 +283,6 @@ impl EventListener for DirectoryStorage {
     }
 }
 
-impl Store for DirectoryStorage {
-    fn get_yak(&self, name: &str) -> Result<Yak> {
-        StoragePort::get_yak(self, name)
-    }
-
-    fn list_yaks(&self) -> Result<Vec<Yak>> {
-        StoragePort::list_yaks(self)
-    }
-
-    fn yak_exists(&self, name: &str) -> bool {
-        let context_file = self.field_path(name, CONTEXT_FIELD);
-        context_file.exists()
-    }
-
-    fn find_yak(&self, name: &str) -> Result<String> {
-        StoragePort::find_yak(self, name)
-    }
-
-    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
-        StoragePort::read_field(self, yak_name, field_name)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,7 +305,7 @@ mod tests {
     fn test_get_yak() {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
-        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
         assert_eq!(yak.name, "test-yak");
         assert!(!yak.is_done());
     }
@@ -331,7 +315,7 @@ mod tests {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("yak1").unwrap();
         storage.create_yak("yak2").unwrap();
-        let yaks = StoragePort::list_yaks(&storage).unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
     }
 
@@ -342,7 +326,7 @@ mod tests {
         storage
             .write_field("test-yak", STATE_FIELD, "done")
             .unwrap();
-        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
         assert!(yak.is_done());
     }
 
@@ -361,7 +345,7 @@ mod tests {
         storage
             .write_field("test-yak", CONTEXT_FIELD, "Test context")
             .unwrap();
-        let context = StoragePort::read_field(&storage, "test-yak", CONTEXT_FIELD).unwrap();
+        let context = ReadYakStore::read_field(&storage, "test-yak", CONTEXT_FIELD).unwrap();
         assert_eq!(context, "Test context");
     }
 
@@ -381,7 +365,7 @@ mod tests {
         assert!(!storage.yak_dir("old-name").exists());
         assert!(storage.yak_dir("new-name").exists());
 
-        let yak = StoragePort::get_yak(&storage, "new-name").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "new-name").unwrap();
         assert_eq!(yak.name, "new-name");
         assert!(yak.is_done());
         assert_eq!(yak.context.unwrap(), "Context text");
@@ -412,11 +396,11 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Should match "parent" yak, not "parent/child1"
-        let result = StoragePort::find_yak(&storage, "parent").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "parent").unwrap();
         assert_eq!(result, "parent");
 
         // Should match "child1" in "parent/child1"
-        let result = StoragePort::find_yak(&storage, "child1").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "child1").unwrap();
         assert_eq!(result, "parent/child1");
     }
 
@@ -426,7 +410,7 @@ mod tests {
         storage.create_yak("Fix the Bug").unwrap();
 
         // Substring match should be case-insensitive
-        let result = StoragePort::find_yak(&storage, "the bug").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "the bug").unwrap();
         assert_eq!(result, "Fix the Bug");
     }
 
@@ -436,7 +420,7 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Searching for "parent" should not match "parent/child1"
-        let result = StoragePort::find_yak(&storage, "parent");
+        let result = ReadYakStore::find_yak(&storage, "parent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -470,7 +454,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes", "Field content")
             .unwrap();
-        let content = StoragePort::read_field(&storage, "test-yak", "notes").unwrap();
+        let content = ReadYakStore::read_field(&storage, "test-yak", "notes").unwrap();
         assert_eq!(content, "Field content");
     }
 
@@ -481,7 +465,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes.txt", "Text file")
             .unwrap();
-        let content = StoragePort::read_field(&storage, "test-yak", "notes.txt").unwrap();
+        let content = ReadYakStore::read_field(&storage, "test-yak", "notes.txt").unwrap();
         assert_eq!(content, "Text file");
     }
 
@@ -489,7 +473,7 @@ mod tests {
     fn test_read_nonexistent_field() {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
-        let result = StoragePort::read_field(&storage, "test-yak", "nonexistent");
+        let result = ReadYakStore::read_field(&storage, "test-yak", "nonexistent");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -508,7 +492,7 @@ mod tests {
         storage.on_event(&event).unwrap();
 
         assert!(storage.yak_dir("test").exists());
-        let yak = StoragePort::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "todo");
     }
 
@@ -531,7 +515,7 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = StoragePort::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.context, Some("new context".to_string()));
     }
 
@@ -552,14 +536,12 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = StoragePort::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "wip");
     }
 
     #[test]
-    fn test_directory_storage_store_get_yak() {
-        use crate::ports::Store;
-
+    fn test_directory_storage_read_yak_store_get_yak() {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
@@ -575,16 +557,14 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = Store::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.name, "test");
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
     }
 
     #[test]
-    fn test_directory_storage_store_yak_exists() {
-        use crate::ports::Store;
-
+    fn test_directory_storage_read_yak_store_yak_exists() {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
@@ -593,14 +573,12 @@ mod tests {
             }))
             .unwrap();
 
-        assert!(Store::yak_exists(&storage, "test"));
-        assert!(!Store::yak_exists(&storage, "missing"));
+        assert!(ReadYakStore::yak_exists(&storage, "test"));
+        assert!(!ReadYakStore::yak_exists(&storage, "missing"));
     }
 
     #[test]
-    fn test_directory_storage_store_list_yaks() {
-        use crate::ports::Store;
-
+    fn test_directory_storage_read_yak_store_list_yaks() {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
@@ -615,7 +593,7 @@ mod tests {
             }))
             .unwrap();
 
-        let yaks = Store::list_yaks(&storage).unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
     }
 }

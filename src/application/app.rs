@@ -2,7 +2,7 @@
 
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
-use crate::ports::{DisplayPort, EventStoreReader, InputPort, Store, SyncPort};
+use crate::ports::{DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort};
 use anyhow::Result;
 
 use super::UseCase;
@@ -13,7 +13,7 @@ use super::UseCase;
 /// Use cases are constructed with domain data, then executed with an Application.
 pub struct Application<'a> {
     event_bus: &'a mut EventBus,
-    pub store: &'a dyn Store,
+    pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
     pub sync: Option<&'a dyn SyncPort>,
@@ -23,7 +23,7 @@ pub struct Application<'a> {
 impl<'a> Application<'a> {
     pub fn new(
         event_bus: &'a mut EventBus,
-        store: &'a dyn Store,
+        store: &'a dyn ReadYakStore,
         display: &'a dyn DisplayPort,
         input: &'a dyn InputPort,
         sync: Option<&'a dyn SyncPort>,
@@ -73,7 +73,7 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::infrastructure::EventBus;
-    use crate::ports::Store;
+    use crate::ports::ReadYakStore;
 
     #[test]
     fn test_application_create_yak_via_yak_map() {
@@ -91,7 +91,7 @@ mod tests {
         app.with_yak_map(|yak_map| yak_map.add_yak("test".to_string(), None))
             .unwrap();
 
-        assert!(Store::yak_exists(&storage, "test"));
+        assert!(ReadYakStore::yak_exists(&storage, "test"));
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod tests {
         })
         .unwrap();
 
-        let yak = Store::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -138,8 +138,8 @@ mod tests {
         .unwrap();
 
         // Verify yak was created
-        assert!(Store::yak_exists(&storage, "test"));
-        let yak = Store::get_yak(&storage, "test").unwrap();
+        assert!(ReadYakStore::yak_exists(&storage, "test"));
+        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
     }
@@ -162,8 +162,8 @@ mod tests {
             .unwrap();
 
         // Verify both parent and child exist
-        assert!(Store::yak_exists(&storage, "parent"));
-        assert!(Store::yak_exists(&storage, "parent/child"));
+        assert!(ReadYakStore::yak_exists(&storage, "parent"));
+        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
         .unwrap();
 
         // Verify parent is also wip
-        let parent = Store::get_yak(&storage, "parent").unwrap();
+        let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
         assert_eq!(parent.state, "wip");
     }
 }

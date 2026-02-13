@@ -1,6 +1,6 @@
 use crate::domain::events::*;
 use crate::domain::YakEvent;
-use crate::ports::Store;
+use crate::ports::ReadYakStore;
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ impl YakMap {
         }
     }
 
-    pub fn from_store(store: &dyn Store) -> Result<Self> {
+    pub fn from_store(store: &dyn ReadYakStore) -> Result<Self> {
         let yaks_list = store.list_yaks()?;
 
         let mut yaks = HashMap::new();
@@ -298,14 +298,14 @@ mod tests {
     #[test]
     fn test_from_store_empty() {
         use crate::domain::Yak;
-        use crate::ports::Store;
+        use crate::ports::ReadYakStore;
         use std::collections::HashMap;
 
         struct MockStore {
             yaks: HashMap<String, Yak>,
         }
 
-        impl Store for MockStore {
+        impl ReadYakStore for MockStore {
             fn get_yak(&self, name: &str) -> Result<Yak> {
                 self.yaks
                     .get(name)
@@ -346,14 +346,14 @@ mod tests {
     #[test]
     fn test_from_store_with_yaks() {
         use crate::domain::Yak;
-        use crate::ports::Store;
+        use crate::ports::ReadYakStore;
         use std::collections::HashMap;
 
         struct MockStore {
             yaks: HashMap<String, Yak>,
         }
 
-        impl Store for MockStore {
+        impl ReadYakStore for MockStore {
             fn get_yak(&self, name: &str) -> Result<Yak> {
                 self.yaks
                     .get(name)
