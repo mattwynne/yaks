@@ -56,6 +56,8 @@ impl InProcessWorld {
             &self.storage,
             &self.display,
             &self.input,
+            None,
+            None,
         );
         let result = f(&mut app);
 

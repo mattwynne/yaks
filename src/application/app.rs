@@ -4,7 +4,7 @@
 use crate::domain::validate_yak_name;
 use crate::domain::{Yak, YakMap};
 use crate::infrastructure::EventBus;
-use crate::ports::{DisplayPort, InputPort, Store};
+use crate::ports::{DisplayPort, EventStoreReader, InputPort, Store, SyncPort};
 use anyhow::Result;
 
 use super::UseCase;
@@ -18,6 +18,8 @@ pub struct Application<'a> {
     pub store: &'a dyn Store,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
+    pub sync: Option<&'a dyn SyncPort>,
+    pub event_reader: Option<&'a dyn EventStoreReader>,
 }
 
 impl<'a> Application<'a> {
@@ -26,12 +28,16 @@ impl<'a> Application<'a> {
         store: &'a dyn Store,
         display: &'a dyn DisplayPort,
         input: &'a dyn InputPort,
+        sync: Option<&'a dyn SyncPort>,
+        event_reader: Option<&'a dyn EventStoreReader>,
     ) -> Self {
         Self {
             event_bus,
             store,
             display,
             input,
+            sync,
+            event_reader,
         }
     }
 
@@ -86,7 +92,7 @@ impl<'a> Application<'a> {
     ///
     /// # Example
     /// ```ignore
-    /// let app = Application::new(&mut event_bus, &store, &display, &input);
+    /// let app = Application::new(&mut event_bus, &store, &display, &input, None, None);
     /// app.handle(AddYak::new("my yak"))?;
     /// ```
     pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {
@@ -112,7 +118,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         app.with_new_yak("test", |yak| {
             assert_eq!(yak.name, "test");
@@ -134,7 +140,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         // Create yak first
         app.with_new_yak("test", |_| Ok(())).unwrap();
@@ -158,7 +164,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
@@ -184,7 +190,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         // Add hierarchical yak
         app.with_yak_map(|yak_map| yak_map.add_yak("parent/child".to_string(), None))
@@ -206,7 +212,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {

@@ -1,29 +1,32 @@
-// SyncYaks use case - synchronizes yaks via git refs
+// ShowLog use case - displays the event log
 
 use anyhow::Result;
 
 use super::{Application, UseCase};
 
-pub struct SyncYaks;
+pub struct ShowLog;
 
-impl Default for SyncYaks {
+impl Default for ShowLog {
     fn default() -> Self {
         Self
     }
 }
 
-impl SyncYaks {
+impl ShowLog {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl UseCase for SyncYaks {
+impl UseCase for ShowLog {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let sync = app
-            .sync
-            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?;
-        sync.sync()?;
+        let reader = app
+            .event_reader
+            .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
+        let events = reader.get_all_events()?;
+        for event in events {
+            println!("{}", event.format_message());
+        }
         Ok(())
     }
 }
@@ -32,36 +35,13 @@ impl UseCase for SyncYaks {
 mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::application::AddYak;
     use crate::infrastructure::EventBus;
-    use crate::ports::SyncPort;
-    use std::cell::RefCell;
-
-    struct MockSync {
-        sync_called: RefCell<bool>,
-    }
-
-    impl MockSync {
-        fn new() -> Self {
-            Self {
-                sync_called: RefCell::new(false),
-            }
-        }
-
-        fn was_sync_called(&self) -> bool {
-            *self.sync_called.borrow()
-        }
-    }
-
-    impl SyncPort for MockSync {
-        fn sync(&self) -> Result<()> {
-            *self.sync_called.borrow_mut() = true;
-            Ok(())
-        }
-    }
 
     #[test]
-    fn test_sync_calls_sync_port() {
+    fn test_show_log_displays_events() {
         let event_store = InMemoryEventStore::new();
+        let reader = event_store.clone();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
         let storage = InMemoryStorage::new();
@@ -69,24 +49,24 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
-        let sync = MockSync::new();
 
         let mut app = Application::new(
             &mut event_bus,
             &storage,
             &display,
             &input,
-            Some(&sync),
             None,
+            Some(&reader),
         );
 
-        app.handle(SyncYaks::new()).unwrap();
-
-        assert!(sync.was_sync_called());
+        app.handle(AddYak::new("test yak")).unwrap();
+        // ShowLog prints to stdout via println!, so we
+        // just verify it doesn't error
+        app.handle(ShowLog::new()).unwrap();
     }
 
     #[test]
-    fn test_sync_fails_when_not_configured() {
+    fn test_show_log_fails_when_not_configured() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
@@ -98,8 +78,11 @@ mod tests {
 
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        let result = app.handle(SyncYaks::new());
+        let result = app.handle(ShowLog::new());
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Sync not configured");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Event reader not configured"
+        );
     }
 }
