@@ -1,23 +1,27 @@
+/// All available commands including aliases.
+/// Kept in sync with the Commands enum in main.rs
+/// via the `completions_match_cli_commands` test.
+pub const COMMANDS: &[&str] = &[
+    "add",
+    "list",
+    "ls",
+    "done",
+    "finish",
+    "remove",
+    "rm",
+    "move",
+    "mv",
+    "prune",
+    "context",
+    "state",
+    "field",
+    "sync",
+    "log",
+    "completions",
+];
+
 pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String> {
-    // All available commands (including aliases)
-    let commands = vec![
-        "add",
-        "list",
-        "ls",
-        "done",
-        "finish",
-        "remove",
-        "rm",
-        "move",
-        "mv",
-        "prune",
-        "context",
-        "state",
-        "field",
-        "sync",
-        "log",
-        "completions",
-    ];
+    let commands = COMMANDS;
 
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
@@ -40,7 +44,7 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
         let prefix = if words.len() == 2 { words[1] } else { "" };
 
         commands
-            .into_iter()
+            .iter()
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|s| s.to_string())
             .collect()

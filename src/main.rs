@@ -207,3 +207,37 @@ fn main() -> Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+    use yx::application::COMMANDS;
+
+    #[test]
+    fn completions_match_cli_commands() {
+        let cli = Cli::command();
+        let mut clap_names: BTreeSet<String> = BTreeSet::new();
+        for sub in cli.get_subcommands() {
+            clap_names.insert(sub.get_name().to_string());
+            for alias in sub.get_all_aliases() {
+                clap_names.insert(alias.to_string());
+            }
+        }
+
+        let completion_names: BTreeSet<String> =
+            COMMANDS.iter().map(|s| s.to_string()).collect();
+
+        let missing: Vec<_> = clap_names.difference(&completion_names).collect();
+        let extra: Vec<_> = completion_names.difference(&clap_names).collect();
+
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "Completion commands out of sync with CLI!\n  \
+             Missing from completions: {:?}\n  \
+             Extra in completions: {:?}",
+            missing,
+            extra,
+        );
+    }
+}
