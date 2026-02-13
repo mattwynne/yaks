@@ -121,7 +121,7 @@ fn main() -> Result<()> {
     let input = ConsoleInput;
 
     // Create application with injected dependencies
-    let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+    let mut app = Application::new(&mut event_bus, &storage, &display, &input, None);
 
     match cli.command {
         Commands::Add { name } => {

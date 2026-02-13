@@ -94,7 +94,7 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input);
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None);
 
         let use_case = AddYak::new("test-yak");
         use_case.execute(&mut app).unwrap();
