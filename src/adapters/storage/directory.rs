@@ -137,7 +137,6 @@ impl StoragePort for DirectoryStorage {
             name: name.to_string(),
             state,
             context,
-            pending_events: vec![],
         })
     }
 
@@ -580,7 +579,6 @@ mod tests {
         assert_eq!(yak.name, "test");
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
-        assert!(yak.pending_events.is_empty());
     }
 
     #[test]

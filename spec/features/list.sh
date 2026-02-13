@@ -72,7 +72,7 @@ Describe 'yx list'
       yx add 'parent b' &&
       yx list --format markdown
     "
-    The line 1 should equal "- [todo] parent a"
+    The line 1 should equal "- [wip] parent a"
     The line 2 should equal $'\e[90m  - [done] child 1\e[0m'
     The line 3 should equal "  - [todo] child 2"
     The line 4 should equal "- [todo] parent b"
@@ -164,7 +164,7 @@ Describe 'yx list'
       yx done 'parent/done child' &&
       yx ls --format markdown --only not-done
     "
-    The line 1 should equal "- [todo] parent"
+    The line 1 should equal "- [wip] parent"
     The line 2 should equal "  - [todo] incomplete child"
   End
 

@@ -22,15 +22,17 @@ impl WriteField {
         // Validate field name
         validate_field_name(&self.field)?;
 
-        // Request content via input port
+        // Request content via input port (before closure)
         let content = app
             .input
             .request_content(None, None)?
             .context("No content provided on stdin")?;
 
-        app.with_yak(&self.name, |yak| {
-            yak.update_field(self.field.clone(), content)
-        })
+        // Resolve fuzzy name before closure
+        let name = app.store.find_yak(&self.name)?;
+        let field = self.field.clone();
+
+        app.with_yak_map(|yak_map| yak_map.update_field(name, field, content))
     }
 }
 

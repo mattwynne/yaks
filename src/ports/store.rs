@@ -56,7 +56,6 @@ mod tests {
                 name: "test".to_string(),
                 state: "todo".to_string(),
                 context: None,
-                pending_events: vec![],
             },
         );
 
@@ -75,7 +74,6 @@ mod tests {
                 name: "test".to_string(),
                 state: "todo".to_string(),
                 context: None,
-                pending_events: vec![],
             },
         );
 

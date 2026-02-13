@@ -142,7 +142,7 @@ impl YakMap {
 
             if incomplete {
                 anyhow::bail!(
-                    "Cannot mark '{}' as done: children are incomplete",
+                    "cannot mark '{}' as done - it has incomplete children",
                     parent_name
                 );
             }
@@ -178,6 +178,26 @@ impl YakMap {
             .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
                 name,
                 content: context,
+            }));
+
+        Ok(())
+    }
+
+    pub fn update_field(
+        &mut self,
+        name: String,
+        field_name: String,
+        content: String,
+    ) -> Result<()> {
+        if !self.yaks.contains_key(&name) {
+            anyhow::bail!("yak '{}' not found", name);
+        }
+
+        self.pending_events
+            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
+                name,
+                field_name,
+                content,
             }));
 
         Ok(())
@@ -369,7 +389,6 @@ mod tests {
                 name: "test1".to_string(),
                 state: "todo".to_string(),
                 context: Some("context1".to_string()),
-                pending_events: vec![],
             },
         );
         yaks.insert(
@@ -378,7 +397,6 @@ mod tests {
                 name: "test2".to_string(),
                 state: "wip".to_string(),
                 context: None,
-                pending_events: vec![],
             },
         );
 
@@ -551,7 +569,7 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("children are incomplete"));
+            .contains("incomplete children"));
     }
 
     #[test]
@@ -643,6 +661,48 @@ mod tests {
     fn test_update_context_fails_for_nonexistent_yak() {
         let mut map = YakMap::new();
         let result = map.update_context("nonexistent".to_string(), "context".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    // Tests for update_field
+    #[test]
+    fn test_update_field_emits_event() {
+        let mut map = YakMap::new();
+        map.add_yak("test".to_string(), None).unwrap();
+        map.take_events();
+
+        map.update_field(
+            "test".to_string(),
+            "notes".to_string(),
+            "some content".to_string(),
+        )
+        .unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                name,
+                field_name,
+                content,
+            }) => {
+                assert_eq!(name, "test");
+                assert_eq!(field_name, "notes");
+                assert_eq!(content, "some content");
+            }
+            _ => panic!("Expected FieldUpdated event"),
+        }
+    }
+
+    #[test]
+    fn test_update_field_fails_for_nonexistent_yak() {
+        let mut map = YakMap::new();
+        let result = map.update_field(
+            "nonexistent".to_string(),
+            "notes".to_string(),
+            "content".to_string(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
