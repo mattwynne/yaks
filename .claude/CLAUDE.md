@@ -167,6 +167,13 @@ ADRs can reference each other:
 
 **Incremental approach**: Use the `incremental-tdd` skill for guidance on writing one test at a time.
 
+## Plans
+
+When working on a yak, store implementation plans on the yak's
+`plan` field using `yx field <yak-name> plan` (pipe content via stdin).
+Read existing plans with `yx field --show <yak-name> plan`.
+Do NOT store plans in `docs/superpowers/plans/`.
+
 ## CRITICAL: Dogfooding Rule
 
 **NEVER touch the `.yaks` folder in this project!**
