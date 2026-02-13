@@ -16,12 +16,13 @@ impl EditContext {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
+        let resolved = app.store.find_yak(&self.name)?;
         // Get current context
-        let current_context = app.store.get_yak(&self.name)?.context.unwrap_or_default();
+        let current_context = app.store.get_yak(&resolved)?.context.unwrap_or_default();
 
         // Request new content via input
         if let Some(content) = app.input.request_content(Some(&current_context), None)? {
-            app.with_yak_map(|yak_map| yak_map.update_context(self.name.clone(), content))?;
+            app.with_yak_map(|yak_map| yak_map.update_context(resolved.clone(), content))?;
         }
 
         Ok(())

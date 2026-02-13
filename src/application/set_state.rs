@@ -24,32 +24,8 @@ impl SetState {
         self
     }
 
-    fn resolve_name(&self, app: &Application) -> Result<String> {
-        let all_yaks = app.store.list_yaks()?;
-        let name = &self.name;
-
-        if app.store.yak_exists(name) {
-            return Ok(name.clone());
-        }
-
-        let matches: Vec<String> = all_yaks
-            .iter()
-            .filter(|yak| {
-                let leaf = yak.name.rsplit('/').next().unwrap_or(&yak.name);
-                leaf.contains(name.as_str())
-            })
-            .map(|yak| yak.name.clone())
-            .collect();
-
-        match matches.len() {
-            0 => anyhow::bail!("yak '{}' not found", name),
-            1 => Ok(matches[0].clone()),
-            _ => anyhow::bail!("yak name '{}' is ambiguous", name),
-        }
-    }
-
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let resolved_name = self.resolve_name(app)?;
+        let resolved_name = app.store.find_yak(&self.name)?;
 
         let names_to_update = if self.recursive {
             let all_yaks = app.store.list_yaks()?;
