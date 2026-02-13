@@ -12,10 +12,8 @@ devenv.local.yaml
 # verification marker for git hooks
 .last-checked
 
-# Claude Code (ignore local settings but track docs and skills)
-.claude
-!.claude/CLAUDE.md
-!.claude/skills
+# Claude Code (ignore local settings only)
+.claude/settings.local.json
 
 # worktrees
 .worktrees
