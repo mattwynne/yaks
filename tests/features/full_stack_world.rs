@@ -89,8 +89,20 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["add", name])
     }
 
+    fn done_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["done", name])
+    }
+
     fn list_yaks(&mut self) -> Result<()> {
         self.run_yx(&["list"])
+    }
+
+    fn list_yaks_with_format(&mut self, format: &str) -> Result<()> {
+        self.run_yx(&["list", "--format", format])
+    }
+
+    fn list_yaks_with_format_and_filter(&mut self, format: &str, only: &str) -> Result<()> {
+        self.run_yx(&["list", "--format", format, "--only", only])
     }
 
     fn get_output(&self) -> String {
