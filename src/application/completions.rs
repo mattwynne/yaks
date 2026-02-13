@@ -27,7 +27,8 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
 
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
-        "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "context", "state", "field",
+        "add", "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "context", "state",
+        "field",
     ];
 
     // Flags for each command
@@ -81,11 +82,12 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
                 yaks.iter().collect()
             };
 
+            let suffix = if subcommand == "add" { "/" } else { "" };
             let yak_completions: Vec<String> = filtered_yaks
                 .iter()
                 .map(|(name, _)| *name)
                 .filter(|yak| yak.starts_with(prefix))
-                .map(|s| s.to_string())
+                .map(|s| format!("{s}{suffix}"))
                 .collect();
 
             completions.extend(yak_completions);
@@ -153,10 +155,18 @@ mod tests {
     }
 
     #[test]
-    fn no_yak_names_for_add() {
+    fn add_offers_yak_names_with_trailing_slash() {
         let yaks = &["my-yak"];
         let result = complete(&["yx", "add", ""], yaks);
-        assert!(!result.contains(&"my-yak".to_string()));
+        assert!(result.contains(&"my-yak/".to_string()));
+    }
+
+    #[test]
+    fn add_filters_yak_names_by_prefix() {
+        let yaks = &["fix-bug", "write-docs"];
+        let result = complete(&["yx", "add", "fix"], yaks);
+        assert!(result.contains(&"fix-bug/".to_string()));
+        assert!(!result.contains(&"write-docs/".to_string()));
     }
 
     #[test]
