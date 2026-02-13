@@ -1,4 +1,4 @@
-pub fn complete(words: &[&str], yak_names: &[&str]) -> Vec<String> {
+pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String> {
     // All available commands (including aliases)
     let commands = vec![
         "add",
@@ -38,8 +38,27 @@ pub fn complete(words: &[&str], yak_names: &[&str]) -> Vec<String> {
         let subcommand = words[1];
         if commands_with_yak_args.contains(&subcommand) {
             let prefix = words.last().unwrap_or(&"");
-            yak_names
+
+            // Apply smart filtering for done/finish commands
+            let filtered_yaks: Vec<_> = if subcommand == "done" || subcommand == "finish" {
+                // Check if --undo is present in the words
+                let has_undo = words.contains(&"--undo");
+
+                if has_undo {
+                    // Show only done yaks for undo operations
+                    yaks.iter().filter(|(_, is_done)| *is_done).collect()
+                } else {
+                    // Show only incomplete yaks for normal done operations
+                    yaks.iter().filter(|(_, is_done)| !*is_done).collect()
+                }
+            } else {
+                // For other commands, show all yaks
+                yaks.iter().collect()
+            };
+
+            filtered_yaks
                 .iter()
+                .map(|(name, _)| *name)
                 .filter(|yak| yak.starts_with(prefix))
                 .map(|s| s.to_string())
                 .collect()
@@ -47,6 +66,12 @@ pub fn complete(words: &[&str], yak_names: &[&str]) -> Vec<String> {
             vec![]
         }
     }
+}
+
+pub fn complete(words: &[&str], yak_names: &[&str]) -> Vec<String> {
+    // Delegate to complete_with_state by converting yak names to (name, false) tuples
+    let yaks_with_state: Vec<(&str, bool)> = yak_names.iter().map(|name| (*name, false)).collect();
+    complete_with_state(words, &yaks_with_state)
 }
 
 #[cfg(test)]
@@ -112,5 +137,21 @@ mod tests {
         let yaks = &["my-yak"];
         let result = complete(&["yx", "prune", ""], yaks);
         assert!(!result.contains(&"my-yak".to_string()));
+    }
+
+    #[test]
+    fn done_shows_only_incomplete_yaks() {
+        let yaks = &[("todo-yak", false), ("done-yak", true)];
+        let result = complete_with_state(&["yx", "done", ""], yaks);
+        assert!(result.contains(&"todo-yak".to_string()));
+        assert!(!result.contains(&"done-yak".to_string()));
+    }
+
+    #[test]
+    fn done_undo_shows_only_done_yaks() {
+        let yaks = &[("todo-yak", false), ("done-yak", true)];
+        let result = complete_with_state(&["yx", "done", "--undo", ""], yaks);
+        assert!(result.contains(&"done-yak".to_string()));
+        assert!(!result.contains(&"todo-yak".to_string()));
     }
 }

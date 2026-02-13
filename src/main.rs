@@ -7,8 +7,8 @@ use yx::adapters::input::ConsoleInput;
 use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
 use yx::application::{
-    complete, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak,
-    SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
+    complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
+    RemoveYak, SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
 use yx::ports::Store;
@@ -181,16 +181,22 @@ fn main() -> Result<()> {
         Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),
         Commands::Completions { words } => {
-            // Get yak names from storage
+            // Get yaks with state from storage
             let yaks = storage.list_yaks()?;
+
+            // Build tuples of (name, is_done)
             let yak_name_strings: Vec<String> = yaks.iter().map(|y| y.name.clone()).collect();
-            let yak_names: Vec<&str> = yak_name_strings.iter().map(|s| s.as_str()).collect();
+            let yaks_with_state: Vec<(&str, bool)> = yak_name_strings
+                .iter()
+                .zip(yaks.iter())
+                .map(|(name, yak)| (name.as_str(), yak.is_done()))
+                .collect();
 
             // Convert words to &str slice
             let word_refs: Vec<&str> = words.iter().map(|s| s.as_str()).collect();
 
-            // Call the complete function
-            let results = complete(&word_refs, &yak_names);
+            // Call the complete_with_state function
+            let results = complete_with_state(&word_refs, &yaks_with_state);
 
             // Print each result on a separate line
             for result in results {

@@ -19,7 +19,7 @@ mod write_field;
 
 pub use add_yak::AddYak;
 pub use app::Application;
-pub use completions::complete;
+pub use completions::{complete, complete_with_state};
 pub use done_yak::DoneYak;
 pub use edit_context::EditContext;
 pub use list_yaks::ListYaks;
