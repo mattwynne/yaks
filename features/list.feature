@@ -1,177 +1,177 @@
 Feature: List yaks
   Displays all yaks with their status and hierarchy.
 
-  The default format is "pretty" (tree-style with Unicode indicators).
-  Machine-readable formats "markdown" and "plain" are also available.
-  Alias: `yx ls`
+  Rule: Multiple output formats are available
+    The default is "pretty" (tree-style with Unicode indicators).
+    "markdown" shows state labels. "plain" shows just names (for scripting).
+    Aliases: "md" for markdown, "raw" for plain.
 
-  # Default (pretty) format
+    Example: Pretty format is the default
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I list the yaks
+      Then the output should be:
+        """
+          ○ Fix the bug
+        """
 
-  Scenario: List a single yak
-    Given I have a clean git repository
-    And I add the yak "Fix the bug"
-    When I list the yaks
-    Then the output should be:
-      """
-        ○ Fix the bug
-      """
+    Example: Markdown format shows state in brackets
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] Fix the bug
+        """
 
-  Scenario: Show nothing when no yaks exist
-    Given I have a clean git repository
-    When I list the yaks
-    Then the output should be empty
+    Example: "md" is an alias for markdown
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I list the yaks in "md" format
+      Then the output should be:
+        """
+        - [todo] Fix the bug
+        """
 
-  # Markdown format
+    Example: Plain format shows just the name
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I list the yaks in "plain" format
+      Then the output should be:
+        """
+        Fix the bug
+        """
 
-  Scenario: List yaks in markdown format
-    Given I have a clean git repository
-    And I add the yak "Fix the bug"
-    When I list the yaks in "markdown" format
-    Then the output should be:
-      """
-      - [todo] Fix the bug
-      """
+    Example: "raw" is an alias for plain
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I list the yaks in "raw" format
+      Then the output should be:
+        """
+        Fix the bug
+        """
 
-  Scenario: Show message when no yaks exist in markdown format
-    Given I have a clean git repository
-    When I list the yaks in "markdown" format
-    Then the output should be:
-      """
-      You have no yaks. Are you done?
-      """
+  Rule: Done yaks sort before undone yaks, then alphabetically
 
-  Scenario: Support "md" as alias for markdown format
-    Given I have a clean git repository
-    And I add the yak "Fix the bug"
-    When I list the yaks in "md" format
-    Then the output should be:
-      """
-      - [todo] Fix the bug
-      """
+    Example: Sort sibling yaks with done first, then alphabetically
+      Given I have a clean git repository
+      And I add the yak "zebra"
+      And I add the yak "mango"
+      And I add the yak "apple"
+      And I mark the yak "apple" as done
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] apple
+        - [todo] mango
+        - [todo] zebra
+        """
 
-  Scenario: Sort sibling yaks with done first, then alphabetically
-    Given I have a clean git repository
-    And I add the yak "zebra"
-    And I add the yak "mango"
-    And I add the yak "apple"
-    And I mark the yak "apple" as done
-    When I list the yaks in "markdown" format
-    Then the output should be:
-      """
-      - [done] apple
-      - [todo] mango
-      - [todo] zebra
-      """
+  Rule: Nested yaks are displayed as a hierarchy
 
-  Scenario: Display nested yaks with indentation
-    Given I have a clean git repository
-    And I add the yak "first task"
-    And I add the yak "first task/second task"
-    When I list the yaks in "markdown" format
-    Then the output should be:
-      """
-      - [todo] first task
-        - [todo] second task
-      """
+    Example: Nested yaks are indented under their parent
+      Given I have a clean git repository
+      And I add the yak "first task"
+      And I add the yak "first task/second task"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] first task
+          - [todo] second task
+        """
 
-  Scenario: Keep hierarchy when child is done
-    Given I have a clean git repository
-    And I add the yak "parent a"
-    And I add the yak "parent a/child 1"
-    And I add the yak "parent a/child 2"
-    And I mark the yak "parent a/child 1" as done
-    And I add the yak "parent b"
-    When I list the yaks in "markdown" format
-    Then the output should be:
-      """
-      - [wip] parent a
-        - [done] child 1
-        - [todo] child 2
-      - [todo] parent b
-      """
+    Example: Done children stay under their parent
+      Given I have a clean git repository
+      And I add the yak "parent a"
+      And I add the yak "parent a/child 1"
+      And I add the yak "parent a/child 2"
+      And I mark the yak "parent a/child 1" as done
+      And I add the yak "parent b"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent a
+          - [done] child 1
+          - [todo] child 2
+        - [todo] parent b
+        """
 
-  # Plain format (for scripting)
+    Example: Plain format shows full paths for nested yaks
+      Given I have a clean git repository
+      And I add the yak "parent task"
+      And I add the yak "parent task/child task"
+      When I list the yaks in "plain" format
+      Then the output should be:
+        """
+        parent task
+        parent task/child task
+        """
 
-  Scenario: List yaks in plain format
-    Given I have a clean git repository
-    And I add the yak "Fix the bug"
-    When I list the yaks in "plain" format
-    Then the output should be:
-      """
-      Fix the bug
-      """
+  Rule: Yaks can be filtered by completion status
 
-  Scenario: Show nested yaks with full paths in plain format
-    Given I have a clean git repository
-    And I add the yak "parent task"
-    And I add the yak "parent task/child task"
-    When I list the yaks in "plain" format
-    Then the output should be:
-      """
-      parent task
-      parent task/child task
-      """
+    Example: Show only incomplete yaks
+      Given I have a clean git repository
+      And I add the yak "incomplete task"
+      And I add the yak "done task"
+      And I mark the yak "done task" as done
+      When I list the yaks in "plain" format filtering by "not-done"
+      Then the output should be:
+        """
+        incomplete task
+        """
 
-  Scenario: Support "raw" as alias for plain format
-    Given I have a clean git repository
-    And I add the yak "Fix the bug"
-    When I list the yaks in "raw" format
-    Then the output should be:
-      """
-      Fix the bug
-      """
+    Example: Show only completed yaks
+      Given I have a clean git repository
+      And I add the yak "incomplete task"
+      And I add the yak "done task"
+      And I mark the yak "done task" as done
+      When I list the yaks in "plain" format filtering by "done"
+      Then the output should be:
+        """
+        done task
+        """
 
-  Scenario: Output nothing in plain format when no yaks exist
-    Given I have a clean git repository
-    When I list the yaks in "plain" format
-    Then the output should be empty
+    Example: Show all yaks when no filter is specified
+      Given I have a clean git repository
+      And I add the yak "done task"
+      And I add the yak "incomplete task"
+      And I mark the yak "done task" as done
+      When I list the yaks in "plain" format
+      Then the output should be:
+        """
+        done task
+        incomplete task
+        """
 
-  # Filtering with --only
+    Example: Parents are included when filtering nested yaks
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "parent/done child"
+      And I add the yak "parent/incomplete child"
+      And I mark the yak "parent/done child" as done
+      When I list the yaks in "markdown" format filtering by "not-done"
+      Then the output should be:
+        """
+        - [wip] parent
+          - [todo] incomplete child
+        """
 
-  Scenario: Filter to show only incomplete yaks
-    Given I have a clean git repository
-    And I add the yak "incomplete task"
-    And I add the yak "done task"
-    And I mark the yak "done task" as done
-    When I list the yaks in "plain" format filtering by "not-done"
-    Then the output should be:
-      """
-      incomplete task
-      """
+  Rule: Empty list shows appropriate feedback per format
 
-  Scenario: Filter to show only completed yaks
-    Given I have a clean git repository
-    And I add the yak "incomplete task"
-    And I add the yak "done task"
-    And I mark the yak "done task" as done
-    When I list the yaks in "plain" format filtering by "done"
-    Then the output should be:
-      """
-      done task
-      """
+    Example: Pretty format shows nothing when empty
+      Given I have a clean git repository
+      When I list the yaks
+      Then the output should be empty
 
-  Scenario: Show all yaks when no filter is specified
-    Given I have a clean git repository
-    And I add the yak "done task"
-    And I add the yak "incomplete task"
-    And I mark the yak "done task" as done
-    When I list the yaks in "plain" format
-    Then the output should be:
-      """
-      done task
-      incomplete task
-      """
+    Example: Markdown format shows a friendly message when empty
+      Given I have a clean git repository
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        You have no yaks. Are you done?
+        """
 
-  Scenario: Include parent when filtering nested yaks by not-done status
-    Given I have a clean git repository
-    And I add the yak "parent"
-    And I add the yak "parent/done child"
-    And I add the yak "parent/incomplete child"
-    And I mark the yak "parent/done child" as done
-    When I list the yaks in "markdown" format filtering by "not-done"
-    Then the output should be:
-      """
-      - [wip] parent
-        - [todo] incomplete child
-      """
-
+    Example: Plain format shows nothing when empty
+      Given I have a clean git repository
+      When I list the yaks in "plain" format
+      Then the output should be empty
