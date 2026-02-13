@@ -16,7 +16,8 @@ impl ShowContext {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let yak = app.store.get_yak(&self.name)?;
+        let resolved = app.store.find_yak(&self.name)?;
+        let yak = app.store.get_yak(&resolved)?;
 
         // Display the header (yak name)
         app.display.info(&yak.name);
