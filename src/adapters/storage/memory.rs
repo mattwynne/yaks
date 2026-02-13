@@ -130,7 +130,7 @@ impl StoragePort for InMemoryStorage {
             .filter(|yak_name| {
                 // Extract leaf node (last segment after /)
                 let leaf = yak_name.rsplit('/').next().unwrap_or(yak_name);
-                leaf.contains(name)
+                leaf.to_lowercase().contains(&name.to_lowercase())
             })
             .cloned()
             .collect();
@@ -404,6 +404,15 @@ mod tests {
         let result = StoragePort::find_yak(&storage, "nonexistent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_find_yak_case_insensitive() {
+        let storage = InMemoryStorage::new();
+        storage.create_yak("Fix the Bug").unwrap();
+
+        let result = StoragePort::find_yak(&storage, "the bug").unwrap();
+        assert_eq!(result, "Fix the Bug");
     }
 
     #[test]

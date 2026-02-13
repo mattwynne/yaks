@@ -216,7 +216,7 @@ impl StoragePort for DirectoryStorage {
             .filter(|yak| {
                 // Extract leaf node (last segment after /)
                 let leaf = yak.name.rsplit('/').next().unwrap_or(&yak.name);
-                leaf.contains(name)
+                leaf.to_lowercase().contains(&name.to_lowercase())
             })
             .collect();
 
@@ -419,6 +419,16 @@ mod tests {
         // Should match "child1" in "parent/child1"
         let result = StoragePort::find_yak(&storage, "child1").unwrap();
         assert_eq!(result, "parent/child1");
+    }
+
+    #[test]
+    fn test_find_yak_case_insensitive() {
+        let (storage, _temp) = setup_test_storage();
+        storage.create_yak("Fix the Bug").unwrap();
+
+        // Substring match should be case-insensitive
+        let result = StoragePort::find_yak(&storage, "the bug").unwrap();
+        assert_eq!(result, "Fix the Bug");
     }
 
     #[test]
