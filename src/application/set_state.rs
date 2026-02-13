@@ -51,8 +51,35 @@ impl SetState {
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         let resolved_name = self.resolve_name(app)?;
 
+        let names_to_update = if self.recursive {
+            let all_yaks = app.store.list_yaks()?;
+            let mut names: Vec<String> = all_yaks
+                .iter()
+                .filter(|yak| {
+                    yak.name == resolved_name
+                        || yak.name.starts_with(&format!("{resolved_name}/"))
+                })
+                .map(|yak| yak.name.clone())
+                .collect();
+            // Sort by depth descending (leaves first) so children are
+            // marked done before parents, passing hierarchy validation
+            names.sort_by(|a, b| {
+                let depth_a = a.matches('/').count();
+                let depth_b = b.matches('/').count();
+                depth_b.cmp(&depth_a)
+            });
+            names
+        } else {
+            vec![resolved_name]
+        };
+
         let state = self.state.clone();
-        app.with_yak_map(move |yak_map| yak_map.update_state(resolved_name, state))
+        app.with_yak_map(move |yak_map| {
+            for name in names_to_update {
+                yak_map.update_state(name, state.clone())?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -122,6 +149,33 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("ambiguous"));
+    }
+
+    #[test]
+    fn sets_state_recursively() {
+        let (storage, display, input) = setup();
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+        event_bus.register(Box::new(storage.clone()));
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("parent").execute(&mut app).unwrap();
+        AddYak::new("parent/child").execute(&mut app).unwrap();
+        AddYak::new("parent/child/grandchild")
+            .execute(&mut app)
+            .unwrap();
+
+        SetState::new("parent", "done")
+            .with_recursive(true)
+            .execute(&mut app)
+            .unwrap();
+
+        let parent = Store::get_yak(&storage, "parent").unwrap();
+        let child = Store::get_yak(&storage, "parent/child").unwrap();
+        let grandchild = Store::get_yak(&storage, "parent/child/grandchild").unwrap();
+        assert_eq!(parent.state, "done");
+        assert_eq!(child.state, "done");
+        assert_eq!(grandchild.state, "done");
     }
 
     #[test]

@@ -89,4 +89,19 @@ Describe 'yx state'
     The error should include "yak name 'bug' is ambiguous"
     The status should be failure
   End
+
+  It 'sets state recursively on parent and all descendants'
+    When run sh -c "
+      yx add 'parent'
+      yx add 'parent/child1'
+      yx add 'parent/child2'
+      yx add 'parent/child1/grandchild'
+      yx state --recursive 'parent' done
+      yx list --format markdown
+    "
+    The output should include $'\e[90m- [done] parent\e[0m'
+    The output should include $'\e[90m  - [done] child1\e[0m'
+    The output should include $'\e[90m  - [done] child2\e[0m'
+    The output should include $'\e[90m    - [done] grandchild\e[0m'
+  End
 End

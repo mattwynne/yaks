@@ -78,6 +78,9 @@ enum Commands {
         name: Vec<String>,
         /// The state to set (e.g., "todo", "wip", "done")
         state: String,
+        /// Apply state change recursively to all descendants
+        #[arg(long)]
+        recursive: bool,
     },
     /// Write or show custom field for a yak
     Field {
@@ -166,9 +169,13 @@ fn main() -> Result<()> {
                 app.handle(EditContext::new(&name_str))
             }
         }
-        Commands::State { name, state } => {
+        Commands::State {
+            name,
+            state,
+            recursive,
+        } => {
             let name_str = name.join(" ");
-            app.handle(SetState::new(&name_str, &state))
+            app.handle(SetState::new(&name_str, &state).with_recursive(recursive))
         }
         Commands::Field { name, field, show } => {
             let name_str = name.join(" ");
