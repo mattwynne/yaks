@@ -46,7 +46,7 @@ impl DirectoryStorage {
     /// This is intended for testing only, where we want to use isolated temp
     /// directories without environment variable pollution.
     #[cfg(test)]
-    fn from_path_unchecked(base_path: PathBuf) -> Self {
+    pub(crate) fn from_path_unchecked(base_path: PathBuf) -> Self {
         Self { base_path }
     }
 
@@ -102,6 +102,10 @@ impl DirectoryStorage {
 
 impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &str) -> Result<()> {
+        if self.field_path(name, CONTEXT_FIELD).exists() {
+            anyhow::bail!("Yak '{}' already exists", name);
+        }
+
         let dir = self.yak_dir(name);
         fs::create_dir_all(&dir)
             .with_context(|| format!("Failed to create yak directory: {name}"))?;
@@ -149,6 +153,10 @@ impl WriteYakStore for DirectoryStorage {
     }
 
     fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
+        let dir = self.yak_dir(yak_name);
+        if !dir.exists() {
+            anyhow::bail!("yak '{}' not found", yak_name);
+        }
         let field_path = self.field_path(yak_name, field_name);
         fs::write(&field_path, content)
             .with_context(|| format!("Failed to write field '{field_name}' for '{yak_name}'"))
@@ -165,7 +173,9 @@ impl ReadYakStore for DirectoryStorage {
         }
 
         // Read context field
-        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD).ok();
+        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD)
+            .ok()
+            .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
         // Read state field, default to "todo" if not present
         let state = ReadYakStore::read_field(self, name, STATE_FIELD)
@@ -260,137 +270,6 @@ mod tests {
     }
 
     #[test]
-    fn test_create_yak() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        assert!(storage.yak_dir("test-yak").exists());
-    }
-
-    #[test]
-    fn test_get_yak() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
-        assert_eq!(yak.name, "test-yak");
-        assert!(!yak.is_done());
-    }
-
-    #[test]
-    fn test_list_yaks() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("yak1").unwrap();
-        storage.create_yak("yak2").unwrap();
-        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
-        assert_eq!(yaks.len(), 2);
-    }
-
-    #[test]
-    fn test_mark_done() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        storage
-            .write_field("test-yak", STATE_FIELD, "done")
-            .unwrap();
-        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
-        assert!(yak.is_done());
-    }
-
-    #[test]
-    fn test_delete_yak() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        storage.delete_yak("test-yak").unwrap();
-        assert!(!storage.yak_dir("test-yak").exists());
-    }
-
-    #[test]
-    fn test_context() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        storage
-            .write_field("test-yak", CONTEXT_FIELD, "Test context")
-            .unwrap();
-        let context = ReadYakStore::read_field(&storage, "test-yak", CONTEXT_FIELD).unwrap();
-        assert_eq!(context, "Test context");
-    }
-
-    #[test]
-    fn test_rename_yak() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("old-name").unwrap();
-        storage
-            .write_field("old-name", CONTEXT_FIELD, "Context text")
-            .unwrap();
-        storage
-            .write_field("old-name", STATE_FIELD, "done")
-            .unwrap();
-
-        storage.rename_yak("old-name", "new-name").unwrap();
-
-        assert!(!storage.yak_dir("old-name").exists());
-        assert!(storage.yak_dir("new-name").exists());
-
-        let yak = ReadYakStore::get_yak(&storage, "new-name").unwrap();
-        assert_eq!(yak.name, "new-name");
-        assert!(yak.is_done());
-        assert_eq!(yak.context.unwrap(), "Context text");
-    }
-
-    #[test]
-    fn test_rename_nonexistent_yak() {
-        let (storage, _temp) = setup_test_storage();
-        let result = storage.rename_yak("nonexistent", "new-name");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
-
-    #[test]
-    fn test_rename_to_existing_yak() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("yak1").unwrap();
-        storage.create_yak("yak2").unwrap();
-        let result = storage.rename_yak("yak1", "yak2");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("already exists"));
-    }
-
-    #[test]
-    fn test_find_yak_matches_leaf_not_full_path() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("parent").unwrap();
-        storage.create_yak("parent/child1").unwrap();
-
-        // Should match "parent" yak, not "parent/child1"
-        let result = ReadYakStore::find_yak(&storage, "parent").unwrap();
-        assert_eq!(result, "parent");
-
-        // Should match "child1" in "parent/child1"
-        let result = ReadYakStore::find_yak(&storage, "child1").unwrap();
-        assert_eq!(result, "parent/child1");
-    }
-
-    #[test]
-    fn test_find_yak_case_insensitive() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("Fix the Bug").unwrap();
-
-        // Substring match should be case-insensitive
-        let result = ReadYakStore::find_yak(&storage, "the bug").unwrap();
-        assert_eq!(result, "Fix the Bug");
-    }
-
-    #[test]
-    fn test_find_yak_leaf_only_no_ambiguity() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("parent/child1").unwrap();
-
-        // Searching for "parent" should not match "parent/child1"
-        let result = ReadYakStore::find_yak(&storage, "parent");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
-
-    #[test]
     fn test_skip_git_checks_with_env_var() {
         // Save original env var state
         let original = std::env::var("YX_SKIP_GIT_CHECKS").ok();
@@ -410,40 +289,6 @@ mod tests {
         if let Some(val) = original {
             std::env::set_var("YX_SKIP_GIT_CHECKS", val);
         }
-    }
-
-    #[test]
-    fn test_write_and_read_field() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        storage
-            .write_field("test-yak", "notes", "Field content")
-            .unwrap();
-        let content = ReadYakStore::read_field(&storage, "test-yak", "notes").unwrap();
-        assert_eq!(content, "Field content");
-    }
-
-    #[test]
-    fn test_write_field_with_dots() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        storage
-            .write_field("test-yak", "notes.txt", "Text file")
-            .unwrap();
-        let content = ReadYakStore::read_field(&storage, "test-yak", "notes.txt").unwrap();
-        assert_eq!(content, "Text file");
-    }
-
-    #[test]
-    fn test_read_nonexistent_field() {
-        let (storage, _temp) = setup_test_storage();
-        storage.create_yak("test-yak").unwrap();
-        let result = ReadYakStore::read_field(&storage, "test-yak", "nonexistent");
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to read field"));
     }
 
     #[test]
