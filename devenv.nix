@@ -11,6 +11,7 @@
     pkg-config
     openssl
     zlib
+    tmux
   ] ++ lib.optionals pkgs.stdenv.isDarwin [
     libiconv
   ];
