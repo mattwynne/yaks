@@ -7,8 +7,8 @@ use yx::adapters::input::ConsoleInput;
 use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
 use yx::application::{
-    AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
-    ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
+    complete, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak,
+    SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
 
@@ -91,6 +91,12 @@ enum Commands {
     Sync,
     /// Show event log from refs/notes/yaks
     Log,
+    /// Generate shell completions (hidden)
+    #[command(hide = true)]
+    Completions {
+        #[arg(last = true)]
+        words: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -173,5 +179,22 @@ fn main() -> Result<()> {
         }
         Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),
+        Commands::Completions { words } => {
+            // Get yak names from storage (for now, pass empty slice)
+            let yak_names: Vec<&str> = vec![];
+
+            // Convert words to &str slice
+            let word_refs: Vec<&str> = words.iter().map(|s| s.as_str()).collect();
+
+            // Call the complete function
+            let results = complete(&word_refs, &yak_names);
+
+            // Print each result on a separate line
+            for result in results {
+                println!("{}", result);
+            }
+
+            Ok(())
+        }
     }
 }
