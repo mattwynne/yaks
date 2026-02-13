@@ -47,7 +47,9 @@ macro_rules! yak_store_tests {
         fn rename_yak_moves_with_fields() {
             let (store, _guard) = $create_store;
             store.create_yak("old-name").unwrap();
-            store.write_field("old-name", CONTEXT_FIELD, "Context text").unwrap();
+            store
+                .write_field("old-name", CONTEXT_FIELD, "Context text")
+                .unwrap();
             store.write_field("old-name", STATE_FIELD, "done").unwrap();
 
             store.rename_yak("old-name", "new-name").unwrap();
@@ -83,7 +85,9 @@ macro_rules! yak_store_tests {
         fn write_field_is_readable() {
             let (store, _guard) = $create_store;
             store.create_yak("test-yak").unwrap();
-            store.write_field("test-yak", "notes", "Field content").unwrap();
+            store
+                .write_field("test-yak", "notes", "Field content")
+                .unwrap();
             let content = ReadYakStore::read_field(&store, "test-yak", "notes").unwrap();
             assert_eq!(content, "Field content");
         }
@@ -229,7 +233,9 @@ macro_rules! yak_store_tests {
         fn context_via_field() {
             let (store, _guard) = $create_store;
             store.create_yak("test-yak").unwrap();
-            store.write_field("test-yak", CONTEXT_FIELD, "Some context").unwrap();
+            store
+                .write_field("test-yak", CONTEXT_FIELD, "Some context")
+                .unwrap();
             let yak = ReadYakStore::get_yak(&store, "test-yak").unwrap();
             assert_eq!(yak.context, Some("Some context".to_string()));
         }
