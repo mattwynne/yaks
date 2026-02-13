@@ -12,8 +12,17 @@ pub trait TestWorld {
     /// Add a yak with the given name
     fn add_yak(&mut self, name: &str) -> Result<()>;
 
-    /// List all yaks
+    /// Mark a yak as done
+    fn done_yak(&mut self, name: &str) -> Result<()>;
+
+    /// List all yaks (default pretty format)
     fn list_yaks(&mut self) -> Result<()>;
+
+    /// List yaks with a specific format
+    fn list_yaks_with_format(&mut self, format: &str) -> Result<()>;
+
+    /// List yaks with a specific format and filter
+    fn list_yaks_with_format_and_filter(&mut self, format: &str, only: &str) -> Result<()>;
 
     /// Get the output from the last command
     fn get_output(&self) -> String;
