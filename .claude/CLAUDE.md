@@ -65,6 +65,11 @@ The codebase uses hexagonal architecture for testability and future extensibilit
 - Wires together ports and adapters
 - Routes commands to use cases
 
+### Target Architecture: CQRS/Event Sourcing
+The codebase is evolving toward **CQRS (Command Query Responsibility Segregation)** with **Event Sourcing**. Commands mutate state through aggregates; queries read from projections. Events are the source of truth.
+
+**When making architectural decisions, invoke the `cqrs-event-sourcing` skill** for guidance on aggregate boundaries, event design, read models, policies, and sagas.
+
 ### Storage Format
 - Uses `YAK_PATH` environment variable (defaults to `.yaks`)
 - Each yak is a directory: `$YAK_PATH/<yak-name>/`
