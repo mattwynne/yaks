@@ -2,7 +2,6 @@
 
 use crate::domain::validate_field_name;
 use anyhow::{Context as AnyhowContext, Result};
-use std::io::{self, Read};
 
 use super::{Application, UseCase};
 
@@ -23,14 +22,14 @@ impl WriteField {
         // Validate field name
         validate_field_name(&self.field)?;
 
-        // Read content from stdin
-        let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .context("Failed to read from stdin")?;
+        // Request content via input port
+        let content = app
+            .input
+            .request_content(None, None)?
+            .context("No content provided on stdin")?;
 
         app.with_yak(&self.name, |yak| {
-            yak.update_field(self.field.clone(), buffer)
+            yak.update_field(self.field.clone(), content)
         })
     }
 }
