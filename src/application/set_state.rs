@@ -56,8 +56,7 @@ impl SetState {
             let mut names: Vec<String> = all_yaks
                 .iter()
                 .filter(|yak| {
-                    yak.name == resolved_name
-                        || yak.name.starts_with(&format!("{resolved_name}/"))
+                    yak.name == resolved_name || yak.name.starts_with(&format!("{resolved_name}/"))
                 })
                 .map(|yak| yak.name.clone())
                 .collect();

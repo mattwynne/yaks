@@ -8,7 +8,7 @@ use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
 use yx::application::{
     complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
-    RemoveYak, SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
+    RemoveYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
 use yx::ports::Store;
@@ -49,6 +49,15 @@ enum Commands {
         /// The yak name (space-separated words)
         name: Vec<String>,
         /// Mark yak and all children as done recursively
+        #[arg(long)]
+        recursive: bool,
+    },
+    /// Start working on a yak (set state to wip)
+    #[command(alias = "wip")]
+    Start {
+        /// The yak name (space-separated words)
+        name: Vec<String>,
+        /// Start yak and all children recursively
         #[arg(long)]
         recursive: bool,
     },
@@ -149,6 +158,10 @@ fn main() -> Result<()> {
             let name_str = name.join(" ");
             app.handle(DoneYak::new(&name_str, recursive))
         }
+        Commands::Start { name, recursive } => {
+            let name_str = name.join(" ");
+            app.handle(StartYak::new(&name_str, recursive))
+        }
         Commands::Remove { name } => {
             let name_str = name.join(" ");
             app.handle(RemoveYak::new(&name_str))
@@ -226,8 +239,7 @@ mod tests {
             }
         }
 
-        let completion_names: BTreeSet<String> =
-            COMMANDS.iter().map(|s| s.to_string()).collect();
+        let completion_names: BTreeSet<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
 
         let missing: Vec<_> = clap_names.difference(&completion_names).collect();
         let extra: Vec<_> = completion_names.difference(&clap_names).collect();

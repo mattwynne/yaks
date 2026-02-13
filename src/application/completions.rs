@@ -7,6 +7,8 @@ pub const COMMANDS: &[&str] = &[
     "ls",
     "done",
     "finish",
+    "start",
+    "wip",
     "remove",
     "rm",
     "move",
@@ -25,13 +27,14 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
 
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
-        "done", "finish", "remove", "rm", "move", "mv", "context", "state", "field",
+        "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "context", "state", "field",
     ];
 
     // Flags for each command
     let command_flags = |cmd: &str| -> Vec<&str> {
         match cmd {
-            "done" | "finish" => vec!["--recursive"],
+            "done" | "finish" | "start" | "wip" => vec!["--recursive"],
+            "state" => vec!["--recursive"],
             "context" => vec!["--show"],
             "field" => vec!["--show"],
             "list" | "ls" => vec!["--format", "--only"],
