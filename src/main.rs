@@ -8,10 +8,9 @@ use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
 use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
-    ShowContext, ShowField, SyncYaks, WriteField,
+    ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
-use yx::ports::EventStore;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -120,9 +119,17 @@ fn main() -> Result<()> {
     let display = ConsoleDisplay;
     let input = ConsoleInput;
     let sync = GitRefSync::new()?;
+    let event_reader = GitEventStore::new(&repo_path)?;
 
     // Create application with injected dependencies
-    let mut app = Application::new(&mut event_bus, &storage, &display, &input, Some(&sync));
+    let mut app = Application::new(
+        &mut event_bus,
+        &storage,
+        &display,
+        &input,
+        Some(&sync),
+        Some(&event_reader),
+    );
 
     match cli.command {
         Commands::Add { name } => {
@@ -165,16 +172,6 @@ fn main() -> Result<()> {
             }
         }
         Commands::Sync => app.handle(SyncYaks::new()),
-        Commands::Log => {
-            let repo_path = std::env::var("GIT_WORK_TREE")
-                .map(PathBuf::from)
-                .unwrap_or(std::env::current_dir()?);
-            let reader = GitEventStore::new(&repo_path)?;
-            let events = reader.get_all_events()?;
-            for event in events {
-                println!("{}", event.format_message());
-            }
-            Ok(())
-        }
+        Commands::Log => app.handle(ShowLog::new()),
     }
 }

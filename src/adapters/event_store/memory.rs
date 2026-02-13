@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::{Arc, Mutex};
 
 use crate::domain::YakEvent;
-use crate::ports::EventStore;
+use crate::ports::{EventStore, EventStoreReader};
 
 #[derive(Clone)]
 pub struct InMemoryEventStore {
@@ -43,6 +43,12 @@ impl EventStore for InMemoryEventStore {
     }
 }
 
+impl EventStoreReader for InMemoryEventStore {
+    fn get_all_events(&self) -> Result<Vec<YakEvent>> {
+        EventStore::get_all_events(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,7 +63,7 @@ mod tests {
         });
 
         store.append(&event).unwrap();
-        let events = store.get_all_events().unwrap();
+        let events = EventStore::get_all_events(&store).unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0], event);

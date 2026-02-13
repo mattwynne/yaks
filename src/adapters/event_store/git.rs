@@ -3,7 +3,7 @@ use git2::Repository;
 use std::path::Path;
 
 use crate::domain::YakEvent;
-use crate::ports::EventStore;
+use crate::ports::{EventStore, EventStoreReader};
 
 pub struct GitEventStore {
     repo: Repository,
@@ -189,8 +189,7 @@ impl GitEventStore {
 #[cfg(test)]
 impl GitEventStore {
     pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
-        Ok(self
-            .get_all_events()?
+        Ok(EventStore::get_all_events(self)?
             .into_iter()
             .filter(|e| e.yak_name() == name)
             .collect())
@@ -254,6 +253,12 @@ impl EventStore for GitEventStore {
         // Reverse: revwalk gives newest-first, we want chronological
         events.reverse();
         Ok(events)
+    }
+}
+
+impl EventStoreReader for GitEventStore {
+    fn get_all_events(&self) -> Result<Vec<YakEvent>> {
+        EventStore::get_all_events(self)
     }
 }
 

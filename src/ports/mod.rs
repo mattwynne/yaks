@@ -11,6 +11,7 @@ pub mod sync;
 pub use display::DisplayPort;
 pub use event_listener::EventListener;
 pub use event_store::EventStore;
+pub use event_store::EventStoreReader;
 pub use input::InputPort;
 pub use storage::StoragePort;
 pub use store::Store;
