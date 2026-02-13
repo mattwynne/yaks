@@ -1,7 +1,5 @@
 // Use case: Remove all done yaks
 
-use crate::domain::events::*;
-use crate::domain::YakEvent;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -22,22 +20,7 @@ impl Default for PruneYaks {
 
 impl PruneYaks {
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let yaks = app.store.list_yaks()?;
-
-        for yak in yaks.iter().filter(|y| y.is_done()) {
-            let mut yak_to_remove = yak.clone();
-            yak_to_remove
-                .pending_events
-                .push(YakEvent::Removed(RemovedEvent {
-                    name: yak_to_remove.name.clone(),
-                }));
-
-            for event in yak_to_remove.take_events() {
-                app.event_bus.publish(event)?;
-            }
-        }
-
-        Ok(())
+        app.with_yak_map(|yak_map| yak_map.prune())
     }
 }
 

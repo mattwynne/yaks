@@ -207,6 +207,25 @@ impl YakMap {
         Ok(())
     }
 
+    pub fn prune(&mut self) -> Result<()> {
+        use crate::domain::find_children;
+
+        let done_leaves: Vec<String> = self
+            .yaks
+            .iter()
+            .filter(|(name, state)| {
+                state.state == "done" && find_children(name, &self.yaks).is_empty()
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        for name in done_leaves {
+            self.remove_yak(name)?;
+        }
+
+        Ok(())
+    }
+
     pub fn move_yak(&mut self, old_name: String, new_name: String) -> Result<()> {
         use crate::domain::{find_children, validate_yak_name};
 
@@ -761,5 +780,66 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("has"));
         assert!(err_msg.contains("child"));
+    }
+
+    // Tests for prune
+    #[test]
+    fn test_prune_removes_done_leaf_yaks() {
+        let mut map = YakMap::new();
+        map.add_yak("done-yak".to_string(), None).unwrap();
+        map.add_yak("todo-yak".to_string(), None).unwrap();
+        map.update_state("done-yak".to_string(), "done".to_string())
+            .unwrap();
+        map.take_events();
+
+        map.prune().unwrap();
+
+        assert!(!map.yaks.contains_key("done-yak"));
+        assert!(map.yaks.contains_key("todo-yak"));
+    }
+
+    #[test]
+    fn test_prune_skips_done_parent_with_undone_children() {
+        let mut map = YakMap::new();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        // Parent is auto-created as todo; child is todo
+        // Mark child done, then mark parent done
+        map.update_state("parent/child".to_string(), "done".to_string())
+            .unwrap();
+        map.update_state("parent".to_string(), "done".to_string())
+            .unwrap();
+        map.take_events();
+
+        // Prune should only remove the child (leaf), not the parent
+        // because parent still has a child at prune-collection time.
+        // After child is removed, parent becomes a leaf but prune
+        // only processes the snapshot collected before removals.
+        map.prune().unwrap();
+
+        // Child should be removed (done leaf)
+        assert!(!map.yaks.contains_key("parent/child"));
+        // Parent kept because it had children when we collected
+        assert!(map.yaks.contains_key("parent"));
+    }
+
+    #[test]
+    fn test_prune_emits_removed_events() {
+        let mut map = YakMap::new();
+        map.add_yak("done-yak".to_string(), None).unwrap();
+        map.add_yak("todo-yak".to_string(), None).unwrap();
+        map.update_state("done-yak".to_string(), "done".to_string())
+            .unwrap();
+        map.take_events();
+
+        map.prune().unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::Removed(RemovedEvent { name }) => {
+                assert_eq!(name, "done-yak")
+            }
+            _ => panic!("Expected Removed event"),
+        }
     }
 }
