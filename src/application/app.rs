@@ -1,8 +1,6 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
-#[cfg(test)]
-use crate::domain::validate_yak_name;
-use crate::domain::{Yak, YakMap};
+use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
 use crate::ports::{DisplayPort, EventStoreReader, InputPort, Store, SyncPort};
 use anyhow::Result;
@@ -41,29 +39,6 @@ impl<'a> Application<'a> {
         }
     }
 
-    pub fn with_yak<F>(&mut self, name: &str, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut Yak) -> Result<()>,
-    {
-        let yak_name = self.store.find_yak(name)?;
-        let mut yak = self.store.get_yak(&yak_name)?;
-        f(&mut yak)?;
-        self.save(&mut yak)?;
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn with_new_yak<F>(&mut self, name: &str, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut Yak) -> Result<()>,
-    {
-        validate_yak_name(name).map_err(|e| anyhow::anyhow!(e))?;
-        let mut yak = Yak::new(name.to_string());
-        f(&mut yak)?;
-        self.save(&mut yak)?;
-        Ok(())
-    }
-
     pub fn with_yak_map<F>(&mut self, f: F) -> Result<()>
     where
         F: FnOnce(&mut YakMap) -> Result<()>,
@@ -71,13 +46,6 @@ impl<'a> Application<'a> {
         let mut yak_map = YakMap::from_store(self.store)?;
         f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
-        Ok(())
-    }
-
-    fn save(&mut self, aggregate: &mut Yak) -> Result<()> {
-        for event in aggregate.take_events() {
-            self.event_bus.publish(event)?;
-        }
         Ok(())
     }
 
@@ -108,7 +76,7 @@ mod tests {
     use crate::ports::Store;
 
     #[test]
-    fn test_application_with_new_yak() {
+    fn test_application_create_yak_via_yak_map() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
@@ -120,17 +88,14 @@ mod tests {
 
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        app.with_new_yak("test", |yak| {
-            assert_eq!(yak.name, "test");
-            Ok(())
-        })
-        .unwrap();
+        app.with_yak_map(|yak_map| yak_map.add_yak("test".to_string(), None))
+            .unwrap();
 
         assert!(Store::yak_exists(&storage, "test"));
     }
 
     #[test]
-    fn test_application_with_yak() {
+    fn test_application_mutate_yak_via_yak_map() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
@@ -142,12 +107,12 @@ mod tests {
 
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        // Create yak first
-        app.with_new_yak("test", |_| Ok(())).unwrap();
-
-        // Now mutate it
-        app.with_yak("test", |yak| yak.update_state("wip".to_string()))
-            .unwrap();
+        // Create yak and mutate its state via YakMap
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak("test".to_string(), None)?;
+            yak_map.update_state("test".to_string(), "wip".to_string())
+        })
+        .unwrap();
 
         let yak = Store::get_yak(&storage, "test").unwrap();
         assert_eq!(yak.state, "wip");
