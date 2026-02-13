@@ -58,13 +58,13 @@ Feature: List yaks
       And I add the yak "zebra"
       And I add the yak "mango"
       And I add the yak "apple"
-      And I mark the yak "apple" as done
+      And I mark the yak "zebra" as done
       When I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [done] apple
+        - [done] zebra
+        - [todo] apple
         - [todo] mango
-        - [todo] zebra
         """
 
   Rule: Nested yaks are displayed as a hierarchy
