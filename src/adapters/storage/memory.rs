@@ -2,7 +2,7 @@
 
 use crate::domain::events::*;
 use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{EventListener, StoragePort, Store};
+use crate::ports::{EventListener, ReadYakStore, WriteYakStore};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -27,7 +27,7 @@ impl Default for InMemoryStorage {
     }
 }
 
-impl StoragePort for InMemoryStorage {
+impl WriteYakStore for InMemoryStorage {
     fn create_yak(&self, name: &str) -> Result<()> {
         let mut yaks = self.yaks.write().unwrap();
 
@@ -43,6 +43,44 @@ impl StoragePort for InMemoryStorage {
         Ok(())
     }
 
+    fn delete_yak(&self, name: &str) -> Result<()> {
+        let mut yaks = self.yaks.write().unwrap();
+        yaks.remove(name);
+        Ok(())
+    }
+
+    fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
+        let mut yaks = self.yaks.write().unwrap();
+
+        if !yaks.contains_key(from) {
+            anyhow::bail!("yak '{}' not found", from);
+        }
+
+        if yaks.contains_key(to) {
+            anyhow::bail!("Yak '{}' already exists", to);
+        }
+
+        if let Some(fields) = yaks.remove(from) {
+            yaks.insert(to.to_string(), fields);
+        }
+
+        Ok(())
+    }
+
+    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
+        let mut yaks = self.yaks.write().unwrap();
+
+        let fields = yaks
+            .get_mut(yak_name)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_name))?;
+
+        fields.insert(field_name.to_string(), content.to_string());
+
+        Ok(())
+    }
+}
+
+impl ReadYakStore for InMemoryStorage {
     fn get_yak(&self, name: &str) -> Result<Yak> {
         let yaks = self.yaks.read().unwrap();
 
@@ -80,7 +118,7 @@ impl StoragePort for InMemoryStorage {
         let mut result = Vec::new();
 
         for name in yaks.keys() {
-            if let Ok(yak) = StoragePort::get_yak(self, name) {
+            if let Ok(yak) = ReadYakStore::get_yak(self, name) {
                 result.push(yak);
             }
         }
@@ -91,28 +129,8 @@ impl StoragePort for InMemoryStorage {
         Ok(result)
     }
 
-    fn delete_yak(&self, name: &str) -> Result<()> {
-        let mut yaks = self.yaks.write().unwrap();
-        yaks.remove(name);
-        Ok(())
-    }
-
-    fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
-        let mut yaks = self.yaks.write().unwrap();
-
-        if !yaks.contains_key(from) {
-            anyhow::bail!("yak '{}' not found", from);
-        }
-
-        if yaks.contains_key(to) {
-            anyhow::bail!("Yak '{}' already exists", to);
-        }
-
-        if let Some(fields) = yaks.remove(from) {
-            yaks.insert(to.to_string(), fields);
-        }
-
-        Ok(())
+    fn yak_exists(&self, name: &str) -> bool {
+        self.yaks.read().unwrap().contains_key(name)
     }
 
     fn find_yak(&self, name: &str) -> Result<String> {
@@ -139,18 +157,6 @@ impl StoragePort for InMemoryStorage {
             1 => Ok(matches[0].clone()),
             _ => anyhow::bail!("yak name '{}' is ambiguous", name),
         }
-    }
-
-    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
-        let mut yaks = self.yaks.write().unwrap();
-
-        let fields = yaks
-            .get_mut(yak_name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_name))?;
-
-        fields.insert(field_name.to_string(), content.to_string());
-
-        Ok(())
     }
 
     fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
@@ -203,28 +209,6 @@ impl EventListener for InMemoryStorage {
     }
 }
 
-impl Store for InMemoryStorage {
-    fn get_yak(&self, name: &str) -> Result<Yak> {
-        StoragePort::get_yak(self, name)
-    }
-
-    fn list_yaks(&self) -> Result<Vec<Yak>> {
-        StoragePort::list_yaks(self)
-    }
-
-    fn yak_exists(&self, name: &str) -> bool {
-        self.yaks.read().unwrap().contains_key(name)
-    }
-
-    fn find_yak(&self, name: &str) -> Result<String> {
-        StoragePort::find_yak(self, name)
-    }
-
-    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
-        StoragePort::read_field(self, yak_name, field_name)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,7 +219,7 @@ mod tests {
         storage.create_yak("test-yak").unwrap();
 
         // Verify yak exists
-        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
         assert_eq!(yak.name, "test-yak");
     }
 
@@ -252,7 +236,7 @@ mod tests {
     fn test_get_yak() {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak").unwrap();
-        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
         assert_eq!(yak.name, "test-yak");
         assert!(!yak.is_done());
         assert_eq!(yak.state, "todo");
@@ -262,7 +246,7 @@ mod tests {
     #[test]
     fn test_get_nonexistent_yak() {
         let storage = InMemoryStorage::new();
-        let result = StoragePort::get_yak(&storage, "nonexistent");
+        let result = ReadYakStore::get_yak(&storage, "nonexistent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -272,7 +256,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         storage.create_yak("yak1").unwrap();
         storage.create_yak("yak2").unwrap();
-        let yaks = StoragePort::list_yaks(&storage).unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
         // Check sorted order
         assert_eq!(yaks[0].name, "yak1");
@@ -282,7 +266,7 @@ mod tests {
     #[test]
     fn test_list_yaks_empty() {
         let storage = InMemoryStorage::new();
-        let yaks = StoragePort::list_yaks(&storage).unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 0);
     }
 
@@ -291,7 +275,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak").unwrap();
         storage.delete_yak("test-yak").unwrap();
-        let result = StoragePort::get_yak(&storage, "test-yak");
+        let result = ReadYakStore::get_yak(&storage, "test-yak");
         assert!(result.is_err());
     }
 
@@ -317,11 +301,11 @@ mod tests {
         storage.rename_yak("old-name", "new-name").unwrap();
 
         // Old name should not exist
-        let result = StoragePort::get_yak(&storage, "old-name");
+        let result = ReadYakStore::get_yak(&storage, "old-name");
         assert!(result.is_err());
 
         // New name should exist with all fields preserved
-        let yak = StoragePort::get_yak(&storage, "new-name").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "new-name").unwrap();
         assert_eq!(yak.name, "new-name");
         assert!(yak.is_done());
         assert_eq!(yak.context.unwrap(), "Context text");
@@ -349,7 +333,7 @@ mod tests {
     fn test_find_yak_exact_match() {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak").unwrap();
-        let result = StoragePort::find_yak(&storage, "test-yak").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "test-yak").unwrap();
         assert_eq!(result, "test-yak");
     }
 
@@ -357,7 +341,7 @@ mod tests {
     fn test_find_yak_fuzzy_match() {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak").unwrap();
-        let result = StoragePort::find_yak(&storage, "test").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "test").unwrap();
         assert_eq!(result, "test-yak");
     }
 
@@ -368,11 +352,11 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Should match "parent" yak, not "parent/child1"
-        let result = StoragePort::find_yak(&storage, "parent").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "parent").unwrap();
         assert_eq!(result, "parent");
 
         // Should match "child1" in "parent/child1"
-        let result = StoragePort::find_yak(&storage, "child1").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "child1").unwrap();
         assert_eq!(result, "parent/child1");
     }
 
@@ -382,7 +366,7 @@ mod tests {
         storage.create_yak("parent/child1").unwrap();
 
         // Searching for "parent" should not match "parent/child1"
-        let result = StoragePort::find_yak(&storage, "parent");
+        let result = ReadYakStore::find_yak(&storage, "parent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -392,7 +376,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak1").unwrap();
         storage.create_yak("test-yak2").unwrap();
-        let result = StoragePort::find_yak(&storage, "test");
+        let result = ReadYakStore::find_yak(&storage, "test");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("ambiguous"));
     }
@@ -400,7 +384,7 @@ mod tests {
     #[test]
     fn test_find_yak_not_found() {
         let storage = InMemoryStorage::new();
-        let result = StoragePort::find_yak(&storage, "nonexistent");
+        let result = ReadYakStore::find_yak(&storage, "nonexistent");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -410,7 +394,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         storage.create_yak("Fix the Bug").unwrap();
 
-        let result = StoragePort::find_yak(&storage, "the bug").unwrap();
+        let result = ReadYakStore::find_yak(&storage, "the bug").unwrap();
         assert_eq!(result, "Fix the Bug");
     }
 
@@ -421,7 +405,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes", "Field content")
             .unwrap();
-        let content = StoragePort::read_field(&storage, "test-yak", "notes").unwrap();
+        let content = ReadYakStore::read_field(&storage, "test-yak", "notes").unwrap();
         assert_eq!(content, "Field content");
     }
 
@@ -432,7 +416,7 @@ mod tests {
         storage
             .write_field("test-yak", "notes.txt", "Text file")
             .unwrap();
-        let content = StoragePort::read_field(&storage, "test-yak", "notes.txt").unwrap();
+        let content = ReadYakStore::read_field(&storage, "test-yak", "notes.txt").unwrap();
         assert_eq!(content, "Text file");
     }
 
@@ -440,7 +424,7 @@ mod tests {
     fn test_read_nonexistent_field() {
         let storage = InMemoryStorage::new();
         storage.create_yak("test-yak").unwrap();
-        let result = StoragePort::read_field(&storage, "test-yak", "nonexistent");
+        let result = ReadYakStore::read_field(&storage, "test-yak", "nonexistent");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -463,7 +447,7 @@ mod tests {
         storage
             .write_field("test-yak", STATE_FIELD, "done")
             .unwrap();
-        let yak = StoragePort::get_yak(&storage, "test-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, "test-yak").unwrap();
         assert!(yak.is_done());
         assert_eq!(yak.state, "done");
     }
@@ -494,7 +478,7 @@ mod tests {
         }
 
         // Verify all yaks were created
-        let yaks = StoragePort::list_yaks(&storage).unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 6);
     }
 }

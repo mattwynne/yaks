@@ -1,7 +1,9 @@
+// Read-side storage port - abstraction for yak queries
+
 use crate::domain::Yak;
 use anyhow::Result;
 
-pub trait Store {
+pub trait ReadYakStore {
     fn get_yak(&self, name: &str) -> Result<Yak>;
     fn list_yaks(&self) -> Result<Vec<Yak>>;
     fn yak_exists(&self, name: &str) -> bool;
@@ -18,7 +20,7 @@ mod tests {
         yaks: HashMap<String, Yak>,
     }
 
-    impl Store for InMemoryStore {
+    impl ReadYakStore for InMemoryStore {
         fn get_yak(&self, name: &str) -> Result<Yak> {
             self.yaks
                 .get(name)

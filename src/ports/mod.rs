@@ -13,6 +13,6 @@ pub use event_listener::EventListener;
 pub use event_store::EventStore;
 pub use event_store::EventStoreReader;
 pub use input::InputPort;
-pub use storage::StoragePort;
-pub use store::Store;
+pub use storage::WriteYakStore;
+pub use store::ReadYakStore;
 pub use sync::SyncPort;

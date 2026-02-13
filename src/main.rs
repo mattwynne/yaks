@@ -11,7 +11,7 @@ use yx::application::{
     RemoveYak, SetState, ShowContext, ShowField, ShowLog, SyncYaks, WriteField,
 };
 use yx::infrastructure::EventBus;
-use yx::ports::Store;
+use yx::ports::ReadYakStore;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -225,8 +225,7 @@ mod tests {
             }
         }
 
-        let completion_names: BTreeSet<String> =
-            COMMANDS.iter().map(|s| s.to_string()).collect();
+        let completion_names: BTreeSet<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
 
         let missing: Vec<_> = clap_names.difference(&completion_names).collect();
         let extra: Vec<_> = completion_names.difference(&clap_names).collect();

@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::infrastructure::EventBus;
-    use crate::ports::Store;
+    use crate::ports::ReadYakStore;
 
     #[test]
     fn test_add_yak_creates_yak() {
@@ -99,7 +99,7 @@ mod tests {
         let use_case = AddYak::new("test-yak");
         use_case.execute(&mut app).unwrap();
 
-        assert!(Store::yak_exists(&storage, "test-yak"));
+        assert!(ReadYakStore::yak_exists(&storage, "test-yak"));
     }
 
     #[test]
