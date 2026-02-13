@@ -32,9 +32,7 @@ impl WriteField {
         let name = app.store.find_yak(&self.name)?;
         let field = self.field.clone();
 
-        app.with_yak_map(|yak_map| {
-            yak_map.update_field(name, field, content)
-        })
+        app.with_yak_map(|yak_map| yak_map.update_field(name, field, content))
     }
 }
 

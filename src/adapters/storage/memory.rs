@@ -72,7 +72,6 @@ impl StoragePort for InMemoryStorage {
             name: name.to_string(),
             state,
             context,
-            pending_events: vec![],
         })
     }
 

@@ -183,7 +183,12 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn update_field(&mut self, name: String, field_name: String, content: String) -> Result<()> {
+    pub fn update_field(
+        &mut self,
+        name: String,
+        field_name: String,
+        content: String,
+    ) -> Result<()> {
         if !self.yaks.contains_key(&name) {
             anyhow::bail!("yak '{}' not found", name);
         }
@@ -384,7 +389,6 @@ mod tests {
                 name: "test1".to_string(),
                 state: "todo".to_string(),
                 context: Some("context1".to_string()),
-                pending_events: vec![],
             },
         );
         yaks.insert(
@@ -393,7 +397,6 @@ mod tests {
                 name: "test2".to_string(),
                 state: "wip".to_string(),
                 context: None,
-                pending_events: vec![],
             },
         );
 
