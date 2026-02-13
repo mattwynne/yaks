@@ -31,6 +31,18 @@ Describe 'Bash completion wiring'
     The output should include "test-yak"
   End
 
+  It 'offers nested yak names for add after slash'
+    yx add "grandma/mummy"
+    get_completions_after_slash() {
+      COMP_WORDS=(yx add "grandma" "/" "")
+      COMP_CWORD=4
+      _yx_completions
+      printf '%s\n' "${COMPREPLY[@]}"
+    }
+    When call get_completions_after_slash
+    The output should include "grandma/mummy/"
+  End
+
   It 'offers flags for done --'
     call_with_partial_flag() {
       COMP_WORDS=(yx done "--")
