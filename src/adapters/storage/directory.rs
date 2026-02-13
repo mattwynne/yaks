@@ -46,7 +46,7 @@ impl DirectoryStorage {
     /// This is intended for testing only, where we want to use isolated temp
     /// directories without environment variable pollution.
     #[cfg(test)]
-    fn from_path_unchecked(base_path: PathBuf) -> Self {
+    pub(crate) fn from_path_unchecked(base_path: PathBuf) -> Self {
         Self { base_path }
     }
 
@@ -102,6 +102,10 @@ impl DirectoryStorage {
 
 impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &str) -> Result<()> {
+        if self.field_path(name, CONTEXT_FIELD).exists() {
+            anyhow::bail!("Yak '{}' already exists", name);
+        }
+
         let dir = self.yak_dir(name);
         fs::create_dir_all(&dir)
             .with_context(|| format!("Failed to create yak directory: {name}"))?;
@@ -149,6 +153,10 @@ impl WriteYakStore for DirectoryStorage {
     }
 
     fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
+        let dir = self.yak_dir(yak_name);
+        if !dir.exists() {
+            anyhow::bail!("yak '{}' not found", yak_name);
+        }
         let field_path = self.field_path(yak_name, field_name);
         fs::write(&field_path, content)
             .with_context(|| format!("Failed to write field '{field_name}' for '{yak_name}'"))
@@ -165,7 +173,9 @@ impl ReadYakStore for DirectoryStorage {
         }
 
         // Read context field
-        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD).ok();
+        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD)
+            .ok()
+            .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
         // Read state field, default to "todo" if not present
         let state = ReadYakStore::read_field(self, name, STATE_FIELD)
@@ -264,6 +274,15 @@ mod tests {
         let (storage, _temp) = setup_test_storage();
         storage.create_yak("test-yak").unwrap();
         assert!(storage.yak_dir("test-yak").exists());
+    }
+
+    #[test]
+    fn test_create_duplicate_yak() {
+        let (storage, _temp) = setup_test_storage();
+        storage.create_yak("test-yak").unwrap();
+        let result = storage.create_yak("test-yak");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already exists"));
     }
 
     #[test]
