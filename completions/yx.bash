@@ -1,47 +1,8 @@
 #!/usr/bin/env bash
-# Bash completion for yx (yak CLI)
-# To enable: source this file or add to your .bashrc:
-#   source /path/to/yx/completions/yx.bash
-
 _yx_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local prev="${COMP_WORDS[COMP_CWORD-1]}"
-    local cmd="${COMP_WORDS[1]}"
-
-    # Complete commands
-    if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "add list ls done finish remove rm move mv prune context sync --help" -- "$cur"))
-        return 0
-    fi
-
-    # Complete yak names based on command
-    case "$cmd" in
-        done|finish)
-            # Check if --undo flag is present
-            if [[ " ${COMP_WORDS[@]} " =~ " --undo " ]]; then
-                # After --undo, complete with done yaks
-                COMPREPLY=($(compgen -W "$(yx ls --format plain --only done 2>/dev/null)" -- "$cur"))
-            elif [ "$cur" = "-" ] || [ "$cur" = "--" ]; then
-                # Offer flags
-                COMPREPLY=($(compgen -W "--undo --recursive" -- "$cur"))
-            else
-                # Complete with incomplete yaks
-                COMPREPLY=($(compgen -W "$(yx ls --format plain --only not-done 2>/dev/null)" -- "$cur"))
-            fi
-            ;;
-        remove|rm|move|mv)
-            # Complete with all yaks
-            COMPREPLY=($(compgen -W "$(yx ls --format plain 2>/dev/null)" -- "$cur"))
-            ;;
-        context)
-            # Offer --show flag and yak names
-            if [ "$cur" = "-" ] || [ "$cur" = "--" ]; then
-                COMPREPLY=($(compgen -W "--show" -- "$cur"))
-            else
-                COMPREPLY=($(compgen -W "$(yx ls --format plain 2>/dev/null)" -- "$cur"))
-            fi
-            ;;
-    esac
+    local candidates
+    candidates=$(yx completions -- "${COMP_WORDS[@]}" 2>/dev/null)
+    COMPREPLY=($(compgen -W "$candidates" -- "$cur"))
 }
-
 complete -F _yx_completions yx
