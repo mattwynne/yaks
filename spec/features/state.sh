@@ -70,4 +70,23 @@ Describe 'yx state'
     The line 2 should equal $'\e[90m  - [done] get milk\e[0m'
     The line 3 should equal "  - [todo] boil water"
   End
+
+  It 'resolves yak name with fuzzy matching'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx state bug wip
+      yx list --format markdown
+    "
+    The output should include "- [wip] Fix the bug"
+  End
+
+  It 'shows error when fuzzy match is ambiguous'
+    When run sh -c "
+      yx add 'Fix the bug'
+      yx add 'Report the bug'
+      yx state bug wip
+    "
+    The error should include "yak name 'bug' is ambiguous"
+    The status should be failure
+  End
 End
