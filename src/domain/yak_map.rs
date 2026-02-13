@@ -142,7 +142,7 @@ impl YakMap {
 
             if incomplete {
                 anyhow::bail!(
-                    "Cannot mark '{}' as done: children are incomplete",
+                    "cannot mark '{}' as done - it has incomplete children",
                     parent_name
                 );
             }
@@ -551,7 +551,7 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("children are incomplete"));
+            .contains("incomplete children"));
     }
 
     #[test]

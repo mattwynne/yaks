@@ -55,7 +55,7 @@ Describe 'yx prune'
       yx prune
       yx list --format markdown
     "
-    The output should include "- [todo] parent"
+    The output should include "- [wip] parent"
     The output should not include "child1"
     The output should include "- [todo] child2"
   End

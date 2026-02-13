@@ -66,7 +66,7 @@ Describe 'yx done'
       yx done 'parent/child'
       yx list --format markdown
     "
-    The line 1 should equal "- [todo] parent"
+    The line 1 should equal "- [wip] parent"
     The line 2 should equal $'\e[90m  - [done] child\e[0m'
   End
 
