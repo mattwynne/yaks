@@ -1,19 +1,23 @@
 // SyncYaks use case - synchronizes yaks via git refs
 
-use crate::ports::{DisplayPort, SyncPort};
 use anyhow::Result;
 
-pub struct SyncYaks<'a> {
-    sync: &'a dyn SyncPort,
+use super::{Application, UseCase};
+
+pub struct SyncYaks;
+
+impl SyncYaks {
+    pub fn new() -> Self {
+        Self
+    }
 }
 
-impl<'a> SyncYaks<'a> {
-    pub fn new(sync: &'a dyn SyncPort, _display: &'a dyn DisplayPort) -> Self {
-        Self { sync }
-    }
-
-    pub fn execute(&self) -> Result<()> {
-        self.sync.sync()?;
+impl UseCase for SyncYaks {
+    fn execute(&self, app: &mut Application) -> Result<()> {
+        let sync = app
+            .sync
+            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?;
+        sync.sync()?;
         Ok(())
     }
 }
@@ -21,6 +25,9 @@ impl<'a> SyncYaks<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::infrastructure::EventBus;
+    use crate::ports::SyncPort;
     use std::cell::RefCell;
 
     struct MockSync {
@@ -46,51 +53,55 @@ mod tests {
         }
     }
 
-    struct MockOutput {
-        messages: RefCell<Vec<String>>,
-    }
+    #[test]
+    fn test_sync_calls_sync_port() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
 
-    impl MockOutput {
-        fn new() -> Self {
-            Self {
-                messages: RefCell::new(Vec::new()),
-            }
-        }
-    }
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
 
-    impl DisplayPort for MockOutput {
-        fn success(&self, message: &str) {
-            self.messages.borrow_mut().push(message.to_string());
-        }
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let sync = MockSync::new();
 
-        fn info(&self, message: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("INFO: {}", message));
-        }
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            Some(&sync),
+        );
 
-        fn display_yak_pretty(&self, prefix: &str, name: &str, state: &str) {
-            self.messages
-                .borrow_mut()
-                .push(format!("{prefix}{name} [{state}]"));
-        }
+        app.handle(SyncYaks::new()).unwrap();
 
-        fn display_yak_markdown(&self, depth: usize, name: &str, state: &str) {
-            let indent = "  ".repeat(depth);
-            self.messages
-                .borrow_mut()
-                .push(format!("{indent}- [{state}] {name}"));
-        }
+        assert!(sync.was_sync_called());
     }
 
     #[test]
-    fn test_sync_calls_sync_port() {
-        let sync = MockSync::new();
-        let display = MockOutput::new();
-        let use_case = SyncYaks::new(&sync, &display);
+    fn test_sync_fails_when_not_configured() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
 
-        use_case.execute().unwrap();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
 
-        assert!(sync.was_sync_called());
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+        );
+
+        let result = app.handle(SyncYaks::new());
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Sync not configured"
+        );
     }
 }

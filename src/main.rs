@@ -119,9 +119,10 @@ fn main() -> Result<()> {
     // Initialize other adapters
     let display = ConsoleDisplay;
     let input = ConsoleInput;
+    let sync = GitRefSync::new()?;
 
     // Create application with injected dependencies
-    let mut app = Application::new(&mut event_bus, &storage, &display, &input, None);
+    let mut app = Application::new(&mut event_bus, &storage, &display, &input, Some(&sync));
 
     match cli.command {
         Commands::Add { name } => {
@@ -163,11 +164,7 @@ fn main() -> Result<()> {
                 app.handle(WriteField::new(&name_str, &field))
             }
         }
-        Commands::Sync => {
-            let sync = GitRefSync::new()?;
-            let use_case = SyncYaks::new(&sync, &display);
-            use_case.execute()
-        }
+        Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => {
             let repo_path = std::env::var("GIT_WORK_TREE")
                 .map(PathBuf::from)
