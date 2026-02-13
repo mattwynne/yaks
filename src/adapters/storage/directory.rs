@@ -1,8 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
-use crate::domain::events::*;
-use crate::domain::{Yak, YakEvent, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{EventListener, ReadYakStore, WriteYakStore};
+use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
+use crate::ports::{ReadYakStore, WriteYakStore};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -246,46 +245,12 @@ impl ReadYakStore for DirectoryStorage {
     }
 }
 
-impl EventListener for DirectoryStorage {
-    fn on_event(&mut self, event: &YakEvent) -> Result<()> {
-        match event {
-            YakEvent::Added(AddedEvent { name }) => {
-                self.create_yak(name)?;
-                // Set default state
-                self.write_field(name, STATE_FIELD, "todo")?;
-            }
-
-            YakEvent::Removed(RemovedEvent { name }) => {
-                self.delete_yak(name)?;
-            }
-
-            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
-                self.rename_yak(old_name, new_name)?;
-            }
-
-            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
-                self.write_field(name, CONTEXT_FIELD, content)?;
-            }
-
-            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
-                self.write_field(name, STATE_FIELD, state)?;
-            }
-
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                name,
-                field_name,
-                content,
-            }) => {
-                self.write_field(name, field_name, content)?;
-            }
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::events::*;
+    use crate::domain::YakEvent;
+    use crate::ports::EventListener;
     use tempfile::TempDir;
 
     fn setup_test_storage() -> (DirectoryStorage, TempDir) {
