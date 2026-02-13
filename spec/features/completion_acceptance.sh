@@ -18,6 +18,12 @@ Describe 'yx completions (acceptance)'
     The output should include "my-yak"
   End
 
+  It 'lists yak names with trailing slash for add'
+    yx add "my-yak"
+    When run yx completions -- yx add ""
+    The output should include "my-yak/"
+  End
+
   It 'filters done yaks for done command'
     yx add "todo-yak"
     yx add "done-yak"
