@@ -49,16 +49,6 @@ Describe 'yx done'
     The output should include $'\e[90m- [done] x marks the spot\e[0m'
   End
 
-  It 'unmarks a done yak with --undo flag'
-    When run sh -c "
-      yx add 'Fix the bug'
-      yx done 'Fix the bug'
-      yx done --undo 'Fix the bug'
-      yx list --format markdown
-    "
-    The output should include "- [todo] Fix the bug"
-  End
-
   It 'marks a nested yak as done'
     When run sh -c "
       yx add 'parent'

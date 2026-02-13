@@ -48,8 +48,6 @@ enum Commands {
     Done {
         /// The yak name (space-separated words)
         name: Vec<String>,
-        #[arg(long)]
-        undo: bool,
         /// Mark yak and all children as done recursively
         #[arg(long)]
         recursive: bool,
@@ -147,13 +145,9 @@ fn main() -> Result<()> {
             app.handle(AddYak::new(&name_str))
         }
         Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
-        Commands::Done {
-            name,
-            undo,
-            recursive,
-        } => {
+        Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
-            app.handle(DoneYak::new(&name_str, undo, recursive))
+            app.handle(DoneYak::new(&name_str, recursive))
         }
         Commands::Remove { name } => {
             let name_str = name.join(" ");
