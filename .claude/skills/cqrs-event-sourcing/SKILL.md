@@ -110,6 +110,32 @@ digraph aggregate_decision {
 
 **Write-side repository is minimal:** `GetById` and `Save` only. Query methods = mixed concerns.
 
+### Policies (Reactors)
+
+A policy listens to an event and issues a command: **"When X happens, do Y."** Stateless, fire-and-forget. The command goes through the normal pipeline so the target aggregate still validates it.
+
+Example: "When all children are done, mark parent done" -- policy listens for `StateUpdated`, queries children, dispatches `MarkDone` to parent if all complete.
+
+Policies are the **glue between aggregates**. They allow aggregates to remain ignorant of each other while enabling coordinated behavior. Aggregate A emits event -> policy dispatches command to Aggregate B. Neither aggregate knows the other exists.
+
+### Sagas (Process Managers)
+
+A saga is a **stateful, long-running coordination process** that reacts to multiple events over time. Use instead of a policy when:
+- The response requires a *sequence* of steps
+- You must wait for multiple events before deciding (correlation)
+- The process has intermediate states, timeouts, or compensating actions
+
+Example: conflict resolution during sync -- detect conflict, present options, wait for user input, apply resolution, handle failures at each step.
+
+| Aspect | Policy | Saga |
+|--------|--------|------|
+| State | Stateless | Stateful, persisted |
+| Trigger | Single event | Multiple events over time |
+| Output | Single command | Sequence of commands |
+| Failure | Retry or ignore | Compensating actions |
+
+**Critical rule:** Policies and sagas must never modify aggregate state directly. They issue commands through the command pipeline so aggregate invariants are always enforced.
+
 ## Anti-Patterns
 
 | Pattern | Symptom | Fix |
