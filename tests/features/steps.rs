@@ -339,6 +339,15 @@ async fn output_includes_full_stack(world: &mut FullStackWorld, expected: String
     check_output_includes(world, &expected)
 }
 
+#[then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)]
+async fn line_of_output_includes_full_stack(
+    world: &mut FullStackWorld,
+    line_num: usize,
+    expected: String,
+) -> Result<()> {
+    check_line_of_output_includes(world, line_num, &expected)
+}
+
 // ============================================================================
 // Then steps
 // ============================================================================
@@ -476,6 +485,36 @@ fn check_output_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> 
             "Expected output to include '{}', but got:\n{}",
             expected,
             output_no_ansi
+        );
+    }
+    Ok(())
+}
+
+fn check_line_of_output_includes<W: TestWorld>(
+    world: &W,
+    line_num: usize,
+    expected: &str,
+) -> Result<()> {
+    let output = world.get_output();
+    let output_no_ansi = strip_ansi_codes(&output);
+    let lines: Vec<&str> = output_no_ansi.lines().collect();
+
+    if line_num == 0 || line_num > lines.len() {
+        anyhow::bail!(
+            "Line {} does not exist. Output has {} line(s):\n{}",
+            line_num,
+            lines.len(),
+            output_no_ansi
+        );
+    }
+
+    let line = lines[line_num - 1];
+    if !line.contains(expected) {
+        anyhow::bail!(
+            "Expected line {} to include '{}', but got: '{}'",
+            line_num,
+            expected,
+            line
         );
     }
     Ok(())
