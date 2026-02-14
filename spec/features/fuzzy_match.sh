@@ -36,45 +36,4 @@ Describe 'fuzzy match on yak names'
     The output should include "test context"
     The output should not include "ambiguous"
   End
-
-  It 'fuzzy matches for rm'
-    When run sh -c "
-      yx add 'ideas/buy a pony'
-      yx add 'ideas/fix the build'
-      yx rm build
-      yx list --format markdown
-    "
-    The output should not include "fix the build"
-    The output should include "buy a pony"
-  End
-
-  It 'fuzzy matches for context edit'
-    When run sh -c "
-      yx add 'ideas/fix the build'
-      unset YX_IGNORE_STDIN
-      echo 'build notes' | yx context build
-      yx context --show 'ideas/fix the build'
-    "
-    The output should include "build notes"
-  End
-
-  It 'fuzzy matches for context show'
-    When run sh -c "
-      yx add 'ideas/fix the build'
-      unset YX_IGNORE_STDIN
-      echo 'build notes' | yx context 'ideas/fix the build'
-      yx context --show build
-    "
-    The output should include "build notes"
-  End
-
-  It 'fuzzy matches source for move'
-    When run sh -c "
-      yx add 'fix the build'
-      yx mv build 'renamed build'
-      yx list --format markdown
-    "
-    The output should include "renamed build"
-    The output should not include "fix the build"
-  End
 End

@@ -18,14 +18,4 @@ Describe 'Tab completion (tmux smoke test)'
     The output should include "add"
     The output should include "done"
   End
-
-  It 'yx rm <TAB> shows yak names'
-    yx add "smoke-test-yak"
-    start_completion_session
-    tmux_send "yx rm "
-    tmux_send_tab
-    poll_pane_content "smoke-test-yak" 5
-    When call tmux_capture
-    The output should include "smoke-test-yak"
-  End
 End

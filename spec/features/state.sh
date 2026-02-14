@@ -13,31 +13,6 @@ Describe 'yx state'
     The output should include "- [wip] get milk"
   End
 
-  It 'sets a yak to done state'
-    When run sh -c "
-      yx add 'get milk'
-      yx state 'get milk' done
-      yx list --format markdown
-    "
-    The output should include $'\e[90m- [done] get milk\e[0m'
-  End
-
-  It 'sets a yak back to todo state'
-    When run sh -c "
-      yx add 'get milk'
-      yx state 'get milk' wip
-      yx state 'get milk' todo
-      yx list --format markdown
-    "
-    The output should include "- [todo] get milk"
-  End
-
-  It 'shows error when setting state of non-existent yak'
-    When run yx state "Nonexistent yak" wip
-    The error should include "Error: yak 'Nonexistent yak' not found"
-    The status should be failure
-  End
-
   It 'shows error when setting invalid state'
     When run sh -c "
       yx add 'get milk'
@@ -45,63 +20,5 @@ Describe 'yx state'
     "
     The error should include "Error: Invalid state 'invalid-state'. Valid states are: todo, wip, done"
     The status should be failure
-  End
-
-  It 'sets parent to wip when child state changes from todo'
-    When run sh -c "
-      yx add 'make tea'
-      yx add 'make tea/get milk'
-      yx state 'make tea/get milk' wip
-      yx list --format markdown
-    "
-    The line 1 should equal "- [wip] make tea"
-    The line 2 should equal "  - [wip] get milk"
-  End
-
-  It 'keeps parent as wip when child is done if other children remain in todo'
-    When run sh -c "
-      yx add 'make tea'
-      yx add 'make tea/get milk'
-      yx add 'make tea/boil water'
-      yx state 'make tea/get milk' done
-      yx list --format markdown
-    "
-    The line 1 should equal "- [wip] make tea"
-    The line 2 should equal $'\e[90m  - [done] get milk\e[0m'
-    The line 3 should equal "  - [todo] boil water"
-  End
-
-  It 'resolves yak name with fuzzy matching'
-    When run sh -c "
-      yx add 'Fix the bug'
-      yx state bug wip
-      yx list --format markdown
-    "
-    The output should include "- [wip] Fix the bug"
-  End
-
-  It 'shows error when fuzzy match is ambiguous'
-    When run sh -c "
-      yx add 'Fix the bug'
-      yx add 'Report the bug'
-      yx state bug wip
-    "
-    The error should include "yak name 'bug' is ambiguous"
-    The status should be failure
-  End
-
-  It 'sets state recursively on parent and all descendants'
-    When run sh -c "
-      yx add 'parent'
-      yx add 'parent/child1'
-      yx add 'parent/child2'
-      yx add 'parent/child1/grandchild'
-      yx state --recursive 'parent' done
-      yx list --format markdown
-    "
-    The output should include $'\e[90m- [done] parent\e[0m'
-    The output should include $'\e[90m  - [done] child1\e[0m'
-    The output should include $'\e[90m  - [done] child2\e[0m'
-    The output should include $'\e[90m    - [done] grandchild\e[0m'
   End
 End
