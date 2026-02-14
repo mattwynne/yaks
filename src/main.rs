@@ -82,6 +82,7 @@ enum Commands {
     /// Set the state of a yak
     State {
         /// The yak name (space-separated words)
+        #[arg(required = true)]
         name: Vec<String>,
         /// The state to set (e.g., "todo", "wip", "done")
         state: String,
@@ -92,6 +93,7 @@ enum Commands {
     /// Write or show custom field for a yak
     Field {
         /// The yak name (space-separated words)
+        #[arg(required = true)]
         name: Vec<String>,
         /// The field name (e.g., "notes", "priority", "notes.txt")
         field: String,

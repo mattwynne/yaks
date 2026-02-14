@@ -54,6 +54,15 @@ pub trait TestWorld {
     /// Prune all done yaks
     fn prune_yaks(&mut self) -> Result<()>;
 
+    /// Set a yak's state (todo, wip, done)
+    fn set_state(&mut self, name: &str, state: &str) -> Result<()>;
+
+    /// Try to set a yak's state - captures result without bailing on failure
+    fn try_set_state(&mut self, name: &str, state: &str) -> Result<()>;
+
+    /// Start a yak (alias for setting state to wip)
+    fn start_yak(&mut self, name: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }
