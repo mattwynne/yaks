@@ -6,7 +6,7 @@ use cucumber::World as CucumberWorld;
 use super::test_world::TestWorld;
 use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
 use yx::application::{
-    AddYak, Application, DoneYak, EditContext, ListYaks, RemoveYak, ShowContext,
+    AddYak, Application, DoneYak, EditContext, ListYaks, PruneYaks, RemoveYak, ShowContext,
 };
 use yx::infrastructure::EventBus;
 
@@ -156,6 +156,10 @@ impl TestWorld for InProcessWorld {
 
     fn get_output(&self) -> String {
         self.display.get_all_messages().join("\n")
+    }
+
+    fn prune_yaks(&mut self) -> Result<()> {
+        self.execute(|app| app.handle(PruneYaks::new()))
     }
 
     fn get_exit_code(&self) -> i32 {

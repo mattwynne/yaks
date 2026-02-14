@@ -195,6 +195,16 @@ async fn show_context_in_process(world: &mut InProcessWorld, name: String) -> Re
     world.show_context(&name)
 }
 
+#[when(expr = "I prune done yaks")]
+async fn prune_done_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
+    world.prune_yaks()
+}
+
+#[when(expr = "I prune done yaks")]
+async fn prune_done_yaks_in_process(world: &mut InProcessWorld) -> Result<()> {
+    world.prune_yaks()
+}
+
 // ============================================================================
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================
