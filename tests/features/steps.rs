@@ -137,6 +137,36 @@ async fn try_remove_yak_in_process(world: &mut InProcessWorld, yak_name: String)
     world.try_remove_yak(&yak_name)
 }
 
+#[when(regex = r#"^I mark the yak "(.+)" as done$"#)]
+async fn when_done_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.done_yak(&yak_name)
+}
+
+#[when(regex = r#"^I mark the yak "(.+)" as done$"#)]
+async fn when_done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.done_yak(&yak_name)
+}
+
+#[when(regex = r#"^I try to mark the yak "(.+)" as done$"#)]
+async fn try_done_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.try_done_yak(&yak_name)
+}
+
+#[when(regex = r#"^I try to mark the yak "(.+)" as done$"#)]
+async fn try_done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.try_done_yak(&yak_name)
+}
+
+#[when(regex = r#"^I mark the yak "(.+)" as done recursively$"#)]
+async fn done_yak_recursive_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.done_yak_recursive(&yak_name)
+}
+
+#[when(regex = r#"^I mark the yak "(.+)" as done recursively$"#)]
+async fn done_yak_recursive_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.done_yak_recursive(&yak_name)
+}
+
 #[when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)]
 async fn set_context_full_stack(
     world: &mut FullStackWorld,

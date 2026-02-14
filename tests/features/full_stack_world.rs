@@ -187,6 +187,14 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["context", "--show", name])
     }
 
+    fn try_done_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx_unchecked(&["done", name])
+    }
+
+    fn done_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["done", "--recursive", name])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }

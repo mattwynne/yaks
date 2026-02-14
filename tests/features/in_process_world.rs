@@ -146,6 +146,14 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(ShowContext::new(name)))
     }
 
+    fn try_done_yak(&mut self, name: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(DoneYak::new(name, false)))
+    }
+
+    fn done_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(DoneYak::new(name, true)))
+    }
+
     fn get_output(&self) -> String {
         self.display.get_all_messages().join("\n")
     }

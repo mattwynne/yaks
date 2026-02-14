@@ -45,6 +45,12 @@ pub trait TestWorld {
     /// Show a yak's context (yx context --show)
     fn show_context(&mut self, name: &str) -> Result<()>;
 
+    /// Try to mark a yak as done - captures result without bailing on failure
+    fn try_done_yak(&mut self, name: &str) -> Result<()>;
+
+    /// Mark a yak as done recursively (parent + all descendants)
+    fn done_yak_recursive(&mut self, name: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }
