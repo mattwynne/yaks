@@ -4,7 +4,6 @@ pub mod adapters;
 pub mod application;
 pub mod domain;
 pub mod infrastructure;
-pub mod ports;
 pub mod projections;
 
 pub use infrastructure::EventBus;

@@ -1,6 +1,6 @@
 use crate::domain::events::*;
+use crate::domain::ports::ReadYakStore;
 use crate::domain::YakEvent;
-use crate::ports::ReadYakStore;
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -297,8 +297,8 @@ mod tests {
     // Tests for from_store
     #[test]
     fn test_from_store_empty() {
+        use crate::domain::ports::ReadYakStore;
         use crate::domain::Yak;
-        use crate::ports::ReadYakStore;
         use std::collections::HashMap;
 
         struct MockStore {
@@ -345,8 +345,8 @@ mod tests {
 
     #[test]
     fn test_from_store_with_yaks() {
+        use crate::domain::ports::ReadYakStore;
         use crate::domain::Yak;
-        use crate::ports::ReadYakStore;
         use std::collections::HashMap;
 
         struct MockStore {

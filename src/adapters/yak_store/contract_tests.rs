@@ -6,8 +6,8 @@
 /// For implementations that don't need a guard, pass `()`.
 macro_rules! yak_store_tests {
     ($create_store:expr) => {
+        use crate::domain::ports::{ReadYakStore, WriteYakStore};
         use crate::domain::{CONTEXT_FIELD, STATE_FIELD};
-        use crate::ports::{ReadYakStore, WriteYakStore};
 
         // --- WriteYakStore ---
 

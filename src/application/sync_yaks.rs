@@ -32,8 +32,8 @@ impl UseCase for SyncYaks {
 mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::domain::ports::SyncPort;
     use crate::infrastructure::EventBus;
-    use crate::ports::SyncPort;
     use std::cell::RefCell;
 
     struct MockSync {

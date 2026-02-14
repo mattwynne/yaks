@@ -1,11 +1,12 @@
 // Core business logic - independent of infrastructure
-// Contains Yak model, validation rules, and domain operations
+// Contains Yak model, validation rules, domain operations, and port traits
 
 pub mod event;
 pub mod event_format;
 pub mod events;
 pub mod field;
 pub mod hierarchy;
+pub mod ports;
 pub mod yak;
 pub mod yak_map;
 

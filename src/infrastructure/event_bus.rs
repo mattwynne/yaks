@@ -1,7 +1,7 @@
 use anyhow::Result;
 
+use crate::domain::ports::{EventListener, EventStore};
 use crate::domain::YakEvent;
-use crate::ports::{EventListener, EventStore};
 
 pub struct EventBus {
     event_store: Box<dyn EventStore>,

@@ -1,8 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
+use crate::domain::ports::{DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort};
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
-use crate::ports::{DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort};
 use anyhow::Result;
 
 use super::UseCase;
@@ -72,8 +72,8 @@ impl<'a> Application<'a> {
 mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
-    use crate::ports::ReadYakStore;
 
     #[test]
     fn test_application_create_yak_via_yak_map() {

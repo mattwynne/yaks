@@ -1,7 +1,7 @@
 // In-memory storage adapter - for testing only
 
+use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{ReadYakStore, WriteYakStore};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

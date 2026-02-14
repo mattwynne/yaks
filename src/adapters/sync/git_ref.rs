@@ -1,6 +1,6 @@
 // Git ref sync adapter - synchronizes yaks via git refs/notes/yaks
 
-use crate::ports::SyncPort;
+use crate::domain::ports::SyncPort;
 use anyhow::{Context, Result};
 use git2::{Oid, Repository};
 use std::path::PathBuf;

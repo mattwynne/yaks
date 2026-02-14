@@ -1,7 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
+use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{ReadYakStore, WriteYakStore};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -259,8 +259,8 @@ impl ReadYakStore for DirectoryStorage {
 mod tests {
     use super::*;
     use crate::domain::events::*;
+    use crate::domain::ports::EventListener;
     use crate::domain::YakEvent;
-    use crate::ports::EventListener;
     use tempfile::TempDir;
 
     fn setup_test_storage() -> (DirectoryStorage, TempDir) {
