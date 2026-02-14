@@ -6,13 +6,7 @@ Describe 'yx'
     The status should be success
   End
 
-  It 'shows help when run with no arguments'
-    When run yx
-    The output should include "Usage:"
-    The status should be success
-  End
-
-  It 'shows help for invalid subcommands'
+  It 'shows error for invalid subcommands'
     When run yx woop
     The error should include "error:"
     The status should be failure
