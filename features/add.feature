@@ -17,45 +17,11 @@ Feature: Add yaks
 
   Rule: Invalid characters are rejected
     Names cannot contain: \ : * ? | < > "
+    Individual character validation is covered by unit tests.
+    This acceptance test verifies the error surfaces correctly.
 
-    Example: Backslash is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo\bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Colon is rejected
+    Example: Forbidden character is rejected with a clear error
       Given I have a clean git repository
       When I try to add the yak "foo:bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Asterisk is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo*bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Question mark is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo?bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Pipe is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo|bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Less than is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo<bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
-
-    Example: Greater than is rejected
-      Given I have a clean git repository
-      When I try to add the yak "foo>bar"
       Then the command should fail
       And the error should contain "Invalid yak name"
