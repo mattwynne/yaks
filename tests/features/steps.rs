@@ -205,6 +205,52 @@ async fn prune_done_yaks_in_process(world: &mut InProcessWorld) -> Result<()> {
     world.prune_yaks()
 }
 
+#[when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)]
+async fn set_state_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    state: String,
+) -> Result<()> {
+    world.set_state(&name, &state)
+}
+
+#[when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)]
+async fn set_state_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    state: String,
+) -> Result<()> {
+    world.set_state(&name, &state)
+}
+
+#[when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)]
+async fn try_set_state_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    state: String,
+) -> Result<()> {
+    world.try_set_state(&name, &state)
+}
+
+#[when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)]
+async fn try_set_state_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    state: String,
+) -> Result<()> {
+    world.try_set_state(&name, &state)
+}
+
+#[when(regex = r#"^I start "(.+)"$"#)]
+async fn start_yak_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.start_yak(&name)
+}
+
+#[when(regex = r#"^I start "(.+)"$"#)]
+async fn start_yak_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
+    world.start_yak(&name)
+}
+
 // ============================================================================
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================

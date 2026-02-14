@@ -199,6 +199,18 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["prune"])
     }
 
+    fn set_state(&mut self, name: &str, state: &str) -> Result<()> {
+        self.run_yx(&["state", name, state])
+    }
+
+    fn try_set_state(&mut self, name: &str, state: &str) -> Result<()> {
+        self.run_yx_unchecked(&["state", name, state])
+    }
+
+    fn start_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["start", name])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
