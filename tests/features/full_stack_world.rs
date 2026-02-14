@@ -17,6 +17,9 @@ pub struct FullStackWorld {
     output: String,
     error: String,
     exit_code: i32,
+    /// Override directory for scenarios that need a custom environment
+    /// (e.g., git-checks tests that run without YX_SKIP_GIT_CHECKS)
+    pub override_dir: Option<TempDir>,
 }
 
 impl FullStackWorld {
@@ -30,6 +33,7 @@ impl FullStackWorld {
             output: String::new(),
             error: String::new(),
             exit_code: 0,
+            override_dir: None,
         })
     }
 
@@ -114,6 +118,32 @@ impl FullStackWorld {
                 self.error
             );
         }
+
+        Ok(())
+    }
+
+    /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
+    /// Used for testing git environment checks (not-in-repo, no gitignore).
+    pub fn run_yx_in_override_dir(&mut self, args: &[&str]) -> Result<()> {
+        let dir = self
+            .override_dir
+            .as_ref()
+            .context("No override directory set")?;
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let output = Command::new(yx_path)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("YX_IGNORE_STDIN", "1")
+            .env_remove("YX_SKIP_GIT_CHECKS")
+            .current_dir(dir.path())
+            .output()
+            .context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
 
         Ok(())
     }

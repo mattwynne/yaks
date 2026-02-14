@@ -323,6 +323,35 @@ async fn show_field_in_process(
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================
 
+#[given(expr = "a directory that is not a git repository")]
+async fn dir_not_git_repo(world: &mut FullStackWorld) -> Result<()> {
+    let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+    world.override_dir = Some(temp_dir);
+    Ok(())
+}
+
+#[given(expr = "a git repository without .yaks in .gitignore")]
+async fn git_repo_without_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+    let status = std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to run git init")?;
+    if !status.success() {
+        anyhow::bail!("git init failed");
+    }
+    world.override_dir = Some(temp_dir);
+    Ok(())
+}
+
+#[when(expr = "I try to list the yaks from this directory")]
+async fn list_yaks_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_in_override_dir(&["ls"])
+}
+
 #[when(regex = r#"^I run yx (.+)$"#)]
 async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Result<()> {
     let arg_vec: Vec<&str> = args.split_whitespace().collect();
