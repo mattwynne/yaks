@@ -1,0 +1,42 @@
+Feature: Fuzzy match on yak names
+  Commands that take a yak name accept a unique substring
+  instead of requiring the full name. This avoids needing to
+  type or remember long hierarchical names.
+
+  Rule: A unique substring matches a yak
+
+    Example: Marking a yak done by unique substring
+      Given I have a clean git repository
+      And I add the yak "ideas/buy a pony"
+      And I add the yak "ideas/fix the build"
+      And I add the yak "ideas/fix the fridge"
+      And I mark the yak "build" as done
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] ideas
+          - [done] fix the build
+          - [todo] buy a pony
+          - [todo] fix the fridge
+        """
+
+  Rule: An ambiguous substring produces a clear error
+
+    Example: Failing with an ambiguous match error
+      Given I have a clean git repository
+      And I add the yak "ideas/buy a pony"
+      And I add the yak "ideas/fix the build"
+      And I add the yak "ideas/fix the fridge"
+      When I try to mark the yak "fix" as done
+      Then the command should fail
+      And the error should contain "ambiguous"
+
+  Rule: A parent name is not ambiguous with its children
+
+    Example: Setting context on a parent that has children
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "parent/child1"
+      When I set the context of "parent" to "test context"
+      And I show the context of "parent"
+      Then the output should include "test context"
