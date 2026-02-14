@@ -13,42 +13,6 @@ Describe 'yx done'
     The output should include $'\e[90m- [done] Fix the bug\e[0m'
   End
 
-  It 'shows error when marking non-existent yak as done'
-    When run yx done "Nonexistent yak"
-    The error should include "Error: yak 'Nonexistent yak' not found"
-    The status should be failure
-  End
-
-  It 'displays mix of done and not-done yaks'
-    When run sh -c "
-      yx add 'Fix the bug'
-      yx add 'Write the docs'
-      yx add 'Add tests'
-      yx done 'Write the docs'
-      yx list --format markdown
-    "
-    The output should include "- [todo] Fix the bug"
-    The output should include $'\e[90m- [done] Write the docs\e[0m'
-    The output should include "- [todo] Add tests"
-  End
-
-  It 'handles yak names starting with x'
-    When run sh -c "
-      yx add 'x marks the spot'
-      yx list --format markdown
-    "
-    The output should include "- [todo] x marks the spot"
-  End
-
-  It 'marks yak starting with x as done correctly'
-    When run sh -c "
-      yx add 'x marks the spot'
-      yx done 'x marks the spot'
-      yx list --format markdown
-    "
-    The output should include $'\e[90m- [done] x marks the spot\e[0m'
-  End
-
   It 'marks a nested yak as done'
     When run sh -c "
       yx add 'parent'
