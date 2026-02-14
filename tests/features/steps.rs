@@ -354,8 +354,19 @@ async fn list_yaks_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
 
 #[when(regex = r#"^I run yx (.+)$"#)]
 async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Result<()> {
-    let arg_vec: Vec<&str> = args.split_whitespace().collect();
+    let parsed = shell_split(&args);
+    let arg_vec: Vec<&str> = parsed.iter().map(|s| s.as_str()).collect();
     world.run_raw(&arg_vec)
+}
+
+#[when(regex = r#"^I invoke bash completion for words: (.+)$"#)]
+async fn invoke_bash_completion(world: &mut FullStackWorld, words_str: String) -> Result<()> {
+    world.run_bash_completion(&words_str)
+}
+
+#[then(regex = r#"^the completions should include "(.+)"$"#)]
+async fn completions_should_include(world: &mut FullStackWorld, expected: String) -> Result<()> {
+    check_output_includes(world, &expected)
 }
 
 #[then(expr = "it should succeed")]
@@ -366,6 +377,14 @@ async fn should_succeed_full_stack(world: &mut FullStackWorld) -> Result<()> {
 #[then(regex = r#"^the output should include "(.+)"$"#)]
 async fn output_includes_full_stack(world: &mut FullStackWorld, expected: String) -> Result<()> {
     check_output_includes(world, &expected)
+}
+
+#[then(regex = r#"^the output should not include "(.+)"$"#)]
+async fn output_not_includes_full_stack(
+    world: &mut FullStackWorld,
+    expected: String,
+) -> Result<()> {
+    check_output_not_includes(world, &expected)
 }
 
 #[then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)]
@@ -547,4 +566,51 @@ fn check_line_of_output_includes<W: TestWorld>(
         );
     }
     Ok(())
+}
+
+fn check_output_not_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+    let output = world.get_output();
+    let output_no_ansi = strip_ansi_codes(&output);
+    if output_no_ansi.contains(expected) {
+        anyhow::bail!(
+            "Expected output to NOT include '{}', but got:\n{}",
+            expected,
+            output_no_ansi
+        );
+    }
+    Ok(())
+}
+
+/// Split a string into arguments, respecting double-quoted strings.
+/// `""` becomes an empty string, `"foo bar"` becomes `foo bar`.
+pub fn shell_split(s: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut has_token = false;
+
+    for c in s.chars() {
+        match c {
+            '"' => {
+                has_token = true;
+                in_quotes = !in_quotes;
+            }
+            ' ' | '\t' if !in_quotes => {
+                if has_token {
+                    result.push(std::mem::take(&mut current));
+                    has_token = false;
+                }
+            }
+            _ => {
+                has_token = true;
+                current.push(c);
+            }
+        }
+    }
+
+    if has_token {
+        result.push(current);
+    }
+
+    result
 }

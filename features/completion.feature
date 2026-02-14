@@ -1,0 +1,47 @@
+Feature: Tab completion
+  The yx CLI supports tab completion for commands, arguments, and flags.
+  Completion suggestions are context-aware, filtering based on yak state
+  and the current command being typed.
+
+  Rule: Command name completion
+    Completions for the top-level command suggest all available subcommands.
+
+    Example: Completing after "yx" suggests available commands
+      Given I have a clean git repository
+      When I run yx completions -- yx ""
+      Then it should succeed
+      And the output should include "add"
+      And the output should include "done"
+      And the output should include "remove"
+
+  Rule: Argument completion filters by context
+    When completing arguments for a command, only contextually valid
+    values are suggested. For example, the "done" command should not
+    suggest yaks that are already done.
+
+    Example: Completing "done" only suggests yaks that are not already done
+      Given I have a clean git repository
+      And I add the yak "todo-yak"
+      And I add the yak "done-yak"
+      And I mark the yak "done-yak" as done
+      When I run yx completions -- yx done ""
+      Then the output should include "todo-yak"
+      And the output should not include "done-yak"
+
+  Rule: Bash completion wiring
+    The bash completion script integrates with bash's programmable
+    completion system, handling special cases like nested yak names
+    and flag suggestions.
+
+    @bash_completion
+    Example: Completing after a slash suggests nested yak names
+      Given I have a clean git repository
+      And I add the yak "grandma/mummy"
+      When I invoke bash completion for words: yx add "grandma" "/" ""
+      Then the completions should include "grandma/mummy/"
+
+    @bash_completion
+    Example: Completing after "--" suggests flags for the command
+      Given I have a clean git repository
+      When I invoke bash completion for words: yx done "--"
+      Then the completions should include "--recursive"
