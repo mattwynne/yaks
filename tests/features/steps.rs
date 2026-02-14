@@ -87,9 +87,59 @@ async fn list_yaks_format_filter_in_process(
     world.list_yaks_with_format_and_filter(&format, &only)
 }
 
+#[when(regex = r#"^I add the yak "(.+)"$"#)]
+async fn when_add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.add_yak(&yak_name)
+}
+
+#[when(regex = r#"^I add the yak "(.+)"$"#)]
+async fn when_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.add_yak(&yak_name)
+}
+
+#[when(regex = r#"^there should be (\d+) yaks?$"#)]
+async fn yak_count_full_stack(world: &mut FullStackWorld, expected: usize) -> Result<()> {
+    check_yak_count(world, expected)
+}
+
+#[when(regex = r#"^there should be (\d+) yaks?$"#)]
+async fn yak_count_in_process(world: &mut InProcessWorld, expected: usize) -> Result<()> {
+    check_yak_count(world, expected)
+}
+
+#[when(regex = r#"^I try to add the yak "(.+)"$"#)]
+async fn try_add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.try_add_yak(&yak_name)
+}
+
+#[when(regex = r#"^I try to add the yak "(.+)"$"#)]
+async fn try_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.try_add_yak(&yak_name)
+}
+
 // ============================================================================
 // Then steps
 // ============================================================================
+
+#[then(expr = "the command should fail")]
+async fn command_fails_full_stack(world: &mut FullStackWorld) -> Result<()> {
+    check_command_fails(world)
+}
+
+#[then(expr = "the command should fail")]
+async fn command_fails_in_process(world: &mut InProcessWorld) -> Result<()> {
+    check_command_fails(world)
+}
+
+#[then(regex = r#"^the error should contain "(.+)"$"#)]
+async fn error_contains_full_stack(world: &mut FullStackWorld, expected: String) -> Result<()> {
+    check_error_contains(world, &expected)
+}
+
+#[then(regex = r#"^the error should contain "(.+)"$"#)]
+async fn error_contains_in_process(world: &mut InProcessWorld, expected: String) -> Result<()> {
+    check_error_contains(world, &expected)
+}
 
 #[then(expr = "the output should be:")]
 async fn output_should_be_full_stack(
@@ -140,6 +190,37 @@ fn check_output<W: TestWorld>(world: &W, step: &cucumber::gherkin::Step) -> Resu
         );
     }
 
+    Ok(())
+}
+
+fn check_yak_count<W: TestWorld>(world: &mut W, expected: usize) -> Result<()> {
+    world.list_yaks_with_format("plain")?;
+    let output = world.get_output();
+    let actual = output.trim().lines().filter(|l| !l.is_empty()).count();
+
+    if actual != expected {
+        anyhow::bail!("Expected {} yak(s), but found {}", expected, actual);
+    }
+
+    Ok(())
+}
+
+fn check_command_fails<W: TestWorld>(world: &W) -> Result<()> {
+    if world.get_exit_code() == 0 {
+        anyhow::bail!("Expected command to fail, but it succeeded");
+    }
+    Ok(())
+}
+
+fn check_error_contains<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+    let error = world.get_error();
+    if !error.contains(expected) {
+        anyhow::bail!(
+            "Expected error to contain '{}', but got: '{}'",
+            expected,
+            error
+        );
+    }
     Ok(())
 }
 

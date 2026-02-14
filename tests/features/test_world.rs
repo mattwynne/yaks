@@ -27,8 +27,13 @@ pub trait TestWorld {
     /// Get the output from the last command
     fn get_output(&self) -> String;
 
+    /// Try to add a yak - captures result without bailing on failure
+    fn try_add_yak(&mut self, name: &str) -> Result<()>;
+
+    /// Get the error output from the last command
+    fn get_error(&self) -> String;
+
     /// Get the exit code from the last command
-    #[allow(dead_code)]
     fn get_exit_code(&self) -> i32;
 }
 

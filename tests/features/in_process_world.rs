@@ -16,6 +16,7 @@ pub struct InProcessWorld {
     storage: InMemoryStorage,
     display: InMemoryDisplay,
     input: InMemoryInput,
+    error: String,
     exit_code: i32,
 }
 
@@ -41,6 +42,7 @@ impl InProcessWorld {
             storage,
             display: InMemoryDisplay::new(),
             input: InMemoryInput::new(),
+            error: String::new(),
             exit_code: 0,
         })
     }
@@ -50,6 +52,7 @@ impl InProcessWorld {
         F: FnOnce(&mut Application) -> Result<()>,
     {
         self.display.clear();
+        self.error.clear();
 
         let mut app = Application::new(
             &mut self.event_bus,
@@ -65,11 +68,47 @@ impl InProcessWorld {
 
         result
     }
+
+    fn try_execute<F>(&mut self, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Application) -> Result<()>,
+    {
+        self.display.clear();
+        self.error.clear();
+
+        let mut app = Application::new(
+            &mut self.event_bus,
+            &self.storage,
+            &self.display,
+            &self.input,
+            None,
+            None,
+        );
+        let result = f(&mut app);
+
+        match result {
+            Ok(()) => self.exit_code = 0,
+            Err(e) => {
+                self.exit_code = 1;
+                self.error = e.to_string();
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl TestWorld for InProcessWorld {
     fn add_yak(&mut self, name: &str) -> Result<()> {
         self.execute(|app| app.handle(AddYak::new(name)))
+    }
+
+    fn try_add_yak(&mut self, name: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(AddYak::new(name)))
+    }
+
+    fn get_error(&self) -> String {
+        self.error.clone()
     }
 
     fn done_yak(&mut self, name: &str) -> Result<()> {
