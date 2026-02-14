@@ -261,6 +261,64 @@ async fn move_yak_in_process(world: &mut InProcessWorld, from: String, to: Strin
     world.move_yak(&from, &to)
 }
 
+#[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
+async fn set_field_full_stack(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.set_field(&name, &field, &content)
+}
+
+#[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
+async fn set_field_in_process(
+    world: &mut InProcessWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.set_field(&name, &field, &content)
+}
+
+#[when(regex = r#"^I try to set the "(.+)" field of "(.+)" to "(.+)"$"#)]
+async fn try_set_field_full_stack(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.try_set_field(&name, &field, &content)
+}
+
+#[when(regex = r#"^I try to set the "(.+)" field of "(.+)" to "(.+)"$"#)]
+async fn try_set_field_in_process(
+    world: &mut InProcessWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.try_set_field(&name, &field, &content)
+}
+
+#[when(regex = r#"^I show the "(.+)" field of "(.+)"$"#)]
+async fn show_field_full_stack(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+) -> Result<()> {
+    world.show_field(&name, &field)
+}
+
+#[when(regex = r#"^I show the "(.+)" field of "(.+)"$"#)]
+async fn show_field_in_process(
+    world: &mut InProcessWorld,
+    field: String,
+    name: String,
+) -> Result<()> {
+    world.show_field(&name, &field)
+}
+
 // ============================================================================
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================
