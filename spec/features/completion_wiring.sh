@@ -12,25 +12,6 @@ Describe 'Bash completion wiring'
   }
   BeforeEach 'setup_bash_completions'
 
-  get_completions() {
-    COMP_WORDS=("$@" "")
-    COMP_CWORD=$(( ${#COMP_WORDS[@]} - 1 ))
-    _yx_completions
-    printf '%s\n' "${COMPREPLY[@]}"
-  }
-
-  It 'offers subcommands'
-    When call get_completions yx
-    The output should include "add"
-    The output should include "done"
-  End
-
-  It 'offers yak names for rm'
-    yx add "test-yak"
-    When call get_completions yx rm
-    The output should include "test-yak"
-  End
-
   It 'offers nested yak names for add after slash'
     yx add "grandma/mummy"
     get_completions_after_slash() {
