@@ -87,6 +87,26 @@ async fn list_yaks_format_filter_in_process(
     world.list_yaks_with_format_and_filter(&format, &only)
 }
 
+#[when(regex = r#"^I add the yak "(.+)"$"#)]
+async fn when_add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.add_yak(&yak_name)
+}
+
+#[when(regex = r#"^I add the yak "(.+)"$"#)]
+async fn when_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.add_yak(&yak_name)
+}
+
+#[when(regex = r#"^there should be (\d+) yaks?$"#)]
+async fn yak_count_full_stack(world: &mut FullStackWorld, expected: usize) -> Result<()> {
+    check_yak_count(world, expected)
+}
+
+#[when(regex = r#"^there should be (\d+) yaks?$"#)]
+async fn yak_count_in_process(world: &mut InProcessWorld, expected: usize) -> Result<()> {
+    check_yak_count(world, expected)
+}
+
 // ============================================================================
 // Then steps
 // ============================================================================
@@ -138,6 +158,18 @@ fn check_output<W: TestWorld>(world: &W, step: &cucumber::gherkin::Step) -> Resu
             expected_text,
             actual_no_ansi
         );
+    }
+
+    Ok(())
+}
+
+fn check_yak_count<W: TestWorld>(world: &mut W, expected: usize) -> Result<()> {
+    world.list_yaks_with_format("plain")?;
+    let output = world.get_output();
+    let actual = output.trim().lines().filter(|l| !l.is_empty()).count();
+
+    if actual != expected {
+        anyhow::bail!("Expected {} yak(s), but found {}", expected, actual);
     }
 
     Ok(())
