@@ -7,7 +7,7 @@ use super::test_world::TestWorld;
 use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
 use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
-    ShowContext, StartYak,
+    ShowContext, ShowField, StartYak, WriteField,
 };
 use yx::infrastructure::EventBus;
 
@@ -177,6 +177,20 @@ impl TestWorld for InProcessWorld {
 
     fn move_yak(&mut self, from: &str, to: &str) -> Result<()> {
         self.execute(|app| app.handle(MoveYak::new(from, to)))
+    }
+
+    fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
+        self.input.set_content(Some(content.to_string()));
+        self.execute(|app| app.handle(WriteField::new(name, field)))
+    }
+
+    fn try_set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
+        self.input.set_content(Some(content.to_string()));
+        self.try_execute(|app| app.handle(WriteField::new(name, field)))
+    }
+
+    fn show_field(&mut self, name: &str, field: &str) -> Result<()> {
+        self.execute(|app| app.handle(ShowField::new(name, field)))
     }
 
     fn get_exit_code(&self) -> i32 {

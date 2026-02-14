@@ -66,6 +66,15 @@ pub trait TestWorld {
     /// Move/rename a yak
     fn move_yak(&mut self, from: &str, to: &str) -> Result<()>;
 
+    /// Set a yak's field from content (simulates stdin piping)
+    fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()>;
+
+    /// Try to set a yak's field - captures result without bailing on failure
+    fn try_set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()>;
+
+    /// Show a yak's field (yx field --show)
+    fn show_field(&mut self, name: &str, field: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }
