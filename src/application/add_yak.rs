@@ -103,6 +103,24 @@ mod tests {
     }
 
     #[test]
+    fn test_add_yak_stores_context_from_input() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::with_content("# My context".to_string());
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("my-yak").execute(&mut app).unwrap();
+
+        let yak = ReadYakStore::get_yak(&storage, "my-yak").unwrap();
+        assert_eq!(yak.context, Some("# My context".to_string()));
+    }
+
+    #[test]
     fn test_generate_context_template_simple_yak() {
         let use_case = AddYak::new("simple-yak");
         let template = use_case.generate_context_template().unwrap();

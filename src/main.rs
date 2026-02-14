@@ -229,6 +229,15 @@ mod tests {
     use yx::application::COMMANDS;
 
     #[test]
+    fn add_joins_multiple_args_into_yak_name() {
+        let cli = Cli::try_parse_from(["yx", "add", "this", "is", "a", "test"]).unwrap();
+        match cli.command {
+            Commands::Add { name } => assert_eq!(name.join(" "), "this is a test"),
+            other => panic!("Expected Add, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn completions_match_cli_commands() {
         let cli = Cli::command();
         let mut clap_names: BTreeSet<String> = BTreeSet::new();
