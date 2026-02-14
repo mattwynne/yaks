@@ -369,6 +369,111 @@ async fn completions_should_include(world: &mut FullStackWorld, expected: String
     check_output_includes(world, &expected)
 }
 
+// ============================================================================
+// Multi-repo steps (sync tests)
+// ============================================================================
+
+#[given(regex = r#"^a bare git repository called "(.+)"$"#)]
+async fn bare_git_repo(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.create_bare_repo(&name)
+}
+
+#[given(regex = r#"^a git clone of "(.+)" called "(.+)"$"#)]
+async fn git_clone(world: &mut FullStackWorld, origin: String, clone: String) -> Result<()> {
+    world.create_clone(&origin, &clone)
+}
+
+#[given(regex = r#"^a git worktree of "(.+)" called "(.+)"$"#)]
+async fn git_worktree(world: &mut FullStackWorld, parent: String, worktree: String) -> Result<()> {
+    world.create_worktree(&parent, &worktree)
+}
+
+#[given(regex = r#"^"(.+)" has a yak called "(.+)"$"#)]
+async fn repo_has_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["add", &yak])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Failed to add yak '{}' in repo '{}':\nstdout: {}\nstderr: {}",
+            yak,
+            repo,
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+#[given(regex = r#"^"(.+)" has synced yaks$"#)]
+async fn repo_has_synced(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["sync"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Failed to sync yaks in repo '{}':\nstdout: {}\nstderr: {}",
+            repo,
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+#[when(regex = r#"^"(.+)" syncs yaks$"#)]
+async fn repo_syncs_yaks(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["sync"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Failed to sync yaks in repo '{}':\nstdout: {}\nstderr: {}",
+            repo,
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^"(.+)" has a "(.+)" ref$"#)]
+async fn repo_has_ref(world: &mut FullStackWorld, repo: String, ref_name: String) -> Result<()> {
+    world.run_git_in_repo(&repo, &["show-ref", &ref_name])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Expected repo '{}' to have ref '{}', but show-ref failed",
+            repo,
+            ref_name
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^"(.+)" should have a yak called "(.+)"$"#)]
+async fn repo_should_have_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["ls", "--format", "markdown"])?;
+    let output = world.get_output();
+    if !output.contains(&yak) {
+        anyhow::bail!(
+            "Expected repo '{}' to have yak '{}', but output was:\n{}",
+            repo,
+            yak,
+            output
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^"(.+)" has nothing staged in the git index$"#)]
+async fn repo_has_clean_index(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_git_in_repo(&repo, &["diff", "--cached", "--name-only"])?;
+    let output = world.get_output();
+    let trimmed = output.trim();
+    if !trimmed.is_empty() {
+        anyhow::bail!(
+            "Expected repo '{}' to have nothing staged, but found:\n{}",
+            repo,
+            trimmed
+        );
+    }
+    Ok(())
+}
+
 #[then(expr = "it should succeed")]
 async fn should_succeed_full_stack(world: &mut FullStackWorld) -> Result<()> {
     check_should_succeed(world)
