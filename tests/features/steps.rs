@@ -251,6 +251,16 @@ async fn start_yak_in_process(world: &mut InProcessWorld, name: String) -> Resul
     world.start_yak(&name)
 }
 
+#[when(regex = r#"^I move the yak "(.+)" to "(.+)"$"#)]
+async fn move_yak_full_stack(world: &mut FullStackWorld, from: String, to: String) -> Result<()> {
+    world.move_yak(&from, &to)
+}
+
+#[when(regex = r#"^I move the yak "(.+)" to "(.+)"$"#)]
+async fn move_yak_in_process(world: &mut InProcessWorld, from: String, to: String) -> Result<()> {
+    world.move_yak(&from, &to)
+}
+
 // ============================================================================
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================
