@@ -14,6 +14,7 @@ pub struct FullStackWorld {
     repo_path: PathBuf,
     _temp_dir: TempDir,
     output: String,
+    error: String,
     exit_code: i32,
 }
 
@@ -26,6 +27,7 @@ impl FullStackWorld {
             repo_path,
             _temp_dir: temp_dir,
             output: String::new(),
+            error: String::new(),
             exit_code: 0,
         })
     }
@@ -58,27 +60,34 @@ impl FullStackWorld {
     }
 
     fn run_yx(&mut self, args: &[&str]) -> Result<()> {
+        self.run_yx_unchecked(args)?;
+
+        if !self.exit_code == 0 {
+            anyhow::bail!(
+                "yx command failed:\nstdout: {}\nstderr: {}",
+                self.output,
+                self.error
+            );
+        }
+
+        Ok(())
+    }
+
+    fn run_yx_unchecked(&mut self, args: &[&str]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
         let output = Command::new(yx_path)
             .args(args)
             .env("YAK_PATH", &self.repo_path)
-            .env("YX_IGNORE_STDIN", "1") // Skip interactive editor
-            .env("YX_SKIP_GIT_CHECKS", "1") // Skip git logging
+            .env("YX_IGNORE_STDIN", "1")
+            .env("YX_SKIP_GIT_CHECKS", "1")
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to run yx command")?;
 
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();
-
-        if !output.status.success() {
-            anyhow::bail!(
-                "yx command failed:\nstdout: {}\nstderr: {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
 
         Ok(())
     }
@@ -87,6 +96,14 @@ impl FullStackWorld {
 impl TestWorld for FullStackWorld {
     fn add_yak(&mut self, name: &str) -> Result<()> {
         self.run_yx(&["add", name])
+    }
+
+    fn try_add_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx_unchecked(&["add", name])
+    }
+
+    fn get_error(&self) -> String {
+        self.error.clone()
     }
 
     fn done_yak(&mut self, name: &str) -> Result<()> {
