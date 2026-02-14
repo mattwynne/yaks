@@ -69,8 +69,8 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::application::AddYak;
+    use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
-    use crate::ports::ReadYakStore;
 
     fn setup() -> (InMemoryStorage, InMemoryDisplay, InMemoryInput) {
         (

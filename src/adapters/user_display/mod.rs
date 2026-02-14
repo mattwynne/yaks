@@ -5,7 +5,7 @@ pub mod memory_display;
 
 pub struct ConsoleDisplay;
 
-impl crate::ports::DisplayPort for ConsoleDisplay {
+impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     fn success(&self, message: &str) {
         println!("{message}");
     }

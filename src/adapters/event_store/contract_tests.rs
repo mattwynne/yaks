@@ -10,11 +10,11 @@
 /// rather than commit messages. Tests only check event count, not content equality.
 macro_rules! event_store_tests {
     ($create_store:expr) => {
+        use crate::domain::ports::EventStore;
         use crate::domain::{
             AddedEvent, ContextUpdatedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent,
             StateUpdatedEvent, YakEvent,
         };
-        use crate::ports::EventStore;
 
         #[test]
         fn appends_and_retrieves_single_event() {

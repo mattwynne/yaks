@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
 
+use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::YakEvent;
-use crate::ports::{EventStore, EventStoreReader};
 
 #[derive(Clone)]
 pub struct InMemoryEventStore {

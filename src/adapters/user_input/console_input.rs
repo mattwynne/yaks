@@ -1,6 +1,6 @@
 // Console input adapter - handles stdin and editor-based input
 
-use crate::ports::InputPort;
+use crate::domain::ports::InputPort;
 use anyhow::{Context as AnyhowContext, Result};
 use std::env;
 use std::fs;

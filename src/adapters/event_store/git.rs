@@ -2,8 +2,8 @@ use anyhow::Result;
 use git2::Repository;
 use std::path::Path;
 
+use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::YakEvent;
-use crate::ports::{EventStore, EventStoreReader};
 
 pub struct GitEventStore {
     repo: Repository,

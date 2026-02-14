@@ -1,6 +1,6 @@
 // In-memory display adapter - for testing only
 
-use crate::ports::DisplayPort;
+use crate::domain::ports::DisplayPort;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]

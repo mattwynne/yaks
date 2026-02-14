@@ -1,6 +1,6 @@
 // In-memory input adapter for testing
 
-use crate::ports::InputPort;
+use crate::domain::ports::InputPort;
 use anyhow::Result;
 use std::cell::RefCell;
 

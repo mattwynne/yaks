@@ -1,17 +1,17 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
-use yx::adapters::cli::ConsoleDisplay;
 use yx::adapters::event_store::GitEventStore;
-use yx::adapters::input::ConsoleInput;
-use yx::adapters::storage::DirectoryStorage;
 use yx::adapters::sync::GitRefSync;
+use yx::adapters::user_display::ConsoleDisplay;
+use yx::adapters::user_input::ConsoleInput;
+use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
     RemoveYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
 };
+use yx::domain::ports::ReadYakStore;
 use yx::infrastructure::EventBus;
-use yx::ports::ReadYakStore;
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]

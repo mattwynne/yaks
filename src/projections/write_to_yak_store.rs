@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::domain::events::*;
+use crate::domain::ports::{EventListener, WriteYakStore};
 use crate::domain::{YakEvent, CONTEXT_FIELD, STATE_FIELD};
-use crate::ports::{EventListener, WriteYakStore};
 
 impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {

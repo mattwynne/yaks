@@ -81,8 +81,8 @@ impl UseCase for AddYak {
 mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
-    use crate::ports::ReadYakStore;
 
     #[test]
     fn test_add_yak_creates_yak() {
