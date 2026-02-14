@@ -73,6 +73,11 @@ impl FullStackWorld {
         Ok(())
     }
 
+    /// Run yx with raw args, capturing output without checking exit code
+    pub fn run_raw(&mut self, args: &[&str]) -> Result<()> {
+        self.run_yx_unchecked(args)
+    }
+
     fn run_yx_unchecked(&mut self, args: &[&str]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 

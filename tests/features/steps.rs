@@ -138,6 +138,26 @@ async fn try_remove_yak_in_process(world: &mut InProcessWorld, yak_name: String)
 }
 
 // ============================================================================
+// Full-stack-only steps (CLI behavior that can't be tested in-process)
+// ============================================================================
+
+#[when(regex = r#"^I run yx (.+)$"#)]
+async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Result<()> {
+    let arg_vec: Vec<&str> = args.split_whitespace().collect();
+    world.run_raw(&arg_vec)
+}
+
+#[then(expr = "it should succeed")]
+async fn should_succeed_full_stack(world: &mut FullStackWorld) -> Result<()> {
+    check_should_succeed(world)
+}
+
+#[then(regex = r#"^the output should include "(.+)"$"#)]
+async fn output_includes_full_stack(world: &mut FullStackWorld, expected: String) -> Result<()> {
+    check_output_includes(world, &expected)
+}
+
+// ============================================================================
 // Then steps
 // ============================================================================
 
@@ -252,5 +272,29 @@ fn check_empty_output<W: TestWorld>(world: &W) -> Result<()> {
         anyhow::bail!("\nExpected empty output\n\nActual:\n{}", actual);
     }
 
+    Ok(())
+}
+
+fn check_should_succeed<W: TestWorld>(world: &W) -> Result<()> {
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Expected command to succeed, but it failed with exit code {}.\nstderr: {}",
+            world.get_exit_code(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+fn check_output_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+    let output = world.get_output();
+    let output_no_ansi = strip_ansi_codes(&output);
+    if !output_no_ansi.contains(expected) {
+        anyhow::bail!(
+            "Expected output to include '{}', but got:\n{}",
+            expected,
+            output_no_ansi
+        );
+    }
     Ok(())
 }
