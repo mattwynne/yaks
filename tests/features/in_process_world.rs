@@ -5,7 +5,9 @@ use cucumber::World as CucumberWorld;
 
 use super::test_world::TestWorld;
 use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
-use yx::application::{AddYak, Application, DoneYak, ListYaks, RemoveYak};
+use yx::application::{
+    AddYak, Application, DoneYak, EditContext, ListYaks, RemoveYak, ShowContext,
+};
 use yx::infrastructure::EventBus;
 
 #[derive(CucumberWorld)]
@@ -133,6 +135,15 @@ impl TestWorld for InProcessWorld {
 
     fn list_yaks_with_format_and_filter(&mut self, format: &str, only: &str) -> Result<()> {
         self.execute(|app| app.handle(ListYaks::new(format, Some(only))))
+    }
+
+    fn set_context(&mut self, name: &str, content: &str) -> Result<()> {
+        self.input.set_content(Some(content.to_string()));
+        self.execute(|app| app.handle(EditContext::new(name)))
+    }
+
+    fn show_context(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(ShowContext::new(name)))
     }
 
     fn get_output(&self) -> String {

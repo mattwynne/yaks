@@ -39,6 +39,12 @@ pub trait TestWorld {
     /// Get the error output from the last command
     fn get_error(&self) -> String;
 
+    /// Set a yak's context from content (simulates stdin piping)
+    fn set_context(&mut self, name: &str, content: &str) -> Result<()>;
+
+    /// Show a yak's context (yx context --show)
+    fn show_context(&mut self, name: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

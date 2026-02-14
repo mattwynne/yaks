@@ -2,8 +2,9 @@
 
 use anyhow::{Context, Result};
 use cucumber::World as CucumberWorld;
+use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tempfile::TempDir;
 
 use super::test_world::TestWorld;
@@ -78,6 +79,45 @@ impl FullStackWorld {
         self.run_yx_unchecked(args)
     }
 
+    fn run_yx_with_stdin(&mut self, args: &[&str], stdin_content: &str) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let mut child = Command::new(yx_path)
+            .args(args)
+            .env("YAK_PATH", &self.repo_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .current_dir(&self.repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn yx command")?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(stdin_content.as_bytes())
+                .context("Failed to write to stdin")?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .context("Failed to wait for yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if self.exit_code != 0 {
+            anyhow::bail!(
+                "yx command failed:\nstdout: {}\nstderr: {}",
+                self.output,
+                self.error
+            );
+        }
+
+        Ok(())
+    }
+
     fn run_yx_unchecked(&mut self, args: &[&str]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
@@ -137,6 +177,14 @@ impl TestWorld for FullStackWorld {
 
     fn get_output(&self) -> String {
         self.output.clone()
+    }
+
+    fn set_context(&mut self, name: &str, content: &str) -> Result<()> {
+        self.run_yx_with_stdin(&["context", name], content)
+    }
+
+    fn show_context(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["context", "--show", name])
     }
 
     fn get_exit_code(&self) -> i32 {

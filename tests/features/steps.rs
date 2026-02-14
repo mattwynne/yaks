@@ -137,6 +137,34 @@ async fn try_remove_yak_in_process(world: &mut InProcessWorld, yak_name: String)
     world.try_remove_yak(&yak_name)
 }
 
+#[when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)]
+async fn set_context_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.set_context(&name, &content)
+}
+
+#[when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)]
+async fn set_context_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.set_context(&name, &content)
+}
+
+#[when(regex = r#"^I show the context of "(.+)"$"#)]
+async fn show_context_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.show_context(&name)
+}
+
+#[when(regex = r#"^I show the context of "(.+)"$"#)]
+async fn show_context_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
+    world.show_context(&name)
+}
+
 // ============================================================================
 // Full-stack-only steps (CLI behavior that can't be tested in-process)
 // ============================================================================
