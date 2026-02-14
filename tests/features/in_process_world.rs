@@ -6,7 +6,7 @@ use cucumber::World as CucumberWorld;
 use super::test_world::TestWorld;
 use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
 use yx::application::{
-    AddYak, Application, DoneYak, EditContext, ListYaks, PruneYaks, RemoveYak, SetState,
+    AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, SetState,
     ShowContext, StartYak,
 };
 use yx::infrastructure::EventBus;
@@ -173,6 +173,10 @@ impl TestWorld for InProcessWorld {
 
     fn start_yak(&mut self, name: &str) -> Result<()> {
         self.execute(|app| app.handle(StartYak::new(name, false)))
+    }
+
+    fn move_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.execute(|app| app.handle(MoveYak::new(from, to)))
     }
 
     fn get_exit_code(&self) -> i32 {

@@ -211,6 +211,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["start", name])
     }
 
+    fn move_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.run_yx(&["move", from, to])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
