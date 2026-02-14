@@ -102,6 +102,14 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["add", name])
     }
 
+    fn remove_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["rm", name])
+    }
+
+    fn try_remove_yak(&mut self, name: &str) -> Result<()> {
+        self.run_yx_unchecked(&["rm", name])
+    }
+
     fn get_error(&self) -> String {
         self.error.clone()
     }
