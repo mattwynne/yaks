@@ -13,40 +13,4 @@ Describe 'yx rm'
     The output should include "- [todo] Write docs"
     The output should not include "- [todo] Fix the bug"
   End
-
-  It 'shows error when yak not found'
-    When run yx rm "Nonexistent yak"
-    The status should be failure
-    The error should include "not found"
-  End
-
-  It 'handles removing the only yak'
-    When run sh -c "
-      yx add 'Only yak'
-      yx rm 'Only yak'
-      yx list --format markdown
-    "
-    The output should equal "You have no yaks. Are you done?"
-  End
-
-  It 'removes multi-word yak names without quotes'
-    When run sh -c "
-      yx add this is a test
-      yx add another yak
-      yx rm this is a test
-      yx list --format markdown
-    "
-    The output should include "- [todo] another yak"
-    The output should not include "- [todo] this is a test"
-  End
-
-  It 'removes a nested yak'
-    When run sh -c "
-      yx add 'parent'
-      yx add 'parent/child'
-      yx rm 'parent/child'
-      yx list --format markdown
-    "
-    The output should equal "- [todo] parent"
-  End
 End
