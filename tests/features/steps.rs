@@ -117,6 +117,26 @@ async fn try_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) ->
     world.try_add_yak(&yak_name)
 }
 
+#[when(regex = r#"^I remove the yak "(.+)"$"#)]
+async fn remove_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.remove_yak(&yak_name)
+}
+
+#[when(regex = r#"^I remove the yak "(.+)"$"#)]
+async fn remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.remove_yak(&yak_name)
+}
+
+#[when(regex = r#"^I try to remove the yak "(.+)"$"#)]
+async fn try_remove_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.try_remove_yak(&yak_name)
+}
+
+#[when(regex = r#"^I try to remove the yak "(.+)"$"#)]
+async fn try_remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.try_remove_yak(&yak_name)
+}
+
 // ============================================================================
 // Then steps
 // ============================================================================

@@ -30,6 +30,12 @@ pub trait TestWorld {
     /// Try to add a yak - captures result without bailing on failure
     fn try_add_yak(&mut self, name: &str) -> Result<()>;
 
+    /// Remove a yak by name
+    fn remove_yak(&mut self, name: &str) -> Result<()>;
+
+    /// Try to remove a yak - captures result without bailing on failure
+    fn try_remove_yak(&mut self, name: &str) -> Result<()>;
+
     /// Get the error output from the last command
     fn get_error(&self) -> String;
 
