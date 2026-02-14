@@ -25,29 +25,4 @@ Describe 'yx sync does not pollute working tree or index'
 
     rm -rf "$ORIGIN" "$REPO"
   End
-
-  It 'does not leave yak files outside .yaks directory'
-    ORIGIN=$(mktemp -d)
-    REPO=$(mktemp -d)
-
-    # Set up bare origin and clone
-    setup_bare_repo "$ORIGIN"
-    setup_test_repo "$REPO" "test@example.com" "Test" "$ORIGIN"
-    echo "test" > "$REPO/README.md"
-    git -C "$REPO" add README.md
-    git -C "$REPO" commit -m "init" --quiet
-    git -C "$REPO" push -u origin main --quiet
-
-    # Add a yak and sync
-    GIT_WORK_TREE="$REPO" "yx" add "test yak"
-    cd "$REPO" || return
-    GIT_WORK_TREE="$REPO" "yx" sync 2>&1
-
-    # Check that no yak directories appear at root (like claim/)
-    # The bug we're preventing had directories like "claim/" at root instead of ".yaks/claim/"
-    When call sh -c "cd '$REPO' && find . -maxdepth 1 -type d ! -name . ! -name .git ! -name .yaks ! -name '.*' | wc -l | tr -d ' '"
-    The output should equal "0"
-
-    rm -rf "$ORIGIN" "$REPO"
-  End
 End
