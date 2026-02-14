@@ -51,6 +51,9 @@ pub trait TestWorld {
     /// Mark a yak as done recursively (parent + all descendants)
     fn done_yak_recursive(&mut self, name: &str) -> Result<()>;
 
+    /// Prune all done yaks
+    fn prune_yaks(&mut self) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

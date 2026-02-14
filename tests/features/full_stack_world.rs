@@ -195,6 +195,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["done", "--recursive", name])
     }
 
+    fn prune_yaks(&mut self) -> Result<()> {
+        self.run_yx(&["prune"])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
