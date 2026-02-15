@@ -10,8 +10,8 @@ A CLI tool for managing TODO lists as a directed acyclic graph (DAG), designed f
 
 ```bash
 # Testing
-shellspec                    # Run all tests
-shellspec spec/list.sh       # Run specific test file
+cargo test --test cucumber --features test-support  # Run Cucumber acceptance tests
+shellspec                    # Run ShellSpec tests (tmux smoke, git checks, installer)
 
 # Linting
 dev lint                     # Run linting (Rust clippy + rustfmt)
@@ -79,12 +79,15 @@ The codebase is evolving toward **CQRS (Command Query Responsibility Segregation
 - Directory-based storage allows future backends (git refs) via adapter pattern
 
 ### Testing
-- Framework: ShellSpec for acceptance tests (black-box testing of compiled binary)
-- Pattern: Each command has its own spec file (spec/add.sh, spec/list.sh, etc.)
-- Tests use `YAK_PATH=$(mktemp -d)` for isolation
-- Configuration: `.shellspec` sets format, pattern, and shell
-- Rust unit tests for internal logic (run with `cargo test`)
-- Integration tests exercise use cases with mock adapters
+- **Cucumber acceptance tests** (`features/*.feature`): Primary test framework.
+  Runs in two modes via `cargo test --test cucumber --features test-support`:
+  - FullStackWorld: spawns yx binary (real integration test)
+  - InProcessWorld: calls Rust directly with in-memory adapters (fast)
+- **ShellSpec tests** (`tests/shellspec/`): For tests that don't fit Cucumber
+  (tmux completion smoke test, git availability check, installer test).
+  Run with `shellspec`.
+- **Rust unit tests**: Internal logic (`cargo test`)
+- **Integration tests**: Exercise use cases with mock adapters
 
 ## CLI Design Philosophy
 
@@ -154,10 +157,10 @@ ADRs can reference each other:
 ## Development Workflow
 
 **Test-Driven Development (TDD)**:
-1. Write ONE failing test
-2. Run `shellspec` (RED)
+1. Write ONE failing test (Cucumber scenario or Rust test)
+2. Run tests (RED)
 3. Implement minimal code to pass (GREEN)
-4. Run `shellspec` to verify
+4. Run tests to verify
 5. Refactor if needed
 6. Run `dev check` to verify all checks pass
 7. Commit
@@ -199,7 +202,7 @@ When the user asks you to pick up a yak, follow this workflow EXACTLY:
 - [ ] **Define "done"**: Ask the user "What will 'done' look like for this yak?" to establish acceptance criteria upfront
 - [ ] **Ask for clarification**: If context is empty or unclear, ask the user - do not assume
 - [ ] **Do the work**: In the worktree, run tests, make changes, commit
-- [ ] **Verify tests pass**: Run `shellspec` to ensure all tests are green
+- [ ] **Verify tests pass**: Run `dev check` to ensure all tests are green
 - [ ] **Run checks**: Run `dev check` before committing to verify all quality checks
 - [ ] **Switch to main**: `cd` back to the main repository directory
 - [ ] **Merge to main**: `git merge --no-ff <branch-name> -m "Merge <branch>: <description>"`
