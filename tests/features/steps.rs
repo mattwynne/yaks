@@ -46,6 +46,116 @@ async fn done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Re
 }
 
 // ============================================================================
+// V1 schema fixture (inline duplication of the v1 event store format)
+// ============================================================================
+
+/// Create a yak directly in the git event store using the v1 schema format.
+/// This is intentionally duplicated/inlined — it's a frozen snapshot of how
+/// v1 works, so that when the production code evolves, this fixture still
+/// creates the old format to prove migration works.
+#[given(regex = r#"^a yak "(.+)" created with the v1 schema$"#)]
+async fn v1_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.init_git()?;
+    let repo_path = world.default_repo_path();
+
+    // -- Build the event store commit on refs/notes/yaks --
+
+    // Create blobs for yak files
+    let state_oid = git_hash_object(repo_path, "todo")?;
+    let context_oid = git_hash_object(repo_path, "")?;
+
+    // Create yak subtree: state + context.md
+    let yak_tree_input = format!(
+        "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
+        state_oid, context_oid
+    );
+    let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
+
+    // Create root tree containing the yak subtree
+    let root_tree_input = format!("040000 tree {}\t{}\n", yak_tree_oid, yak_name);
+    let root_tree_oid = git_mktree(repo_path, &root_tree_input)?;
+
+    // Create commit on refs/notes/yaks
+    let message = format!("Added: \"{}\"", yak_name);
+    let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
+    git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
+
+    // -- Build the .yaks/ projection (YAK_PATH = repo_path in tests) --
+    let yak_dir = repo_path.join(&yak_name);
+    std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
+    std::fs::write(yak_dir.join("state"), "todo").context("Failed to write state")?;
+    std::fs::write(yak_dir.join("context.md"), "").context("Failed to write context.md")?;
+
+    Ok(())
+}
+
+// -- Git plumbing helpers for v1 fixture --
+
+fn git_hash_object(repo_path: &std::path::Path, content: &str) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(["hash-object", "-w", "--stdin"])
+        .current_dir(repo_path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.take().unwrap().write_all(content.as_bytes())?;
+            child.wait_with_output()
+        })
+        .context("git hash-object failed")?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_mktree(repo_path: &std::path::Path, input: &str) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(["mktree"])
+        .current_dir(repo_path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.take().unwrap().write_all(input.as_bytes())?;
+            child.wait_with_output()
+        })
+        .context("git mktree failed")?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_commit_tree(
+    repo_path: &std::path::Path,
+    tree_oid: &str,
+    message: &str,
+    parent: Option<&str>,
+) -> Result<String> {
+    let mut args = vec!["commit-tree", tree_oid, "-m", message];
+    if let Some(parent_oid) = parent {
+        args.extend(["-p", parent_oid]);
+    }
+    let output = std::process::Command::new("git")
+        .args(&args)
+        .current_dir(repo_path)
+        .output()
+        .context("git commit-tree failed")?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_update_ref(repo_path: &std::path::Path, ref_name: &str, oid: &str) -> Result<()> {
+    let status = std::process::Command::new("git")
+        .args(["update-ref", ref_name, oid])
+        .current_dir(repo_path)
+        .status()
+        .context("git update-ref failed")?;
+    if !status.success() {
+        anyhow::bail!("git update-ref failed");
+    }
+    Ok(())
+}
+
+// ============================================================================
 // When steps
 // ============================================================================
 
