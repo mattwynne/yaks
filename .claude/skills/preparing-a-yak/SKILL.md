@@ -51,10 +51,27 @@ EOF
 
 Use `/example-mapping` to discover rules, examples, and questions.
 
-**Adaptation:** Instead of leaving the Gherkin skeleton in conversation, store it on the yak:
+**CRITICAL: Go one rule at a time, not all at once.**
+
+The process:
+
+1. **Identify all the rules** from the spec. List them as a short numbered checklist (rule name only, one line each) so the user can see the full scope.
+
+2. **Present one rule at a time.** For each rule:
+   - State the rule clearly
+   - Give 2-3 concrete examples (including edge cases)
+   - Ask the user: does this rule look right? Any examples missing?
+   - Wait for confirmation before moving to the next rule.
+
+3. **After all rules are confirmed, go through questions one at a time.** For each question:
+   - State the question and why it matters
+   - Suggest options if you have them
+   - Wait for the user's answer
+   - Record the decision (update the relevant rule or note the deferral)
+
+4. **Store the final example map on the yak:**
 
 ```bash
-# Store the example map as a field
 cat <<'EOF' | yx field "yak name" examples
 Feature: [yak name]
 
@@ -65,12 +82,12 @@ Feature: [yak name]
   Rule: [second rule]
     Example: [concrete example]
 
-  # Questions:
-  # - [unanswered question]
+  # Deferred:
+  # - [deferred question or rule]
 EOF
 ```
 
-**Done when:** The user confirms the rules and examples cover the scope. Questions are either answered or explicitly deferred.
+**Done when:** All rules confirmed, all questions answered or deferred, and the example map is stored on the yak.
 
 ### Phase 3: Write the Implementation Plan
 
