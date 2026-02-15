@@ -359,6 +359,15 @@ async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Resu
     world.run_raw(&arg_vec)
 }
 
+#[when(regex = r#"^I add the yak "(.+)" with context "(.+)" from stdin$"#)]
+async fn add_yak_with_stdin_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    context: String,
+) -> Result<()> {
+    world.add_yak_with_stdin(&yak_name, &context)
+}
+
 #[when(regex = r#"^I invoke bash completion for words: (.+)$"#)]
 async fn invoke_bash_completion(world: &mut FullStackWorld, words_str: String) -> Result<()> {
     world.run_bash_completion(&words_str)

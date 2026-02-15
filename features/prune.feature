@@ -1,8 +1,7 @@
 Feature: Prune done yaks
-  Removes all completed yaks in bulk.
-
-  Usage:
-    yx prune   # Remove all done yaks
+  Removes all completed yaks in bulk. Silent operation with no output
+  on success (exit code 0). Use prune for bulk cleanup after
+  completing a sprint or milestone. Use rm to remove a specific yak.
 
   Rule: Removes all done yaks and keeps incomplete yaks
 
