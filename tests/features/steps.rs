@@ -478,6 +478,20 @@ async fn add_yak_with_stdin_full_stack(
     world.add_yak_with_stdin(&yak_name, &context)
 }
 
+#[when(regex = r#"^I try to set the context of "(.+)" with empty stdin$"#)]
+async fn try_set_context_empty_stdin(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.run_yx_with_empty_stdin(&["context", &name])
+}
+
+#[when(regex = r#"^I try to set the "(.+)" field of "(.+)" with empty stdin$"#)]
+async fn try_set_field_empty_stdin(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+) -> Result<()> {
+    world.run_yx_with_empty_stdin(&["field", &name, &field])
+}
+
 #[when(regex = r#"^I invoke bash completion for words: (.+)$"#)]
 async fn invoke_bash_completion(world: &mut FullStackWorld, words_str: String) -> Result<()> {
     world.run_bash_completion(&words_str)

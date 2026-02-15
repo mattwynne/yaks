@@ -16,6 +16,15 @@ Feature: Yak fields
         field content
         """
 
+  Rule: Empty piped stdin is an error
+
+    Example: Piping empty content to field fails
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to set the "notes" field of "my yak" with empty stdin
+      Then the command should fail
+      And the error should contain "no content received on stdin"
+
   Rule: Reserved field names are rejected
     Certain field names conflict with internal storage and cannot
     be used as custom field names.

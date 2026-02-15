@@ -21,22 +21,22 @@ impl InputPort for ConsoleInput {
         initial_content: Option<&str>,
         template: Option<&str>,
     ) -> Result<Option<String>> {
+        // Check for YX_IGNORE_STDIN first (test mode)
+        if env::var("YX_IGNORE_STDIN").is_ok() {
+            return Ok(None);
+        }
+
         // Check if stdin is a TTY
         if !atty::is(atty::Stream::Stdin) {
-            // Non-TTY: Check if stdin has content piped to it
+            // Non-TTY: Check if stdin is a pipe with content
             if Self::stdin_has_readable_data() {
                 let content = Self::read_stdin()?;
                 if !content.is_empty() {
                     return Ok(Some(content));
                 }
             }
-            // No readable data, return None
-            return Ok(None);
-        }
-
-        // TTY: check if we should skip interactive behavior (test mode)
-        if env::var("YX_IGNORE_STDIN").is_ok() {
-            return Ok(None);
+            // Pipe detected but no content — this is an error, not a cancellation
+            return Err(anyhow::anyhow!("no content received on stdin"));
         }
 
         // Interactive mode (TTY): open editor

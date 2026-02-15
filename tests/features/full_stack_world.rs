@@ -403,6 +403,36 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Run yx with piped stdin that has no content (simulates `true | yx ...`).
+    /// Captures output without checking exit code.
+    pub fn run_yx_with_empty_stdin(&mut self, args: &[&str]) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let mut child = Command::new(yx_path)
+            .args(args)
+            .env("YAK_PATH", &self.repo_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .current_dir(&self.repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn yx command")?;
+
+        // Drop stdin immediately to simulate empty pipe
+        drop(child.stdin.take());
+
+        let output = child
+            .wait_with_output()
+            .context("Failed to wait for yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
     fn run_yx_unchecked(&mut self, args: &[&str]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
