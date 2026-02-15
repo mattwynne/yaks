@@ -3,7 +3,8 @@ Feature: Manage yak context
 
   Context is stored per-yak and can be set from stdin (pipeline mode)
   or edited interactively ($EDITOR). The --show flag displays the yak
-  name followed by its context.
+  name followed by its context. Keep yak names short and use context
+  for detailed requirements, acceptance criteria, and technical notes.
 
   Rule: Context can be set from stdin
 

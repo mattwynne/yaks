@@ -10,7 +10,7 @@ Describe 'install.sh'
       temp_zip=$(mktemp)
       cp "$TEST_PROJECT_DIR/result-linux/yx-linux.zip" "$temp_zip"
 
-      docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/spec/features/Dockerfile.installer-test" "$TEST_PROJECT_DIR" 2>/dev/null
+      docker build -t yx-installer-test-base -f "$TEST_PROJECT_DIR/tests/shellspec/Dockerfile.installer-test" "$TEST_PROJECT_DIR" 2>/dev/null
 
       docker run --rm \
         -v "$TEST_PROJECT_DIR:/workspace" \

@@ -126,6 +126,11 @@ impl FullStackWorld {
         Ok(())
     }
 
+    /// Add a yak with piped stdin content (does not set YX_IGNORE_STDIN)
+    pub fn add_yak_with_stdin(&mut self, name: &str, stdin_content: &str) -> Result<()> {
+        self.run_yx_with_stdin(&["add", name], stdin_content)
+    }
+
     /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
     /// Used for testing git environment checks (not-in-repo, no gitignore).
     pub fn run_yx_in_override_dir(&mut self, args: &[&str]) -> Result<()> {

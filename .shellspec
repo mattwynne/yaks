@@ -1,3 +1,5 @@
+--default-path tests/shellspec
+--helperdir ./tests/shellspec
 --require spec_helper
 --pattern "*.sh"
 --shell bash

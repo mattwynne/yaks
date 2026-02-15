@@ -1,9 +1,11 @@
 Feature: Move and rename yaks
   Renames yaks and reorganizes them in the hierarchy.
-  Alias: yx mv
+  Alias: yx mv. All data (context, state, children) is preserved
+  when moving. Moving to a non-existent parent creates it implicitly.
 
   Rule: A yak can be renamed
-    A simple rename changes the name while keeping everything else.
+    A simple rename changes the name while preserving context, state,
+    and children.
 
     Example: Rename a yak
       Given I have a clean git repository

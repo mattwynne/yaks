@@ -2,13 +2,14 @@
 Feature: yx sync - Collaborate on Yaks via Git
 
   Synchronizes yaks between team members using a hidden git ref
-  (`refs/notes/yaks`).
+  (`refs/notes/yaks`). Idempotent and safe to run anytime.
 
   Yaks are stored in a hidden git ref (`refs/notes/yaks`) that does
   not appear in branch history. Sync fetches from origin, commits
   local yak state, merges remote changes (fast-forward when possible,
   true merge if both sides changed), pushes, and extracts the merged
-  result. Conflict resolution uses last-write-wins.
+  result. Conflict resolution uses last-write-wins. When there is no
+  remote origin, sync succeeds silently as a no-op.
 
   Background:
     Given a bare git repository called "origin"
