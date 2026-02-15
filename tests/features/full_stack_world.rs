@@ -41,6 +41,11 @@ impl FullStackWorld {
         })
     }
 
+    /// Get the default repository path
+    pub fn default_repo_path(&self) -> &std::path::Path {
+        &self.repo_path
+    }
+
     /// Initialize git repository (needed for full-stack testing)
     pub fn init_git(&self) -> Result<()> {
         let status = Command::new("git")
