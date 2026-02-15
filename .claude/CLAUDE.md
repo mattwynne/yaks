@@ -189,41 +189,7 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 
 ## CRITICAL: Picking Up a Yak
 
-**ALWAYS use a worktree when working on a yak. NEVER work directly on main.**
-
-**This is a team tool** - multiple people/agents may be working simultaneously, pushing to main and syncing yaks.
-
-When the user asks you to pick up a yak, follow this workflow EXACTLY:
-
-### Yak Workflow Checklist
-
-- [ ] **Create worktree**: Use `git worktree add .worktrees/<branch-name> -b <branch-name>`
-- [ ] **Read yak context**: Run `yx context --show <yak-name>` to understand the task
-- [ ] **Define "done"**: Ask the user "What will 'done' look like for this yak?" to establish acceptance criteria upfront
-- [ ] **Ask for clarification**: If context is empty or unclear, ask the user - do not assume
-- [ ] **Do the work**: In the worktree, run tests, make changes, commit
-- [ ] **Verify tests pass**: Run `dev check` to ensure all tests are green
-- [ ] **Run checks**: Run `dev check` before committing to verify all quality checks
-- [ ] **Switch to main**: `cd` back to the main repository directory
-- [ ] **Merge to main**: `git merge --no-ff <branch-name> -m "Merge <branch>: <description>"`
-- [ ] **Delete worktree**: `git worktree remove .worktrees/<branch-name>`
-- [ ] **Delete branch**: `git branch -d <branch-name>`
-- [ ] **Demonstrate completion**: Show that the acceptance criteria are met (specific to each yak)
-- [ ] **Get confirmation**: Wait for user approval before marking as done
-- [ ] **Mark yak done**: Run `yx done <yak-name>` ONLY after user confirms success
-
-**CRITICAL**: NEVER mark a yak as done until AFTER the user confirms the acceptance criteria are met. What "done" means is yak-specific - always clarify upfront.
-
-This applies to ALL yak work, regardless of how "simple" the change appears. No exceptions.
-
-**Why worktrees matter:**
-- **Isolation**: Keep main clean while working
-- **Safety**: Test changes without affecting the main branch
-- **Dogfooding**: We use yaks to build yaks - follow the same workflow
-- **Collaboration**: Multiple agents/developers can work on different yaks simultaneously
-
-**Worktree directory location:**
-Use `.worktrees/` for all git worktrees in this project. This directory is ignored in `.gitignore`.
+**ALWAYS use the `yak-worktree-workflow` skill when picking up a yak.** Follow it exactly.
 
 ## Commit Message Policy
 
