@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
+use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::GitEventStore;
 use yx::adapters::sync::GitRefSync;
 use yx::adapters::user_display::ConsoleDisplay;
@@ -127,6 +128,9 @@ fn main() -> Result<()> {
     let repo_path = std::env::var("GIT_WORK_TREE")
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
+    // Run schema migration before using the event store
+    Migrator::for_current_version().run(&repo_path)?;
+
     let event_store = GitEventStore::new(&repo_path)?;
     let mut event_bus = EventBus::new(Box::new(event_store));
 
