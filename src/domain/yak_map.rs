@@ -113,6 +113,7 @@ impl YakMap {
         // Capture old state before updating
         let old_state = self.yaks.get(&name).unwrap().state.clone();
         let transitioning_from_todo = old_state == "todo" && state != "todo";
+        let transitioning_from_done = old_state == "done" && state != "done";
 
         // Update this yak
         self.yaks.get_mut(&name).unwrap().state = state.clone();
@@ -125,6 +126,11 @@ impl YakMap {
         // Propagate to ancestors if transitioning from todo
         if transitioning_from_todo {
             self.propagate_wip_to_ancestors(&name);
+        }
+
+        // Demote done ancestors if transitioning from done
+        if transitioning_from_done {
+            self.demote_done_ancestors_to_wip(&name);
         }
 
         Ok(())
@@ -157,6 +163,23 @@ impl YakMap {
         for ancestor in get_ancestors(child_name) {
             if let Some(parent) = self.yaks.get_mut(&ancestor) {
                 if parent.state == "todo" {
+                    parent.state = "wip".to_string();
+                    self.pending_events
+                        .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                            name: ancestor,
+                            state: "wip".to_string(),
+                        }));
+                }
+            }
+        }
+    }
+
+    fn demote_done_ancestors_to_wip(&mut self, child_name: &str) {
+        use crate::domain::get_ancestors;
+
+        for ancestor in get_ancestors(child_name) {
+            if let Some(parent) = self.yaks.get_mut(&ancestor) {
+                if parent.state == "done" {
                     parent.state = "wip".to_string();
                     self.pending_events
                         .push(YakEvent::StateUpdated(StateUpdatedEvent {
@@ -617,6 +640,56 @@ mod tests {
         map.take_events();
         map.update_state("parent/child".to_string(), "done".to_string())
             .unwrap();
+        let events = map.take_events();
+        assert_eq!(events.len(), 1); // Only child event
+    }
+
+    #[test]
+    fn test_update_state_demotes_done_parent_when_child_leaves_done() {
+        let mut map = YakMap::new();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        map.update_state("parent/child".to_string(), "done".to_string())
+            .unwrap();
+        map.update_state("parent".to_string(), "done".to_string())
+            .unwrap();
+        map.take_events();
+        map.update_state("parent/child".to_string(), "wip".to_string())
+            .unwrap();
+        assert_eq!(map.yaks.get("parent").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("parent/child").unwrap().state, "wip");
+    }
+
+    #[test]
+    fn test_update_state_demotes_through_multiple_levels() {
+        let mut map = YakMap::new();
+        map.add_yak("a/b/c".to_string(), None).unwrap();
+        map.update_state("a/b/c".to_string(), "done".to_string())
+            .unwrap();
+        map.update_state("a/b".to_string(), "done".to_string())
+            .unwrap();
+        map.update_state("a".to_string(), "done".to_string())
+            .unwrap();
+        map.take_events();
+        map.update_state("a/b/c".to_string(), "wip".to_string())
+            .unwrap();
+        assert_eq!(map.yaks.get("a").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("a/b").unwrap().state, "wip");
+        assert_eq!(map.yaks.get("a/b/c").unwrap().state, "wip");
+    }
+
+    #[test]
+    fn test_update_state_only_demotes_done_ancestors() {
+        let mut map = YakMap::new();
+        map.add_yak("parent/child".to_string(), None).unwrap();
+        map.update_state("parent/child".to_string(), "done".to_string())
+            .unwrap();
+        // parent is wip (auto-promoted), not done
+        assert_eq!(map.yaks.get("parent").unwrap().state, "wip");
+        map.take_events();
+        map.update_state("parent/child".to_string(), "wip".to_string())
+            .unwrap();
+        // parent stays wip, not affected
+        assert_eq!(map.yaks.get("parent").unwrap().state, "wip");
         let events = map.take_events();
         assert_eq!(events.len(), 1); // Only child event
     }

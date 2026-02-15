@@ -34,3 +34,77 @@ Feature: Setting yak state
         """
         - [wip] Fix the bug
         """
+
+  Rule: Done ancestors demote to wip when a child leaves done
+    A parent cannot remain done if any child is not done.
+    This is the symmetric counterpart to the existing rule that
+    promotes todo ancestors to wip when a child starts.
+
+    Example: Child set from done to wip demotes done parent to wip
+      Given I have a clean git repository
+      And I add the yak "parent/child"
+      And I mark the yak "parent/child" as done
+      And I mark the yak "parent" as done
+      When I set the state of "parent/child" to "wip"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [wip] child
+        """
+
+    Example: Child set from done to todo demotes done parent to wip
+      Given I have a clean git repository
+      And I add the yak "parent/child"
+      And I mark the yak "parent/child" as done
+      And I mark the yak "parent" as done
+      When I set the state of "parent/child" to "todo"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [todo] child
+        """
+
+    Example: Propagates through multiple ancestor levels
+      Given I have a clean git repository
+      And I add the yak "a/b/c"
+      And I mark the yak "a/b/c" as done
+      And I mark the yak "a/b" as done
+      And I mark the yak "a" as done
+      When I set the state of "a/b/c" to "wip"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] a
+          - [wip] b
+            - [wip] c
+        """
+
+    Example: Only affects ancestors in done state
+      Given I have a clean git repository
+      And I add the yak "parent/child"
+      And I mark the yak "parent/child" as done
+      When I set the state of "parent/child" to "wip"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [wip] child
+        """
+
+    Example: Sibling state is irrelevant
+      Given I have a clean git repository
+      And I add the yak "parent/child-a"
+      And I add the yak "parent/child-b"
+      And I mark the yak "parent/child-a" as done
+      And I mark the yak "parent/child-b" as done
+      And I mark the yak "parent" as done
+      When I set the state of "parent/child-a" to "wip"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [done] child-b
+          - [wip] child-a
+        """
