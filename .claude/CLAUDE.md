@@ -189,7 +189,9 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 
 ## CRITICAL: Picking Up a Yak
 
-**ALWAYS use the `yak-worktree-workflow` skill when picking up a yak.** Follow it exactly.
+**If a yak needs requirements fleshed out**, use the `preparing-a-yak` skill first.
+
+**When ready to implement**, use the `yak-worktree-workflow` skill. Follow it exactly.
 
 ## Commit Message Policy
 
