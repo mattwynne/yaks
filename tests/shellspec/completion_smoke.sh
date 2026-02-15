@@ -1,18 +1,13 @@
-#!/usr/bin/env bash
-# tmux helper functions for completion smoke tests
+# shellcheck shell=bash
+# shellcheck disable=SC1010
 
 TMUX_SOCKET="yx-test-$$"
 
 start_completion_session() {
-  # Start tmux with isolated socket, source completions, set PATH
   tmux -L "$TMUX_SOCKET" new-session -d -s test \
     -x 120 -y 30 \
     "bash --norc --noprofile"
-
-  # Wait for shell to start
   sleep 0.5
-
-  # Set up environment in the tmux session
   tmux -L "$TMUX_SOCKET" send-keys \
     "export PATH=\"$TEST_PROJECT_DIR/target/release:\$PATH\"" Enter
   tmux -L "$TMUX_SOCKET" send-keys \
@@ -21,8 +16,6 @@ start_completion_session() {
     "source \"$TEST_PROJECT_DIR/completions/yx.bash\"" Enter
   tmux -L "$TMUX_SOCKET" send-keys \
     "bind 'set show-all-if-ambiguous on'" Enter
-
-  # Wait for setup to complete
   sleep 0.3
 }
 
@@ -42,14 +35,11 @@ tmux_capture() {
   tmux -L "$TMUX_SOCKET" capture-pane -p -t test
 }
 
-# Poll until expected text appears or timeout
-# Usage: poll_pane_content "expected text" [timeout_seconds]
 poll_pane_content() {
   local expected="$1"
   local timeout="${2:-5}"
   local interval=0.2
   local elapsed=0
-
   while [ "$(echo "$elapsed < $timeout" | bc)" -eq 1 ]; do
     local content
     content=$(tmux_capture)
@@ -59,10 +49,28 @@ poll_pane_content() {
     sleep "$interval"
     elapsed=$(echo "$elapsed + $interval" | bc)
   done
-
   return 1
 }
 
 destroy_completion_session() {
   tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
 }
+
+Describe 'Tab completion (tmux smoke test)'
+  Skip if "tmux not installed" \
+    [ -z "$(command -v tmux)" ]
+
+  BeforeEach 'setup_isolated_repo'
+  AfterEach 'destroy_completion_session'
+  AfterEach 'teardown_isolated_repo'
+
+  It 'yx <TAB> shows commands'
+    start_completion_session
+    tmux_send "yx "
+    tmux_send_tab
+    poll_pane_content "add" 5
+    When call tmux_capture
+    The output should include "add"
+    The output should include "done"
+  End
+End

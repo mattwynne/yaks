@@ -20,15 +20,6 @@ export YX_IGNORE_STDIN=1
 GIT_CEILING_DIRECTORIES="$(pwd)"
 export GIT_CEILING_DIRECTORIES
 
-# Helper function to set up a bare git repository
-# Usage: setup_bare_repo /path/to/repo
-# Arguments:
-#   repo_path: Path where the bare repo should be created
-setup_bare_repo() {
-  local repo_path="$1"
-  git -C "$repo_path" init --bare --initial-branch=main --quiet
-}
-
 # Helper function to set up a git test repository
 # Usage: setup_test_repo /path/to/repo [user_email] [user_name] [origin_url]
 # Arguments:
@@ -53,16 +44,6 @@ setup_test_repo() {
   echo ".yaks" > "$repo_path/.gitignore"
   git -C "$repo_path" add .gitignore
   git -C "$repo_path" commit --quiet -m "Add .gitignore"
-}
-
-# Helper function to set up gitignore for .yaks in a repo
-# Usage: setup_gitignore_for_yaks /path/to/repo
-# Deprecated: Use setup_test_repo() instead for new code
-setup_gitignore_for_yaks() {
-  local repo_path="$1"
-  echo ".yaks" > "$repo_path/.gitignore"
-  git -C "$repo_path" add .gitignore
-  git -C "$repo_path" commit --quiet -m "Add .gitignore" 2>/dev/null || true
 }
 
 # This callback function will be invoked only once before loading specfiles.
@@ -99,13 +80,6 @@ setup_isolated_repo() {
   export TEST_REPO
   setup_test_repo "$TEST_REPO"
   export GIT_WORK_TREE="$TEST_REPO"
-}
-
-# Helper function to run commands in test repo context
-# Sets GIT_DIR and GIT_WORK_TREE so git commands work without -C flag
-# Usage: in_test_repo "git log --oneline"
-in_test_repo() {
-  GIT_DIR="$TEST_REPO/.git" GIT_WORK_TREE="$TEST_REPO" sh -c "$1"
 }
 
 # Clean up isolated test repo
