@@ -60,11 +60,15 @@ impl ConsoleInput {
 
         let stdin_fd = io::stdin().as_raw_fd();
 
-        // First check: Is it actually a pipe (FIFO)?
+        // First check: Is it a pipe (FIFO) or a regular file (redirect)?
         let mut stat: libc::stat = unsafe { std::mem::zeroed() };
         let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
-        if stat_result != 0 || (stat.st_mode & libc::S_IFMT) != libc::S_IFIFO {
-            return false; // Not a pipe, don't try to read
+        if stat_result != 0 {
+            return false;
+        }
+        let file_type = stat.st_mode & libc::S_IFMT;
+        if file_type != libc::S_IFIFO && file_type != libc::S_IFREG {
+            return false; // Not a pipe or file, don't try to read
         }
 
         // Second check: Is there data available to read?

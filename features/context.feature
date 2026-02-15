@@ -20,6 +20,18 @@ Feature: Manage yak context
         # Some context
         """
 
+    Example: Setting context from a file redirect
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the context of "my yak" from a file containing "# File context"
+      And I show the context of "my yak"
+      Then the output should be:
+        """
+        my yak
+
+        # File context
+        """
+
   Rule: Stdin input replaces existing context
 
     Example: Setting context twice replaces the first value

@@ -478,6 +478,15 @@ async fn add_yak_with_stdin_full_stack(
     world.add_yak_with_stdin(&yak_name, &context)
 }
 
+#[when(regex = r#"^I set the context of "(.+)" from a file containing "(.+)"$"#)]
+async fn set_context_from_file(
+    world: &mut FullStackWorld,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.run_yx_with_file_stdin(&["context", &name], &content)
+}
+
 #[when(regex = r#"^I try to set the context of "(.+)" with empty stdin$"#)]
 async fn try_set_context_empty_stdin(world: &mut FullStackWorld, name: String) -> Result<()> {
     world.run_yx_with_empty_stdin(&["context", &name])

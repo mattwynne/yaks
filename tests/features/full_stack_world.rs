@@ -403,6 +403,46 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Run yx with stdin redirected from a file (simulates `yx ... < file`).
+    /// Unlike run_yx_with_stdin which creates a pipe (FIFO), this provides
+    /// a regular file fd on stdin.
+    pub fn run_yx_with_file_stdin(&mut self, args: &[&str], content: &str) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        // Write content to a temp file
+        let temp_file = self.repo_path.join(".stdin_temp");
+        std::fs::write(&temp_file, content).context("Failed to write temp file")?;
+
+        let file = std::fs::File::open(&temp_file).context("Failed to open temp file")?;
+
+        let output = Command::new(yx_path)
+            .args(args)
+            .env("YAK_PATH", &self.repo_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .current_dir(&self.repo_path)
+            .stdin(Stdio::from(file))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        std::fs::remove_file(&temp_file).ok();
+
+        if self.exit_code != 0 {
+            anyhow::bail!(
+                "yx command failed:\nstdout: {}\nstderr: {}",
+                self.output,
+                self.error
+            );
+        }
+
+        Ok(())
+    }
+
     /// Run yx with piped stdin that has no content (simulates `true | yx ...`).
     /// Captures output without checking exit code.
     pub fn run_yx_with_empty_stdin(&mut self, args: &[&str]) -> Result<()> {
