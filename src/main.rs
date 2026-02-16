@@ -29,6 +29,9 @@ enum Commands {
     Add {
         /// The yak name (space-separated words)
         name: Vec<String>,
+        /// Parent yak that this new yak blocks
+        #[arg(long)]
+        blocks: Option<String>,
     },
     /// List yaks
     #[command(alias = "ls")]
@@ -155,9 +158,9 @@ fn main() -> Result<()> {
     );
 
     match cli.command {
-        Commands::Add { name } => {
+        Commands::Add { name, blocks } => {
             let name_str = name.join(" ");
-            app.handle(AddYak::new(&name_str))
+            app.handle(AddYak::new(&name_str).with_parent(blocks.as_deref()))
         }
         Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
         Commands::Done { name, recursive } => {
@@ -238,7 +241,7 @@ mod tests {
     fn add_joins_multiple_args_into_yak_name() {
         let cli = Cli::try_parse_from(["yx", "add", "this", "is", "a", "test"]).unwrap();
         match cli.command {
-            Commands::Add { name } => assert_eq!(name.join(" "), "this is a test"),
+            Commands::Add { name, .. } => assert_eq!(name.join(" "), "this is a test"),
             other => panic!("Expected Add, got {:?}", other),
         }
     }

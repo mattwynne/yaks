@@ -28,9 +28,9 @@ Feature: Prune done yaks
     Example: Prune removes done child but keeps non-done siblings
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "parent/child1"
-      And I add the yak "parent/child2"
-      And I mark the yak "parent/child1" as done
+      And I add the yak "child1" blocking "parent"
+      And I add the yak "child2" blocking "parent"
+      And I mark the yak "child1" as done
       When I prune done yaks
       And I list the yaks in "markdown" format
       Then the output should be:

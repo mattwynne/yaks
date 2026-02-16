@@ -19,8 +19,10 @@ impl MoveYak {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        // Validate target yak name
-        validate_yak_name(&self.to).map_err(|e| anyhow::anyhow!(e))?;
+        // Validate each segment of the target name
+        for segment in self.to.split('/') {
+            validate_yak_name(segment).map_err(|e| anyhow::anyhow!(e))?;
+        }
 
         let resolved_from = app.store.find_yak(&self.from)?;
 
