@@ -21,6 +21,7 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             let event = YakEvent::Added(AddedEvent {
                 name: "foo".to_string(),
+                id: String::new(),
             });
             store.append(&event).unwrap();
 
@@ -34,11 +35,13 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "foo".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "bar".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
 
@@ -52,11 +55,13 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "first".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "second".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
 
@@ -71,11 +76,13 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "foo".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "bar".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
             store
@@ -108,6 +115,7 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "test".to_string(),
+                    id: String::new(),
                 }))
                 .unwrap();
             store

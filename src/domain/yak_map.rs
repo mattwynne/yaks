@@ -69,7 +69,10 @@ impl YakMap {
         );
 
         self.pending_events
-            .push(YakEvent::Added(AddedEvent { name: name.clone() }));
+            .push(YakEvent::Added(AddedEvent {
+                name: name.clone(),
+                id: id.clone(),
+            }));
 
         if let Some(content) = context {
             self.pending_events
@@ -92,13 +95,16 @@ impl YakMap {
                 self.yaks.insert(
                     ancestor.clone(),
                     YakState {
-                        id,
+                        id: id.clone(),
                         state: "todo".to_string(),
                         context: None,
                     },
                 );
                 self.pending_events
-                    .push(YakEvent::Added(AddedEvent { name: ancestor }));
+                    .push(YakEvent::Added(AddedEvent {
+                        name: ancestor,
+                        id,
+                    }));
             }
         }
     }
@@ -463,6 +469,7 @@ mod tests {
         let mut map = YakMap::new();
         map.pending_events.push(YakEvent::Added(AddedEvent {
             name: "test".to_string(),
+            id: String::new(),
         }));
 
         let events = map.take_events();
@@ -542,7 +549,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Added(AddedEvent { name }) => assert_eq!(name, "test"),
+            YakEvent::Added(AddedEvent { name, .. }) => assert_eq!(name, "test"),
             _ => panic!("Expected Added event"),
         }
     }
@@ -557,7 +564,7 @@ mod tests {
 
         assert_eq!(events.len(), 2);
         match &events[0] {
-            YakEvent::Added(AddedEvent { name }) => assert_eq!(name, "test"),
+            YakEvent::Added(AddedEvent { name, .. }) => assert_eq!(name, "test"),
             _ => panic!("Expected Added event first"),
         }
         match &events[1] {

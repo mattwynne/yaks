@@ -68,8 +68,12 @@ mod tests {
     fn format_message_added() {
         let event = YakEvent::Added(AddedEvent {
             name: "test yak".to_string(),
+            id: "test-yak-a1b2".to_string(),
         });
-        assert_eq!(event.format_message(), "Added: \"test yak\"");
+        assert_eq!(
+            event.format_message(),
+            "Added: \"test yak\" \"test-yak-a1b2\""
+        );
     }
 
     #[test]
@@ -85,6 +89,7 @@ mod tests {
     fn parse_roundtrip() {
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
+            id: "test-x1y2".to_string(),
         });
         let msg = event.format_message();
         let parsed = YakEvent::parse(&msg).unwrap();

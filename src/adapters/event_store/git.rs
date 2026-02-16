@@ -313,13 +313,17 @@ mod tests {
         store
             .append(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: "test-a1b2".to_string(),
             }))
             .unwrap();
 
         // Verify ref exists
         let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
         let commit = store.repo.find_commit(oid).unwrap();
-        assert_eq!(commit.message().unwrap(), "Added: \"test\"");
+        assert_eq!(
+            commit.message().unwrap(),
+            "Added: \"test\" \"test-a1b2\""
+        );
     }
 
     #[test]
@@ -329,6 +333,7 @@ mod tests {
         store
             .append(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 

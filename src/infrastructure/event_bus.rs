@@ -57,6 +57,7 @@ mod tests {
 
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
+            id: String::new(),
         });
 
         bus.publish(event.clone()).unwrap();
@@ -76,6 +77,7 @@ mod tests {
 
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
+            id: String::new(),
         });
 
         bus.publish(event.clone()).unwrap();

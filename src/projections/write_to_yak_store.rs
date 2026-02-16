@@ -7,7 +7,7 @@ use crate::domain::{YakEvent, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
 impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         match event {
-            YakEvent::Added(AddedEvent { name }) => {
+            YakEvent::Added(AddedEvent { name, .. }) => {
                 self.create_yak(name)?;
                 self.write_field(name, STATE_FIELD, "todo")?;
                 self.write_field(name, NAME_FIELD, name)?;

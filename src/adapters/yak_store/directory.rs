@@ -298,6 +298,7 @@ mod tests {
 
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
+            id: String::new(),
         });
 
         storage.on_event(&event).unwrap();
@@ -315,6 +316,7 @@ mod tests {
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
@@ -337,6 +339,7 @@ mod tests {
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
@@ -358,6 +361,7 @@ mod tests {
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
@@ -381,6 +385,7 @@ mod tests {
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
@@ -395,12 +400,14 @@ mod tests {
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test1".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test2".to_string(),
+                id: String::new(),
             }))
             .unwrap();
 
