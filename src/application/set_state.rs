@@ -138,7 +138,8 @@ mod tests {
         app.with_yak_map(|yak_map| {
             yak_map.add_yak("parent".to_string(), None)?;
             yak_map.add_yak("parent/child".to_string(), None)?;
-            yak_map.add_yak("parent/child/grandchild".to_string(), None)
+            yak_map.add_yak("parent/child/grandchild".to_string(), None)?;
+            Ok(())
         })
         .unwrap();
 

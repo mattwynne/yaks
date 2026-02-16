@@ -53,7 +53,10 @@ impl AddYak {
             .request_content(None, Some(&template))?
             .filter(|content| !content.trim().is_empty());
 
-        app.with_yak_map(|yak_map| yak_map.add_yak(full_name, context))
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak(full_name, context)?;
+            Ok(())
+        })
     }
 }
 

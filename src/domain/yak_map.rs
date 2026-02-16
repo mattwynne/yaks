@@ -1,11 +1,13 @@
 use crate::domain::events::*;
 use crate::domain::ports::ReadYakStore;
+use crate::domain::slug::generate_slug;
 use crate::domain::YakEvent;
 use anyhow::Result;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct YakState {
+    pub(crate) id: String,
     pub(crate) state: String,
     pub(crate) context: Option<String>,
 }
@@ -33,6 +35,7 @@ impl YakMap {
             yaks.insert(
                 yak.name,
                 YakState {
+                    id: yak.id,
                     state: yak.state,
                     context: yak.context,
                 },
@@ -49,13 +52,17 @@ impl YakMap {
         std::mem::take(&mut self.pending_events)
     }
 
-    pub fn add_yak(&mut self, name: String, context: Option<String>) -> Result<()> {
+    pub fn add_yak(&mut self, name: String, context: Option<String>) -> Result<String> {
         // Ensure all ancestors exist
         self.ensure_ancestors_exist(&name);
+
+        let leaf_name = name.rsplit('/').next().unwrap_or(&name);
+        let id = generate_slug(leaf_name);
 
         self.yaks.insert(
             name.clone(),
             YakState {
+                id: id.clone(),
                 state: "todo".to_string(),
                 context: context.clone(),
             },
@@ -72,7 +79,7 @@ impl YakMap {
                 }));
         }
 
-        Ok(())
+        Ok(id)
     }
 
     fn ensure_ancestors_exist(&mut self, name: &str) {
@@ -80,9 +87,12 @@ impl YakMap {
 
         for ancestor in get_ancestors(name) {
             if !self.yaks.contains_key(&ancestor) {
+                let leaf = ancestor.rsplit('/').next().unwrap_or(&ancestor);
+                let id = generate_slug(leaf);
                 self.yaks.insert(
                     ancestor.clone(),
                     YakState {
+                        id,
                         state: "todo".to_string(),
                         context: None,
                     },
@@ -470,6 +480,44 @@ mod tests {
         assert!(map.yaks.contains_key("test"));
         assert_eq!(map.yaks.get("test").unwrap().state, "todo");
         assert_eq!(map.yaks.get("test").unwrap().context, None);
+    }
+
+    #[test]
+    fn test_add_yak_generates_slug_id() {
+        let mut map = YakMap::new();
+
+        let id = map.add_yak("Make the tea".to_string(), None).unwrap();
+
+        assert!(
+            id.starts_with("make-the-tea-"),
+            "Expected slug starting with 'make-the-tea-', got '{}'",
+            id
+        );
+        assert_eq!(id.len(), "make-the-tea-".len() + 4);
+    }
+
+    #[test]
+    fn test_add_yak_stores_id_in_yak_state() {
+        let mut map = YakMap::new();
+
+        let id = map.add_yak("test".to_string(), None).unwrap();
+
+        assert_eq!(map.yaks.get("test").unwrap().id, id);
+    }
+
+    #[test]
+    fn test_add_yak_generates_slug_from_leaf_name() {
+        let mut map = YakMap::new();
+
+        let id = map
+            .add_yak("parent/child task".to_string(), None)
+            .unwrap();
+
+        assert!(
+            id.starts_with("child-task-"),
+            "Expected slug from leaf name 'child task', got '{}'",
+            id
+        );
     }
 
     #[test]

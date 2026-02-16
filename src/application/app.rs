@@ -88,8 +88,11 @@ mod tests {
 
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        app.with_yak_map(|yak_map| yak_map.add_yak("test".to_string(), None))
-            .unwrap();
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak("test".to_string(), None)?;
+            Ok(())
+        })
+        .unwrap();
 
         assert!(ReadYakStore::yak_exists(&storage, "test"));
     }
@@ -133,7 +136,8 @@ mod tests {
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), Some("context".to_string()))
+            yak_map.add_yak("test".to_string(), Some("context".to_string()))?;
+            Ok(())
         })
         .unwrap();
 
@@ -158,8 +162,11 @@ mod tests {
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         // Add hierarchical yak
-        app.with_yak_map(|yak_map| yak_map.add_yak("parent/child".to_string(), None))
-            .unwrap();
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak("parent/child".to_string(), None)?;
+            Ok(())
+        })
+        .unwrap();
 
         // Verify both parent and child exist
         assert!(ReadYakStore::yak_exists(&storage, "parent"));
