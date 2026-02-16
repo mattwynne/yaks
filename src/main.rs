@@ -104,6 +104,8 @@ enum Commands {
         #[arg(long)]
         show: bool,
     },
+    /// Rebuild yaks from the git event store tree
+    Reset,
     /// Sync yaks with git refs
     Sync,
     /// Show event log from refs/notes/yaks
@@ -200,6 +202,17 @@ fn main() -> Result<()> {
             } else {
                 app.handle(WriteField::new(&name_str, &field))
             }
+        }
+        Commands::Reset => {
+            let yak_path = if let Ok(yak_path) = std::env::var("YAK_PATH") {
+                PathBuf::from(yak_path)
+            } else if let Ok(git_work_tree) = std::env::var("GIT_WORK_TREE") {
+                PathBuf::from(git_work_tree).join(".yaks")
+            } else {
+                PathBuf::from(".yaks")
+            };
+            let event_store = GitEventStore::new(&repo_path)?;
+            event_store.materialize_tree(&yak_path)
         }
         Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),

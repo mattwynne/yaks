@@ -17,6 +17,7 @@ pub const COMMANDS: &[&str] = &[
     "context",
     "state",
     "field",
+    "reset",
     "sync",
     "log",
     "completions",

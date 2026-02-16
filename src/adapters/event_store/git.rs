@@ -201,6 +201,58 @@ impl GitEventStore {
             }
         }
     }
+    /// Materialize the git tree at HEAD of refs/notes/yaks to a filesystem path.
+    /// Removes existing yak entries, then walks the tree recursively,
+    /// writing blobs as files and creating directories for subtrees.
+    pub fn materialize_tree(&self, target: &Path) -> Result<()> {
+        let tree = self.get_current_tree()?;
+        let Some(tree) = tree else {
+            anyhow::bail!("No yaks tree found in refs/notes/yaks");
+        };
+
+        // Remove existing entries that correspond to tree entries,
+        // but preserve non-yak files (like .git, .gitignore)
+        if target.exists() {
+            for entry in tree.iter() {
+                if let Some(name) = entry.name() {
+                    let path = target.join(name);
+                    if path.exists() {
+                        if path.is_dir() {
+                            std::fs::remove_dir_all(&path)?;
+                        } else {
+                            std::fs::remove_file(&path)?;
+                        }
+                    }
+                }
+            }
+        }
+        std::fs::create_dir_all(target)?;
+
+        self.write_tree_to_dir(&tree, target)
+    }
+
+    fn write_tree_to_dir(&self, tree: &git2::Tree, dir: &Path) -> Result<()> {
+        for entry in tree.iter() {
+            let name = entry
+                .name()
+                .ok_or_else(|| anyhow::anyhow!("Tree entry has no name"))?;
+            let path = dir.join(name);
+
+            match entry.kind() {
+                Some(git2::ObjectType::Blob) => {
+                    let blob = self.repo.find_blob(entry.id())?;
+                    std::fs::write(&path, blob.content())?;
+                }
+                Some(git2::ObjectType::Tree) => {
+                    std::fs::create_dir_all(&path)?;
+                    let subtree = self.repo.find_tree(entry.id())?;
+                    self.write_tree_to_dir(&subtree, &path)?;
+                }
+                _ => {} // Skip other object types
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -440,5 +492,40 @@ mod tests {
             "Expected child subtree under parent");
         assert!(parent_tree.get_name("state").is_some(),
             "Expected parent's state file");
+    }
+
+    #[test]
+    fn materialize_tree_round_trips() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: "test".to_string(),
+                id: "test-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        store
+            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+                id: "test-a1b2".to_string(),
+                state: "wip".to_string(),
+            }))
+            .unwrap();
+
+        let target = _tmp.path().join("materialized");
+        store.materialize_tree(&target).unwrap();
+
+        // Verify directory structure
+        assert!(target.join("test-a1b2").is_dir());
+        assert_eq!(
+            std::fs::read_to_string(target.join("test-a1b2/state")).unwrap(),
+            "wip"
+        );
+        assert_eq!(
+            std::fs::read_to_string(target.join("test-a1b2/name")).unwrap(),
+            "test"
+        );
+        assert!(target.join("test-a1b2/context.md").exists());
     }
 }
