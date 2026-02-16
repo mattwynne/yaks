@@ -1,7 +1,7 @@
 // Use case: Add a new yak
 
-use anyhow::Result;
 use crate::domain::validate_yak_name;
+use anyhow::Result;
 
 use super::{Application, UseCase};
 
@@ -119,7 +119,10 @@ mod tests {
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         AddYak::new("parent").execute(&mut app).unwrap();
-        AddYak::new("child").with_parent(Some("parent")).execute(&mut app).unwrap();
+        AddYak::new("child")
+            .with_parent(Some("parent"))
+            .execute(&mut app)
+            .unwrap();
 
         assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
     }

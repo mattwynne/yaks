@@ -17,6 +17,7 @@ pub struct YakMap {
 
 impl YakMap {
     #[cfg(test)]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             yaks: HashMap::new(),
@@ -49,7 +50,6 @@ impl YakMap {
     }
 
     pub fn add_yak(&mut self, name: String, context: Option<String>) -> Result<()> {
-
         // Ensure all ancestors exist
         self.ensure_ancestors_exist(&name);
 
@@ -298,8 +298,17 @@ impl YakMap {
         // Move the yak
         if let Some(yak_state) = self.yaks.remove(&old_name) {
             self.yaks.insert(new_name.clone(), yak_state);
-            self.pending_events
-                .push(YakEvent::Moved(MovedEvent { old_name, new_name }));
+            // Determine event type: rename vs move
+            use crate::domain::hierarchy::get_parent;
+            let old_parent = get_parent(&old_name);
+            let new_parent = get_parent(&new_name);
+            if old_parent == new_parent {
+                self.pending_events
+                    .push(YakEvent::Renamed(RenamedEvent { old_name, new_name }));
+            } else {
+                self.pending_events
+                    .push(YakEvent::Moved(MovedEvent { old_name, new_name }));
+            }
         }
 
         Ok(())
@@ -849,7 +858,7 @@ mod tests {
     }
 
     #[test]
-    fn test_move_yak_emits_event() {
+    fn test_move_yak_emits_renamed_event_for_same_level() {
         let mut map = YakMap::new();
         map.add_yak("old".to_string(), None).unwrap();
         map.take_events();
@@ -859,11 +868,11 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
+            YakEvent::Renamed(RenamedEvent { old_name, new_name }) => {
                 assert_eq!(old_name, "old");
                 assert_eq!(new_name, "new");
             }
-            _ => panic!("Expected Moved event"),
+            _ => panic!("Expected Renamed event"),
         }
     }
 

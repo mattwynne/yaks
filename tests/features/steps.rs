@@ -36,22 +36,38 @@ async fn add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Res
 }
 
 #[given(regex = r#"^I add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn add_yak_blocking_full_stack(world: &mut FullStackWorld, yak_name: String, parent: String) -> Result<()> {
+async fn add_yak_blocking_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.add_yak_blocking(&yak_name, &parent)
 }
 
 #[given(regex = r#"^I add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn add_yak_blocking_in_process(world: &mut InProcessWorld, yak_name: String, parent: String) -> Result<()> {
+async fn add_yak_blocking_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.add_yak_blocking(&yak_name, &parent)
 }
 
 #[when(regex = r#"^I add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn when_add_yak_blocking_full_stack(world: &mut FullStackWorld, yak_name: String, parent: String) -> Result<()> {
+async fn when_add_yak_blocking_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.add_yak_blocking(&yak_name, &parent)
 }
 
 #[when(regex = r#"^I add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn when_add_yak_blocking_in_process(world: &mut InProcessWorld, yak_name: String, parent: String) -> Result<()> {
+async fn when_add_yak_blocking_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.add_yak_blocking(&yak_name, &parent)
 }
 
@@ -248,12 +264,20 @@ async fn try_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) ->
 }
 
 #[when(regex = r#"^I try to add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn try_add_yak_blocking_full_stack(world: &mut FullStackWorld, yak_name: String, parent: String) -> Result<()> {
+async fn try_add_yak_blocking_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.try_add_yak_blocking(&yak_name, &parent)
 }
 
 #[when(regex = r#"^I try to add the yak "([^"]+)" blocking "([^"]+)"$"#)]
-async fn try_add_yak_blocking_in_process(world: &mut InProcessWorld, yak_name: String, parent: String) -> Result<()> {
+async fn try_add_yak_blocking_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
     world.try_add_yak_blocking(&yak_name, &parent)
 }
 
