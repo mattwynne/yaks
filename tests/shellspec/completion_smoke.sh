@@ -13,6 +13,8 @@ start_completion_session() {
   tmux -L "$TMUX_SOCKET" send-keys \
     "export GIT_WORK_TREE=\"$TEST_REPO\"" Enter
   tmux -L "$TMUX_SOCKET" send-keys \
+    "export GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/dev/null'\"" Enter
+  tmux -L "$TMUX_SOCKET" send-keys \
     "source \"$TEST_PROJECT_DIR/completions/yx.bash\"" Enter
   tmux -L "$TMUX_SOCKET" send-keys \
     "bind 'set show-all-if-ambiguous on'" Enter

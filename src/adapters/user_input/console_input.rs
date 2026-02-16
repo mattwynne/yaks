@@ -28,15 +28,20 @@ impl InputPort for ConsoleInput {
 
         // Check if stdin is a TTY
         if !atty::is(atty::Stream::Stdin) {
-            // Non-TTY: Check if stdin is a pipe with content
+            // Non-TTY: Check if stdin is a pipe or file with content
             if Self::stdin_has_readable_data() {
                 let content = Self::read_stdin()?;
                 if !content.is_empty() {
                     return Ok(Some(content));
                 }
             }
-            // Pipe detected but no content — this is an error, not a cancellation
-            return Err(anyhow::anyhow!("no content received on stdin"));
+            // Only error when stdin is an explicit pipe or file (user intended
+            // to provide content). When stdin is something else like /dev/null
+            // (e.g., in Docker containers), treat it as "no input available".
+            if Self::stdin_is_pipe_or_file() {
+                return Err(anyhow::anyhow!("no content received on stdin"));
+            }
+            return Ok(None);
         }
 
         // Interactive mode (TTY): open editor
@@ -55,6 +60,20 @@ impl InputPort for ConsoleInput {
 }
 
 impl ConsoleInput {
+    fn stdin_is_pipe_or_file() -> bool {
+        use std::os::unix::io::AsRawFd;
+
+        let stdin_fd = io::stdin().as_raw_fd();
+
+        let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+        let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
+        if stat_result != 0 {
+            return false;
+        }
+        let file_type = stat.st_mode & libc::S_IFMT;
+        file_type == libc::S_IFIFO || file_type == libc::S_IFREG
+    }
+
     fn stdin_has_readable_data() -> bool {
         use std::os::unix::io::AsRawFd;
 
