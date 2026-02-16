@@ -565,6 +565,22 @@ async fn completions_should_include(world: &mut FullStackWorld, expected: String
     check_output_includes(world, &expected)
 }
 
+#[then(regex = r#"^the yak directory should be named "(.+)"$"#)]
+async fn yak_directory_named(world: &mut FullStackWorld, slug: String) -> Result<()> {
+    let dir = world.default_repo_path().join(&slug);
+    if !dir.exists() {
+        anyhow::bail!("Expected yak directory '{}' to exist at {:?}", slug, dir);
+    }
+    let marker = dir.join("context.md");
+    if !marker.exists() {
+        anyhow::bail!(
+            "Directory '{}' exists but does not contain context.md",
+            slug
+        );
+    }
+    Ok(())
+}
+
 // ============================================================================
 // Multi-repo steps (sync tests)
 // ============================================================================
