@@ -640,6 +640,21 @@ async fn repo_has_ref(world: &mut FullStackWorld, repo: String, ref_name: String
     Ok(())
 }
 
+#[given(regex = r#"^a file "(.+)" exists in the yak directory$"#)]
+async fn file_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
+    let path = world.default_repo_path().join(&filename);
+    std::fs::write(&path, "test content").context(format!("Failed to create {}", filename))
+}
+
+#[then(regex = r#"^the file "(.+)" should still exist in the yak directory$"#)]
+async fn file_still_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
+    let path = world.default_repo_path().join(&filename);
+    if !path.exists() {
+        anyhow::bail!("Expected file '{}' to still exist after reset", filename);
+    }
+    Ok(())
+}
+
 #[when(expr = "I reset the yaks")]
 async fn reset_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
     world.run_raw(&["reset"])?;

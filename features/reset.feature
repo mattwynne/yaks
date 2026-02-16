@@ -30,3 +30,11 @@ Feature: yx reset - Rebuild yaks from git tree
         - [todo] parent
           - [todo] child
         """
+
+  Rule: Reset only affects yak entries
+
+    Example: Non-yak files in the yak directory are preserved
+      Given I add the yak "my yak"
+      And a file "notes.txt" exists in the yak directory
+      When I reset the yaks
+      Then the file "notes.txt" should still exist in the yak directory
