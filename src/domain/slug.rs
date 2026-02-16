@@ -1,8 +1,8 @@
-/// Generate a unique slug ID from a human-readable yak name.
+/// Slugify a name: lowercase, spaces to hyphens, strip non-alphanumeric,
+/// collapse multiple hyphens. No random suffix — just a human-readable slug.
 ///
-/// Slugification: lowercase, spaces to hyphens, strip non-alphanumeric
-/// (except hyphens), collapse multiple hyphens, append 4-char random suffix.
-pub fn generate_slug(name: &str) -> String {
+/// Used for directory names on disk. Only needs sibling-uniqueness.
+pub fn slugify(name: &str) -> String {
     let base: String = name
         .to_lowercase()
         .chars()
@@ -26,10 +26,16 @@ pub fn generate_slug(name: &str) -> String {
     }
 
     // Trim leading/trailing hyphens
-    let trimmed = collapsed.trim_matches('-');
+    collapsed.trim_matches('-').to_string()
+}
 
+/// Generate a unique ID from a human-readable yak name.
+///
+/// Slug + 4-char random suffix. Immutable once created.
+pub fn generate_id(name: &str) -> String {
+    let slug = slugify(name);
     let suffix = random_suffix();
-    format!("{}-{}", trimmed, suffix)
+    format!("{}-{}", slug, suffix)
 }
 
 fn random_suffix() -> String {
@@ -52,73 +58,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simple_name_is_lowercased_and_hyphenated() {
-        let slug = generate_slug("Make the tea");
-        // Should start with "make-the-tea-" followed by 4 alphanumeric chars
-        assert!(
-            slug.starts_with("make-the-tea-"),
-            "Expected slug to start with 'make-the-tea-', got '{}'",
-            slug
-        );
-        let suffix = &slug["make-the-tea-".len()..];
-        assert_eq!(
-            suffix.len(),
-            4,
-            "Suffix should be 4 chars, got '{}'",
-            suffix
-        );
-        assert!(
-            suffix.chars().all(|c| c.is_ascii_alphanumeric()),
-            "Suffix should be alphanumeric, got '{}'",
-            suffix
-        );
+    fn slugify_lowercases_and_hyphenates() {
+        assert_eq!(slugify("Make the tea"), "make-the-tea");
     }
 
     #[test]
-    fn special_characters_are_stripped() {
-        let slug = generate_slug("clean up tests/docs/*");
-        assert!(
-            slug.starts_with("clean-up-testsdocs-"),
-            "Expected slug to start with 'clean-up-testsdocs-', got '{}'",
-            slug
-        );
+    fn slugify_strips_special_characters() {
+        assert_eq!(slugify("clean up tests/docs/*"), "clean-up-testsdocs");
     }
 
     #[test]
-    fn multiple_hyphens_are_collapsed() {
-        let slug = generate_slug("foo - - bar");
-        assert!(
-            slug.starts_with("foo-bar-"),
-            "Expected slug to start with 'foo-bar-', got '{}'",
-            slug
-        );
+    fn slugify_collapses_multiple_hyphens() {
+        assert_eq!(slugify("foo - - bar"), "foo-bar");
     }
 
     #[test]
-    fn each_call_produces_a_different_suffix() {
-        let slug1 = generate_slug("test");
-        let slug2 = generate_slug("test");
-        // Both start with "test-" but have different suffixes
-        assert_ne!(slug1, slug2, "Two calls should produce different slugs");
+    fn slugify_is_deterministic() {
+        assert_eq!(slugify("test"), slugify("test"));
     }
 
     #[test]
-    fn already_kebab_case_is_preserved() {
-        let slug = generate_slug("fix-the-bug");
-        assert!(
-            slug.starts_with("fix-the-bug-"),
-            "Expected slug to start with 'fix-the-bug-', got '{}'",
-            slug
-        );
+    fn slugify_preserves_kebab_case() {
+        assert_eq!(slugify("fix-the-bug"), "fix-the-bug");
     }
 
     #[test]
-    fn leading_and_trailing_special_chars_are_trimmed() {
-        let slug = generate_slug("  hello world  ");
+    fn slugify_trims_leading_and_trailing_whitespace() {
+        assert_eq!(slugify("  hello world  "), "hello-world");
+    }
+
+    #[test]
+    fn generate_id_includes_random_suffix() {
+        let id = generate_id("Make the tea");
         assert!(
-            slug.starts_with("hello-world-"),
-            "Expected slug to start with 'hello-world-', got '{}'",
-            slug
+            id.starts_with("make-the-tea-"),
+            "Expected id to start with 'make-the-tea-', got '{}'",
+            id
         );
+        let suffix = &id["make-the-tea-".len()..];
+        assert_eq!(suffix.len(), 4);
+        assert!(suffix.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn generate_id_produces_different_ids() {
+        let id1 = generate_id("test");
+        let id2 = generate_id("test");
+        assert_ne!(id1, id2);
     }
 }
