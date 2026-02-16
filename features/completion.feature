@@ -36,7 +36,8 @@ Feature: Tab completion
     @bash_completion
     Example: Completing after a slash suggests nested yak names
       Given I have a clean git repository
-      And I add the yak "grandma/mummy"
+      And I add the yak "grandma"
+      And I add the yak "mummy" blocking "grandma"
       When I invoke bash completion for words: yx add "grandma" "/" ""
       Then the completions should include "grandma/mummy/"
 

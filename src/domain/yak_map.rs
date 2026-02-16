@@ -49,9 +49,6 @@ impl YakMap {
     }
 
     pub fn add_yak(&mut self, name: String, context: Option<String>) -> Result<()> {
-        use crate::domain::validate_yak_name;
-
-        validate_yak_name(&name).map_err(|e| anyhow::anyhow!(e))?;
 
         // Ensure all ancestors exist
         self.ensure_ancestors_exist(&name);
@@ -280,7 +277,10 @@ impl YakMap {
             anyhow::bail!("Yak '{}' already exists", new_name);
         }
 
-        validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
+        // Validate each segment of the new name
+        for segment in new_name.split('/') {
+            validate_yak_name(segment).map_err(|e| anyhow::anyhow!(e))?;
+        }
 
         // MVP limitation: Fail if moving a yak with children
         let children = find_children(&old_name, &self.yaks);
