@@ -443,7 +443,12 @@ mod tests {
         let tree = store.get_current_tree().unwrap().unwrap();
 
         // Should have exactly one entry, keyed by id
-        assert_eq!(tree.len(), 1, "Expected exactly 1 tree entry, got {}", tree.len());
+        assert_eq!(
+            tree.len(),
+            1,
+            "Expected exactly 1 tree entry, got {}",
+            tree.len()
+        );
 
         let entry = tree.get_name("test-a1b2").unwrap();
         let subtree = entry.to_object(&store.repo).unwrap();
@@ -488,10 +493,14 @@ mod tests {
         let parent_tree = parent_tree.as_tree().unwrap();
 
         // Parent tree should have its own files + child subtree
-        assert!(parent_tree.get_name("child-c3d4").is_some(),
-            "Expected child subtree under parent");
-        assert!(parent_tree.get_name("state").is_some(),
-            "Expected parent's state file");
+        assert!(
+            parent_tree.get_name("child-c3d4").is_some(),
+            "Expected child subtree under parent"
+        );
+        assert!(
+            parent_tree.get_name("state").is_some(),
+            "Expected parent's state file"
+        );
     }
 
     #[test]
