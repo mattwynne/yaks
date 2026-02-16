@@ -39,7 +39,7 @@ impl GitEventStore {
     }
 
     /// Create a tree for a single yak with initial files
-    fn create_yak_tree(&self, state: &str, context: &str) -> Result<git2::Oid> {
+    fn create_yak_tree(&self, name: &str, state: &str, context: &str) -> Result<git2::Oid> {
         let mut builder = self.repo.treebuilder(None)?;
 
         let state_blob = self.repo.blob(state.as_bytes())?;
@@ -47,6 +47,9 @@ impl GitEventStore {
 
         let context_blob = self.repo.blob(context.as_bytes())?;
         builder.insert("context.md", context_blob, 0o100644)?;
+
+        let name_blob = self.repo.blob(name.as_bytes())?;
+        builder.insert("name", name_blob, 0o100644)?;
 
         Ok(builder.write()?)
     }
@@ -153,7 +156,7 @@ impl GitEventStore {
     ) -> Result<git2::Oid> {
         match event {
             YakEvent::Added(e) => {
-                let yak_tree_oid = self.create_yak_tree("todo", "")?;
+                let yak_tree_oid = self.create_yak_tree(&e.name, "todo", "")?;
                 self.set_yak_in_root(current_tree, &e.name, Some(yak_tree_oid))
             }
 
@@ -168,7 +171,12 @@ impl GitEventStore {
                 // Remove old, add new
                 let intermediate = self.set_yak_in_root(current_tree, &e.old_name, None)?;
                 let intermediate_tree = self.repo.find_tree(intermediate)?;
-                self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)
+                let with_new =
+                    self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)?;
+
+                // Update name file to reflect the new name
+                let with_new_tree = self.repo.find_tree(with_new)?;
+                self.update_yak_file(Some(&with_new_tree), &e.new_name, "name", &e.new_name)
             }
 
             YakEvent::ContextUpdated(e) => {

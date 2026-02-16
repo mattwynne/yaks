@@ -12,7 +12,9 @@ pub mod yak;
 pub mod yak_map;
 
 pub use event::YakEvent;
-pub use field::{validate_field_name, CONTEXT_FIELD, STATE_FIELD};
+pub use field::{
+    validate_field_name, validate_field_name_format, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD,
+};
 pub use hierarchy::{find_children, get_ancestors};
 pub use slug::generate_slug;
 pub use yak::{validate_state, validate_yak_name, Yak};

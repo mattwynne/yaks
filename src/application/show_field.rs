@@ -1,6 +1,6 @@
 // Use case: Show a yak field
 
-use crate::domain::validate_field_name;
+use crate::domain::validate_field_name_format;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -19,8 +19,8 @@ impl ShowField {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        // Validate field name
-        validate_field_name(&self.field)?;
+        // Validate field name format (allow reserved fields for reading)
+        validate_field_name_format(&self.field)?;
 
         // Find yak (handles fuzzy matching)
         let yak_name = app.store.find_yak(&self.name)?;

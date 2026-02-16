@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
-use crate::domain::{YakEvent, CONTEXT_FIELD, STATE_FIELD};
+use crate::domain::{YakEvent, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
@@ -10,6 +10,7 @@ impl<T: WriteYakStore> EventListener for T {
             YakEvent::Added(AddedEvent { name }) => {
                 self.create_yak(name)?;
                 self.write_field(name, STATE_FIELD, "todo")?;
+                self.write_field(name, NAME_FIELD, name)?;
             }
 
             YakEvent::Removed(RemovedEvent { name }) => {
@@ -18,6 +19,7 @@ impl<T: WriteYakStore> EventListener for T {
 
             YakEvent::Moved(MovedEvent { old_name, new_name }) => {
                 self.rename_yak(old_name, new_name)?;
+                self.write_field(new_name, NAME_FIELD, new_name)?;
             }
 
             YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
