@@ -68,11 +68,10 @@ impl YakMap {
             },
         );
 
-        self.pending_events
-            .push(YakEvent::Added(AddedEvent {
-                name: name.clone(),
-                id: id.clone(),
-            }));
+        self.pending_events.push(YakEvent::Added(AddedEvent {
+            name: name.clone(),
+            id: id.clone(),
+        }));
 
         if let Some(content) = context {
             self.pending_events
@@ -101,10 +100,7 @@ impl YakMap {
                     },
                 );
                 self.pending_events
-                    .push(YakEvent::Added(AddedEvent {
-                        name: ancestor,
-                        id,
-                    }));
+                    .push(YakEvent::Added(AddedEvent { name: ancestor, id }));
             }
         }
     }
@@ -516,9 +512,7 @@ mod tests {
     fn test_add_yak_generates_slug_from_leaf_name() {
         let mut map = YakMap::new();
 
-        let id = map
-            .add_yak("parent/child task".to_string(), None)
-            .unwrap();
+        let id = map.add_yak("parent/child task".to_string(), None).unwrap();
 
         assert!(
             id.starts_with("child-task-"),

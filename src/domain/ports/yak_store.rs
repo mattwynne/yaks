@@ -12,8 +12,8 @@ pub trait ReadYakStore {
 }
 
 pub trait WriteYakStore {
-    /// Create a new yak
-    fn create_yak(&self, name: &str) -> Result<()>;
+    /// Create a new yak. The `id` is the storage-safe identifier for the yak.
+    fn create_yak(&self, name: &str, id: &str) -> Result<()>;
 
     /// Delete a yak
     fn delete_yak(&self, name: &str) -> Result<()>;

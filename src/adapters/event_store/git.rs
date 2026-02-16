@@ -320,10 +320,7 @@ mod tests {
         // Verify ref exists
         let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
         let commit = store.repo.find_commit(oid).unwrap();
-        assert_eq!(
-            commit.message().unwrap(),
-            "Added: \"test\" \"test-a1b2\""
-        );
+        assert_eq!(commit.message().unwrap(), "Added: \"test\" \"test-a1b2\"");
     }
 
     #[test]

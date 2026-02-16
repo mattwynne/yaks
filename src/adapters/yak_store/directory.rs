@@ -1,7 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
-use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
+use crate::domain::{Yak, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -92,7 +92,41 @@ impl DirectoryStorage {
     }
 
     fn yak_dir(&self, name: &str) -> PathBuf {
-        self.base_path.join(name)
+        // Try direct path first (backward compat: dir name == yak name)
+        let direct = self.base_path.join(name);
+        if direct.exists() {
+            return direct;
+        }
+
+        // Scan for id-based directory whose name file matches
+        if let Some(dir) = self.resolve_by_name(name) {
+            return dir;
+        }
+
+        // Fallback to direct path (will fail later with "not found")
+        direct
+    }
+
+    /// Scan top-level directories for one whose name file matches the given name.
+    fn resolve_by_name(&self, name: &str) -> Option<PathBuf> {
+        let base = &self.base_path;
+        if !base.exists() {
+            return None;
+        }
+        for entry in fs::read_dir(base).ok()?.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name_file = path.join(NAME_FIELD);
+                if name_file.exists() {
+                    if let Ok(stored_name) = fs::read_to_string(&name_file) {
+                        if stored_name == name {
+                            return Some(path);
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn field_path(&self, name: &str, field_name: &str) -> PathBuf {
@@ -101,19 +135,25 @@ impl DirectoryStorage {
 }
 
 impl WriteYakStore for DirectoryStorage {
-    fn create_yak(&self, name: &str) -> Result<()> {
-        if self.field_path(name, CONTEXT_FIELD).exists() {
+    fn create_yak(&self, name: &str, id: &str) -> Result<()> {
+        // Use id as directory name if available, otherwise fall back to name
+        let dir_name = if id.is_empty() { name } else { id };
+
+        let dir = self.base_path.join(dir_name);
+        if dir.join(CONTEXT_FIELD).exists() {
             anyhow::bail!("Yak '{}' already exists", name);
         }
 
-        let dir = self.yak_dir(name);
         fs::create_dir_all(&dir)
-            .with_context(|| format!("Failed to create yak directory: {name}"))?;
+            .with_context(|| format!("Failed to create yak directory: {dir_name}"))?;
 
         // Create empty context.md file by default
-        let context_file = self.field_path(name, CONTEXT_FIELD);
-        fs::write(&context_file, "")
+        fs::write(dir.join(CONTEXT_FIELD), "")
             .with_context(|| format!("Failed to create context.md for yak: {name}"))?;
+
+        // Write name file for name→directory resolution
+        fs::write(dir.join(NAME_FIELD), name)
+            .with_context(|| format!("Failed to write name file for yak: {name}"))?;
 
         Ok(())
     }
@@ -128,7 +168,7 @@ impl WriteYakStore for DirectoryStorage {
 
     fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
         let from_dir = self.yak_dir(from);
-        let to_dir = self.yak_dir(to);
+        let to_dir = self.base_path.join(to);
 
         if !from_dir.exists() {
             anyhow::bail!("yak '{from}' not found");
@@ -149,6 +189,10 @@ impl WriteYakStore for DirectoryStorage {
         fs::rename(&from_dir, &to_dir)
             .with_context(|| format!("Failed to rename '{from}' to '{to}'"))?;
 
+        // Update name file to reflect new name
+        fs::write(to_dir.join(NAME_FIELD), to)
+            .with_context(|| format!("Failed to update name file for '{to}'"))?;
+
         Ok(())
     }
 
@@ -166,27 +210,36 @@ impl WriteYakStore for DirectoryStorage {
 impl ReadYakStore for DirectoryStorage {
     fn get_yak(&self, name: &str) -> Result<Yak> {
         let dir = self.yak_dir(name);
-        let context_file = self.field_path(name, CONTEXT_FIELD);
 
-        if !dir.exists() || !context_file.exists() {
+        if !dir.exists() || !dir.join(CONTEXT_FIELD).exists() {
             anyhow::bail!("yak '{name}' not found");
         }
 
+        // Read display name from name file, fall back to directory name
+        let display_name =
+            fs::read_to_string(dir.join(NAME_FIELD)).unwrap_or_else(|_| name.to_string());
+
+        // Derive id from directory name (last component of path)
+        let id = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(name)
+            .to_string();
+
         // Read context field
-        let context = ReadYakStore::read_field(self, name, CONTEXT_FIELD)
+        let context = fs::read_to_string(dir.join(CONTEXT_FIELD))
             .ok()
             .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
         // Read state field, default to "todo" if not present
-        let state = ReadYakStore::read_field(self, name, STATE_FIELD)
+        let state = fs::read_to_string(dir.join(STATE_FIELD))
             .unwrap_or_else(|_| "todo".to_string())
             .trim()
             .to_string();
 
-        // Derive done from state
         Ok(Yak {
-            id: name.to_string(),
-            name: name.to_string(),
+            id,
+            name: display_name,
             state,
             context,
         })
@@ -199,22 +252,50 @@ impl ReadYakStore for DirectoryStorage {
             return Ok(yaks);
         }
 
-        // Use WalkDir to recursively find all directories (yaks)
+        // Use WalkDir to recursively find all directories that are yaks
         for entry in WalkDir::new(&self.base_path)
             .min_depth(1)
             .into_iter()
             .filter_entry(|e| e.file_type().is_dir())
         {
             let entry = entry?;
-            // Get relative path from base_path
-            if let Ok(rel_path) = entry.path().strip_prefix(&self.base_path) {
-                if let Some(name) = rel_path.to_str() {
-                    // Only add if we can successfully read it as a yak
-                    if let Ok(yak) = ReadYakStore::get_yak(self, name) {
-                        yaks.push(yak);
-                    }
-                }
+            let path = entry.path();
+
+            // Only process directories that have a context.md (are actual yaks)
+            if !path.join(CONTEXT_FIELD).exists() {
+                continue;
             }
+
+            // Read display name from name file, fall back to relative path
+            let display_name = fs::read_to_string(path.join(NAME_FIELD)).unwrap_or_else(|_| {
+                path.strip_prefix(&self.base_path)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .to_string()
+            });
+
+            // Derive id from directory name (last component)
+            let id = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&display_name)
+                .to_string();
+
+            let context = fs::read_to_string(path.join(CONTEXT_FIELD))
+                .ok()
+                .and_then(|c| if c.is_empty() { None } else { Some(c) });
+
+            let state = fs::read_to_string(path.join(STATE_FIELD))
+                .unwrap_or_else(|_| "todo".to_string())
+                .trim()
+                .to_string();
+
+            yaks.push(Yak {
+                id,
+                name: display_name,
+                state,
+                context,
+            });
         }
 
         Ok(yaks)
@@ -226,9 +307,13 @@ impl ReadYakStore for DirectoryStorage {
     }
 
     fn find_yak(&self, name: &str) -> Result<String> {
-        // First, try exact match - verify it's a real yak (has context.md)
-        if self.field_path(name, CONTEXT_FIELD).exists() {
-            return Ok(name.to_string());
+        // First, try exact match via resolution (handles both old and new format)
+        let dir = self.yak_dir(name);
+        if dir.exists() && dir.join(CONTEXT_FIELD).exists() {
+            // Read the actual display name from the name file
+            let display_name =
+                fs::read_to_string(dir.join(NAME_FIELD)).unwrap_or_else(|_| name.to_string());
+            return Ok(display_name);
         }
 
         // If not found, try fuzzy match on the leaf node only
@@ -391,6 +476,28 @@ mod tests {
 
         assert!(ReadYakStore::yak_exists(&storage, "test"));
         assert!(!ReadYakStore::yak_exists(&storage, "missing"));
+    }
+
+    #[test]
+    fn test_added_event_with_id_creates_id_based_directory() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        let event = YakEvent::Added(AddedEvent {
+            name: "my yak".to_string(),
+            id: "my-yak-a1b2".to_string(),
+        });
+
+        storage.on_event(&event).unwrap();
+
+        // Directory should be named by id, not name
+        assert!(
+            storage.base_path.join("my-yak-a1b2").exists(),
+            "Expected directory 'my-yak-a1b2' to exist"
+        );
+        // get_yak should resolve by name
+        let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
+        assert_eq!(yak.id, "my-yak-a1b2");
+        assert_eq!(yak.name, "my yak");
     }
 
     #[test]
