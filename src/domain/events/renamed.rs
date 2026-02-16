@@ -1,11 +1,12 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::{Name, YakId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenamedEvent {
-    pub id: String,
-    pub new_name: String,
+    pub id: YakId,
+    pub new_name: Name,
 }
 
 impl EventFormat for RenamedEvent {
@@ -21,8 +22,8 @@ impl EventFormat for RenamedEvent {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(values.len() >= 2, "Renamed event requires id and new_name");
         Ok(Self {
-            id: values[0].clone(),
-            new_name: values[1].clone(),
+            id: YakId::from(values[0].clone()),
+            new_name: Name::from(values[1].clone()),
         })
     }
 }
@@ -34,8 +35,8 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = RenamedEvent {
-            id: "my-yak-a1b2".to_string(),
-            new_name: "better name".to_string(),
+            id: YakId::from("my-yak-a1b2"),
+            new_name: Name::from("better name"),
         };
         let data = event.format_data();
         let parsed = RenamedEvent::parse_data(&data).unwrap();

@@ -17,7 +17,7 @@ pub use field::{
     STATE_FIELD,
 };
 pub use hierarchy::{find_children, get_ancestors};
-pub use slug::{generate_id, slugify};
+pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use yak::{validate_state, validate_yak_name, Yak};
 pub use yak_map::YakMap;
 

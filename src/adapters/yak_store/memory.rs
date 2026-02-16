@@ -1,6 +1,7 @@
 // In-memory storage adapter - for testing only
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
+use crate::domain::slug::{Name, YakId};
 use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -108,9 +109,7 @@ impl WriteYakStore for InMemoryStorage {
 
         // Update id→name mapping
         let mut id_map = self.id_to_name.write().unwrap();
-        if let Some((_id, stored_name)) =
-            id_map.iter_mut().find(|(_, v)| **v == from_name)
-        {
+        if let Some((_id, stored_name)) = id_map.iter_mut().find(|(_, v)| **v == from_name) {
             *stored_name = to_name;
         }
 
@@ -246,8 +245,8 @@ impl ReadYakStore for InMemoryStorage {
         };
 
         Ok(Yak {
-            id,
-            name: name.to_string(),
+            id: YakId::from(id),
+            name: Name::from(name),
             state,
             context,
         })

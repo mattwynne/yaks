@@ -11,6 +11,7 @@
 macro_rules! event_store_tests {
     ($create_store:expr) => {
         use crate::domain::ports::EventStore;
+        use crate::domain::slug::{Name, YakId};
         use crate::domain::{
             AddedEvent, ContextUpdatedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent,
             StateUpdatedEvent, YakEvent,
@@ -20,8 +21,8 @@ macro_rules! event_store_tests {
         fn appends_and_retrieves_single_event() {
             let (mut store, _guard) = $create_store;
             let event = YakEvent::Added(AddedEvent {
-                name: "foo".to_string(),
-                id: String::new(),
+                name: Name::from("foo"),
+                id: YakId::from(""),
                 parent_id: None,
             });
             store.append(&event).unwrap();
@@ -35,15 +36,15 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "foo".to_string(),
-                    id: String::new(),
+                    name: Name::from("foo"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "bar".to_string(),
-                    id: String::new(),
+                    name: Name::from("bar"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
@@ -57,15 +58,15 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "first".to_string(),
-                    id: String::new(),
+                    name: Name::from("first"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "second".to_string(),
-                    id: String::new(),
+                    name: Name::from("second"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
@@ -80,21 +81,21 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "foo".to_string(),
-                    id: String::new(),
+                    name: Name::from("foo"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "bar".to_string(),
-                    id: String::new(),
+                    name: Name::from("bar"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    id: "foo".to_string(),
+                    id: YakId::from("foo"),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
@@ -121,39 +122,39 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(AddedEvent {
-                    name: "test".to_string(),
-                    id: String::new(),
+                    name: Name::from("test"),
+                    id: YakId::from(""),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    id: "test".to_string(),
+                    id: YakId::from("test"),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Moved(MovedEvent {
-                    id: "test".to_string(),
-                    new_parent: Some("test2".to_string()),
+                    id: YakId::from("test"),
+                    new_parent: Some(YakId::from("test2")),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                    id: "test2".to_string(),
+                    id: YakId::from("test2"),
                     content: "some context".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    id: "test2".to_string(),
+                    id: YakId::from("test2"),
                     field_name: "notes".to_string(),
                     content: "stuff".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Removed(RemovedEvent {
-                    id: "test2".to_string(),
+                    id: YakId::from("test2"),
                 }))
                 .unwrap();
 

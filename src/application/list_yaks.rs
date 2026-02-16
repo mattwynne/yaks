@@ -98,7 +98,8 @@ impl ListYaks {
 
         // First pass: create nodes for all yaks and implicit parents
         for yak in &yaks {
-            let parts: Vec<&str> = yak.name.split('/').collect();
+            let name_str = yak.name.as_str();
+            let parts: Vec<&str> = name_str.split('/').collect();
 
             // Create implicit parent nodes if they don't exist
             for i in 1..parts.len() {
@@ -120,10 +121,10 @@ impl ListYaks {
             // Create node for this yak
             let name = parts.last().unwrap_or(&"").to_string();
             nodes_by_path.insert(
-                yak.name.clone(),
+                yak.name.to_string(),
                 YakNode {
                     name,
-                    full_path: yak.name.clone(),
+                    full_path: yak.name.to_string(),
                     yak: Some(yak.clone()),
                     children: Vec::new(),
                 },

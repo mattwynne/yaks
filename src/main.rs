@@ -221,7 +221,7 @@ fn main() -> Result<()> {
             let yaks = storage.list_yaks()?;
 
             // Build tuples of (name, is_done)
-            let yak_name_strings: Vec<String> = yaks.iter().map(|y| y.name.clone()).collect();
+            let yak_name_strings: Vec<String> = yaks.iter().map(|y| y.name.to_string()).collect();
             let yaks_with_state: Vec<(&str, bool)> = yak_name_strings
                 .iter()
                 .zip(yaks.iter())

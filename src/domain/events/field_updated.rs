@@ -1,13 +1,14 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::YakId;
 
 /// Note: `content` is NOT serialized in the commit message because it
 /// is stored in the git tree (as a blob). When reading events back
 /// from git, `content` will be empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldUpdatedEvent {
-    pub id: String,
+    pub id: YakId,
     pub field_name: String,
     pub content: String,
 }
@@ -28,7 +29,7 @@ impl EventFormat for FieldUpdatedEvent {
             "FieldUpdated event requires id and field_name"
         );
         Ok(Self {
-            id: values[0].clone(),
+            id: YakId::from(values[0].clone()),
             field_name: values[1].clone(),
             content: String::new(),
         })
@@ -42,7 +43,7 @@ mod tests {
     #[test]
     fn format_excludes_content() {
         let event = FieldUpdatedEvent {
-            id: "test-yak-a1b2".to_string(),
+            id: YakId::from("test-yak-a1b2"),
             field_name: "notes".to_string(),
             content: "stuff".to_string(),
         };
@@ -52,7 +53,7 @@ mod tests {
     #[test]
     fn parse_sets_empty_content() {
         let parsed = FieldUpdatedEvent::parse_data("\"test-yak-a1b2\" \"notes\"").unwrap();
-        assert_eq!(parsed.id, "test-yak-a1b2");
+        assert_eq!(parsed.id, YakId::from("test-yak-a1b2"));
         assert_eq!(parsed.field_name, "notes");
         assert_eq!(parsed.content, "");
     }

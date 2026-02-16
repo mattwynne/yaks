@@ -1,10 +1,11 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemovedEvent {
-    pub id: String,
+    pub id: YakId,
 }
 
 impl EventFormat for RemovedEvent {
@@ -20,7 +21,7 @@ impl EventFormat for RemovedEvent {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "Removed event requires an id");
         Ok(Self {
-            id: values[0].clone(),
+            id: YakId::from(values[0].clone()),
         })
     }
 }
@@ -32,7 +33,7 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = RemovedEvent {
-            id: "test-yak-a1b2".to_string(),
+            id: YakId::from("test-yak-a1b2"),
         };
         let data = event.format_data();
         let parsed = RemovedEvent::parse_data(&data).unwrap();

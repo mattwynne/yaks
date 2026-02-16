@@ -1,10 +1,11 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateUpdatedEvent {
-    pub id: String,
+    pub id: YakId,
     pub state: String,
 }
 
@@ -24,7 +25,7 @@ impl EventFormat for StateUpdatedEvent {
             "StateUpdated event requires id and state"
         );
         Ok(Self {
-            id: values[0].clone(),
+            id: YakId::from(values[0].clone()),
             state: values[1].clone(),
         })
     }
@@ -37,7 +38,7 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = StateUpdatedEvent {
-            id: "test-yak-a1b2".to_string(),
+            id: YakId::from("test-yak-a1b2"),
             state: "wip".to_string(),
         };
         let data = event.format_data();

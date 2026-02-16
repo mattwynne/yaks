@@ -32,7 +32,7 @@ impl ShowField {
         let content = app.store.read_field(&yak_name, &self.field)?;
 
         // Display yak name and field content
-        app.display.success(&yak.name);
+        app.display.success(yak.name.as_str());
         app.display.info("");
         app.display.info(&content);
 

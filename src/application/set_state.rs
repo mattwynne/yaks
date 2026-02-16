@@ -32,9 +32,10 @@ impl SetState {
             let mut names: Vec<String> = all_yaks
                 .iter()
                 .filter(|yak| {
-                    yak.name == resolved_name || yak.name.starts_with(&format!("{resolved_name}/"))
+                    yak.name == resolved_name
+                        || yak.name.as_str().starts_with(&format!("{resolved_name}/"))
                 })
-                .map(|yak| yak.name.clone())
+                .map(|yak| yak.name.to_string())
                 .collect();
             // Sort by depth descending (leaves first) so children are
             // marked done before parents, passing hierarchy validation

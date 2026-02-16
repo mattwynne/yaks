@@ -1,11 +1,12 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedEvent {
-    pub id: String,
-    pub new_parent: Option<String>,
+    pub id: YakId,
+    pub new_parent: Option<YakId>,
 }
 
 impl EventFormat for MovedEvent {
@@ -24,12 +25,12 @@ impl EventFormat for MovedEvent {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "Moved event requires an id");
         let new_parent = if values.len() >= 2 {
-            Some(values[1].clone())
+            Some(YakId::from(values[1].clone()))
         } else {
             None
         };
         Ok(Self {
-            id: values[0].clone(),
+            id: YakId::from(values[0].clone()),
             new_parent,
         })
     }
@@ -42,8 +43,8 @@ mod tests {
     #[test]
     fn roundtrip_with_parent() {
         let event = MovedEvent {
-            id: "child-a1b2".to_string(),
-            new_parent: Some("new-parent-c3d4".to_string()),
+            id: YakId::from("child-a1b2"),
+            new_parent: Some(YakId::from("new-parent-c3d4")),
         };
         let data = event.format_data();
         let parsed = MovedEvent::parse_data(&data).unwrap();
@@ -53,7 +54,7 @@ mod tests {
     #[test]
     fn roundtrip_to_root() {
         let event = MovedEvent {
-            id: "child-a1b2".to_string(),
+            id: YakId::from("child-a1b2"),
             new_parent: None,
         };
         let data = event.format_data();

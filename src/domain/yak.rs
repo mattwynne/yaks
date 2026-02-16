@@ -1,5 +1,7 @@
 // Yak domain model - a simple value object
 
+use super::slug::{Name, YakId};
+
 const VALID_STATES: &[&str] = &["todo", "wip", "done"];
 
 pub fn validate_state(state: &str) -> Result<(), String> {
@@ -16,8 +18,8 @@ pub fn validate_state(state: &str) -> Result<(), String> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
-    pub id: String,
-    pub name: String,
+    pub id: YakId,
+    pub name: Name,
     pub state: String,
     pub context: Option<String>,
 }
@@ -57,16 +59,16 @@ mod tests {
     #[test]
     fn test_is_done_derived_from_state() {
         let yak = Yak {
-            id: "test".to_string(),
-            name: "test".to_string(),
+            id: YakId::from("test"),
+            name: Name::from("test"),
             state: "todo".to_string(),
             context: None,
         };
         assert!(!yak.is_done());
 
         let done_yak = Yak {
-            id: "test".to_string(),
-            name: "test".to_string(),
+            id: YakId::from("test"),
+            name: Name::from("test"),
             state: "done".to_string(),
             context: None,
         };

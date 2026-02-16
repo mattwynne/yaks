@@ -10,6 +10,7 @@ pub trait EventListener {
 mod tests {
     use super::*;
     use crate::domain::events::AddedEvent;
+    use crate::domain::slug::{Name, YakId};
 
     struct TestListener {
         events: Vec<YakEvent>,
@@ -27,8 +28,8 @@ mod tests {
         let mut listener = TestListener { events: vec![] };
 
         let event = YakEvent::Added(AddedEvent {
-            name: "test".to_string(),
-            id: String::new(),
+            name: Name::from("test"),
+            id: YakId::from(""),
             parent_id: None,
         });
 

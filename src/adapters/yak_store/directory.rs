@@ -1,7 +1,7 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
-use crate::domain::slug::slugify;
+use crate::domain::slug::{slugify, Name, YakId};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::{Context, Result};
 use std::fs;
@@ -154,9 +154,7 @@ impl DirectoryStorage {
                 }
             }
             // Fallback: match against directory name (backward compat)
-            if fallback.is_none()
-                && path.file_name().and_then(|n| n.to_str()) == Some(id)
-            {
+            if fallback.is_none() && path.file_name().and_then(|n| n.to_str()) == Some(id) {
                 fallback = Some(path.to_path_buf());
             }
         }
@@ -278,7 +276,7 @@ impl WriteYakStore for DirectoryStorage {
         let dir_name = if id.is_empty() {
             name.to_string()
         } else {
-            slugify(name)
+            slugify(name).to_string()
         };
 
         // Determine parent directory: base_path or parent's directory
@@ -330,7 +328,7 @@ impl WriteYakStore for DirectoryStorage {
         }
 
         // Compute new slug-based directory name
-        let new_slug = slugify(to);
+        let new_slug = slugify(to).to_string();
 
         // Target directory is in the same parent as the current directory
         let parent_dir = from_dir
@@ -424,8 +422,8 @@ impl ReadYakStore for DirectoryStorage {
             .to_string();
 
         Ok(Yak {
-            id,
-            name: display_name,
+            id: YakId::from(id),
+            name: Name::from(display_name),
             state,
             context,
         })
@@ -476,8 +474,8 @@ impl ReadYakStore for DirectoryStorage {
                 .to_string();
 
             yaks.push(Yak {
-                id,
-                name: display_name,
+                id: YakId::from(id),
+                name: Name::from(display_name),
                 state,
                 context,
             });
@@ -506,14 +504,15 @@ impl ReadYakStore for DirectoryStorage {
             .iter()
             .filter(|yak| {
                 // Extract leaf node (last segment after /)
-                let leaf = yak.name.rsplit('/').next().unwrap_or(&yak.name);
+                let yak_name_str = yak.name.as_str();
+                let leaf = yak_name_str.rsplit('/').next().unwrap_or(yak_name_str);
                 leaf.to_lowercase().contains(&name.to_lowercase())
             })
             .collect();
 
         match matches.len() {
             0 => anyhow::bail!("yak '{name}' not found"),
-            1 => Ok(matches[0].name.clone()),
+            1 => Ok(matches[0].name.to_string()),
             _ => anyhow::bail!("yak name '{name}' is ambiguous"),
         }
     }
@@ -566,8 +565,8 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         let event = YakEvent::Added(AddedEvent {
-            name: "test".to_string(),
-            id: String::new(),
+            name: Name::from("test"),
+            id: YakId::from(""),
             parent_id: None,
         });
 
@@ -585,8 +584,8 @@ mod tests {
         // First add the yak
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: String::new(),
+                name: Name::from("test"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
@@ -594,7 +593,7 @@ mod tests {
         // Then update context
         storage
             .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                id: "test".to_string(),
+                id: YakId::from("test"),
                 content: "new context".to_string(),
             }))
             .unwrap();
@@ -609,15 +608,15 @@ mod tests {
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: String::new(),
+                name: Name::from("test"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
 
         storage
             .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
-                id: "test".to_string(),
+                id: YakId::from("test"),
                 state: "wip".to_string(),
             }))
             .unwrap();
@@ -632,21 +631,21 @@ mod tests {
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: String::new(),
+                name: Name::from("test"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
 
         storage
             .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                id: "test".to_string(),
+                id: YakId::from("test"),
                 content: "context".to_string(),
             }))
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
-        assert_eq!(yak.name, "test");
+        assert_eq!(yak.name, Name::from("test"));
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
     }
@@ -657,8 +656,8 @@ mod tests {
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: String::new(),
+                name: Name::from("test"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
@@ -672,8 +671,8 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         let event = YakEvent::Added(AddedEvent {
-            name: "my yak".to_string(),
-            id: "my-yak-a1b2".to_string(),
+            name: Name::from("my yak"),
+            id: YakId::from("my-yak-a1b2"),
             parent_id: None,
         });
 
@@ -686,8 +685,8 @@ mod tests {
         );
         // get_yak should resolve by name
         let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
-        assert_eq!(yak.id, "my-yak-a1b2");
-        assert_eq!(yak.name, "my yak");
+        assert_eq!(yak.id, YakId::from("my-yak-a1b2"));
+        assert_eq!(yak.name, Name::from("my yak"));
     }
 
     #[test]
@@ -696,16 +695,16 @@ mod tests {
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test1".to_string(),
-                id: String::new(),
+                name: Name::from("test1"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
 
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "test2".to_string(),
-                id: String::new(),
+                name: Name::from("test2"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
@@ -721,8 +720,8 @@ mod tests {
         // Add yak with id
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "my yak".to_string(),
-                id: "my-yak-a1b2".to_string(),
+                name: Name::from("my yak"),
+                id: YakId::from("my-yak-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
@@ -730,7 +729,7 @@ mod tests {
         // Update state using id
         storage
             .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
-                id: "my-yak-a1b2".to_string(),
+                id: YakId::from("my-yak-a1b2"),
                 state: "wip".to_string(),
             }))
             .unwrap();
@@ -747,8 +746,8 @@ mod tests {
         // Add parent
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "parent".to_string(),
-                id: "parent-a1b2".to_string(),
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
@@ -756,28 +755,24 @@ mod tests {
         // Add child under parent
         storage
             .on_event(&YakEvent::Added(AddedEvent {
-                name: "child".to_string(),
-                id: "child-c3d4".to_string(),
-                parent_id: Some("parent-a1b2".to_string()),
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
             }))
             .unwrap();
 
         // Child directory should be nested under parent's slug-based directory
         assert!(
-            storage
-                .base_path
-                .join("parent")
-                .join("child")
-                .exists(),
+            storage.base_path.join("parent").join("child").exists(),
             "Expected child directory nested under parent"
         );
 
         // Both yaks should be retrievable
         let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
-        assert_eq!(parent.id, "parent-a1b2");
+        assert_eq!(parent.id, YakId::from("parent-a1b2"));
 
         let child = ReadYakStore::get_yak(&storage, "child").unwrap();
-        assert_eq!(child.id, "child-c3d4");
-        assert_eq!(child.name, "parent/child");
+        assert_eq!(child.id, YakId::from("child-c3d4"));
+        assert_eq!(child.name, Name::from("parent/child"));
     }
 }

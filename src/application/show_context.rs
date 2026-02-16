@@ -20,7 +20,7 @@ impl ShowContext {
         let yak = app.store.get_yak(&resolved)?;
 
         // Display the header (yak name)
-        app.display.info(&yak.name);
+        app.display.info(yak.name.as_str());
 
         // Display a blank line if there's content
         if let Some(context) = &yak.context {

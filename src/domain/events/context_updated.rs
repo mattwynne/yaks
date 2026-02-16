@@ -1,13 +1,14 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::slug::YakId;
 
 /// Note: `content` is NOT serialized in the commit message because it
 /// is stored in the git tree (context.md blob). When reading events
 /// back from git, `content` will be empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContextUpdatedEvent {
-    pub id: String,
+    pub id: YakId,
     pub content: String,
 }
 
@@ -24,7 +25,7 @@ impl EventFormat for ContextUpdatedEvent {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "ContextUpdated event requires an id");
         Ok(Self {
-            id: values[0].clone(),
+            id: YakId::from(values[0].clone()),
             content: String::new(),
         })
     }
@@ -37,7 +38,7 @@ mod tests {
     #[test]
     fn format_excludes_content() {
         let event = ContextUpdatedEvent {
-            id: "test-yak-a1b2".to_string(),
+            id: YakId::from("test-yak-a1b2"),
             content: "some long context".to_string(),
         };
         assert_eq!(event.format_data(), "\"test-yak-a1b2\"");
@@ -46,7 +47,7 @@ mod tests {
     #[test]
     fn parse_sets_empty_content() {
         let parsed = ContextUpdatedEvent::parse_data("\"test-yak-a1b2\"").unwrap();
-        assert_eq!(parsed.id, "test-yak-a1b2");
+        assert_eq!(parsed.id, YakId::from("test-yak-a1b2"));
         assert_eq!(parsed.content, "");
     }
 }

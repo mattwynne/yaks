@@ -38,6 +38,7 @@ mod tests {
     use super::*;
     use crate::adapters::InMemoryEventStore;
     use crate::domain::events::AddedEvent;
+    use crate::domain::slug::{Name, YakId};
 
     struct TestListener {
         events: Vec<YakEvent>,
@@ -56,8 +57,8 @@ mod tests {
         let mut bus = EventBus::new(Box::new(store.clone()));
 
         let event = YakEvent::Added(AddedEvent {
-            name: "test".to_string(),
-            id: String::new(),
+            name: Name::from("test"),
+            id: YakId::from(""),
             parent_id: None,
         });
 
@@ -77,8 +78,8 @@ mod tests {
         bus.register(Box::new(listener));
 
         let event = YakEvent::Added(AddedEvent {
-            name: "test".to_string(),
-            id: String::new(),
+            name: Name::from("test"),
+            id: YakId::from(""),
             parent_id: None,
         });
 

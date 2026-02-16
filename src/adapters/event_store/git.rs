@@ -156,8 +156,12 @@ impl GitEventStore {
     ) -> Result<git2::Oid> {
         match event {
             YakEvent::Added(e) => {
-                let yak_tree_oid = self.create_yak_tree(&e.name, "todo", "")?;
-                let key = if e.id.is_empty() { &e.name } else { &e.id };
+                let yak_tree_oid = self.create_yak_tree(e.name.as_str(), "todo", "")?;
+                let key = if e.id.as_str().is_empty() {
+                    e.name.as_str()
+                } else {
+                    e.id.as_str()
+                };
                 let path = match &e.parent_id {
                     Some(parent) => format!("{}/{}", parent, key),
                     None => key.to_string(),
@@ -165,39 +169,41 @@ impl GitEventStore {
                 self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
             }
 
-            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, &e.id, None),
+            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, e.id.as_str(), None),
 
             YakEvent::Moved(e) => {
                 // Move yak subtree to new parent
                 // For now, just update the tree location
-                let old_subtree_oid = self.get_yak_subtree(current_tree, &e.id)?.map(|t| t.id());
+                let old_subtree_oid = self
+                    .get_yak_subtree(current_tree, e.id.as_str())?
+                    .map(|t| t.id());
 
-                let intermediate = self.set_yak_in_root(current_tree, &e.id, None)?;
+                let intermediate = self.set_yak_in_root(current_tree, e.id.as_str(), None)?;
                 let intermediate_tree = self.repo.find_tree(intermediate)?;
 
                 // Place under new parent if specified
                 let target = match &e.new_parent {
                     Some(parent) => format!("{}/{}", parent, e.id),
-                    None => e.id.clone(),
+                    None => e.id.to_string(),
                 };
                 self.set_yak_in_root(Some(&intermediate_tree), &target, old_subtree_oid)
             }
 
             YakEvent::Renamed(e) => {
                 // Update name file for renamed yak
-                self.update_yak_file(current_tree, &e.id, "name", &e.new_name)
+                self.update_yak_file(current_tree, e.id.as_str(), "name", e.new_name.as_str())
             }
 
             YakEvent::ContextUpdated(e) => {
-                self.update_yak_file(current_tree, &e.id, "context.md", &e.content)
+                self.update_yak_file(current_tree, e.id.as_str(), "context.md", &e.content)
             }
 
             YakEvent::StateUpdated(e) => {
-                self.update_yak_file(current_tree, &e.id, "state", &e.state)
+                self.update_yak_file(current_tree, e.id.as_str(), "state", &e.state)
             }
 
             YakEvent::FieldUpdated(e) => {
-                self.update_yak_file(current_tree, &e.id, &e.field_name, &e.content)
+                self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
             }
         }
     }
@@ -334,6 +340,7 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::slug::{Name, YakId};
     use crate::domain::{AddedEvent, StateUpdatedEvent};
     use tempfile::TempDir;
 
@@ -356,8 +363,8 @@ mod tests {
 
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: "test-a1b2".to_string(),
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
@@ -374,8 +381,8 @@ mod tests {
 
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: String::new(),
+                name: Name::from("test"),
+                id: YakId::from(""),
                 parent_id: None,
             }))
             .unwrap();
@@ -402,8 +409,8 @@ mod tests {
 
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: "test-a1b2".to_string(),
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
@@ -427,15 +434,15 @@ mod tests {
 
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: "test-a1b2".to_string(),
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
 
         store
             .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                id: "test-a1b2".to_string(),
+                id: YakId::from("test-a1b2"),
                 state: "wip".to_string(),
             }))
             .unwrap();
@@ -468,8 +475,8 @@ mod tests {
         // Add parent
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "parent".to_string(),
-                id: "parent-a1b2".to_string(),
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
@@ -477,9 +484,9 @@ mod tests {
         // Add child under parent
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "child".to_string(),
-                id: "child-c3d4".to_string(),
-                parent_id: Some("parent-a1b2".to_string()),
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
             }))
             .unwrap();
 
@@ -509,15 +516,15 @@ mod tests {
 
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: "test".to_string(),
-                id: "test-a1b2".to_string(),
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
 
         store
             .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                id: "test-a1b2".to_string(),
+                id: YakId::from("test-a1b2"),
                 state: "wip".to_string(),
             }))
             .unwrap();

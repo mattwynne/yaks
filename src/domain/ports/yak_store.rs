@@ -32,6 +32,7 @@ pub trait WriteYakStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::slug::{Name, YakId};
     use std::collections::HashMap;
 
     struct InMemoryStore {
@@ -73,8 +74,8 @@ mod tests {
         yaks.insert(
             "test".to_string(),
             Yak {
-                id: "test".to_string(),
-                name: "test".to_string(),
+                id: YakId::from("test"),
+                name: Name::from("test"),
                 state: "todo".to_string(),
                 context: None,
             },
@@ -83,7 +84,7 @@ mod tests {
         let store = InMemoryStore { yaks };
         let yak = store.get_yak("test").unwrap();
 
-        assert_eq!(yak.name, "test");
+        assert_eq!(yak.name, Name::from("test"));
     }
 
     #[test]
@@ -92,8 +93,8 @@ mod tests {
         yaks.insert(
             "test".to_string(),
             Yak {
-                id: "test".to_string(),
-                name: "test".to_string(),
+                id: YakId::from("test"),
+                name: Name::from("test"),
                 state: "todo".to_string(),
                 context: None,
             },

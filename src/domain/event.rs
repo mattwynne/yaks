@@ -49,13 +49,13 @@ impl YakEvent {
     #[cfg(any(test, feature = "test-support"))]
     pub fn yak_name(&self) -> &str {
         match self {
-            Self::Added(e) => &e.name,
-            Self::Removed(e) => &e.id,
-            Self::Moved(e) => &e.id,
-            Self::Renamed(e) => &e.id,
-            Self::ContextUpdated(e) => &e.id,
-            Self::StateUpdated(e) => &e.id,
-            Self::FieldUpdated(e) => &e.id,
+            Self::Added(e) => e.name.as_str(),
+            Self::Removed(e) => e.id.as_str(),
+            Self::Moved(e) => e.id.as_str(),
+            Self::Renamed(e) => e.id.as_str(),
+            Self::ContextUpdated(e) => e.id.as_str(),
+            Self::StateUpdated(e) => e.id.as_str(),
+            Self::FieldUpdated(e) => e.id.as_str(),
         }
     }
 }
@@ -63,12 +63,13 @@ impl YakEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::slug::{Name, YakId};
 
     #[test]
     fn format_message_added() {
         let event = YakEvent::Added(AddedEvent {
-            name: "test yak".to_string(),
-            id: "test-yak-a1b2".to_string(),
+            name: Name::from("test yak"),
+            id: YakId::from("test-yak-a1b2"),
             parent_id: None,
         });
         assert_eq!(
@@ -80,7 +81,7 @@ mod tests {
     #[test]
     fn format_message_state_updated() {
         let event = YakEvent::StateUpdated(StateUpdatedEvent {
-            id: "test".to_string(),
+            id: YakId::from("test"),
             state: "wip".to_string(),
         });
         assert_eq!(event.format_message(), "StateUpdated: \"test\" \"wip\"");
@@ -89,8 +90,8 @@ mod tests {
     #[test]
     fn parse_roundtrip() {
         let event = YakEvent::Added(AddedEvent {
-            name: "test".to_string(),
-            id: "test-x1y2".to_string(),
+            name: Name::from("test"),
+            id: YakId::from("test-x1y2"),
             parent_id: None,
         });
         let msg = event.format_message();
@@ -106,8 +107,8 @@ mod tests {
     #[test]
     fn yak_name_returns_correct_name() {
         let event = YakEvent::Moved(MovedEvent {
-            id: "old-a1b2".to_string(),
-            new_parent: Some("new-parent-c3d4".to_string()),
+            id: YakId::from("old-a1b2"),
+            new_parent: Some(YakId::from("new-parent-c3d4")),
         });
         assert_eq!(event.yak_name(), "old-a1b2");
     }
