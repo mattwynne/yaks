@@ -54,16 +54,16 @@ Ask specific questions:
 
 ### 3. Create a Worktree
 
-Create a worktree in `.claude/worktrees/` with a descriptive branch name:
+Create a worktree in `.worktrees/` with a descriptive branch name:
 
 ```bash
 mkdir -p .claude/worktrees
-git worktree add .claude/worktrees/descriptive-name -b descriptive-name
+git worktree add .worktrees/descriptive-name -b descriptive-name
 ```
 
 Example:
 ```bash
-git worktree add .claude/worktrees/sort-ls-results -b sort-ls-results
+git worktree add .worktrees/sort-ls-results -b sort-ls-results
 ```
 
 ### 4. Mark Yak as WIP and Record Worktree Location
@@ -73,7 +73,7 @@ Signal to other agents that you're working on this yak:
 ```bash
 cd /path/to/main/repo  # Go back to main repo
 yx state "yak name" wip
-yx field "yak name" worktree ".claude/worktrees/descriptive-name"
+yx field "yak name" worktree ".worktrees/descriptive-name"
 ```
 
 This prevents other agents from picking up the same yak and helps track where work is happening.
@@ -81,7 +81,7 @@ This prevents other agents from picking up the same yak and helps track where wo
 ### 5. Switch to the Worktree
 
 ```bash
-cd .claude/worktrees/descriptive-name
+cd .worktrees/descriptive-name
 ```
 
 All your work happens here. You're now on an isolated branch.
@@ -135,7 +135,7 @@ Use the exact yak name (with spaces if needed). This automatically clears the "w
 Remove the worktree and delete the branch:
 
 ```bash
-git worktree remove .claude/worktrees/descriptive-name
+git worktree remove .worktrees/descriptive-name
 git branch -d descriptive-name
 ```
 
@@ -153,9 +153,9 @@ Always demonstrate your work before merging to main. Show test results, example 
 
 This prevents unwanted changes from reaching main and gives the user a chance to provide feedback.
 
-### Use .claude/worktrees/
+### Use .worktrees/
 
-Keep all worktrees in `.claude/worktrees/` for consistency and easy cleanup.
+Keep all worktrees in `.worktrees/` for consistency and easy cleanup.
 
 ### Branch Names
 
@@ -204,7 +204,7 @@ Ask the user for clarification before proceeding. Examples:
 ### User wants changes after demo
 
 If the user requests changes during the demo:
-1. Go back to the worktree: `cd .claude/worktrees/descriptive-name`
+1. Go back to the worktree: `cd .worktrees/descriptive-name`
 2. Make the requested changes
 3. Commit them
 4. Demo again
@@ -237,15 +237,15 @@ yx context --show "sort ls results somehow"
 # Output: "Sort by done first, then by creation date..."
 
 # 3. Create worktree
-git worktree add .claude/worktrees/sort-ls-results -b sort-ls-results
+git worktree add .worktrees/sort-ls-results -b sort-ls-results
 
 # 4. Mark as WIP and record worktree location
 cd /path/to/main/repo
 yx state "sort ls results somehow" wip
-yx field "sort ls results somehow" worktree ".claude/worktrees/sort-ls-results"
+yx field "sort ls results somehow" worktree ".worktrees/sort-ls-results"
 
 # 5. Switch to worktree
-cd .claude/worktrees/sort-ls-results
+cd .worktrees/sort-ls-results
 
 # 6. Do the work (write tests, implement, commit)
 # ... work happens here ...
@@ -262,7 +262,7 @@ git merge sort-ls-results
 yx done "sort ls results somehow"
 
 # 10. Cleanup
-git worktree remove .claude/worktrees/sort-ls-results
+git worktree remove .worktrees/sort-ls-results
 git branch -d sort-ls-results
 ```
 
