@@ -30,16 +30,10 @@ Feature: Add yaks
       And I show the context of "my-yak"
       Then the output should include "# My context"
 
-  Rule: Invalid characters are rejected
-    Names cannot contain: / \ : * ? | < > "
-    Individual character validation is covered by unit tests.
-    This acceptance test verifies the error surfaces correctly.
-
-    Example: Forbidden character is rejected with a clear error
-      Given I have a clean git repository
-      When I try to add the yak "foo:bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
+  Rule: Forward slash is rejected
+    Names cannot contain `/` because hierarchy is expressed via --blocks.
+    Other special characters are allowed since storage uses slugified
+    directory names.
 
     Example: Forward slash in name is rejected
       Given I have a clean git repository

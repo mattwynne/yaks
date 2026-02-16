@@ -29,22 +29,22 @@ impl Yak {
 }
 
 /// Validate a yak name provided by the user.
-/// Rejects names containing forbidden characters: / \ : * ? | < > "
+/// Rejects empty names, names containing `/`, and null bytes.
+/// Most special characters are allowed because directory names use slugs.
 /// Hierarchy is created via --blocks, not by embedding / in names.
 pub fn validate_yak_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Yak name cannot be empty".to_string());
     }
 
-    // Forbidden: / \ : * ? | < > "
-    const FORBIDDEN_CHARS: &[char] = &['/', '\\', ':', '*', '?', '|', '<', '>', '"'];
+    if name.contains('/') {
+        return Err(
+            "Invalid yak name: '/' is not allowed (use --blocks for hierarchy)".to_string(),
+        );
+    }
 
-    for c in FORBIDDEN_CHARS {
-        if name.contains(*c) {
-            return Err(
-                "Invalid yak name: contains forbidden characters (/ \\ : * ? | < > \")".to_string(),
-            );
-        }
+    if name.contains('\0') {
+        return Err("Invalid yak name: null bytes are not allowed".to_string());
     }
 
     Ok(())
@@ -85,18 +85,27 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_yak_name_forbidden_chars() {
-        // Test each forbidden character
-        assert!(validate_yak_name("test\\name").is_err());
-        assert!(validate_yak_name("test:name").is_err());
-        assert!(validate_yak_name("test*name").is_err());
-        assert!(validate_yak_name("test?name").is_err());
-        assert!(validate_yak_name("test|name").is_err());
-        assert!(validate_yak_name("test<name").is_err());
-        assert!(validate_yak_name("test>name").is_err());
-        assert!(validate_yak_name("test\"name").is_err());
-
-        // Slash is also forbidden (use --blocks for hierarchy)
+    fn test_validate_yak_name_slash_forbidden() {
+        // Slash is forbidden (use --blocks for hierarchy)
         assert!(validate_yak_name("test/name").is_err());
+    }
+
+    #[test]
+    fn test_validate_yak_name_null_byte_forbidden() {
+        assert!(validate_yak_name("test\0name").is_err());
+    }
+
+    #[test]
+    fn test_validate_yak_name_special_chars_allowed() {
+        // These were previously forbidden but are now allowed
+        // because directory names use slugs
+        assert!(validate_yak_name("test\\name").is_ok());
+        assert!(validate_yak_name("test:name").is_ok());
+        assert!(validate_yak_name("test*name").is_ok());
+        assert!(validate_yak_name("test?name").is_ok());
+        assert!(validate_yak_name("test|name").is_ok());
+        assert!(validate_yak_name("test<name").is_ok());
+        assert!(validate_yak_name("test>name").is_ok());
+        assert!(validate_yak_name("test\"name").is_ok());
     }
 }
