@@ -16,6 +16,7 @@ pub fn validate_state(state: &str) -> Result<(), String> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
+    pub id: String,
     pub name: String,
     pub state: String,
     pub context: Option<String>,
@@ -56,6 +57,7 @@ mod tests {
     #[test]
     fn test_is_done_derived_from_state() {
         let yak = Yak {
+            id: "test".to_string(),
             name: "test".to_string(),
             state: "todo".to_string(),
             context: None,
@@ -63,6 +65,7 @@ mod tests {
         assert!(!yak.is_done());
 
         let done_yak = Yak {
+            id: "test".to_string(),
             name: "test".to_string(),
             state: "done".to_string(),
             context: None,

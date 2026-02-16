@@ -106,6 +106,7 @@ impl ReadYakStore for InMemoryStorage {
             .unwrap_or_else(|| "todo".to_string());
 
         Ok(Yak {
+            id: name.to_string(),
             name: name.to_string(),
             state,
             context,

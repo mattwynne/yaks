@@ -185,6 +185,7 @@ impl ReadYakStore for DirectoryStorage {
 
         // Derive done from state
         Ok(Yak {
+            id: name.to_string(),
             name: name.to_string(),
             state,
             context,

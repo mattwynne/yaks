@@ -418,6 +418,7 @@ mod tests {
         yaks.insert(
             "test1".to_string(),
             Yak {
+                id: "test1".to_string(),
                 name: "test1".to_string(),
                 state: "todo".to_string(),
                 context: Some("context1".to_string()),
@@ -426,6 +427,7 @@ mod tests {
         yaks.insert(
             "test2".to_string(),
             Yak {
+                id: "test2".to_string(),
                 name: "test2".to_string(),
                 state: "wip".to_string(),
                 context: None,
