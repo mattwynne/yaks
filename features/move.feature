@@ -1,7 +1,7 @@
 Feature: Move and rename yaks
   Renames yaks and reorganizes them in the hierarchy.
   Alias: yx mv. All data (context, state, children) is preserved
-  when moving. Moving to a non-existent parent creates it implicitly.
+  when moving. The destination parent must already exist.
 
   Rule: A yak can be renamed
     A simple rename changes the name while preserving context, state,
