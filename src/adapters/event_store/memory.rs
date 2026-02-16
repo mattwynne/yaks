@@ -61,6 +61,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
             id: String::new(),
+            parent_id: None,
         });
 
         store.append(&event).unwrap();

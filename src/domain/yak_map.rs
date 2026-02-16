@@ -53,11 +53,14 @@ impl YakMap {
     }
 
     pub fn add_yak(&mut self, name: String, context: Option<String>) -> Result<String> {
-        // Ensure all ancestors exist
+        // Ensure all ancestors exist (creates parents before children)
         self.ensure_ancestors_exist(&name);
 
         let leaf_name = name.rsplit('/').next().unwrap_or(&name);
         let id = generate_slug(leaf_name);
+
+        // Look up parent's id from the map
+        let parent_id = self.parent_id_for(&name);
 
         self.yaks.insert(
             name.clone(),
@@ -71,6 +74,7 @@ impl YakMap {
         self.pending_events.push(YakEvent::Added(AddedEvent {
             name: name.clone(),
             id: id.clone(),
+            parent_id,
         }));
 
         if let Some(content) = context {
@@ -87,10 +91,15 @@ impl YakMap {
     fn ensure_ancestors_exist(&mut self, name: &str) {
         use crate::domain::get_ancestors;
 
-        for ancestor in get_ancestors(name) {
+        // Reverse so we create from root toward leaves (parent before child)
+        let mut ancestors = get_ancestors(name);
+        ancestors.reverse();
+
+        for ancestor in ancestors {
             if !self.yaks.contains_key(&ancestor) {
                 let leaf = ancestor.rsplit('/').next().unwrap_or(&ancestor);
                 let id = generate_slug(leaf);
+                let parent_id = self.parent_id_for(&ancestor);
                 self.yaks.insert(
                     ancestor.clone(),
                     YakState {
@@ -99,10 +108,20 @@ impl YakMap {
                         context: None,
                     },
                 );
-                self.pending_events
-                    .push(YakEvent::Added(AddedEvent { name: ancestor, id }));
+                self.pending_events.push(YakEvent::Added(AddedEvent {
+                    name: ancestor,
+                    id,
+                    parent_id,
+                }));
             }
         }
+    }
+
+    /// Look up the parent yak's id from the map, based on name-path hierarchy.
+    fn parent_id_for(&self, name: &str) -> Option<String> {
+        use crate::domain::hierarchy::get_parent;
+
+        get_parent(name).and_then(|parent_name| self.yaks.get(&parent_name).map(|s| s.id.clone()))
     }
 
     pub fn update_state(&mut self, name: String, state: String) -> Result<()> {
@@ -466,6 +485,7 @@ mod tests {
         map.pending_events.push(YakEvent::Added(AddedEvent {
             name: "test".to_string(),
             id: String::new(),
+            parent_id: None,
         }));
 
         let events = map.take_events();

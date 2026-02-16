@@ -314,6 +314,7 @@ mod tests {
             .append(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: "test-a1b2".to_string(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -331,6 +332,7 @@ mod tests {
             .append(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 

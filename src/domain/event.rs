@@ -69,6 +69,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "test yak".to_string(),
             id: "test-yak-a1b2".to_string(),
+            parent_id: None,
         });
         assert_eq!(
             event.format_message(),
@@ -90,6 +91,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
             id: "test-x1y2".to_string(),
+            parent_id: None,
         });
         let msg = event.format_message();
         let parsed = YakEvent::parse(&msg).unwrap();

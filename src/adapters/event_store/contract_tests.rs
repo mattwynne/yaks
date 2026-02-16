@@ -22,6 +22,7 @@ macro_rules! event_store_tests {
             let event = YakEvent::Added(AddedEvent {
                 name: "foo".to_string(),
                 id: String::new(),
+                parent_id: None,
             });
             store.append(&event).unwrap();
 
@@ -36,12 +37,14 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::Added(AddedEvent {
                     name: "foo".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "bar".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
 
@@ -56,12 +59,14 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::Added(AddedEvent {
                     name: "first".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "second".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
 
@@ -77,12 +82,14 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::Added(AddedEvent {
                     name: "foo".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: "bar".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
             store
@@ -116,6 +123,7 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::Added(AddedEvent {
                     name: "test".to_string(),
                     id: String::new(),
+                    parent_id: None,
                 }))
                 .unwrap();
             store

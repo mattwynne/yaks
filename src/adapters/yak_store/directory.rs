@@ -384,6 +384,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
             id: String::new(),
+            parent_id: None,
         });
 
         storage.on_event(&event).unwrap();
@@ -402,6 +403,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -425,6 +427,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -447,6 +450,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -471,6 +475,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -485,6 +490,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "my yak".to_string(),
             id: "my-yak-a1b2".to_string(),
+            parent_id: None,
         });
 
         storage.on_event(&event).unwrap();
@@ -508,6 +514,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test1".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 
@@ -515,6 +522,7 @@ mod tests {
             .on_event(&YakEvent::Added(AddedEvent {
                 name: "test2".to_string(),
                 id: String::new(),
+                parent_id: None,
             }))
             .unwrap();
 

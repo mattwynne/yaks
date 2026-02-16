@@ -29,6 +29,7 @@ mod tests {
         let event = YakEvent::Added(AddedEvent {
             name: "test".to_string(),
             id: String::new(),
+            parent_id: None,
         });
 
         listener.on_event(&event).unwrap();
