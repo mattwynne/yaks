@@ -4,7 +4,7 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemovedEvent {
-    pub name: String,
+    pub id: String,
 }
 
 impl EventFormat for RemovedEvent {
@@ -13,14 +13,14 @@ impl EventFormat for RemovedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\"", self.name)
+        format!("\"{}\"", self.id)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
-        anyhow::ensure!(!values.is_empty(), "Removed event requires a name");
+        anyhow::ensure!(!values.is_empty(), "Removed event requires an id");
         Ok(Self {
-            name: values[0].clone(),
+            id: values[0].clone(),
         })
     }
 }
@@ -32,7 +32,7 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = RemovedEvent {
-            name: "test yak".to_string(),
+            id: "test-yak-a1b2".to_string(),
         };
         let data = event.format_data();
         let parsed = RemovedEvent::parse_data(&data).unwrap();

@@ -4,7 +4,7 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateUpdatedEvent {
-    pub name: String,
+    pub id: String,
     pub state: String,
 }
 
@@ -14,17 +14,17 @@ impl EventFormat for StateUpdatedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\" \"{}\"", self.name, self.state)
+        format!("\"{}\" \"{}\"", self.id, self.state)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(
             values.len() >= 2,
-            "StateUpdated event requires name and state"
+            "StateUpdated event requires id and state"
         );
         Ok(Self {
-            name: values[0].clone(),
+            id: values[0].clone(),
             state: values[1].clone(),
         })
     }
@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = StateUpdatedEvent {
-            name: "test yak".to_string(),
+            id: "test-yak-a1b2".to_string(),
             state: "wip".to_string(),
         };
         let data = event.format_data();

@@ -4,7 +4,7 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenamedEvent {
-    pub old_name: String,
+    pub id: String,
     pub new_name: String,
 }
 
@@ -14,17 +14,14 @@ impl EventFormat for RenamedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\" \"{}\"", self.old_name, self.new_name)
+        format!("\"{}\" \"{}\"", self.id, self.new_name)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
-        anyhow::ensure!(
-            values.len() >= 2,
-            "Renamed event requires old and new names"
-        );
+        anyhow::ensure!(values.len() >= 2, "Renamed event requires id and new_name");
         Ok(Self {
-            old_name: values[0].clone(),
+            id: values[0].clone(),
             new_name: values[1].clone(),
         })
     }
@@ -37,8 +34,8 @@ mod tests {
     #[test]
     fn roundtrip() {
         let event = RenamedEvent {
-            old_name: "old name".to_string(),
-            new_name: "new name".to_string(),
+            id: "my-yak-a1b2".to_string(),
+            new_name: "better name".to_string(),
         };
         let data = event.format_data();
         let parsed = RenamedEvent::parse_data(&data).unwrap();

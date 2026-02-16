@@ -13,38 +13,42 @@ impl<T: WriteYakStore> EventListener for T {
                 parent_id,
             }) => {
                 self.create_yak(name, id, parent_id.as_deref())?;
-                self.write_field(name, STATE_FIELD, "todo")?;
-                self.write_field(name, NAME_FIELD, name)?;
+                // Use id for subsequent writes (storage resolves by id)
+                let key = if id.is_empty() {
+                    name.as_str()
+                } else {
+                    id.as_str()
+                };
+                self.write_field(key, STATE_FIELD, "todo")?;
+                self.write_field(key, NAME_FIELD, name)?;
             }
 
-            YakEvent::Removed(RemovedEvent { name }) => {
-                self.delete_yak(name)?;
+            YakEvent::Removed(RemovedEvent { id }) => {
+                self.delete_yak(id)?;
             }
 
-            YakEvent::Moved(MovedEvent { old_name, new_name }) => {
-                self.rename_yak(old_name, new_name)?;
-                self.write_field(new_name, NAME_FIELD, new_name)?;
+            YakEvent::Moved(MovedEvent { id, new_parent }) => {
+                self.reparent_yak(id, new_parent.as_deref())?;
             }
 
-            YakEvent::Renamed(RenamedEvent { old_name, new_name }) => {
-                self.rename_yak(old_name, new_name)?;
-                self.write_field(new_name, NAME_FIELD, new_name)?;
+            YakEvent::Renamed(RenamedEvent { id, new_name }) => {
+                self.write_field(id, NAME_FIELD, new_name)?;
             }
 
-            YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
-                self.write_field(name, CONTEXT_FIELD, content)?;
+            YakEvent::ContextUpdated(ContextUpdatedEvent { id, content }) => {
+                self.write_field(id, CONTEXT_FIELD, content)?;
             }
 
-            YakEvent::StateUpdated(StateUpdatedEvent { name, state }) => {
-                self.write_field(name, STATE_FIELD, state)?;
+            YakEvent::StateUpdated(StateUpdatedEvent { id, state }) => {
+                self.write_field(id, STATE_FIELD, state)?;
             }
 
             YakEvent::FieldUpdated(FieldUpdatedEvent {
-                name,
+                id,
                 field_name,
                 content,
             }) => {
-                self.write_field(name, field_name, content)?;
+                self.write_field(id, field_name, content)?;
             }
         }
         Ok(())

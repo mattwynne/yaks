@@ -4,8 +4,8 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedEvent {
-    pub old_name: String,
-    pub new_name: String,
+    pub id: String,
+    pub new_parent: Option<String>,
 }
 
 impl EventFormat for MovedEvent {
@@ -14,15 +14,23 @@ impl EventFormat for MovedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\" \"{}\"", self.old_name, self.new_name)
+        match &self.new_parent {
+            Some(parent) => format!("\"{}\" \"{}\"", self.id, parent),
+            None => format!("\"{}\"", self.id),
+        }
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
-        anyhow::ensure!(values.len() >= 2, "Moved event requires old and new names");
+        anyhow::ensure!(!values.is_empty(), "Moved event requires an id");
+        let new_parent = if values.len() >= 2 {
+            Some(values[1].clone())
+        } else {
+            None
+        };
         Ok(Self {
-            old_name: values[0].clone(),
-            new_name: values[1].clone(),
+            id: values[0].clone(),
+            new_parent,
         })
     }
 }
@@ -32,10 +40,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roundtrip() {
+    fn roundtrip_with_parent() {
         let event = MovedEvent {
-            old_name: "old name".to_string(),
-            new_name: "new name".to_string(),
+            id: "child-a1b2".to_string(),
+            new_parent: Some("new-parent-c3d4".to_string()),
+        };
+        let data = event.format_data();
+        let parsed = MovedEvent::parse_data(&data).unwrap();
+        assert_eq!(event, parsed);
+    }
+
+    #[test]
+    fn roundtrip_to_root() {
+        let event = MovedEvent {
+            id: "child-a1b2".to_string(),
+            new_parent: None,
         };
         let data = event.format_data();
         let parsed = MovedEvent::parse_data(&data).unwrap();

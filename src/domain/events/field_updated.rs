@@ -7,7 +7,7 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 /// from git, `content` will be empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldUpdatedEvent {
-    pub name: String,
+    pub id: String,
     pub field_name: String,
     pub content: String,
 }
@@ -18,17 +18,17 @@ impl EventFormat for FieldUpdatedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\" \"{}\"", self.name, self.field_name)
+        format!("\"{}\" \"{}\"", self.id, self.field_name)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(
             values.len() >= 2,
-            "FieldUpdated event requires name and field_name"
+            "FieldUpdated event requires id and field_name"
         );
         Ok(Self {
-            name: values[0].clone(),
+            id: values[0].clone(),
             field_name: values[1].clone(),
             content: String::new(),
         })
@@ -42,17 +42,17 @@ mod tests {
     #[test]
     fn format_excludes_content() {
         let event = FieldUpdatedEvent {
-            name: "test yak".to_string(),
+            id: "test-yak-a1b2".to_string(),
             field_name: "notes".to_string(),
             content: "stuff".to_string(),
         };
-        assert_eq!(event.format_data(), "\"test yak\" \"notes\"");
+        assert_eq!(event.format_data(), "\"test-yak-a1b2\" \"notes\"");
     }
 
     #[test]
     fn parse_sets_empty_content() {
-        let parsed = FieldUpdatedEvent::parse_data("\"test yak\" \"notes\"").unwrap();
-        assert_eq!(parsed.name, "test yak");
+        let parsed = FieldUpdatedEvent::parse_data("\"test-yak-a1b2\" \"notes\"").unwrap();
+        assert_eq!(parsed.id, "test-yak-a1b2");
         assert_eq!(parsed.field_name, "notes");
         assert_eq!(parsed.content, "");
     }

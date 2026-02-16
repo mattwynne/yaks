@@ -10,13 +10,27 @@ use std::sync::{Arc, RwLock};
 pub struct InMemoryStorage {
     // HashMap: yak_name -> HashMap of field_name -> field_content
     yaks: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+    // id -> name mapping for id-based lookups
+    id_to_name: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl InMemoryStorage {
     pub fn new() -> Self {
         Self {
             yaks: Arc::new(RwLock::new(HashMap::new())),
+            id_to_name: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Resolve a key (name or id) to the yak name used as HashMap key.
+    fn resolve_key(&self, key: &str) -> Option<String> {
+        let yaks = self.yaks.read().unwrap();
+        if yaks.contains_key(key) {
+            return Some(key.to_string());
+        }
+        // Try id→name lookup
+        let id_map = self.id_to_name.read().unwrap();
+        id_map.get(key).cloned()
     }
 }
 
@@ -27,7 +41,7 @@ impl Default for InMemoryStorage {
 }
 
 impl WriteYakStore for InMemoryStorage {
-    fn create_yak(&self, name: &str, _id: &str, _parent_id: Option<&str>) -> Result<()> {
+    fn create_yak(&self, name: &str, id: &str, _parent_id: Option<&str>) -> Result<()> {
         let mut yaks = self.yaks.write().unwrap();
 
         if yaks.contains_key(name) {
@@ -39,39 +53,127 @@ impl WriteYakStore for InMemoryStorage {
         fields.insert(CONTEXT_FIELD.to_string(), String::new());
         yaks.insert(name.to_string(), fields);
 
+        // Store id→name mapping
+        if !id.is_empty() {
+            let mut id_map = self.id_to_name.write().unwrap();
+            id_map.insert(id.to_string(), name.to_string());
+        }
+
         Ok(())
     }
 
-    fn delete_yak(&self, name: &str) -> Result<()> {
+    fn delete_yak(&self, key: &str) -> Result<()> {
+        let name = self.resolve_key(key).unwrap_or_else(|| key.to_string());
         let mut yaks = self.yaks.write().unwrap();
-        yaks.remove(name);
+        yaks.remove(&name);
         Ok(())
     }
 
     fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
+        let from_name = self.resolve_key(from).unwrap_or_else(|| from.to_string());
+        let to_name = self.resolve_key(to).unwrap_or_else(|| to.to_string());
         let mut yaks = self.yaks.write().unwrap();
 
-        if !yaks.contains_key(from) {
+        if !yaks.contains_key(&from_name) {
             anyhow::bail!("yak '{}' not found", from);
         }
 
-        if yaks.contains_key(to) {
+        if yaks.contains_key(&to_name) {
             anyhow::bail!("Yak '{}' already exists", to);
         }
 
-        if let Some(fields) = yaks.remove(from) {
-            yaks.insert(to.to_string(), fields);
+        if let Some(fields) = yaks.remove(&from_name) {
+            yaks.insert(to_name, fields);
         }
 
         Ok(())
     }
 
-    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
-        let mut yaks = self.yaks.write().unwrap();
+    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()> {
+        // Look up current name-path from id
+        let old_name = {
+            let id_map = self.id_to_name.read().unwrap();
+            id_map
+                .get(id)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?
+        };
 
+        // Extract leaf name from the old path
+        let leaf = old_name.rsplit('/').next().unwrap_or(&old_name);
+
+        // Build new name-path
+        let new_name = match new_parent_id {
+            Some(pid) => {
+                let id_map = self.id_to_name.read().unwrap();
+                let parent_name = id_map
+                    .get(pid)
+                    .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
+                format!("{}/{}", parent_name, leaf)
+            }
+            None => leaf.to_string(),
+        };
+
+        // Rename in storage
+        {
+            let mut yaks = self.yaks.write().unwrap();
+            if let Some(fields) = yaks.remove(&old_name) {
+                yaks.insert(new_name.clone(), fields);
+            }
+        }
+
+        // Update id→name mapping
+        {
+            let mut id_map = self.id_to_name.write().unwrap();
+            id_map.insert(id.to_string(), new_name);
+        }
+
+        Ok(())
+    }
+
+    fn write_field(&self, yak_key: &str, field_name: &str, content: &str) -> Result<()> {
+        let name = self
+            .resolve_key(yak_key)
+            .unwrap_or_else(|| yak_key.to_string());
+
+        // When updating the name field via id (not via name-path), also rename
+        // the HashMap key if the leaf name changed.
+        if field_name == crate::domain::NAME_FIELD && name != yak_key {
+            // yak_key is an id (not name), so this is an id-based update
+            // Extract leaf from both current key and content (content may be
+            // a full path like "parent/child" or just a leaf like "newname")
+            let current_leaf = name.rsplit('/').next().unwrap_or(&name);
+            let new_leaf = content.rsplit('/').next().unwrap_or(content);
+            let new_key = if current_leaf != new_leaf {
+                // Reconstruct the path: keep parent prefix, replace leaf
+                let parent = name.rsplit_once('/').map(|(p, _)| p);
+                match parent {
+                    Some(p) => format!("{}/{}", p, new_leaf),
+                    None => new_leaf.to_string(),
+                }
+            } else {
+                name.clone()
+            };
+            if new_key != name {
+                let mut yaks = self.yaks.write().unwrap();
+                if let Some(fields) = yaks.remove(&name) {
+                    let mut updated_fields = fields;
+                    updated_fields.insert(field_name.to_string(), content.to_string());
+                    yaks.insert(new_key.clone(), updated_fields);
+                }
+                // Update id→name mapping
+                let mut id_map = self.id_to_name.write().unwrap();
+                if let Some((_id, stored_name)) = id_map.iter_mut().find(|(_, v)| **v == name) {
+                    *stored_name = new_key;
+                }
+                return Ok(());
+            }
+        }
+
+        let mut yaks = self.yaks.write().unwrap();
         let fields = yaks
-            .get_mut(yak_name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_name))?;
+            .get_mut(&name)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_key))?;
 
         fields.insert(field_name.to_string(), content.to_string());
 
@@ -105,8 +207,18 @@ impl ReadYakStore for InMemoryStorage {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "todo".to_string());
 
+        // Look up actual slug id from id_to_name (reverse: find key where value == name)
+        let id = {
+            let id_map = self.id_to_name.read().unwrap();
+            id_map
+                .iter()
+                .find(|(_, v)| **v == name)
+                .map(|(k, _)| k.clone())
+                .unwrap_or_else(|| name.to_string()) // fallback for old-format (no id)
+        };
+
         Ok(Yak {
-            id: name.to_string(),
+            id,
             name: name.to_string(),
             state,
             context,

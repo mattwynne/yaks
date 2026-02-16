@@ -94,7 +94,7 @@ macro_rules! event_store_tests {
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    name: "foo".to_string(),
+                    id: "foo".to_string(),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
@@ -128,32 +128,32 @@ macro_rules! event_store_tests {
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    name: "test".to_string(),
+                    id: "test".to_string(),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Moved(MovedEvent {
-                    old_name: "test".to_string(),
-                    new_name: "test2".to_string(),
+                    id: "test".to_string(),
+                    new_parent: Some("test2".to_string()),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                    name: "test2".to_string(),
+                    id: "test2".to_string(),
                     content: "some context".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    name: "test2".to_string(),
+                    id: "test2".to_string(),
                     field_name: "notes".to_string(),
                     content: "stuff".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Removed(RemovedEvent {
-                    name: "test2".to_string(),
+                    id: "test2".to_string(),
                 }))
                 .unwrap();
 

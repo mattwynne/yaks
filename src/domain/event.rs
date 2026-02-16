@@ -50,12 +50,12 @@ impl YakEvent {
     pub fn yak_name(&self) -> &str {
         match self {
             Self::Added(e) => &e.name,
-            Self::Removed(e) => &e.name,
-            Self::Moved(e) => &e.old_name,
-            Self::Renamed(e) => &e.old_name,
-            Self::ContextUpdated(e) => &e.name,
-            Self::StateUpdated(e) => &e.name,
-            Self::FieldUpdated(e) => &e.name,
+            Self::Removed(e) => &e.id,
+            Self::Moved(e) => &e.id,
+            Self::Renamed(e) => &e.id,
+            Self::ContextUpdated(e) => &e.id,
+            Self::StateUpdated(e) => &e.id,
+            Self::FieldUpdated(e) => &e.id,
         }
     }
 }
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn format_message_state_updated() {
         let event = YakEvent::StateUpdated(StateUpdatedEvent {
-            name: "test".to_string(),
+            id: "test".to_string(),
             state: "wip".to_string(),
         });
         assert_eq!(event.format_message(), "StateUpdated: \"test\" \"wip\"");
@@ -106,9 +106,9 @@ mod tests {
     #[test]
     fn yak_name_returns_correct_name() {
         let event = YakEvent::Moved(MovedEvent {
-            old_name: "old".to_string(),
-            new_name: "new".to_string(),
+            id: "old-a1b2".to_string(),
+            new_parent: Some("new-parent-c3d4".to_string()),
         });
-        assert_eq!(event.yak_name(), "old");
+        assert_eq!(event.yak_name(), "old-a1b2");
     }
 }

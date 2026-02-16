@@ -22,6 +22,9 @@ pub trait WriteYakStore {
     /// Rename a yak
     fn rename_yak(&self, from: &str, to: &str) -> Result<()>;
 
+    /// Move a yak to a new parent (or to root if parent_id is None)
+    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()>;
+
     /// Write a field for a yak
     fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()>;
 }

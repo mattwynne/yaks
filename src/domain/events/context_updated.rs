@@ -7,7 +7,7 @@ use crate::domain::event_format::{parse_quoted_values, EventFormat};
 /// back from git, `content` will be empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContextUpdatedEvent {
-    pub name: String,
+    pub id: String,
     pub content: String,
 }
 
@@ -17,14 +17,14 @@ impl EventFormat for ContextUpdatedEvent {
     }
 
     fn format_data(&self) -> String {
-        format!("\"{}\"", self.name)
+        format!("\"{}\"", self.id)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
-        anyhow::ensure!(!values.is_empty(), "ContextUpdated event requires a name");
+        anyhow::ensure!(!values.is_empty(), "ContextUpdated event requires an id");
         Ok(Self {
-            name: values[0].clone(),
+            id: values[0].clone(),
             content: String::new(),
         })
     }
@@ -37,16 +37,16 @@ mod tests {
     #[test]
     fn format_excludes_content() {
         let event = ContextUpdatedEvent {
-            name: "test yak".to_string(),
+            id: "test-yak-a1b2".to_string(),
             content: "some long context".to_string(),
         };
-        assert_eq!(event.format_data(), "\"test yak\"");
+        assert_eq!(event.format_data(), "\"test-yak-a1b2\"");
     }
 
     #[test]
     fn parse_sets_empty_content() {
-        let parsed = ContextUpdatedEvent::parse_data("\"test yak\"").unwrap();
-        assert_eq!(parsed.name, "test yak");
+        let parsed = ContextUpdatedEvent::parse_data("\"test-yak-a1b2\"").unwrap();
+        assert_eq!(parsed.id, "test-yak-a1b2");
         assert_eq!(parsed.content, "");
     }
 }

@@ -91,15 +91,22 @@ impl DirectoryStorage {
         Ok(())
     }
 
-    fn yak_dir(&self, name: &str) -> PathBuf {
+    /// Resolve a yak's directory by name or id.
+    /// Tries: direct path, resolve by id, resolve by name (in that order).
+    fn yak_dir(&self, key: &str) -> PathBuf {
         // Try direct path first (backward compat: dir name == yak name)
-        let direct = self.base_path.join(name);
+        let direct = self.base_path.join(key);
         if direct.exists() {
             return direct;
         }
 
-        // Scan for id-based directory whose name file matches
-        if let Some(dir) = self.resolve_by_name(name) {
+        // Try resolve by id (finds nested id-based dirs)
+        if let Some(dir) = self.resolve_by_id(key) {
+            return dir;
+        }
+
+        // Try resolve by name (scans name files)
+        if let Some(dir) = self.resolve_by_name(key) {
             return dir;
         }
 
@@ -154,6 +161,43 @@ impl DirectoryStorage {
 
     fn field_path(&self, name: &str, field_name: &str) -> PathBuf {
         self.yak_dir(name).join(field_name)
+    }
+
+    /// Build the full hierarchical name for a yak at the given path.
+    /// Walks up parent directories, collecting leaf names from name files,
+    /// so the directory structure determines hierarchy.
+    fn build_full_name(&self, path: &std::path::Path) -> String {
+        let mut parts = Vec::new();
+        let mut current = path.to_path_buf();
+
+        loop {
+            let name_content = fs::read_to_string(current.join(NAME_FIELD)).unwrap_or_else(|_| {
+                current
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            });
+            // Always extract just the leaf - the name file may contain a full
+            // path (old format) or just the leaf (new format after rename/move).
+            let leaf_name = name_content
+                .rsplit('/')
+                .next()
+                .unwrap_or(&name_content)
+                .to_string();
+            parts.push(leaf_name);
+
+            // Move up to parent directory
+            match current.parent() {
+                Some(parent) if parent != self.base_path && parent.join(CONTEXT_FIELD).exists() => {
+                    current = parent.to_path_buf();
+                }
+                _ => break,
+            }
+        }
+
+        parts.reverse();
+        parts.join("/")
     }
 }
 
@@ -227,6 +271,29 @@ impl WriteYakStore for DirectoryStorage {
         Ok(())
     }
 
+    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()> {
+        let current_dir = self
+            .resolve_by_id(id)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
+
+        let new_parent_dir = match new_parent_id {
+            Some(pid) => self
+                .resolve_by_id(pid)
+                .ok_or_else(|| anyhow::anyhow!("parent yak '{}' not found", pid))?,
+            None => self.base_path.clone(),
+        };
+
+        let new_dir = new_parent_dir.join(id);
+        if new_dir.exists() {
+            anyhow::bail!("Target location already exists for '{}'", id);
+        }
+
+        fs::rename(&current_dir, &new_dir)
+            .with_context(|| format!("Failed to move yak '{}' to new parent", id))?;
+
+        Ok(())
+    }
+
     fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
         let dir = self.yak_dir(yak_name);
         if !dir.exists() {
@@ -246,9 +313,8 @@ impl ReadYakStore for DirectoryStorage {
             anyhow::bail!("yak '{name}' not found");
         }
 
-        // Read display name from name file, fall back to directory name
-        let display_name =
-            fs::read_to_string(dir.join(NAME_FIELD)).unwrap_or_else(|_| name.to_string());
+        // Build hierarchical name from directory structure and leaf name files
+        let display_name = self.build_full_name(&dir);
 
         // Derive id from directory name (last component of path)
         let id = dir
@@ -297,13 +363,8 @@ impl ReadYakStore for DirectoryStorage {
                 continue;
             }
 
-            // Read display name from name file, fall back to relative path
-            let display_name = fs::read_to_string(path.join(NAME_FIELD)).unwrap_or_else(|_| {
-                path.strip_prefix(&self.base_path)
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .to_string()
-            });
+            // Build hierarchical name from directory structure and leaf name files
+            let display_name = self.build_full_name(path);
 
             // Derive id from directory name (last component)
             let id = path
@@ -441,7 +502,7 @@ mod tests {
         // Then update context
         storage
             .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                name: "test".to_string(),
+                id: "test".to_string(),
                 content: "new context".to_string(),
             }))
             .unwrap();
@@ -464,7 +525,7 @@ mod tests {
 
         storage
             .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
-                name: "test".to_string(),
+                id: "test".to_string(),
                 state: "wip".to_string(),
             }))
             .unwrap();
@@ -487,7 +548,7 @@ mod tests {
 
         storage
             .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                name: "test".to_string(),
+                id: "test".to_string(),
                 content: "context".to_string(),
             }))
             .unwrap();
@@ -562,6 +623,32 @@ mod tests {
     }
 
     #[test]
+    fn test_state_update_by_id() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // Add yak with id
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: "my yak".to_string(),
+                id: "my-yak-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Update state using id
+        storage
+            .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
+                id: "my-yak-a1b2".to_string(),
+                state: "wip".to_string(),
+            }))
+            .unwrap();
+
+        // Verify
+        let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
+        assert_eq!(yak.state, "wip");
+    }
+
+    #[test]
     fn test_child_yak_nested_under_parent_directory() {
         let (mut storage, _temp) = setup_test_storage();
 
@@ -599,6 +686,6 @@ mod tests {
 
         let child = ReadYakStore::get_yak(&storage, "child").unwrap();
         assert_eq!(child.id, "child-c3d4");
-        assert_eq!(child.name, "child");
+        assert_eq!(child.name, "parent/child");
     }
 }

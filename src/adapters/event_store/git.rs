@@ -160,52 +160,39 @@ impl GitEventStore {
                 self.set_yak_in_root(current_tree, &e.name, Some(yak_tree_oid))
             }
 
-            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, &e.name, None),
+            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, &e.id, None),
 
             YakEvent::Moved(e) => {
-                // Get old subtree
-                let old_subtree_oid = self
-                    .get_yak_subtree(current_tree, &e.old_name)?
-                    .map(|t| t.id());
+                // Move yak subtree to new parent
+                // For now, just update the tree location
+                let old_subtree_oid = self.get_yak_subtree(current_tree, &e.id)?.map(|t| t.id());
 
-                // Remove old, add new
-                let intermediate = self.set_yak_in_root(current_tree, &e.old_name, None)?;
+                let intermediate = self.set_yak_in_root(current_tree, &e.id, None)?;
                 let intermediate_tree = self.repo.find_tree(intermediate)?;
-                let with_new =
-                    self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)?;
 
-                // Update name file to reflect the new name
-                let with_new_tree = self.repo.find_tree(with_new)?;
-                self.update_yak_file(Some(&with_new_tree), &e.new_name, "name", &e.new_name)
+                // Place under new parent if specified
+                let target = match &e.new_parent {
+                    Some(parent) => format!("{}/{}", parent, e.id),
+                    None => e.id.clone(),
+                };
+                self.set_yak_in_root(Some(&intermediate_tree), &target, old_subtree_oid)
             }
 
             YakEvent::Renamed(e) => {
-                // Get old subtree
-                let old_subtree_oid = self
-                    .get_yak_subtree(current_tree, &e.old_name)?
-                    .map(|t| t.id());
-
-                // Remove old, add new
-                let intermediate = self.set_yak_in_root(current_tree, &e.old_name, None)?;
-                let intermediate_tree = self.repo.find_tree(intermediate)?;
-                let with_new =
-                    self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)?;
-
-                // Update name file to reflect the new name
-                let with_new_tree = self.repo.find_tree(with_new)?;
-                self.update_yak_file(Some(&with_new_tree), &e.new_name, "name", &e.new_name)
+                // Update name file for renamed yak
+                self.update_yak_file(current_tree, &e.id, "name", &e.new_name)
             }
 
             YakEvent::ContextUpdated(e) => {
-                self.update_yak_file(current_tree, &e.name, "context.md", &e.content)
+                self.update_yak_file(current_tree, &e.id, "context.md", &e.content)
             }
 
             YakEvent::StateUpdated(e) => {
-                self.update_yak_file(current_tree, &e.name, "state", &e.state)
+                self.update_yak_file(current_tree, &e.id, "state", &e.state)
             }
 
             YakEvent::FieldUpdated(e) => {
-                self.update_yak_file(current_tree, &e.name, &e.field_name, &e.content)
+                self.update_yak_file(current_tree, &e.id, &e.field_name, &e.content)
             }
         }
     }
