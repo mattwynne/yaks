@@ -14,7 +14,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn create_yak_is_retrievable() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let yak = ReadYakStore::get_yak(&store, "test-yak").unwrap();
             assert_eq!(yak.name, "test-yak");
         }
@@ -22,8 +22,8 @@ macro_rules! yak_store_tests {
         #[test]
         fn create_duplicate_yak_errors() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
-            let result = store.create_yak("test-yak", "");
+            store.create_yak("test-yak", "", None).unwrap();
+            let result = store.create_yak("test-yak", "", None);
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("already exists"));
         }
@@ -31,7 +31,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn delete_yak_removes_it() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             store.delete_yak("test-yak").unwrap();
             assert!(!ReadYakStore::yak_exists(&store, "test-yak"));
         }
@@ -46,7 +46,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn rename_yak_moves_with_fields() {
             let (store, _guard) = $create_store;
-            store.create_yak("old-name", "").unwrap();
+            store.create_yak("old-name", "", None).unwrap();
             store
                 .write_field("old-name", CONTEXT_FIELD, "Context text")
                 .unwrap();
@@ -74,8 +74,8 @@ macro_rules! yak_store_tests {
         #[test]
         fn rename_to_existing_yak_errors() {
             let (store, _guard) = $create_store;
-            store.create_yak("yak1", "").unwrap();
-            store.create_yak("yak2", "").unwrap();
+            store.create_yak("yak1", "", None).unwrap();
+            store.create_yak("yak2", "", None).unwrap();
             let result = store.rename_yak("yak1", "yak2");
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("already exists"));
@@ -84,7 +84,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn write_field_is_readable() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             store
                 .write_field("test-yak", "notes", "Field content")
                 .unwrap();
@@ -95,7 +95,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn write_field_with_dots_in_name() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             store
                 .write_field("test-yak", "notes.txt", "Text file")
                 .unwrap();
@@ -116,7 +116,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn get_yak_defaults() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let yak = ReadYakStore::get_yak(&store, "test-yak").unwrap();
             assert_eq!(yak.state, "todo");
             assert_eq!(yak.context, None);
@@ -134,8 +134,8 @@ macro_rules! yak_store_tests {
         #[test]
         fn list_yaks_returns_all() {
             let (store, _guard) = $create_store;
-            store.create_yak("yak1", "").unwrap();
-            store.create_yak("yak2", "").unwrap();
+            store.create_yak("yak1", "", None).unwrap();
+            store.create_yak("yak2", "", None).unwrap();
             let yaks = ReadYakStore::list_yaks(&store).unwrap();
             assert_eq!(yaks.len(), 2);
         }
@@ -150,7 +150,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn yak_exists_returns_correct_value() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             assert!(ReadYakStore::yak_exists(&store, "test-yak"));
             assert!(!ReadYakStore::yak_exists(&store, "missing"));
         }
@@ -158,7 +158,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_exact_match() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let result = ReadYakStore::find_yak(&store, "test-yak").unwrap();
             assert_eq!(result, "test-yak");
         }
@@ -166,7 +166,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_fuzzy_match() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let result = ReadYakStore::find_yak(&store, "test").unwrap();
             assert_eq!(result, "test-yak");
         }
@@ -174,7 +174,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_case_insensitive() {
             let (store, _guard) = $create_store;
-            store.create_yak("Fix the Bug", "").unwrap();
+            store.create_yak("Fix the Bug", "", None).unwrap();
             let result = ReadYakStore::find_yak(&store, "the bug").unwrap();
             assert_eq!(result, "Fix the Bug");
         }
@@ -182,8 +182,8 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_matches_leaf_not_full_path() {
             let (store, _guard) = $create_store;
-            store.create_yak("parent", "").unwrap();
-            store.create_yak("parent/child1", "").unwrap();
+            store.create_yak("parent", "", None).unwrap();
+            store.create_yak("parent/child1", "", None).unwrap();
 
             let result = ReadYakStore::find_yak(&store, "parent").unwrap();
             assert_eq!(result, "parent");
@@ -195,7 +195,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_leaf_only_no_ambiguity() {
             let (store, _guard) = $create_store;
-            store.create_yak("parent/child1", "").unwrap();
+            store.create_yak("parent/child1", "", None).unwrap();
 
             let result = ReadYakStore::find_yak(&store, "parent");
             assert!(result.is_err());
@@ -205,8 +205,8 @@ macro_rules! yak_store_tests {
         #[test]
         fn find_yak_ambiguous_errors() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak1", "").unwrap();
-            store.create_yak("test-yak2", "").unwrap();
+            store.create_yak("test-yak1", "", None).unwrap();
+            store.create_yak("test-yak2", "", None).unwrap();
             let result = ReadYakStore::find_yak(&store, "test");
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("ambiguous"));
@@ -223,7 +223,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn read_nonexistent_field_errors() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let result = ReadYakStore::read_field(&store, "test-yak", "nonexistent");
             assert!(result.is_err());
         }
@@ -233,7 +233,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn state_done_via_field() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             store.write_field("test-yak", STATE_FIELD, "done").unwrap();
             let yak = ReadYakStore::get_yak(&store, "test-yak").unwrap();
             assert!(yak.is_done());
@@ -243,7 +243,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn context_via_field() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             store
                 .write_field("test-yak", CONTEXT_FIELD, "Some context")
                 .unwrap();
@@ -254,7 +254,7 @@ macro_rules! yak_store_tests {
         #[test]
         fn empty_context_is_none() {
             let (store, _guard) = $create_store;
-            store.create_yak("test-yak", "").unwrap();
+            store.create_yak("test-yak", "", None).unwrap();
             let yak = ReadYakStore::get_yak(&store, "test-yak").unwrap();
             assert_eq!(yak.context, None);
         }

@@ -27,7 +27,7 @@ impl Default for InMemoryStorage {
 }
 
 impl WriteYakStore for InMemoryStorage {
-    fn create_yak(&self, name: &str, _id: &str) -> Result<()> {
+    fn create_yak(&self, name: &str, _id: &str, _parent_id: Option<&str>) -> Result<()> {
         let mut yaks = self.yaks.write().unwrap();
 
         if yaks.contains_key(name) {
@@ -183,7 +183,7 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         // Create initial yak
-        storage.create_yak("yak0", "").unwrap();
+        storage.create_yak("yak0", "", None).unwrap();
 
         let mut handles = vec![];
 
@@ -191,7 +191,9 @@ mod tests {
         for i in 1..=5 {
             let storage_clone = storage.clone();
             let handle = thread::spawn(move || {
-                storage_clone.create_yak(&format!("yak{}", i), "").unwrap();
+                storage_clone
+                    .create_yak(&format!("yak{}", i), "", None)
+                    .unwrap();
             });
             handles.push(handle);
         }

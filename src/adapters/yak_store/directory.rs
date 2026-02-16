@@ -107,21 +107,44 @@ impl DirectoryStorage {
         direct
     }
 
-    /// Scan top-level directories for one whose name file matches the given name.
-    fn resolve_by_name(&self, name: &str) -> Option<PathBuf> {
-        let base = &self.base_path;
-        if !base.exists() {
+    /// Find a yak directory by its id (the directory's own name), searching recursively.
+    fn resolve_by_id(&self, id: &str) -> Option<PathBuf> {
+        if !self.base_path.exists() {
             return None;
         }
-        for entry in fs::read_dir(base).ok()?.flatten() {
+        for entry in WalkDir::new(&self.base_path)
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| e.file_type().is_dir())
+        {
+            let entry = entry.ok()?;
             let path = entry.path();
-            if path.is_dir() {
-                let name_file = path.join(NAME_FIELD);
-                if name_file.exists() {
-                    if let Ok(stored_name) = fs::read_to_string(&name_file) {
-                        if stored_name == name {
-                            return Some(path);
-                        }
+            if path.file_name().and_then(|n| n.to_str()) == Some(id)
+                && path.join(CONTEXT_FIELD).exists()
+            {
+                return Some(path.to_path_buf());
+            }
+        }
+        None
+    }
+
+    /// Scan directories recursively for one whose name file matches the given name.
+    fn resolve_by_name(&self, name: &str) -> Option<PathBuf> {
+        if !self.base_path.exists() {
+            return None;
+        }
+        for entry in WalkDir::new(&self.base_path)
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| e.file_type().is_dir())
+        {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let name_file = path.join(NAME_FIELD);
+            if name_file.exists() {
+                if let Ok(stored_name) = fs::read_to_string(&name_file) {
+                    if stored_name == name {
+                        return Some(path.to_path_buf());
                     }
                 }
             }
@@ -135,11 +158,19 @@ impl DirectoryStorage {
 }
 
 impl WriteYakStore for DirectoryStorage {
-    fn create_yak(&self, name: &str, id: &str) -> Result<()> {
+    fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()> {
         // Use id as directory name if available, otherwise fall back to name
         let dir_name = if id.is_empty() { name } else { id };
 
-        let dir = self.base_path.join(dir_name);
+        // Determine parent directory: base_path or parent's directory
+        let parent_dir = match parent_id {
+            Some(pid) => self
+                .resolve_by_id(pid)
+                .ok_or_else(|| anyhow::anyhow!("Parent yak '{}' not found", pid))?,
+            None => self.base_path.clone(),
+        };
+
+        let dir = parent_dir.join(dir_name);
         if dir.join(CONTEXT_FIELD).exists() {
             anyhow::bail!("Yak '{}' already exists", name);
         }
@@ -528,5 +559,46 @@ mod tests {
 
         let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 2);
+    }
+
+    #[test]
+    fn test_child_yak_nested_under_parent_directory() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // Add parent
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: "parent".to_string(),
+                id: "parent-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Add child under parent
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: "child".to_string(),
+                id: "child-c3d4".to_string(),
+                parent_id: Some("parent-a1b2".to_string()),
+            }))
+            .unwrap();
+
+        // Child directory should be nested under parent's id-based directory
+        assert!(
+            storage
+                .base_path
+                .join("parent-a1b2")
+                .join("child-c3d4")
+                .exists(),
+            "Expected child directory nested under parent"
+        );
+
+        // Both yaks should be retrievable
+        let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
+        assert_eq!(parent.id, "parent-a1b2");
+
+        let child = ReadYakStore::get_yak(&storage, "child").unwrap();
+        assert_eq!(child.id, "child-c3d4");
+        assert_eq!(child.name, "child");
     }
 }
