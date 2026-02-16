@@ -22,6 +22,11 @@ impl<T: WriteYakStore> EventListener for T {
                 self.write_field(new_name, NAME_FIELD, new_name)?;
             }
 
+            YakEvent::Renamed(RenamedEvent { old_name, new_name }) => {
+                self.rename_yak(old_name, new_name)?;
+                self.write_field(new_name, NAME_FIELD, new_name)?;
+            }
+
             YakEvent::ContextUpdated(ContextUpdatedEvent { name, content }) => {
                 self.write_field(name, CONTEXT_FIELD, content)?;
             }

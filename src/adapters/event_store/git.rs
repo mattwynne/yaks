@@ -179,6 +179,23 @@ impl GitEventStore {
                 self.update_yak_file(Some(&with_new_tree), &e.new_name, "name", &e.new_name)
             }
 
+            YakEvent::Renamed(e) => {
+                // Get old subtree
+                let old_subtree_oid = self
+                    .get_yak_subtree(current_tree, &e.old_name)?
+                    .map(|t| t.id());
+
+                // Remove old, add new
+                let intermediate = self.set_yak_in_root(current_tree, &e.old_name, None)?;
+                let intermediate_tree = self.repo.find_tree(intermediate)?;
+                let with_new =
+                    self.set_yak_in_root(Some(&intermediate_tree), &e.new_name, old_subtree_oid)?;
+
+                // Update name file to reflect the new name
+                let with_new_tree = self.repo.find_tree(with_new)?;
+                self.update_yak_file(Some(&with_new_tree), &e.new_name, "name", &e.new_name)
+            }
+
             YakEvent::ContextUpdated(e) => {
                 self.update_yak_file(current_tree, &e.name, "context.md", &e.content)
             }

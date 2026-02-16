@@ -48,3 +48,28 @@ Feature: Move and rename yaks
         - [todo] parent
           - [todo] child-yak
         """
+
+  Rule: Renaming emits a Renamed event
+    When the destination is a new name at the same hierarchy level,
+    the operation is a rename, not a move.
+
+    Example: Bare rename emits Renamed event in the log
+      Given I have a clean git repository
+      And I add the yak "old name"
+      When I move the yak "old name" to "new name"
+      And I run yx log
+      Then the output should include "Renamed"
+      And the output should not include "Moved"
+
+  Rule: Hierarchy change emits a Moved event
+    When the destination has a different parent than the source,
+    the operation is a move, not a rename.
+
+    Example: Moving to a new parent emits Moved event
+      Given I have a clean git repository
+      And I add the yak "child"
+      And I add the yak "parent"
+      When I move the yak "child" to "parent/child"
+      And I run yx log
+      Then the output should include "Moved"
+      And the output should not include "Renamed"
