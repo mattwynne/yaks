@@ -12,6 +12,9 @@ pub trait TestWorld {
     /// Add a yak with the given name
     fn add_yak(&mut self, name: &str) -> Result<()>;
 
+    /// Add a yak that blocks the given parent (--blocks flag)
+    fn add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()>;
+
     /// Mark a yak as done
     fn done_yak(&mut self, name: &str) -> Result<()>;
 
@@ -29,6 +32,9 @@ pub trait TestWorld {
 
     /// Try to add a yak - captures result without bailing on failure
     fn try_add_yak(&mut self, name: &str) -> Result<()>;
+
+    /// Try to add a yak that blocks a parent - captures result without bailing on failure
+    fn try_add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()>;
 
     /// Remove a yak by name
     fn remove_yak(&mut self, name: &str) -> Result<()>;

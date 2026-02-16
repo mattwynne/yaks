@@ -134,11 +134,13 @@ mod tests {
         event_bus.register(Box::new(storage.clone()));
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        AddYak::new("parent").execute(&mut app).unwrap();
-        AddYak::new("parent/child").execute(&mut app).unwrap();
-        AddYak::new("parent/child/grandchild")
-            .execute(&mut app)
-            .unwrap();
+        // Add hierarchical yaks directly via yak_map (bypasses name validation)
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak("parent".to_string(), None)?;
+            yak_map.add_yak("parent/child".to_string(), None)?;
+            yak_map.add_yak("parent/child/grandchild".to_string(), None)
+        })
+        .unwrap();
 
         SetState::new("parent", "done")
             .with_recursive(true)

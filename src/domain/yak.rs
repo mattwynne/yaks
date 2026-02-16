@@ -27,23 +27,21 @@ impl Yak {
     }
 }
 
-/// Validate a yak name
-/// Rejects names containing forbidden characters: \ : * ? | < > "
-/// Slashes (/) are allowed for hierarchical yaks (e.g., "dx/rust")
+/// Validate a yak name provided by the user.
+/// Rejects names containing forbidden characters: / \ : * ? | < > "
+/// Hierarchy is created via --blocks, not by embedding / in names.
 pub fn validate_yak_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Yak name cannot be empty".to_string());
     }
 
-    // Check for forbidden characters (matches bash version)
-    // Forbidden: \ : * ? | < > "
-    // Allowed: / (for hierarchy)
-    const FORBIDDEN_CHARS: &[char] = &['\\', ':', '*', '?', '|', '<', '>', '"'];
+    // Forbidden: / \ : * ? | < > "
+    const FORBIDDEN_CHARS: &[char] = &['/', '\\', ':', '*', '?', '|', '<', '>', '"'];
 
     for c in FORBIDDEN_CHARS {
         if name.contains(*c) {
             return Err(
-                "Invalid yak name: contains forbidden characters (\\ : * ? | < > \")".to_string(),
+                "Invalid yak name: contains forbidden characters (/ \\ : * ? | < > \")".to_string(),
             );
         }
     }
@@ -75,7 +73,7 @@ mod tests {
     #[test]
     fn test_validate_yak_name_valid() {
         assert!(validate_yak_name("test").is_ok());
-        assert!(validate_yak_name("dx/rust").is_ok());
+        assert!(validate_yak_name("dx-rust").is_ok());
     }
 
     #[test]
@@ -95,7 +93,7 @@ mod tests {
         assert!(validate_yak_name("test>name").is_err());
         assert!(validate_yak_name("test\"name").is_err());
 
-        // Slash should be allowed (for hierarchy)
-        assert!(validate_yak_name("test/name").is_ok());
+        // Slash is also forbidden (use --blocks for hierarchy)
+        assert!(validate_yak_name("test/name").is_err());
     }
 }

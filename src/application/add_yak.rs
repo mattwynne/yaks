@@ -1,12 +1,14 @@
 // Use case: Add a new yak
 
 use anyhow::Result;
+use crate::domain::validate_yak_name;
 
 use super::{Application, UseCase};
 
 /// AddYak use case - creates a new yak
 pub struct AddYak {
     name: String,
+    parent: Option<String>,
 }
 
 impl AddYak {
@@ -14,13 +16,36 @@ impl AddYak {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
+            parent: None,
         }
+    }
+
+    /// Set the parent yak (--blocks flag)
+    pub fn with_parent(mut self, parent: Option<&str>) -> Self {
+        self.parent = parent.map(|s| s.to_string());
+        self
     }
 
     /// Execute the use case with the application's infrastructure
     pub fn execute(&self, app: &mut Application) -> Result<()> {
+        // Validate user-provided name
+        validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
+
+        // Resolve the parent if specified
+        let resolved_parent = if let Some(ref parent_name) = self.parent {
+            Some(app.store.find_yak(parent_name)?)
+        } else {
+            None
+        };
+
+        // Build the full storage name
+        let full_name = match resolved_parent {
+            Some(ref parent) => format!("{}/{}", parent, self.name),
+            None => self.name.clone(),
+        };
+
         // Generate template
-        let template = self.generate_context_template()?;
+        let template = format!("# {}\n\n", self.name);
 
         // Request content via input port
         let context = app
@@ -28,46 +53,7 @@ impl AddYak {
             .request_content(None, Some(&template))?
             .filter(|content| !content.trim().is_empty());
 
-        app.with_yak_map(|yak_map| yak_map.add_yak(self.name.clone(), context))
-    }
-
-    fn generate_context_template(&self) -> Result<String> {
-        // Parse the yak hierarchy (e.g., "make tea/add milk/go to shops")
-        let parts: Vec<&str> = self.name.split('/').collect();
-
-        if parts.len() == 1 {
-            // Simple yak, no parents
-            return Ok(format!("# {}\n\n", self.name));
-        }
-
-        // Nested yak - generate template with parent chain
-        let leaf = parts.last().unwrap();
-        let mut template = format!("# {}\n\nWhy?\n\n", leaf);
-
-        // Build the parent chain explanation
-        for i in 0..parts.len() - 1 {
-            let parent_path = parts[0..=i].join("/");
-            let parent_name = parts[i];
-
-            if i == 0 {
-                template.push_str(&format!(
-                    "* We want to *{}* (see `yx context \"{}\"`)\n",
-                    parent_name, parent_path
-                ));
-            } else {
-                let prev_parent = parts[i - 1];
-                template.push_str(&format!(
-                    "* to {}, we need to *{}* (see `yx context \"{}\"`)\n",
-                    prev_parent, parent_name, parent_path
-                ));
-            }
-        }
-
-        // Add the final item explaining the current yak
-        let last_parent = parts[parts.len() - 2];
-        template.push_str(&format!("* to {}, we need to *{}*\n", last_parent, leaf));
-
-        Ok(template)
+        app.with_yak_map(|yak_map| yak_map.add_yak(full_name, context))
     }
 }
 
@@ -121,22 +107,37 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_context_template_simple_yak() {
-        let use_case = AddYak::new("simple-yak");
-        let template = use_case.generate_context_template().unwrap();
-        assert_eq!(template, "# simple-yak\n\n");
+    fn test_add_yak_with_parent() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("parent").execute(&mut app).unwrap();
+        AddYak::new("child").with_parent(Some("parent")).execute(&mut app).unwrap();
+
+        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
     }
 
     #[test]
-    fn test_generate_context_template_nested_yak() {
-        let use_case = AddYak::new("make tea/add milk/go to shops");
-        let template = use_case.generate_context_template().unwrap();
+    fn test_add_yak_rejects_slash_in_name() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
 
-        let expected = "# go to shops\n\nWhy?\n\n\
-            * We want to *make tea* (see `yx context \"make tea\"`)\n\
-            * to make tea, we need to *add milk* (see `yx context \"make tea/add milk\"`)\n\
-            * to add milk, we need to *go to shops*\n";
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
 
-        assert_eq!(template, expected);
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        let result = AddYak::new("foo/bar").execute(&mut app);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid yak name"));
     }
 }

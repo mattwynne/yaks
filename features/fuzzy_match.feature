@@ -7,9 +7,10 @@ Feature: Fuzzy match on yak names
 
     Example: Marking a yak done by unique substring
       Given I have a clean git repository
-      And I add the yak "ideas/buy a pony"
-      And I add the yak "ideas/fix the build"
-      And I add the yak "ideas/fix the fridge"
+      And I add the yak "ideas"
+      And I add the yak "buy a pony" blocking "ideas"
+      And I add the yak "fix the build" blocking "ideas"
+      And I add the yak "fix the fridge" blocking "ideas"
       And I mark the yak "build" as done
       When I list the yaks in "markdown" format
       Then the output should be:
@@ -24,9 +25,10 @@ Feature: Fuzzy match on yak names
 
     Example: Failing with an ambiguous match error
       Given I have a clean git repository
-      And I add the yak "ideas/buy a pony"
-      And I add the yak "ideas/fix the build"
-      And I add the yak "ideas/fix the fridge"
+      And I add the yak "ideas"
+      And I add the yak "buy a pony" blocking "ideas"
+      And I add the yak "fix the build" blocking "ideas"
+      And I add the yak "fix the fridge" blocking "ideas"
       When I try to mark the yak "fix" as done
       Then the command should fail
       And the error should contain "ambiguous"
@@ -36,7 +38,7 @@ Feature: Fuzzy match on yak names
     Example: Setting context on a parent that has children
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "parent/child1"
+      And I add the yak "child1" blocking "parent"
       When I set the context of "parent" to "test context"
       And I show the context of "parent"
       Then the output should include "test context"
