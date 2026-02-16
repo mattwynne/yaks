@@ -157,7 +157,12 @@ impl GitEventStore {
         match event {
             YakEvent::Added(e) => {
                 let yak_tree_oid = self.create_yak_tree(&e.name, "todo", "")?;
-                self.set_yak_in_root(current_tree, &e.name, Some(yak_tree_oid))
+                let key = if e.id.is_empty() { &e.name } else { &e.id };
+                let path = match &e.parent_id {
+                    Some(parent) => format!("{}/{}", parent, key),
+                    None => key.to_string(),
+                };
+                self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
             }
 
             YakEvent::Removed(e) => self.set_yak_in_root(current_tree, &e.id, None),
@@ -277,7 +282,7 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::AddedEvent;
+    use crate::domain::{AddedEvent, StateUpdatedEvent};
     use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, GitEventStore) {
@@ -337,5 +342,103 @@ mod tests {
         let state_blob = state_entry.to_object(&store.repo).unwrap();
         let state_content = std::str::from_utf8(state_blob.as_blob().unwrap().content()).unwrap();
         assert_eq!(state_content, "todo");
+    }
+
+    #[test]
+    fn added_with_id_keys_tree_entry_by_id() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: "test".to_string(),
+                id: "test-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Tree entry should be keyed by id, not name
+        assert!(
+            tree.get_name("test-a1b2").is_some(),
+            "Expected tree entry keyed by id 'test-a1b2'"
+        );
+        assert!(
+            tree.get_name("test").is_none(),
+            "Should not have tree entry keyed by name 'test'"
+        );
+    }
+
+    #[test]
+    fn state_update_after_add_uses_same_tree_entry() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: "test".to_string(),
+                id: "test-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        store
+            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+                id: "test-a1b2".to_string(),
+                state: "wip".to_string(),
+            }))
+            .unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Should have exactly one entry, keyed by id
+        assert_eq!(tree.len(), 1, "Expected exactly 1 tree entry, got {}", tree.len());
+
+        let entry = tree.get_name("test-a1b2").unwrap();
+        let subtree = entry.to_object(&store.repo).unwrap();
+        let subtree = subtree.as_tree().unwrap();
+
+        // Verify state was updated
+        let state_entry = subtree.get_name("state").unwrap();
+        let state_blob = state_entry.to_object(&store.repo).unwrap();
+        let state_content = std::str::from_utf8(state_blob.as_blob().unwrap().content()).unwrap();
+        assert_eq!(state_content, "wip");
+    }
+
+    #[test]
+    fn added_with_parent_id_nests_under_parent() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Add parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: "parent".to_string(),
+                id: "parent-a1b2".to_string(),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Add child under parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: "child".to_string(),
+                id: "child-c3d4".to_string(),
+                parent_id: Some("parent-a1b2".to_string()),
+            }))
+            .unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Root should have one entry: the parent
+        assert_eq!(tree.len(), 1);
+
+        let parent_entry = tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = parent_entry.to_object(&store.repo).unwrap();
+        let parent_tree = parent_tree.as_tree().unwrap();
+
+        // Parent tree should have its own files + child subtree
+        assert!(parent_tree.get_name("child-c3d4").is_some(),
+            "Expected child subtree under parent");
+        assert!(parent_tree.get_name("state").is_some(),
+            "Expected parent's state file");
     }
 }
