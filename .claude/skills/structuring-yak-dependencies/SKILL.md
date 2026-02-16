@@ -106,6 +106,42 @@ yx add "add github actions workflow/setup local dev lint/fix existing violations
 
 The structure emerged from doing the work, not planning it upfront.
 
+## Reorganizing Flat Yaks into a Dependency Hierarchy
+
+Sometimes you have a flat set of sibling yaks and realize they have
+phased dependencies. To restructure them:
+
+**The rule: later phases are parents, earlier phases are children.**
+Phase 1 items nest under the Phase 2 item they block, not the other
+way around.
+
+**Example:** You're planning a tea party. You start with flat yaks:
+
+```
+tea party
+├─ ○ buy teapot
+├─ ○ buy tea leaves
+├─ ○ brew tea
+├─ ○ invite friends
+╰─ ○ serve tea
+```
+
+Then you realize: you can't serve tea until it's brewed and
+friends are invited. You can't brew until you have a teapot and
+leaves. Restructure so prerequisites nest under what they block:
+
+```
+tea party
+╰─ ○ serve tea
+   ├─ ○ brew tea
+   │  ├─ ○ buy teapot
+   │  ╰─ ○ buy tea leaves
+   ╰─ ○ invite friends
+```
+
+Now the tree enforces the order: you work leaves first (buy
+teapot, buy tea leaves, invite friends), then brew, then serve.
+
 ## Common Mistakes
 
 **Mistake:** Planning the full structure before starting work
