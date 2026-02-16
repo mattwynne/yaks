@@ -41,22 +41,34 @@ impl Default for InMemoryStorage {
 }
 
 impl WriteYakStore for InMemoryStorage {
-    fn create_yak(&self, name: &str, id: &str, _parent_id: Option<&str>) -> Result<()> {
+    fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()> {
+        // Build path key from parent_id lookup
+        let path_key = match parent_id {
+            Some(pid) => {
+                let id_map = self.id_to_name.read().unwrap();
+                let parent_path = id_map
+                    .get(pid)
+                    .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
+                format!("{}/{}", parent_path, name)
+            }
+            None => name.to_string(),
+        };
+
         let mut yaks = self.yaks.write().unwrap();
 
-        if yaks.contains_key(name) {
+        if yaks.contains_key(&path_key) {
             anyhow::bail!("Yak '{}' already exists", name);
         }
 
         let mut fields = HashMap::new();
         // Create empty context.md by default (matching DirectoryStorage behavior)
         fields.insert(CONTEXT_FIELD.to_string(), String::new());
-        yaks.insert(name.to_string(), fields);
+        yaks.insert(path_key.clone(), fields);
 
         // Store id→name mapping
         if !id.is_empty() {
             let mut id_map = self.id_to_name.write().unwrap();
-            id_map.insert(id.to_string(), name.to_string());
+            id_map.insert(id.to_string(), path_key);
         }
 
         Ok(())
@@ -287,6 +299,16 @@ impl ReadYakStore for InMemoryStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_create_yak_constructs_path_from_parent_id() {
+        let storage = InMemoryStorage::new();
+        storage.create_yak("parent", "parent-a1b2", None).unwrap();
+        storage
+            .create_yak("child", "child-c3d4", Some("parent-a1b2"))
+            .unwrap();
+        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
+    }
 
     #[test]
     fn test_thread_safety() {

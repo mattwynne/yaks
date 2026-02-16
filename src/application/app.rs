@@ -89,7 +89,7 @@ mod tests {
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), None)?;
+            yak_map.add_yak("test".to_string(), None, None)?;
             Ok(())
         })
         .unwrap();
@@ -112,7 +112,7 @@ mod tests {
 
         // Create yak and mutate its state via YakMap
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), None)?;
+            yak_map.add_yak("test".to_string(), None, None)?;
             yak_map.update_state("test".to_string(), "wip".to_string())
         })
         .unwrap();
@@ -136,7 +136,7 @@ mod tests {
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), Some("context".to_string()))?;
+            yak_map.add_yak("test".to_string(), None, Some("context".to_string()))?;
             Ok(())
         })
         .unwrap();
@@ -163,7 +163,8 @@ mod tests {
 
         // Add hierarchical yak
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("parent/child".to_string(), None)?;
+            let parent_id = yak_map.add_yak("parent".to_string(), None, None)?;
+            yak_map.add_yak("child".to_string(), Some(parent_id), None)?;
             Ok(())
         })
         .unwrap();
@@ -188,7 +189,8 @@ mod tests {
 
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("parent/child".to_string(), None)?;
+            let parent_id = yak_map.add_yak("parent".to_string(), None, None)?;
+            yak_map.add_yak("child".to_string(), Some(parent_id), None)?;
             yak_map.update_state("parent/child".to_string(), "wip".to_string())
         })
         .unwrap();

@@ -31,17 +31,13 @@ impl AddYak {
         // Validate user-provided name
         validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
 
-        // Resolve the parent if specified
-        let resolved_parent = if let Some(ref parent_name) = self.parent {
-            Some(app.store.find_yak(parent_name)?)
+        // Resolve parent to its ID
+        let parent_id = if let Some(ref parent_name) = self.parent {
+            let found = app.store.find_yak(parent_name)?;
+            let parent_yak = app.store.get_yak(&found)?;
+            Some(parent_yak.id)
         } else {
             None
-        };
-
-        // Build the full storage name
-        let full_name = match resolved_parent {
-            Some(ref parent) => format!("{}/{}", parent, self.name),
-            None => self.name.clone(),
         };
 
         // Generate template
@@ -54,7 +50,7 @@ impl AddYak {
             .filter(|content| !content.trim().is_empty());
 
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak(full_name, context)?;
+            yak_map.add_yak(self.name.clone(), parent_id, context)?;
             Ok(())
         })
     }

@@ -92,7 +92,8 @@ impl DirectoryStorage {
     }
 
     /// Resolve a yak's directory by name or id.
-    /// Tries: direct path, resolve by id, resolve by name (in that order).
+    /// Tries: direct path, resolve by id, resolve by name,
+    /// resolve hierarchical name (in that order).
     fn yak_dir(&self, key: &str) -> PathBuf {
         // Try direct path first (backward compat: dir name == yak name)
         let direct = self.base_path.join(key);
@@ -105,9 +106,16 @@ impl DirectoryStorage {
             return dir;
         }
 
-        // Try resolve by name (scans name files)
+        // Try resolve by leaf name (scans name files)
         if let Some(dir) = self.resolve_by_name(key) {
             return dir;
+        }
+
+        // Try resolve hierarchical name by walking segments
+        if key.contains('/') {
+            if let Some(dir) = self.resolve_by_hierarchical_name(key) {
+                return dir;
+            }
         }
 
         // Fallback to direct path (will fail later with "not found")
@@ -133,6 +141,45 @@ impl DirectoryStorage {
             }
         }
         None
+    }
+
+    /// Resolve a hierarchical name like "parent/child" by walking the segments,
+    /// matching leaf name files at each level.
+    fn resolve_by_hierarchical_name(&self, name: &str) -> Option<PathBuf> {
+        let segments: Vec<&str> = name.split('/').collect();
+        let mut current_dir = self.base_path.clone();
+
+        for segment in &segments {
+            let mut found = false;
+            if let Ok(entries) = fs::read_dir(&current_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if !path.is_dir() {
+                        continue;
+                    }
+                    let name_file = path.join(NAME_FIELD);
+                    if name_file.exists() {
+                        if let Ok(stored) = fs::read_to_string(&name_file) {
+                            let leaf = stored.rsplit('/').next().unwrap_or(&stored);
+                            if leaf == *segment {
+                                current_dir = path;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if !found {
+                return None;
+            }
+        }
+
+        if current_dir.join(CONTEXT_FIELD).exists() {
+            Some(current_dir)
+        } else {
+            None
+        }
     }
 
     /// Scan directories recursively for one whose name file matches the given name.
@@ -402,9 +449,8 @@ impl ReadYakStore for DirectoryStorage {
         // First, try exact match via resolution (handles both old and new format)
         let dir = self.yak_dir(name);
         if dir.exists() && dir.join(CONTEXT_FIELD).exists() {
-            // Read the actual display name from the name file
-            let display_name =
-                fs::read_to_string(dir.join(NAME_FIELD)).unwrap_or_else(|_| name.to_string());
+            // Build the full hierarchical name from directory structure
+            let display_name = self.build_full_name(&dir);
             return Ok(display_name);
         }
 
