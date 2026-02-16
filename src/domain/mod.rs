@@ -13,7 +13,8 @@ pub mod yak_map;
 
 pub use event::YakEvent;
 pub use field::{
-    validate_field_name, validate_field_name_format, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD,
+    validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, NAME_FIELD,
+    STATE_FIELD,
 };
 pub use hierarchy::{find_children, get_ancestors};
 pub use slug::{generate_id, slugify};

@@ -6,9 +6,10 @@ use anyhow::Result;
 pub const STATE_FIELD: &str = "state";
 pub const CONTEXT_FIELD: &str = "context.md";
 pub const NAME_FIELD: &str = "name";
+pub const ID_FIELD: &str = "id";
 
 /// All reserved field names
-pub const RESERVED_FIELDS: &[&str] = &[STATE_FIELD, CONTEXT_FIELD, NAME_FIELD];
+pub const RESERVED_FIELDS: &[&str] = &[STATE_FIELD, CONTEXT_FIELD, NAME_FIELD, ID_FIELD];
 
 /// Validate a field name format (for reading).
 ///

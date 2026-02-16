@@ -83,7 +83,13 @@ impl WriteYakStore for InMemoryStorage {
 
     fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
         let from_name = self.resolve_key(from).unwrap_or_else(|| from.to_string());
-        let to_name = self.resolve_key(to).unwrap_or_else(|| to.to_string());
+        // `to` is the new display name, not an existing key -- don't resolve it
+        // Reconstruct the path: keep parent prefix, replace leaf
+        let new_leaf = to.rsplit('/').next().unwrap_or(to);
+        let to_name = match from_name.rsplit_once('/') {
+            Some((parent, _)) => format!("{}/{}", parent, new_leaf),
+            None => new_leaf.to_string(),
+        };
         let mut yaks = self.yaks.write().unwrap();
 
         if !yaks.contains_key(&from_name) {
@@ -94,8 +100,18 @@ impl WriteYakStore for InMemoryStorage {
             anyhow::bail!("Yak '{}' already exists", to);
         }
 
-        if let Some(fields) = yaks.remove(&from_name) {
-            yaks.insert(to_name, fields);
+        if let Some(mut fields) = yaks.remove(&from_name) {
+            // Update the name field to reflect the new name
+            fields.insert(crate::domain::NAME_FIELD.to_string(), to.to_string());
+            yaks.insert(to_name.clone(), fields);
+        }
+
+        // Update id→name mapping
+        let mut id_map = self.id_to_name.write().unwrap();
+        if let Some((_id, stored_name)) =
+            id_map.iter_mut().find(|(_, v)| **v == from_name)
+        {
+            *stored_name = to_name;
         }
 
         Ok(())

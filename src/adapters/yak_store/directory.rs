@@ -1,7 +1,8 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
-use crate::domain::{Yak, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::slug::slugify;
+use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -122,25 +123,44 @@ impl DirectoryStorage {
         direct
     }
 
-    /// Find a yak directory by its id (the directory's own name), searching recursively.
+    /// Find a yak directory by its id, searching recursively.
+    /// Reads the `id` file inside each yak directory and matches against that.
+    /// Falls back to directory name matching for backward compat (yaks without id files).
     fn resolve_by_id(&self, id: &str) -> Option<PathBuf> {
         if !self.base_path.exists() {
             return None;
         }
+        let mut fallback: Option<PathBuf> = None;
         for entry in WalkDir::new(&self.base_path)
             .min_depth(1)
             .into_iter()
             .filter_entry(|e| e.file_type().is_dir())
         {
-            let entry = entry.ok()?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             let path = entry.path();
-            if path.file_name().and_then(|n| n.to_str()) == Some(id)
-                && path.join(CONTEXT_FIELD).exists()
+            if !path.join(CONTEXT_FIELD).exists() {
+                continue;
+            }
+            // Primary: match against id file contents
+            let id_file = path.join(ID_FIELD);
+            if id_file.exists() {
+                if let Ok(stored_id) = fs::read_to_string(&id_file) {
+                    if stored_id.trim() == id {
+                        return Some(path.to_path_buf());
+                    }
+                }
+            }
+            // Fallback: match against directory name (backward compat)
+            if fallback.is_none()
+                && path.file_name().and_then(|n| n.to_str()) == Some(id)
             {
-                return Some(path.to_path_buf());
+                fallback = Some(path.to_path_buf());
             }
         }
-        None
+        fallback
     }
 
     /// Resolve a hierarchical name like "parent/child" by walking the segments,
@@ -192,7 +212,10 @@ impl DirectoryStorage {
             .into_iter()
             .filter_entry(|e| e.file_type().is_dir())
         {
-            let entry = entry.ok()?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             let path = entry.path();
             let name_file = path.join(NAME_FIELD);
             if name_file.exists() {
@@ -250,8 +273,13 @@ impl DirectoryStorage {
 
 impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()> {
-        // Use id as directory name if available, otherwise fall back to name
-        let dir_name = if id.is_empty() { name } else { id };
+        // Use slug (from name) as directory name for human readability.
+        // Fall back to name directly for backward compat (empty id = legacy).
+        let dir_name = if id.is_empty() {
+            name.to_string()
+        } else {
+            slugify(name)
+        };
 
         // Determine parent directory: base_path or parent's directory
         let parent_dir = match parent_id {
@@ -261,7 +289,7 @@ impl WriteYakStore for DirectoryStorage {
             None => self.base_path.clone(),
         };
 
-        let dir = parent_dir.join(dir_name);
+        let dir = parent_dir.join(&dir_name);
         if dir.join(CONTEXT_FIELD).exists() {
             anyhow::bail!("Yak '{}' already exists", name);
         }
@@ -277,6 +305,12 @@ impl WriteYakStore for DirectoryStorage {
         fs::write(dir.join(NAME_FIELD), name)
             .with_context(|| format!("Failed to write name file for yak: {name}"))?;
 
+        // Write id file so the immutable ID is stored inside the directory
+        if !id.is_empty() {
+            fs::write(dir.join(ID_FIELD), id)
+                .with_context(|| format!("Failed to write id file for yak: {name}"))?;
+        }
+
         Ok(())
     }
 
@@ -290,22 +324,22 @@ impl WriteYakStore for DirectoryStorage {
 
     fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
         let from_dir = self.yak_dir(from);
-        let to_dir = self.base_path.join(to);
 
         if !from_dir.exists() {
             anyhow::bail!("yak '{from}' not found");
         }
 
+        // Compute new slug-based directory name
+        let new_slug = slugify(to);
+
+        // Target directory is in the same parent as the current directory
+        let parent_dir = from_dir
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory for '{from}'"))?;
+        let to_dir = parent_dir.join(&new_slug);
+
         if to_dir.exists() {
             anyhow::bail!("Yak '{to}' already exists");
-        }
-
-        // Create implicit parent directories if needed
-        if let Some(parent) = to_dir.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create parent directories for '{to}'"))?;
-            }
         }
 
         fs::rename(&from_dir, &to_dir)
@@ -330,7 +364,11 @@ impl WriteYakStore for DirectoryStorage {
             None => self.base_path.clone(),
         };
 
-        let new_dir = new_parent_dir.join(id);
+        // Preserve the existing slug-based directory name when moving
+        let dir_name = current_dir
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine directory name for '{}'", id))?;
+        let new_dir = new_parent_dir.join(dir_name);
         if new_dir.exists() {
             anyhow::bail!("Target location already exists for '{}'", id);
         }
@@ -363,11 +401,15 @@ impl ReadYakStore for DirectoryStorage {
         // Build hierarchical name from directory structure and leaf name files
         let display_name = self.build_full_name(&dir);
 
-        // Derive id from directory name (last component of path)
-        let id = dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(name)
+        // Read id from id file, fall back to directory name (backward compat)
+        let id = fs::read_to_string(dir.join(ID_FIELD))
+            .unwrap_or_else(|_| {
+                dir.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(name)
+                    .to_string()
+            })
+            .trim()
             .to_string();
 
         // Read context field
@@ -413,11 +455,15 @@ impl ReadYakStore for DirectoryStorage {
             // Build hierarchical name from directory structure and leaf name files
             let display_name = self.build_full_name(path);
 
-            // Derive id from directory name (last component)
-            let id = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(&display_name)
+            // Read id from id file, fall back to directory name (backward compat)
+            let id = fs::read_to_string(path.join(ID_FIELD))
+                .unwrap_or_else(|_| {
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&display_name)
+                        .to_string()
+                })
+                .trim()
                 .to_string();
 
             let context = fs::read_to_string(path.join(CONTEXT_FIELD))
@@ -622,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn test_added_event_with_id_creates_id_based_directory() {
+    fn test_added_event_with_id_creates_slug_based_directory() {
         let (mut storage, _temp) = setup_test_storage();
 
         let event = YakEvent::Added(AddedEvent {
@@ -633,10 +679,10 @@ mod tests {
 
         storage.on_event(&event).unwrap();
 
-        // Directory should be named by id, not name
+        // Directory should be named by slug (from name), not id
         assert!(
-            storage.base_path.join("my-yak-a1b2").exists(),
-            "Expected directory 'my-yak-a1b2' to exist"
+            storage.base_path.join("my-yak").exists(),
+            "Expected directory 'my-yak' (slug of 'my yak') to exist"
         );
         // get_yak should resolve by name
         let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
@@ -716,12 +762,12 @@ mod tests {
             }))
             .unwrap();
 
-        // Child directory should be nested under parent's id-based directory
+        // Child directory should be nested under parent's slug-based directory
         assert!(
             storage
                 .base_path
-                .join("parent-a1b2")
-                .join("child-c3d4")
+                .join("parent")
+                .join("child")
                 .exists(),
             "Expected child directory nested under parent"
         );
