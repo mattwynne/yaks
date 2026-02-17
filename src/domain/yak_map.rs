@@ -177,38 +177,76 @@ impl YakMap {
         Ok(id)
     }
 
-    fn ensure_ancestors_exist(&mut self, name_path: &str) {
-        use crate::domain::hierarchy::get_ancestors;
-
-        // Get ancestor name-paths in root-to-leaf order
-        let mut ancestors = get_ancestors(name_path);
-        ancestors.reverse();
-
-        for ancestor_name in ancestors {
-            // Check if this ancestor already exists (by display name)
-            let exists = self.resolve(&ancestor_name).is_some();
-            if !exists {
-                let leaf = ancestor_name.rsplit('/').next().unwrap_or(&ancestor_name);
-                let parent_name = crate::domain::hierarchy::get_parent(&ancestor_name);
-                let parent_id = parent_name.and_then(|pn| self.resolve(&pn));
-                let id = generate_id(leaf);
-                let name = Name::from(leaf);
-                self.yaks.insert(
-                    id.clone(),
-                    YakState {
-                        name: name.clone(),
-                        parent_id: parent_id.clone(),
-                        state: "todo".to_string(),
-                        context: None,
-                    },
-                );
-                self.pending_events.push(YakEvent::Added(AddedEvent {
-                    name,
-                    id,
-                    parent_id,
-                }));
-            }
+    /// Ensure all ancestors in the path exist, returning the resolved
+    /// parent ID (i.e. the ID of the second-to-last segment).
+    ///
+    /// Processes segments left-to-right. For each segment:
+    /// 1. Try exact match (name + parent) in the current map.
+    /// 2. For the first segment only, fall back to a unique leaf-name
+    ///    match anywhere in the map (so "parent/child" finds an
+    ///    existing "parent" even if it's nested under a grandparent).
+    /// 3. If still not found, create a new yak at the current level.
+    fn ensure_ancestors_exist(&mut self, name_path: &str) -> Option<YakId> {
+        let segments: Vec<&str> = name_path.split('/').collect();
+        if segments.len() <= 1 {
+            return None;
         }
+        let ancestor_segments = &segments[..segments.len() - 1];
+
+        let mut current_parent_id: Option<YakId> = None;
+
+        for (i, &segment) in ancestor_segments.iter().enumerate() {
+            // Try exact match: yak with this name under current parent
+            let found = self
+                .yaks
+                .iter()
+                .find(|(_, state)| {
+                    state.name.as_str() == segment && state.parent_id == current_parent_id
+                })
+                .map(|(id, _)| id.clone());
+
+            if let Some(id) = found {
+                current_parent_id = Some(id);
+                continue;
+            }
+
+            // For the first segment, try finding by leaf name anywhere
+            // (if unambiguous). This lets users write "parent/child"
+            // instead of "grandparent/parent/child".
+            if i == 0 {
+                let matches: Vec<YakId> = self
+                    .yaks
+                    .iter()
+                    .filter(|(_, state)| state.name.as_str() == segment)
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                if matches.len() == 1 {
+                    current_parent_id = Some(matches[0].clone());
+                    continue;
+                }
+            }
+
+            // Create new ancestor
+            let id = generate_id(segment);
+            let name = Name::from(segment);
+            self.yaks.insert(
+                id.clone(),
+                YakState {
+                    name: name.clone(),
+                    parent_id: current_parent_id.clone(),
+                    state: "todo".to_string(),
+                    context: None,
+                },
+            );
+            self.pending_events.push(YakEvent::Added(AddedEvent {
+                name,
+                id: id.clone(),
+                parent_id: current_parent_id,
+            }));
+            current_parent_id = Some(id);
+        }
+
+        current_parent_id
     }
 
     pub fn update_state(&mut self, id: YakId, state: String) -> Result<()> {
@@ -351,9 +389,7 @@ impl YakMap {
             let done_leaves: Vec<YakId> = self
                 .yaks
                 .iter()
-                .filter(|(id, state)| {
-                    state.state == "done" && self.find_children_of(id).is_empty()
-                })
+                .filter(|(id, state)| state.state == "done" && self.find_children_of(id).is_empty())
                 .map(|(id, _)| id.clone())
                 .collect();
 
@@ -397,17 +433,15 @@ impl YakMap {
             anyhow::bail!("Yak '{}' already exists", new_name);
         }
 
-        // Ensure ancestors exist for new location
-        self.ensure_ancestors_exist(&new_name);
+        // Ensure ancestors exist and get the resolved parent ID
+        let new_parent_id = self.ensure_ancestors_exist(&new_name);
 
         // Determine old parent and leaf
         let old_parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
         let old_leaf = self.yaks.get(&id).unwrap().name.clone();
 
-        // Determine new parent and leaf from the name-path
+        // Determine new leaf from the name-path
         let new_leaf = new_name.rsplit('/').next().unwrap_or(&new_name);
-        let new_parent_name = crate::domain::hierarchy::get_parent(&new_name);
-        let new_parent_id = new_parent_name.and_then(|pn| self.resolve(&pn));
 
         // Update the yak in place
         let yak = self.yaks.get_mut(&id).unwrap();
@@ -1138,6 +1172,32 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn test_move_yak_under_existing_parent_by_leaf_name() {
+        let mut map = YakMap::new();
+        let grandparent_id = map.add_yak("grandparent", None, None).unwrap();
+        let parent_id = map
+            .add_yak("parent", Some(grandparent_id.clone()), None)
+            .unwrap();
+        let child_id = map.add_yak("child", None, None).unwrap();
+        let yak_count_before = map.yaks.len();
+        map.take_events();
+
+        // Move child under "parent" — should find the existing
+        // "grandparent/parent" yak, not create a new root "parent".
+        map.move_yak(child_id.clone(), "parent/child".to_string())
+            .unwrap();
+
+        let child = map.yaks.get(&child_id).unwrap();
+        assert_eq!(child.parent_id, Some(parent_id));
+        assert_eq!(child.name, Name::from("child"));
+        assert_eq!(
+            map.yaks.len(),
+            yak_count_before,
+            "Should not have created a new yak — the parent already exists"
+        );
     }
 
     #[test]
