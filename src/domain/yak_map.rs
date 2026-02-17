@@ -461,6 +461,32 @@ impl YakMap {
         Ok(())
     }
 
+    pub fn rename_yak(&mut self, id: YakId, new_name: String) -> Result<()> {
+        use crate::domain::validate_yak_name;
+
+        self.ensure_exists(&id)?;
+
+        validate_yak_name(&new_name).map_err(|e| anyhow::anyhow!(e))?;
+
+        // Get the current parent_id (rename does NOT change parent)
+        let parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
+
+        // Check slug uniqueness among siblings (excluding self)
+        self.check_sibling_slug_uniqueness(&new_name, &parent_id, Some(&id))?;
+
+        // Update the name in place
+        let yak = self.yaks.get_mut(&id).unwrap();
+        yak.name = Name::from(new_name.as_str());
+
+        // Emit Renamed event
+        self.pending_events.push(YakEvent::Renamed(RenamedEvent {
+            id,
+            new_name: Name::from(new_name.as_str()),
+        }));
+
+        Ok(())
+    }
+
     pub fn move_yak(&mut self, id: YakId, new_name: String) -> Result<()> {
         use crate::domain::validate_yak_name;
 

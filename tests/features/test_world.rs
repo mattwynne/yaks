@@ -84,6 +84,12 @@ pub trait TestWorld {
     /// Show a yak's field (yx field --show)
     fn show_field(&mut self, name: &str, field: &str) -> Result<()>;
 
+    /// Rename a yak (yx rename)
+    fn rename_yak(&mut self, from: &str, to: &str) -> Result<()>;
+
+    /// Try to rename a yak - captures result without bailing on failure
+    fn try_rename_yak(&mut self, from: &str, to: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

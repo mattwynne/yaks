@@ -13,6 +13,7 @@ pub const COMMANDS: &[&str] = &[
     "rm",
     "move",
     "mv",
+    "rename",
     "prune",
     "context",
     "state",
@@ -28,8 +29,8 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
 
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
-        "add", "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "context", "state",
-        "field",
+        "add", "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "rename", "context",
+        "state", "field",
     ];
 
     // Flags for each command

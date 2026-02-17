@@ -482,6 +482,34 @@ async fn try_move_yak_in_process(
     world.try_move_yak(&from, &to)
 }
 
+#[when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)]
+async fn rename_yak_full_stack(world: &mut FullStackWorld, from: String, to: String) -> Result<()> {
+    world.rename_yak(&from, &to)
+}
+
+#[when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)]
+async fn rename_yak_in_process(world: &mut InProcessWorld, from: String, to: String) -> Result<()> {
+    world.rename_yak(&from, &to)
+}
+
+#[when(regex = r#"^I try to rename the yak "(.+)" to "(.+)"$"#)]
+async fn try_rename_yak_full_stack(
+    world: &mut FullStackWorld,
+    from: String,
+    to: String,
+) -> Result<()> {
+    world.try_rename_yak(&from, &to)
+}
+
+#[when(regex = r#"^I try to rename the yak "(.+)" to "(.+)"$"#)]
+async fn try_rename_yak_in_process(
+    world: &mut InProcessWorld,
+    from: String,
+    to: String,
+) -> Result<()> {
+    world.try_rename_yak(&from, &to)
+}
+
 #[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
 async fn set_field_full_stack(
     world: &mut FullStackWorld,

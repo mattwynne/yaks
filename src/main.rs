@@ -9,7 +9,8 @@ use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
-    RemoveYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
+    RemoveYak, RenameYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks,
+    WriteField,
 };
 use yx::domain::ports::{EventStore, ReadYakStore};
 use yx::infrastructure::EventBus;
@@ -76,6 +77,13 @@ enum Commands {
     /// Move/rename a yak
     #[command(alias = "mv")]
     Move { from: String, to: String },
+    /// Rename a yak (change name without moving)
+    Rename {
+        /// Current yak name
+        from: String,
+        /// New name
+        to: String,
+    },
     /// Edit or show yak context
     Context {
         /// The yak name (space-separated words)
@@ -186,6 +194,7 @@ fn main() -> Result<()> {
         }
         Commands::Prune => app.handle(PruneYaks::new()),
         Commands::Move { from, to } => app.handle(MoveYak::new(&from, &to)),
+        Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
         Commands::Context { name, show } => {
             let name_str = name.join(" ");
             if show {

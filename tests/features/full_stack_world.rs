@@ -621,6 +621,14 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["field", name, field, "--show"])
     }
 
+    fn rename_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.run_yx(&["rename", from, to])
+    }
+
+    fn try_rename_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.run_yx_unchecked(&["rename", from, to])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
