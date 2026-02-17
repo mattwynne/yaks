@@ -62,3 +62,47 @@ Feature: Yak identity
         """
         Fix the Bug
         """
+
+  Rule: Reject add when slug collides with sibling
+
+    Example: Adding a yak with colliding slug at root is rejected
+      Given I have a clean git repository
+      And I add the yak "Make the tea"
+      When I try to add the yak "make-the-tea"
+      Then the command should fail
+      And the error should contain "already exists with the same slug"
+
+    Example: Colliding slug under same parent is rejected
+      Given I have a clean git repository
+      And I add the yak "Backend fixes"
+      And I add the yak "Fix the bug" blocking "Backend fixes"
+      When I try to add the yak "fix-the-bug" blocking "Backend fixes"
+      Then the command should fail
+      And the error should contain "already exists under"
+
+    Example: Same slug under different parent succeeds
+      Given I have a clean git repository
+      And I add the yak "Make the tea"
+      And I add the yak "Backend fixes"
+      When I add the yak "Make the tea" blocking "Backend fixes"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] Backend fixes
+          - [todo] Make the tea
+        - [todo] Make the tea
+        """
+
+  Rule: Reject rename when slug collides with sibling
+    Note: rename/move slug collision is tested at the domain level
+    (unit tests in yak_map.rs). The full-stack flow has a fuzzy match
+    layer that reinterprets some renames as parent-moves, so the
+    acceptance test uses add-based collisions instead.
+
+    Example: Renaming to collide with sibling is rejected
+      Given I have a clean git repository
+      And I add the yak "Make the tea"
+      And I add the yak "Fix the bug"
+      When I try to move the yak "Fix the bug" to "make-the-tea"
+      Then the command should fail
+      And the error should contain "already exists"

@@ -464,6 +464,24 @@ async fn move_yak_in_process(world: &mut InProcessWorld, from: String, to: Strin
     world.move_yak(&from, &to)
 }
 
+#[when(regex = r#"^I try to move the yak "(.+)" to "(.+)"$"#)]
+async fn try_move_yak_full_stack(
+    world: &mut FullStackWorld,
+    from: String,
+    to: String,
+) -> Result<()> {
+    world.try_move_yak(&from, &to)
+}
+
+#[when(regex = r#"^I try to move the yak "(.+)" to "(.+)"$"#)]
+async fn try_move_yak_in_process(
+    world: &mut InProcessWorld,
+    from: String,
+    to: String,
+) -> Result<()> {
+    world.try_move_yak(&from, &to)
+}
+
 #[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
 async fn set_field_full_stack(
     world: &mut FullStackWorld,

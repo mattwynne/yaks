@@ -578,6 +578,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["move", from, to])
     }
 
+    fn try_move_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.run_yx_unchecked(&["move", from, to])
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.run_yx_with_stdin(&["field", name, field], content)
     }

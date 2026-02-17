@@ -1,6 +1,6 @@
 use crate::domain::events::*;
 use crate::domain::ports::ReadYakStore;
-use crate::domain::slug::{generate_id, Name, YakId};
+use crate::domain::slug::{generate_id, slugify, Name, YakId};
 use crate::domain::YakEvent;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -133,6 +133,57 @@ impl YakMap {
         ancestors
     }
 
+    /// Check that no sibling under the same parent has the same slug.
+    /// `self_id` is used to exclude the yak being renamed from the check.
+    fn check_sibling_slug_uniqueness(
+        &self,
+        name: &str,
+        parent_id: &Option<YakId>,
+        self_id: Option<&YakId>,
+    ) -> Result<()> {
+        let new_slug = slugify(name);
+
+        for (id, state) in &self.yaks {
+            // Skip the yak itself (for rename case)
+            if let Some(sid) = self_id {
+                if id == sid {
+                    continue;
+                }
+            }
+
+            // Only check siblings (same parent)
+            if &state.parent_id != parent_id {
+                continue;
+            }
+
+            let sibling_slug = slugify(state.name.as_str());
+            if sibling_slug.as_str() == new_slug.as_str() {
+                let msg = match parent_id {
+                    Some(pid) => {
+                        let parent_display = self.build_display_name(pid);
+                        format!(
+                            "A yak named \"{}\" already exists \
+                             under \"{}\" with the same slug \
+                             \"{}\". Try a more distinct name.",
+                            state.name, parent_display, new_slug
+                        )
+                    }
+                    None => {
+                        format!(
+                            "A yak named \"{}\" already exists \
+                             with the same slug \"{}\". \
+                             Try a more distinct name.",
+                            state.name, new_slug
+                        )
+                    }
+                };
+                anyhow::bail!(msg);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn add_yak(
         &mut self,
         name: impl Into<Name>,
@@ -147,6 +198,9 @@ impl YakMap {
                 anyhow::bail!("parent yak not found");
             }
         }
+
+        // Check slug uniqueness among siblings
+        self.check_sibling_slug_uniqueness(name.as_str(), &parent_id, None)?;
 
         let id = generate_id(name.as_str(), parent_id.as_ref());
 
@@ -443,6 +497,9 @@ impl YakMap {
         // Determine new leaf from the name-path
         let new_leaf = new_name.rsplit('/').next().unwrap_or(&new_name);
 
+        // Check slug uniqueness among siblings at the destination
+        self.check_sibling_slug_uniqueness(new_leaf, &new_parent_id, Some(&id))?;
+
         // Update the yak in place
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.name = Name::from(new_leaf);
@@ -478,6 +535,175 @@ impl YakMap {
 mod tests {
     use super::*;
     use crate::domain::slug::Name;
+
+    // ==================================================================
+    // Tests for slug uniqueness among siblings
+    // ==================================================================
+
+    #[test]
+    fn test_add_yak_rejects_colliding_slug_at_root() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+
+        let result = map.add_yak("make-the-tea", None, None);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Make the tea"),
+            "Error should mention existing yak name, got: {}",
+            err
+        );
+        assert!(
+            err.contains("make-the-tea"),
+            "Error should mention the slug, got: {}",
+            err
+        );
+        assert!(
+            err.contains("Try a more distinct name"),
+            "Error should suggest a fix, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_add_yak_rejects_extra_spaces_colliding_slug_at_root() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+
+        // "Make  the  tea" slugifies to "make-the-tea" (same slug)
+        let result = map.add_yak("Make  the  tea", None, None);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_yak_allows_different_slug_at_root() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+
+        // "Make the_tea" slugifies to "make-thetea" (different slug)
+        let result = map.add_yak("Make the_tea", None, None);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_yak_rejects_colliding_slug_under_same_parent() {
+        let mut map = YakMap::new();
+        let parent_id = map.add_yak("Backend fixes", None, None).unwrap();
+        map.add_yak("Fix the bug", Some(parent_id.clone()), None)
+            .unwrap();
+
+        let result = map.add_yak("fix-the-bug", Some(parent_id.clone()), None);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Fix the bug"),
+            "Error should mention existing yak, got: {}",
+            err
+        );
+        assert!(
+            err.contains("Backend fixes"),
+            "Error should mention parent name, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_add_yak_allows_same_slug_under_different_parent() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+        let parent_id = map.add_yak("Backend fixes", None, None).unwrap();
+
+        let result = map.add_yak("Make the tea", Some(parent_id), None);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_yak_allows_same_slug_under_different_parents() {
+        let mut map = YakMap::new();
+        let backend = map.add_yak("Backend fixes", None, None).unwrap();
+        let frontend = map.add_yak("Frontend fixes", None, None).unwrap();
+        map.add_yak("Fix the bug", Some(backend), None).unwrap();
+
+        let result = map.add_yak("Fix the bug", Some(frontend), None);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_rename_rejects_colliding_slug_with_sibling() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+        let fix_id = map.add_yak("Fix the bug", None, None).unwrap();
+
+        let result = map.move_yak(fix_id, "Make THE Tea".to_string());
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("make-the-tea"),
+            "Error should mention slug, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_rename_allows_same_slug_for_self() {
+        let mut map = YakMap::new();
+        let id = map.add_yak("Make the tea", None, None).unwrap();
+
+        // Rename to different capitalisation (same slug)
+        let result = map.move_yak(id, "Make The Tea".to_string());
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_move_rejects_colliding_slug_at_destination() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+        let backend = map.add_yak("Backend fixes", None, None).unwrap();
+        let fix_id = map.add_yak("Fix the bug", Some(backend), None).unwrap();
+
+        // Move "Fix the bug" to root as "Make The Tea" - should collide
+        let result = map.move_yak(fix_id, "Make The Tea".to_string());
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("make-the-tea"),
+            "Error should mention slug, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_move_allows_slug_at_different_parent() {
+        let mut map = YakMap::new();
+        map.add_yak("Make the tea", None, None).unwrap();
+        let backend = map.add_yak("Backend fixes", None, None).unwrap();
+        let fix_id = map.add_yak("Fix the bug", None, None).unwrap();
+
+        // Move "Fix the bug" under "Backend fixes" as "Make The Tea"
+        // - different parent, so slug collision with root is OK
+        let result = map.move_yak(fix_id, "Backend fixes/Make The Tea".to_string());
+
+        assert!(
+            result.is_ok(),
+            "Should succeed: different parent. Error: {:?}",
+            result.err()
+        );
+        // Verify it's actually under backend
+        let moved = map
+            .yaks
+            .values()
+            .find(|s| s.name.as_str() == "Make The Tea" && s.parent_id == Some(backend.clone()));
+        assert!(moved.is_some());
+    }
 
     #[test]
     fn test_new_yak_map_is_empty() {
