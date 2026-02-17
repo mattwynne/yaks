@@ -330,8 +330,98 @@ impl EventStore for GitEventStore {
         Ok(events)
     }
 
-    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
-        todo!()
+    fn reset_from_snapshot(&mut self, yaks: &[Yak]) -> Result<usize> {
+        use super::migration::CURRENT_SCHEMA_VERSION;
+        use crate::domain::slug::YakId;
+        use std::collections::HashMap;
+
+        // Build a YakId→Yak index
+        let yak_map: HashMap<&YakId, &Yak> = yaks.iter().map(|y| (&y.id, y)).collect();
+
+        // Find root yaks (those whose ID doesn't appear in any children list)
+        let mut child_ids = std::collections::HashSet::new();
+        for yak in yaks {
+            for child_id in &yak.children {
+                child_ids.insert(child_id);
+            }
+        }
+        let roots: Vec<&Yak> = yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
+
+        // Recursively build tree
+        fn build_yak_subtree(
+            repo: &Repository,
+            yak: &Yak,
+            yak_map: &HashMap<&YakId, &Yak>,
+        ) -> Result<git2::Oid> {
+            let mut builder = repo.treebuilder(None)?;
+
+            // Add standard blobs
+            let state_blob = repo.blob(yak.state.as_bytes())?;
+            builder.insert("state", state_blob, 0o100644)?;
+
+            let context_content = yak.context.as_deref().unwrap_or("");
+            let context_blob = repo.blob(context_content.as_bytes())?;
+            builder.insert("context.md", context_blob, 0o100644)?;
+
+            let name_blob = repo.blob(yak.name.as_str().as_bytes())?;
+            builder.insert("name", name_blob, 0o100644)?;
+
+            let id_blob = repo.blob(yak.id.as_str().as_bytes())?;
+            builder.insert("id", id_blob, 0o100644)?;
+
+            // Add custom fields
+            for (field_name, content) in &yak.fields {
+                let field_blob = repo.blob(content.as_bytes())?;
+                builder.insert(field_name, field_blob, 0o100644)?;
+            }
+
+            // Add children subtrees
+            for child_id in &yak.children {
+                if let Some(child) = yak_map.get(child_id) {
+                    let child_tree = build_yak_subtree(repo, child, yak_map)?;
+                    builder.insert(child_id.as_str(), child_tree, 0o040000)?;
+                }
+            }
+
+            Ok(builder.write()?)
+        }
+
+        // Build root tree
+        let mut root_builder = self.repo.treebuilder(None)?;
+
+        for root in roots {
+            let yak_tree = build_yak_subtree(&self.repo, root, &yak_map)?;
+            root_builder.insert(root.id.as_str(), yak_tree, 0o040000)?;
+        }
+
+        // Add .schema-version
+        let version_blob = self
+            .repo
+            .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+        root_builder.insert(".schema-version", version_blob, 0o100644)?;
+
+        let tree_oid = root_builder.write()?;
+        let tree = self.repo.find_tree(tree_oid)?;
+
+        // Create commit
+        let parent = self.get_latest_commit()?;
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+        let sig = self
+            .repo
+            .signature()
+            .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+
+        self.repo.commit(
+            Some("refs/notes/yaks"),
+            &sig,
+            &sig,
+            "Snapshot: rebuilt from disk",
+            &tree,
+            &parents,
+        )?;
+
+        Ok(yaks.len())
     }
 }
 
@@ -547,5 +637,227 @@ mod tests {
             "test"
         );
         assert!(target.join("test-a1b2/context.md").exists());
+    }
+
+    #[test]
+    fn reset_from_snapshot_builds_correct_tree() {
+        use std::collections::HashMap;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let mut fields = HashMap::new();
+        fields.insert("plan".to_string(), "step 1".to_string());
+
+        let yak1 = Yak {
+            id: YakId::from("yak1-a1b2"),
+            name: Name::from("First Yak"),
+            state: "todo".to_string(),
+            context: Some("some context".to_string()),
+            fields: fields.clone(),
+            children: vec![],
+        };
+
+        let yak2 = Yak {
+            id: YakId::from("yak2-c3d4"),
+            name: Name::from("Second Yak"),
+            state: "wip".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        let count = store.reset_from_snapshot(&[yak1, yak2]).unwrap();
+        assert_eq!(count, 2);
+
+        // Verify the git tree structure
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Check yak1 subtree
+        let yak1_entry = tree.get_name("yak1-a1b2").unwrap();
+        let yak1_tree = store.repo.find_tree(yak1_entry.id()).unwrap();
+
+        let state_blob = yak1_tree.get_name("state").unwrap();
+        let state = store.repo.find_blob(state_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(state.content()).unwrap(), "todo");
+
+        let context_blob = yak1_tree.get_name("context.md").unwrap();
+        let context = store.repo.find_blob(context_blob.id()).unwrap();
+        assert_eq!(
+            std::str::from_utf8(context.content()).unwrap(),
+            "some context"
+        );
+
+        let name_blob = yak1_tree.get_name("name").unwrap();
+        let name = store.repo.find_blob(name_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(name.content()).unwrap(), "First Yak");
+
+        let id_blob = yak1_tree.get_name("id").unwrap();
+        let id = store.repo.find_blob(id_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(id.content()).unwrap(), "yak1-a1b2");
+
+        let plan_blob = yak1_tree.get_name("plan").unwrap();
+        let plan = store.repo.find_blob(plan_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(plan.content()).unwrap(), "step 1");
+
+        // Check yak2 subtree
+        let yak2_entry = tree.get_name("yak2-c3d4").unwrap();
+        let yak2_tree = store.repo.find_tree(yak2_entry.id()).unwrap();
+
+        let state2_blob = yak2_tree.get_name("state").unwrap();
+        let state2 = store.repo.find_blob(state2_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(state2.content()).unwrap(), "wip");
+
+        let context2_blob = yak2_tree.get_name("context.md").unwrap();
+        let context2 = store.repo.find_blob(context2_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(context2.content()).unwrap(), "");
+
+        // Check .schema-version
+        let schema_blob = tree.get_name(".schema-version").unwrap();
+        let schema = store.repo.find_blob(schema_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
+    }
+
+    #[test]
+    fn reset_from_snapshot_handles_children() {
+        use std::collections::HashMap;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let child = Yak {
+            id: YakId::from("child-x1y2"),
+            name: Name::from("Child Yak"),
+            state: "todo".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        let parent = Yak {
+            id: YakId::from("parent-a1b2"),
+            name: Name::from("Parent Yak"),
+            state: "wip".to_string(),
+            context: Some("parent context".to_string()),
+            fields: HashMap::new(),
+            children: vec![YakId::from("child-x1y2")],
+        };
+
+        store.reset_from_snapshot(&[parent, child]).unwrap();
+
+        // Verify tree structure
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Root should only have parent (child is nested)
+        assert_eq!(tree.len(), 2); // parent + .schema-version
+
+        // Get parent subtree
+        let parent_entry = tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
+
+        // Parent should have its own blobs + child subtree
+        assert!(parent_tree.get_name("state").is_some());
+        assert!(parent_tree.get_name("context.md").is_some());
+        assert!(parent_tree.get_name("name").is_some());
+        assert!(parent_tree.get_name("id").is_some());
+
+        // Child should be nested under parent
+        let child_entry = parent_tree.get_name("child-x1y2").unwrap();
+        let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
+
+        // Verify child blobs
+        let child_name_blob = child_tree.get_name("name").unwrap();
+        let child_name = store.repo.find_blob(child_name_blob.id()).unwrap();
+        assert_eq!(
+            std::str::from_utf8(child_name.content()).unwrap(),
+            "Child Yak"
+        );
+    }
+
+    #[test]
+    fn reset_from_snapshot_parents_to_existing_commit() {
+        use std::collections::HashMap;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        // First, add a yak via append (creates a commit)
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("initial"),
+                id: YakId::from("initial-z9z9"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        let first_commit_oid = store.get_latest_commit().unwrap().unwrap().id();
+
+        // Now call reset_from_snapshot
+        let yak = Yak {
+            id: YakId::from("snapshot-a1b2"),
+            name: Name::from("Snapshot Yak"),
+            state: "todo".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        store.reset_from_snapshot(&[yak]).unwrap();
+
+        // Verify the new commit has a parent
+        let latest = store.get_latest_commit().unwrap().unwrap();
+        assert_eq!(latest.parent_count(), 1);
+        assert_eq!(latest.parent_id(0).unwrap(), first_commit_oid);
+    }
+
+    #[test]
+    fn reset_from_snapshot_returns_yak_count() {
+        use std::collections::HashMap;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let yak1 = Yak {
+            id: YakId::from("yak1-a1b2"),
+            name: Name::from("Yak One"),
+            state: "todo".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        let yak2 = Yak {
+            id: YakId::from("yak2-c3d4"),
+            name: Name::from("Yak Two"),
+            state: "wip".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        let yak3 = Yak {
+            id: YakId::from("yak3-e5f6"),
+            name: Name::from("Yak Three"),
+            state: "done".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![],
+        };
+
+        let count = store.reset_from_snapshot(&[yak1, yak2, yak3]).unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn reset_from_snapshot_empty_list() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        let count = store.reset_from_snapshot(&[]).unwrap();
+        assert_eq!(count, 0);
+
+        // Verify a commit was created
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Should only have .schema-version
+        assert_eq!(tree.len(), 1);
+        let schema_blob = tree.get_name(".schema-version").unwrap();
+        let schema = store.repo.find_blob(schema_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
     }
 }
