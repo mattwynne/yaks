@@ -61,6 +61,22 @@ Feature: Move and rename yaks
       Then the output should include "Renamed"
       And the output should not include "Moved"
 
+  Rule: A nested yak can be moved to root
+    When the destination is a plain name and the source is nested,
+    the yak becomes a root yak with the new name.
+
+    Example: Move a nested yak to root
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" blocking "parent"
+      When I move the yak "parent/child" to "standalone"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+        - [todo] standalone
+        """
+
   Rule: Hierarchy change emits a Moved event
     When the destination has a different parent than the source,
     the operation is a move, not a rename.
