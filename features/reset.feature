@@ -49,3 +49,18 @@ Feature: yx reset - Rebuild yaks from git tree
       And a file "notes.txt" exists in the yak directory
       When I reset the yaks
       Then the file "notes.txt" should still exist in the yak directory
+
+  Rule: Reset can rebuild git tree from disk
+
+    Example: Round-trip from disk to git and back preserves yaks
+      Given I add the yak "alpha"
+      And I add the yak "beta" blocking "alpha"
+      When I set the state of "beta" to "wip"
+      And I reset the yaks from disk to git
+      And I reset the yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] alpha
+          - [wip] beta
+        """
