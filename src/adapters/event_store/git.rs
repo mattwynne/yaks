@@ -3,7 +3,7 @@ use git2::Repository;
 use std::path::Path;
 
 use crate::domain::ports::{EventStore, EventStoreReader};
-use crate::domain::YakEvent;
+use crate::domain::{Yak, YakEvent};
 
 pub struct GitEventStore {
     repo: Repository,
@@ -328,6 +328,10 @@ impl EventStore for GitEventStore {
         // Reverse: revwalk gives newest-first, we want chronological
         events.reverse();
         Ok(events)
+    }
+
+    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
+        todo!()
     }
 }
 

@@ -102,19 +102,13 @@ impl YakMap {
         None
     }
 
-    /// Resolve a YakId, confirming it exists in the map.
-    fn resolve_id(&self, id: &YakId) -> Option<YakId> {
+    /// Verify a YakId exists in the map, returning an error if not found.
+    fn ensure_exists(&self, id: &YakId) -> Result<()> {
         if self.yaks.contains_key(id) {
-            Some(id.clone())
+            Ok(())
         } else {
-            None
+            anyhow::bail!("yak '{}' not found", id)
         }
-    }
-
-    /// Resolve a YakId, returning an error if not found.
-    fn resolve_id_or_bail(&self, id: &YakId) -> Result<YakId> {
-        self.resolve_id(id)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))
     }
 
     /// Find direct children of a yak by its ID.
@@ -222,7 +216,7 @@ impl YakMap {
 
         validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
 
-        let id = self.resolve_id_or_bail(&id)?;
+        self.ensure_exists(&id)?;
 
         // Validate children if marking done
         if state == "done" {
@@ -305,7 +299,7 @@ impl YakMap {
     }
 
     pub fn update_context(&mut self, id: YakId, context: String) -> Result<()> {
-        let id = self.resolve_id_or_bail(&id)?;
+        self.ensure_exists(&id)?;
 
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.context = Some(context.clone());
@@ -319,7 +313,7 @@ impl YakMap {
     }
 
     pub fn update_field(&mut self, id: YakId, field_name: String, content: String) -> Result<()> {
-        let id = self.resolve_id_or_bail(&id)?;
+        self.ensure_exists(&id)?;
 
         self.pending_events
             .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
@@ -332,7 +326,7 @@ impl YakMap {
     }
 
     pub fn remove_yak(&mut self, id: YakId) -> Result<()> {
-        let id = self.resolve_id_or_bail(&id)?;
+        self.ensure_exists(&id)?;
 
         // Prevent removing yak with children (referential integrity)
         let children = self.find_children_of(&id);
@@ -369,10 +363,10 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn move_yak(&mut self, old_key: YakId, new_name: String) -> Result<()> {
+    pub fn move_yak(&mut self, id: YakId, new_name: String) -> Result<()> {
         use crate::domain::validate_yak_name;
 
-        let id = self.resolve_id_or_bail(&old_key)?;
+        self.ensure_exists(&id)?;
 
         // Validate each segment of the new name
         for segment in new_name.split('/') {

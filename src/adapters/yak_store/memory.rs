@@ -69,6 +69,14 @@ impl InMemoryStorage {
         let id_map = self.id_to_name.read().unwrap();
         id_map.get(key).cloned()
     }
+
+    /// Reverse lookup: find the YakId for a given yak name within an id_map.
+    fn id_for_name_in(id_map: &HashMap<String, String>, name: &str) -> Option<YakId> {
+        id_map
+            .iter()
+            .find(|(_, v)| **v == name)
+            .map(|(k, _)| YakId::from(k.as_str()))
+    }
 }
 
 impl Default for InMemoryStorage {
@@ -358,22 +366,18 @@ impl ReadYakStore for InMemoryStorage {
 
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         let yaks = self.yaks.read().unwrap();
+        let id_map = self.id_to_name.read().unwrap();
 
         // First, try exact match
         if yaks.contains_key(query) {
-            let id_map = self.id_to_name.read().unwrap();
-            let id = id_map
-                .iter()
-                .find(|(_, v)| **v == query)
-                .map(|(k, _)| YakId::from(k.as_str()))
-                .unwrap_or_else(|| YakId::from(query));
+            let id = Self::id_for_name_in(&id_map, query).unwrap_or_else(|| YakId::from(query));
             return Ok(id);
         }
 
         // If not found, try fuzzy match on the leaf node only
-        let matches: Vec<(&String, &HashMap<String, String>)> = yaks
-            .iter()
-            .filter(|(yak_name, _)| {
+        let matches: Vec<&String> = yaks
+            .keys()
+            .filter(|yak_name| {
                 let leaf = yak_name.rsplit('/').next().unwrap_or(yak_name);
                 leaf.to_lowercase().contains(&query.to_lowercase())
             })
@@ -382,12 +386,8 @@ impl ReadYakStore for InMemoryStorage {
         match matches.len() {
             0 => anyhow::bail!("yak '{}' not found", query),
             1 => {
-                let name = matches[0].0;
-                let id_map = self.id_to_name.read().unwrap();
-                let id = id_map
-                    .iter()
-                    .find(|(_, v)| *v == name)
-                    .map(|(k, _)| YakId::from(k.as_str()))
+                let name = matches[0];
+                let id = Self::id_for_name_in(&id_map, name)
                     .unwrap_or_else(|| YakId::from(name.as_str()));
                 Ok(id)
             }

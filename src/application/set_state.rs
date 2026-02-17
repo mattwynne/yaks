@@ -2,6 +2,8 @@
 
 use anyhow::Result;
 
+use crate::domain::slug::YakId;
+
 use super::{Application, UseCase};
 
 pub struct SetState {
@@ -25,8 +27,6 @@ impl SetState {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        use crate::domain::slug::YakId;
-
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         let ids_to_update = if self.recursive {

@@ -192,8 +192,10 @@ macro_rules! yak_store_tests {
             assert_eq!(result, YakId::from("parent"));
 
             // Fuzzy search for "child1" should find the child yak
-            let result = ReadYakStore::fuzzy_find_yak_id(&store, "child1");
-            assert!(result.is_ok(), "Expected to find child1 via fuzzy search");
+            // and the returned ID should resolve to the correct yak
+            let child_id = ReadYakStore::fuzzy_find_yak_id(&store, "child1").unwrap();
+            let child = ReadYakStore::get_yak(&store, &child_id).unwrap();
+            assert_eq!(child.name, "parent/child1");
         }
 
         #[test]

@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::{Arc, Mutex};
 
 use crate::domain::ports::{EventStore, EventStoreReader};
-use crate::domain::YakEvent;
+use crate::domain::{Yak, YakEvent};
 
 #[derive(Clone)]
 pub struct InMemoryEventStore {
@@ -40,6 +40,10 @@ impl EventStore for InMemoryEventStore {
 
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {
         Ok(self.events.lock().unwrap().clone())
+    }
+
+    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
+        Ok(0)
     }
 }
 
