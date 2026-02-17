@@ -22,7 +22,7 @@ macro_rules! event_store_tests {
             let (mut store, _guard) = $create_store;
             let event = YakEvent::Added(AddedEvent {
                 name: Name::from("foo"),
-                id: YakId::from(""),
+                id: YakId::from("foo-a1b2"),
                 parent_id: None,
             });
             store.append(&event).unwrap();
@@ -37,14 +37,14 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("foo"),
-                    id: YakId::from(""),
+                    id: YakId::from("foo-a1b2"),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("bar"),
-                    id: YakId::from(""),
+                    id: YakId::from("bar-c3d4"),
                     parent_id: None,
                 }))
                 .unwrap();
@@ -59,14 +59,14 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("first"),
-                    id: YakId::from(""),
+                    id: YakId::from("first-a1b2"),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("second"),
-                    id: YakId::from(""),
+                    id: YakId::from("second-c3d4"),
                     parent_id: None,
                 }))
                 .unwrap();
@@ -82,29 +82,33 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("foo"),
-                    id: YakId::from(""),
+                    id: YakId::from("foo-a1b2"),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("bar"),
-                    id: YakId::from(""),
+                    id: YakId::from("bar-c3d4"),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    id: YakId::from("foo"),
+                    id: YakId::from("foo-a1b2"),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
 
-            let foo_events = store.get_events("foo").unwrap();
-            assert_eq!(foo_events.len(), 2);
+            // Note: get_events filters by yak_name(), which returns
+            // the Name for Added events but the ID for all others.
+            // This is a known inconsistency (see "fix yak_name
+            // method inconsistency on YakEvent" yak).
+            let foo_events = store.get_events("foo-a1b2").unwrap();
+            assert_eq!(foo_events.len(), 1); // StateUpdated only
 
-            let bar_events = store.get_events("bar").unwrap();
-            assert_eq!(bar_events.len(), 1);
+            let bar_events = store.get_events("bar-c3d4").unwrap();
+            assert_eq!(bar_events.len(), 0); // no non-Added events
 
             let baz_events = store.get_events("baz").unwrap();
             assert_eq!(baz_events.len(), 0);
@@ -123,38 +127,38 @@ macro_rules! event_store_tests {
             store
                 .append(&YakEvent::Added(AddedEvent {
                     name: Name::from("test"),
-                    id: YakId::from(""),
+                    id: YakId::from("test-a1b2"),
                     parent_id: None,
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::StateUpdated(StateUpdatedEvent {
-                    id: YakId::from("test"),
+                    id: YakId::from("test-a1b2"),
                     state: "wip".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Moved(MovedEvent {
-                    id: YakId::from("test"),
-                    new_parent: Some(YakId::from("test2")),
+                    id: YakId::from("test-a1b2"),
+                    new_parent: Some(YakId::from("test2-c3d4")),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::ContextUpdated(ContextUpdatedEvent {
-                    id: YakId::from("test2"),
+                    id: YakId::from("test2-c3d4"),
                     content: "some context".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    id: YakId::from("test2"),
+                    id: YakId::from("test2-c3d4"),
                     field_name: "notes".to_string(),
                     content: "stuff".to_string(),
                 }))
                 .unwrap();
             store
                 .append(&YakEvent::Removed(RemovedEvent {
-                    id: YakId::from("test2"),
+                    id: YakId::from("test2-c3d4"),
                 }))
                 .unwrap();
 

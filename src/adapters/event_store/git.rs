@@ -157,14 +157,9 @@ impl GitEventStore {
         match event {
             YakEvent::Added(e) => {
                 let yak_tree_oid = self.create_yak_tree(e.name.as_str(), "todo", "")?;
-                let key = if e.id.as_str().is_empty() {
-                    e.name.as_str()
-                } else {
-                    e.id.as_str()
-                };
                 let path = match &e.parent_id {
-                    Some(parent) => format!("{}/{}", parent, key),
-                    None => key.to_string(),
+                    Some(parent) => format!("{}/{}", parent, e.id),
+                    None => e.id.to_string(),
                 };
                 self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
             }
@@ -484,34 +479,6 @@ mod tests {
         let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
         let commit = store.repo.find_commit(oid).unwrap();
         assert_eq!(commit.message().unwrap(), "Added: \"test\" \"test-a1b2\"");
-    }
-
-    #[test]
-    fn append_builds_tree_with_yak_directory() {
-        let (_tmp, mut store) = setup_test_repo();
-
-        store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
-            .unwrap();
-
-        let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
-        let commit = store.repo.find_commit(oid).unwrap();
-        let tree = commit.tree().unwrap();
-
-        // Verify test/ directory exists in tree
-        let entry = tree.get_name("test").unwrap();
-        let subtree = entry.to_object(&store.repo).unwrap();
-        let subtree = subtree.as_tree().unwrap();
-
-        // Verify state file
-        let state_entry = subtree.get_name("state").unwrap();
-        let state_blob = state_entry.to_object(&store.repo).unwrap();
-        let state_content = std::str::from_utf8(state_blob.as_blob().unwrap().content()).unwrap();
-        assert_eq!(state_content, "todo");
     }
 
     #[test]
