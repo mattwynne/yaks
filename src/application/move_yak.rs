@@ -1,43 +1,82 @@
-// Use case: Move/rename a yak
+// Use case: Move a yak in the hierarchy
 
-use crate::domain::validate_yak_name;
 use anyhow::Result;
 
 use super::{Application, UseCase};
 
 pub struct MoveYak {
-    from: String,
-    to: String,
+    name: String,
+    under: Option<String>,
+    to_root: bool,
 }
 
 impl MoveYak {
+    /// Legacy constructor (positional from/to args) - kept for backward
+    /// compatibility during migration but not used by new CLI.
     pub fn new(from: &str, to: &str) -> Self {
         Self {
-            from: from.to_string(),
-            to: to.to_string(),
+            name: from.to_string(),
+            under: Some(to.to_string()),
+            to_root: false,
+        }
+    }
+
+    /// Move a yak under a parent (--under flag)
+    pub fn under(name: &str, parent: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            under: Some(parent.to_string()),
+            to_root: false,
+        }
+    }
+
+    /// Move a yak to root level (--to-root flag)
+    pub fn to_root(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            under: None,
+            to_root: true,
+        }
+    }
+
+    /// Both flags specified (should error)
+    pub fn under_and_to_root(name: &str, parent: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            under: Some(parent.to_string()),
+            to_root: true,
+        }
+    }
+
+    /// No flags specified (should error)
+    pub fn no_flags(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            under: None,
+            to_root: false,
         }
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        // Validate each segment of the target name
-        for segment in self.to.split('/') {
-            validate_yak_name(segment).map_err(|e| anyhow::anyhow!(e))?;
+        // Validate: exactly one of --under or --to-root must be provided
+        if self.under.is_some() && self.to_root {
+            anyhow::bail!("Cannot use both --under and --to-root. Use one or the other.");
+        }
+        if self.under.is_none() && !self.to_root {
+            anyhow::bail!("Must specify either --under <parent> or --to-root.");
         }
 
-        let id = app.store.fuzzy_find_yak_id(&self.from)?;
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
-        // Check if destination is an existing yak (parent-only move)
-        // fuzzy_find_yak_id returning Ok already proves existence,
-        // so we just use the Ok/Err result directly.
-        let actual_destination = if app.store.fuzzy_find_yak_id(&self.to).is_ok() {
-            let source_yak = app.store.get_yak(&id)?;
-            let base_name = source_yak.name.as_str().rsplit('/').next().unwrap();
-            format!("{}/{}", self.to, base_name)
+        if self.to_root {
+            // Move to root: set parent to None
+            app.with_yak_map(|yak_map| yak_map.move_yak_to(id, None))
         } else {
-            self.to.clone()
-        };
-
-        app.with_yak_map(|yak_map| yak_map.move_yak(id, actual_destination))
+            // Move under parent: resolve parent by fuzzy match
+            let parent_name = self.under.as_ref().unwrap();
+            let parent_id = app.store.fuzzy_find_yak_id(parent_name)?;
+            app.with_yak_map(|yak_map| yak_map.move_yak_to(id, Some(parent_id)))
+        }
     }
 }
 

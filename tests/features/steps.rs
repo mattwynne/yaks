@@ -482,6 +482,62 @@ async fn try_move_yak_in_process(
     world.try_move_yak(&from, &to)
 }
 
+#[when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)]
+async fn move_yak_under_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    parent: String,
+) -> Result<()> {
+    world.move_yak_under(&name, &parent)
+}
+
+#[when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)]
+async fn move_yak_under_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    parent: String,
+) -> Result<()> {
+    world.move_yak_under(&name, &parent)
+}
+
+#[when(regex = r#"^I move the yak "(.+)" to root$"#)]
+async fn move_yak_to_root_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.move_yak_to_root(&name)
+}
+
+#[when(regex = r#"^I move the yak "(.+)" to root$"#)]
+async fn move_yak_to_root_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
+    world.move_yak_to_root(&name)
+}
+
+#[when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$"#)]
+async fn try_move_yak_both_flags_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    parent: String,
+) -> Result<()> {
+    world.try_move_yak_under_and_to_root(&name, &parent)
+}
+
+#[when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$"#)]
+async fn try_move_yak_both_flags_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    parent: String,
+) -> Result<()> {
+    world.try_move_yak_under_and_to_root(&name, &parent)
+}
+
+#[when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)]
+async fn try_move_yak_no_flags_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.try_move_yak_no_flags(&name)
+}
+
+#[when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)]
+async fn try_move_yak_no_flags_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
+    world.try_move_yak_no_flags(&name)
+}
+
 #[when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)]
 async fn rename_yak_full_stack(world: &mut FullStackWorld, from: String, to: String) -> Result<()> {
     world.rename_yak(&from, &to)

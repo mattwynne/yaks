@@ -74,9 +74,18 @@ enum Commands {
     },
     /// Remove all done yaks
     Prune,
-    /// Move/rename a yak
+    /// Move a yak in the hierarchy
     #[command(alias = "mv")]
-    Move { from: String, to: String },
+    Move {
+        /// The yak to move (space-separated words)
+        name: Vec<String>,
+        /// Move under this parent yak
+        #[arg(long)]
+        under: Option<Vec<String>>,
+        /// Move to root level (un-nest)
+        #[arg(long)]
+        to_root: bool,
+    },
     /// Rename a yak (change name without moving)
     Rename {
         /// Current yak name
@@ -193,7 +202,25 @@ fn main() -> Result<()> {
             app.handle(RemoveYak::new(&name_str))
         }
         Commands::Prune => app.handle(PruneYaks::new()),
-        Commands::Move { from, to } => app.handle(MoveYak::new(&from, &to)),
+        Commands::Move {
+            name,
+            under,
+            to_root,
+        } => {
+            let name_str = name.join(" ");
+            if under.is_some() && to_root {
+                anyhow::bail!("Cannot use both --under and --to-root. Use one or the other.");
+            }
+            if under.is_none() && !to_root {
+                anyhow::bail!("Must specify either --under <parent> or --to-root.");
+            }
+            if to_root {
+                app.handle(MoveYak::to_root(&name_str))
+            } else {
+                let parent_str = under.unwrap().join(" ");
+                app.handle(MoveYak::under(&name_str, &parent_str))
+            }
+        }
         Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
         Commands::Context { name, show } => {
             let name_str = name.join(" ");

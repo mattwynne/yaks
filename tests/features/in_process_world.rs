@@ -195,6 +195,24 @@ impl TestWorld for InProcessWorld {
         self.try_execute(|app| app.handle(MoveYak::new(from, to)))
     }
 
+    fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.execute(|app| app.handle(MoveYak::under(name, parent)))
+    }
+
+    fn move_yak_to_root(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(MoveYak::to_root(name)))
+    }
+
+    fn try_move_yak_under_and_to_root(&mut self, name: &str, parent: &str) -> Result<()> {
+        // Both flags: this should fail at the CLI level, but in-process
+        // we simulate by calling with both
+        self.try_execute(|app| app.handle(MoveYak::under_and_to_root(name, parent)))
+    }
+
+    fn try_move_yak_no_flags(&mut self, name: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(MoveYak::no_flags(name)))
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(WriteField::new(name, field)))

@@ -492,6 +492,51 @@ impl YakMap {
         Ok(())
     }
 
+    /// Move a yak to a new parent (or to root if new_parent_id is None).
+    /// The yak keeps its current name.
+    pub fn move_yak_to(&mut self, id: YakId, new_parent_id: Option<YakId>) -> Result<()> {
+        self.ensure_exists(&id)?;
+
+        // Validate new parent exists
+        if let Some(ref pid) = new_parent_id {
+            self.ensure_exists(pid)?;
+        }
+
+        // MVP limitation: Fail if moving a yak with children
+        let children = self.find_children_of(&id);
+        if !children.is_empty() {
+            let display = self.build_display_name(&id);
+            anyhow::bail!(
+                "Cannot move '{}': it has {} child(ren). Moving with children is not yet supported.",
+                display,
+                children.len()
+            );
+        }
+
+        let old_parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
+
+        // No-op if already at the desired position
+        if old_parent_id == new_parent_id {
+            return Ok(());
+        }
+
+        // Check slug uniqueness among siblings at the destination
+        let name = self.yaks.get(&id).unwrap().name.as_str().to_string();
+        self.check_sibling_slug_uniqueness(&name, &new_parent_id, Some(&id))?;
+
+        // Update the yak's parent
+        let yak = self.yaks.get_mut(&id).unwrap();
+        yak.parent_id = new_parent_id.clone();
+
+        // Emit Moved event
+        self.pending_events.push(YakEvent::Moved(MovedEvent {
+            id,
+            new_parent: new_parent_id,
+        }));
+
+        Ok(())
+    }
+
     pub fn move_yak(&mut self, id: YakId, new_name: String) -> Result<()> {
         use crate::domain::validate_yak_name;
 
