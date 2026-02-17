@@ -72,6 +72,7 @@ mod tests {
             Yak {
                 id: YakId::from("test"),
                 name: Name::from("test"),
+                parent_id: None,
                 state: "todo".to_string(),
                 context: None,
                 fields: HashMap::new(),

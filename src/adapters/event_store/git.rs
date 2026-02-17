@@ -672,6 +672,7 @@ mod tests {
         let yak1 = Yak {
             id: YakId::from("yak1-a1b2"),
             name: Name::from("First Yak"),
+            parent_id: None,
             state: "todo".to_string(),
             context: Some("some context".to_string()),
             fields: fields.clone(),
@@ -681,6 +682,7 @@ mod tests {
         let yak2 = Yak {
             id: YakId::from("yak2-c3d4"),
             name: Name::from("Second Yak"),
+            parent_id: None,
             state: "wip".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -747,6 +749,7 @@ mod tests {
         let child = Yak {
             id: YakId::from("child-x1y2"),
             name: Name::from("Child Yak"),
+            parent_id: None,
             state: "todo".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -756,6 +759,7 @@ mod tests {
         let parent = Yak {
             id: YakId::from("parent-a1b2"),
             name: Name::from("Parent Yak"),
+            parent_id: None,
             state: "wip".to_string(),
             context: Some("parent context".to_string()),
             fields: HashMap::new(),
@@ -814,6 +818,7 @@ mod tests {
         let yak = Yak {
             id: YakId::from("snapshot-a1b2"),
             name: Name::from("Snapshot Yak"),
+            parent_id: None,
             state: "todo".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -837,6 +842,7 @@ mod tests {
         let yak1 = Yak {
             id: YakId::from("yak1-a1b2"),
             name: Name::from("Yak One"),
+            parent_id: None,
             state: "todo".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -846,6 +852,7 @@ mod tests {
         let yak2 = Yak {
             id: YakId::from("yak2-c3d4"),
             name: Name::from("Yak Two"),
+            parent_id: None,
             state: "wip".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -855,6 +862,7 @@ mod tests {
         let yak3 = Yak {
             id: YakId::from("yak3-e5f6"),
             name: Name::from("Yak Three"),
+            parent_id: None,
             state: "done".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -891,6 +899,7 @@ mod tests {
         let parent = Yak {
             id: YakId::from("parent-a1b2"),
             name: Name::from("Parent Yak"),
+            parent_id: None,
             state: "wip".to_string(),
             context: None,
             fields: HashMap::new(),

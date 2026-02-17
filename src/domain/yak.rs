@@ -22,6 +22,7 @@ pub fn validate_state(state: &str) -> Result<(), String> {
 pub struct Yak {
     pub id: YakId,
     pub name: Name,
+    pub parent_id: Option<YakId>,
     pub state: String,
     pub context: Option<String>,
     pub fields: HashMap<String, String>,
@@ -65,6 +66,7 @@ mod tests {
         let yak = Yak {
             id: YakId::from("test"),
             name: Name::from("test"),
+            parent_id: None,
             state: "todo".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -75,6 +77,7 @@ mod tests {
         let done_yak = Yak {
             id: YakId::from("test"),
             name: Name::from("test"),
+            parent_id: None,
             state: "done".to_string(),
             context: None,
             fields: HashMap::new(),

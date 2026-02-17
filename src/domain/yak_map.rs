@@ -31,20 +31,25 @@ impl YakMap {
     pub fn from_store(store: &dyn ReadYakStore) -> Result<Self> {
         let yaks_list = store.list_yaks()?;
 
-        // First pass: build name→id mapping
+        // Build name→id mapping for fallback parent derivation
         let name_to_id: HashMap<String, YakId> = yaks_list
             .iter()
             .map(|yak| (yak.name.to_string(), yak.id.clone()))
             .collect();
 
-        // Second pass: populate with ID keys and derived parent_id
         let mut yaks = HashMap::new();
         for yak in &yaks_list {
             let yak_name_str = yak.name.as_str();
             let leaf = yak_name_str.rsplit('/').next().unwrap_or(yak_name_str);
-            let parent_id = crate::domain::hierarchy::get_parent(yak_name_str)
-                .and_then(|parent_name| name_to_id.get(&parent_name))
-                .cloned();
+
+            // Use parent_id from Yak struct if available,
+            // otherwise fall back to name-based derivation
+            let parent_id = yak.parent_id.clone().or_else(|| {
+                crate::domain::hierarchy::get_parent(yak_name_str)
+                    .and_then(|parent_name| name_to_id.get(&parent_name))
+                    .cloned()
+            });
+
             yaks.insert(
                 yak.id.clone(),
                 YakState {
@@ -808,6 +813,7 @@ mod tests {
                 Yak {
                     id: YakId::from("test1-aaaa"),
                     name: Name::from("test1"),
+                    parent_id: None,
                     state: "todo".to_string(),
                     context: Some("context1".to_string()),
                     fields: std::collections::HashMap::new(),
@@ -816,6 +822,7 @@ mod tests {
                 Yak {
                     id: YakId::from("test2-bbbb"),
                     name: Name::from("test2"),
+                    parent_id: None,
                     state: "wip".to_string(),
                     context: None,
                     fields: std::collections::HashMap::new(),
@@ -862,6 +869,7 @@ mod tests {
                     Yak {
                         id: YakId::from("parent-aaaa"),
                         name: Name::from("parent"),
+                        parent_id: None,
                         state: "wip".to_string(),
                         context: None,
                         fields: std::collections::HashMap::new(),
@@ -870,6 +878,7 @@ mod tests {
                     Yak {
                         id: YakId::from("child-bbbb"),
                         name: Name::from("parent/child"),
+                        parent_id: None,
                         state: "todo".to_string(),
                         context: None,
                         fields: std::collections::HashMap::new(),
@@ -890,6 +899,61 @@ mod tests {
         let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
         assert_eq!(child.name, Name::from("child"));
         assert_eq!(child.parent_id, Some(YakId::from("parent-aaaa")));
+    }
+
+    #[test]
+    fn test_from_store_uses_parent_id_from_yak() {
+        use crate::domain::ports::ReadYakStore;
+        use crate::domain::Yak;
+
+        struct MockStore;
+
+        impl ReadYakStore for MockStore {
+            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
+                anyhow::bail!("Not needed")
+            }
+
+            fn list_yaks(&self) -> Result<Vec<Yak>> {
+                Ok(vec![
+                    Yak {
+                        id: YakId::from("parent-aaaa"),
+                        name: Name::from("parent"),
+                        parent_id: None,
+                        state: "wip".to_string(),
+                        context: None,
+                        fields: std::collections::HashMap::new(),
+                        children: vec![],
+                    },
+                    Yak {
+                        id: YakId::from("child-bbbb"),
+                        // Leaf-only name: no slash to derive parent from
+                        name: Name::from("child"),
+                        // parent_id explicitly set by store
+                        parent_id: Some(YakId::from("parent-aaaa")),
+                        state: "todo".to_string(),
+                        context: None,
+                        fields: std::collections::HashMap::new(),
+                        children: vec![],
+                    },
+                ])
+            }
+
+            fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {
+                anyhow::bail!("Not needed")
+            }
+            fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
+                anyhow::bail!("Not needed")
+            }
+        }
+
+        let map = YakMap::from_store(&MockStore).unwrap();
+        let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
+        assert_eq!(child.name, Name::from("child"));
+        assert_eq!(
+            child.parent_id,
+            Some(YakId::from("parent-aaaa")),
+            "from_store should use parent_id from Yak struct"
+        );
     }
 
     #[test]
