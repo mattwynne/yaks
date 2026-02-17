@@ -371,13 +371,6 @@ impl ReadYakStore for InMemoryStorage {
         Ok(result)
     }
 
-    fn yak_exists(&self, id: &YakId) -> bool {
-        let name = self
-            .resolve_key(id.as_str())
-            .unwrap_or_else(|| id.as_str().to_string());
-        self.yaks.read().unwrap().contains_key(&name)
-    }
-
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         let yaks = self.yaks.read().unwrap();
         let id_map = self.id_to_name.read().unwrap();
@@ -448,10 +441,7 @@ mod tests {
                 Some(&YakId::from("parent-a1b2")),
             )
             .unwrap();
-        assert!(ReadYakStore::yak_exists(
-            &storage,
-            &YakId::from("parent/child")
-        ));
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
     }
 
     #[test]

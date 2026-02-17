@@ -83,7 +83,7 @@ mod tests {
         let use_case = AddYak::new("test-yak");
         use_case.execute(&mut app).unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test-yak")));
+        assert!(ReadYakStore::get_yak(&storage, &YakId::from("test-yak")).is_ok());
     }
 
     #[test]
@@ -123,10 +123,7 @@ mod tests {
             .execute(&mut app)
             .unwrap();
 
-        assert!(ReadYakStore::yak_exists(
-            &storage,
-            &YakId::from("parent/child")
-        ));
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
     }
 
     #[test]

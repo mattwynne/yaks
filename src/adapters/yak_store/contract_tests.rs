@@ -40,7 +40,7 @@ macro_rules! yak_store_tests {
                 .create_yak(&Name::from("test-yak"), &YakId::from(""), None)
                 .unwrap();
             store.delete_yak(&YakId::from("test-yak")).unwrap();
-            assert!(!ReadYakStore::yak_exists(&store, &YakId::from("test-yak")));
+            assert!(ReadYakStore::get_yak(&store, &YakId::from("test-yak")).is_err());
         }
 
         #[test]
@@ -174,16 +174,6 @@ macro_rules! yak_store_tests {
             let (store, _guard) = $create_store;
             let yaks = ReadYakStore::list_yaks(&store).unwrap();
             assert_eq!(yaks.len(), 0);
-        }
-
-        #[test]
-        fn yak_exists_returns_correct_value() {
-            let (store, _guard) = $create_store;
-            store
-                .create_yak(&Name::from("test-yak"), &YakId::from(""), None)
-                .unwrap();
-            assert!(ReadYakStore::yak_exists(&store, &YakId::from("test-yak")));
-            assert!(!ReadYakStore::yak_exists(&store, &YakId::from("missing")));
         }
 
         #[test]

@@ -544,11 +544,6 @@ impl ReadYakStore for DirectoryStorage {
         Ok(yaks)
     }
 
-    fn yak_exists(&self, id: &YakId) -> bool {
-        let dir = self.yak_dir(id.as_str());
-        dir.join(CONTEXT_FIELD).exists()
-    }
-
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         // First, try exact match via resolution (handles both old and new format)
         let dir = self.yak_dir(query);
@@ -718,22 +713,6 @@ mod tests {
         assert_eq!(yak.name, Name::from("test"));
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
-    }
-
-    #[test]
-    fn test_directory_storage_read_yak_store_yak_exists() {
-        let (mut storage, _temp) = setup_test_storage();
-
-        storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
-            .unwrap();
-
-        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
-        assert!(!ReadYakStore::yak_exists(&storage, &YakId::from("missing")));
     }
 
     #[test]

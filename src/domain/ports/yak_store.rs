@@ -7,7 +7,6 @@ use anyhow::Result;
 pub trait ReadYakStore {
     fn get_yak(&self, id: &YakId) -> Result<Yak>;
     fn list_yaks(&self) -> Result<Vec<Yak>>;
-    fn yak_exists(&self, id: &YakId) -> bool;
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId>;
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String>;
 }
@@ -52,10 +51,6 @@ mod tests {
             Ok(self.yaks.values().cloned().collect())
         }
 
-        fn yak_exists(&self, id: &YakId) -> bool {
-            self.yaks.contains_key(id.as_str())
-        }
-
         fn fuzzy_find_yak_id(&self, name: &str) -> Result<YakId> {
             if self.yaks.contains_key(name) {
                 Ok(YakId::from(name))
@@ -88,26 +83,5 @@ mod tests {
         let yak = store.get_yak(&YakId::from("test")).unwrap();
 
         assert_eq!(yak.name, Name::from("test"));
-    }
-
-    #[test]
-    fn test_store_yak_exists() {
-        let mut yaks = HashMap::new();
-        yaks.insert(
-            "test".to_string(),
-            Yak {
-                id: YakId::from("test"),
-                name: Name::from("test"),
-                state: "todo".to_string(),
-                context: None,
-                fields: HashMap::new(),
-                children: vec![],
-            },
-        );
-
-        let store = InMemoryStore { yaks };
-
-        assert!(store.yak_exists(&YakId::from("test")));
-        assert!(!store.yak_exists(&YakId::from("missing")));
     }
 }

@@ -95,7 +95,7 @@ mod tests {
         })
         .unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
+        assert!(ReadYakStore::get_yak(&storage, &YakId::from("test")).is_ok());
     }
 
     #[test]
@@ -144,7 +144,7 @@ mod tests {
         .unwrap();
 
         // Verify yak was created
-        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
+        assert!(ReadYakStore::get_yak(&storage, &YakId::from("test")).is_ok());
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "todo");
@@ -173,11 +173,8 @@ mod tests {
         .unwrap();
 
         // Verify both parent and child exist
-        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("parent")));
-        assert!(ReadYakStore::yak_exists(
-            &storage,
-            &YakId::from("parent/child")
-        ));
+        assert!(ReadYakStore::get_yak(&storage, &YakId::from("parent")).is_ok());
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
     }
 
     #[test]
