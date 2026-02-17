@@ -21,3 +21,11 @@ Feature: Yak log
       Then it should succeed
       And line 1 of the output should include "first yak"
       And line 2 of the output should include "second yak"
+
+  Rule: Events reference yaks by ID
+
+    Example: Added event contains the yak ID
+      Given I have a clean git repository
+      And I add the yak "Fix the Bug"
+      When I run yx log
+      Then the output should include "fix-the-bug-"
