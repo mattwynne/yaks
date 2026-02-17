@@ -1,14 +1,13 @@
 // Yak store port traits - read/write abstractions for yak persistence
 
-use crate::domain::slug::YakId;
+use crate::domain::slug::{Name, YakId};
 use crate::domain::Yak;
 use anyhow::Result;
 
 pub trait ReadYakStore {
     fn get_yak(&self, id: &YakId) -> Result<Yak>;
     fn list_yaks(&self) -> Result<Vec<Yak>>;
-    // TODO: Change yak_exists to accept &YakId instead of &str
-    fn yak_exists(&self, name: &str) -> bool;
+    fn yak_exists(&self, id: &YakId) -> bool;
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId>;
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String>;
 }
@@ -16,19 +15,19 @@ pub trait ReadYakStore {
 pub trait WriteYakStore {
     /// Create a new yak. The `id` is the storage-safe identifier.
     /// If `parent_id` is Some, the yak is nested under the parent's directory.
-    fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()>;
+    fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()>;
 
     /// Delete a yak
-    fn delete_yak(&self, name: &str) -> Result<()>;
+    fn delete_yak(&self, id: &YakId) -> Result<()>;
 
     /// Rename a yak
-    fn rename_yak(&self, from: &str, to: &str) -> Result<()>;
+    fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()>;
 
     /// Move a yak to a new parent (or to root if parent_id is None)
-    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()>;
+    fn reparent_yak(&self, id: &YakId, new_parent_id: Option<&YakId>) -> Result<()>;
 
     /// Write a field for a yak
-    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()>;
+    fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()>;
 }
 
 #[cfg(test)]
@@ -53,8 +52,8 @@ mod tests {
             Ok(self.yaks.values().cloned().collect())
         }
 
-        fn yak_exists(&self, name: &str) -> bool {
-            self.yaks.contains_key(name)
+        fn yak_exists(&self, id: &YakId) -> bool {
+            self.yaks.contains_key(id.as_str())
         }
 
         fn fuzzy_find_yak_id(&self, name: &str) -> Result<YakId> {
@@ -108,7 +107,7 @@ mod tests {
 
         let store = InMemoryStore { yaks };
 
-        assert!(store.yak_exists("test"));
-        assert!(!store.yak_exists("missing"));
+        assert!(store.yak_exists(&YakId::from("test")));
+        assert!(!store.yak_exists(&YakId::from("missing")));
     }
 }

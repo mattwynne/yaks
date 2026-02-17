@@ -1,6 +1,7 @@
 // In-memory display adapter - for testing only
 
 use crate::domain::ports::DisplayPort;
+use crate::domain::slug::Name;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
@@ -59,7 +60,7 @@ impl DisplayPort for InMemoryDisplay {
             .push(message.to_string());
     }
 
-    fn display_yak_pretty(&self, prefix: &str, name: &str, state: &str) {
+    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
         let indicator = match state {
             "wip" => "●",
             "done" => "●",
@@ -71,7 +72,7 @@ impl DisplayPort for InMemoryDisplay {
             .push(format!("{prefix}{indicator} {name}"));
     }
 
-    fn display_yak_markdown(&self, depth: usize, name: &str, state: &str) {
+    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str) {
         let indent = "  ".repeat(depth);
         self.info_messages
             .write()

@@ -1,5 +1,6 @@
 // ListYaks use case - displays all yaks
 
+use crate::domain::slug::Name;
 use crate::domain::Yak;
 // DisplayPort accessed via app.display
 use anyhow::Result;
@@ -7,7 +8,7 @@ use std::collections::HashMap;
 
 /// Represents a node in the yak hierarchy tree
 struct YakNode {
-    name: String,      // Just the leaf name (e.g., "child" not "parent/child")
+    name: Name,        // Just the leaf name (e.g., "child" not "parent/child")
     full_path: String, // Full path (e.g., "parent/child")
     yak: Option<Yak>,  // None for implicit parents
     children: Vec<YakNode>,
@@ -105,7 +106,7 @@ impl ListYaks {
             for i in 1..parts.len() {
                 let parent_path = parts[..i].join("/");
                 if !nodes_by_path.contains_key(&parent_path) {
-                    let parent_name = parts[i - 1].to_string();
+                    let parent_name = Name::from(parts[i - 1]);
                     nodes_by_path.insert(
                         parent_path.clone(),
                         YakNode {
@@ -119,7 +120,7 @@ impl ListYaks {
             }
 
             // Create node for this yak
-            let name = parts.last().unwrap_or(&"").to_string();
+            let name = Name::from(parts.last().copied().unwrap_or(""));
             nodes_by_path.insert(
                 yak.name.to_string(),
                 YakNode {

@@ -65,6 +65,7 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::domain::ports::ReadYakStore;
+    use crate::domain::slug::YakId;
     use crate::infrastructure::EventBus;
 
     #[test]
@@ -82,7 +83,7 @@ mod tests {
         let use_case = AddYak::new("test-yak");
         use_case.execute(&mut app).unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, "test-yak"));
+        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test-yak")));
     }
 
     #[test]
@@ -122,7 +123,10 @@ mod tests {
             .execute(&mut app)
             .unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
+        assert!(ReadYakStore::yak_exists(
+            &storage,
+            &YakId::from("parent/child")
+        ));
     }
 
     #[test]

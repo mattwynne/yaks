@@ -73,6 +73,7 @@ mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::domain::ports::ReadYakStore;
+    use crate::domain::slug::YakId;
     use crate::infrastructure::EventBus;
 
     #[test]
@@ -94,7 +95,7 @@ mod tests {
         })
         .unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, "test"));
+        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
     }
 
     #[test]
@@ -143,7 +144,7 @@ mod tests {
         .unwrap();
 
         // Verify yak was created
-        assert!(ReadYakStore::yak_exists(&storage, "test"));
+        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "todo");
@@ -172,8 +173,11 @@ mod tests {
         .unwrap();
 
         // Verify both parent and child exist
-        assert!(ReadYakStore::yak_exists(&storage, "parent"));
-        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
+        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("parent")));
+        assert!(ReadYakStore::yak_exists(
+            &storage,
+            &YakId::from("parent/child")
+        ));
     }
 
     #[test]

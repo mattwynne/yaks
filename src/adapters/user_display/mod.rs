@@ -3,6 +3,8 @@
 #[cfg(any(test, feature = "test-support"))]
 pub mod memory_display;
 
+use crate::domain::slug::Name;
+
 pub struct ConsoleDisplay;
 
 impl crate::domain::ports::DisplayPort for ConsoleDisplay {
@@ -14,7 +16,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         println!("{message}");
     }
 
-    fn display_yak_pretty(&self, prefix: &str, name: &str, state: &str) {
+    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
         match state {
             "wip" => println!("{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
             "done" => println!("{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
@@ -22,7 +24,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         }
     }
 
-    fn display_yak_markdown(&self, depth: usize, name: &str, state: &str) {
+    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str) {
         let indent = "  ".repeat(depth);
         let line = format!("{indent}- [{state}] {name}");
         if state == "done" {

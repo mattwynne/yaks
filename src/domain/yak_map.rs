@@ -501,7 +501,7 @@ mod tests {
             fn list_yaks(&self) -> Result<Vec<Yak>> {
                 Ok(vec![])
             }
-            fn yak_exists(&self, _name: &str) -> bool {
+            fn yak_exists(&self, _id: &YakId) -> bool {
                 false
             }
             fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {
@@ -541,8 +541,8 @@ mod tests {
                 Ok(self.yaks.clone())
             }
 
-            fn yak_exists(&self, name: &str) -> bool {
-                self.yaks.iter().any(|y| y.name.as_str() == name)
+            fn yak_exists(&self, id: &YakId) -> bool {
+                self.yaks.iter().any(|y| y.id == *id)
             }
 
             fn fuzzy_find_yak_id(&self, name: &str) -> Result<YakId> {
@@ -633,7 +633,7 @@ mod tests {
                 ])
             }
 
-            fn yak_exists(&self, _name: &str) -> bool {
+            fn yak_exists(&self, _id: &YakId) -> bool {
                 false
             }
             fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {

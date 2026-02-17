@@ -86,17 +86,17 @@ impl Default for InMemoryStorage {
 }
 
 impl WriteYakStore for InMemoryStorage {
-    fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()> {
+    fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()> {
         // Build path key from parent_id lookup
         let path_key = match parent_id {
             Some(pid) => {
                 let id_map = self.id_to_name.read().unwrap();
                 let parent_path = id_map
-                    .get(pid)
+                    .get(pid.as_str())
                     .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
                 format!("{}/{}", parent_path, name)
             }
-            None => name.to_string(),
+            None => name.as_str().to_string(),
         };
 
         let mut yaks = self.yaks.write().unwrap();
@@ -111,26 +111,34 @@ impl WriteYakStore for InMemoryStorage {
         yaks.insert(path_key.clone(), fields);
 
         // Store id→name mapping
-        if !id.is_empty() {
+        if !id.as_str().is_empty() {
             let mut id_map = self.id_to_name.write().unwrap();
-            id_map.insert(id.to_string(), path_key);
+            id_map.insert(id.as_str().to_string(), path_key);
         }
 
         Ok(())
     }
 
-    fn delete_yak(&self, key: &str) -> Result<()> {
-        let name = self.resolve_key(key).unwrap_or_else(|| key.to_string());
+    fn delete_yak(&self, id: &YakId) -> Result<()> {
+        let name = self
+            .resolve_key(id.as_str())
+            .unwrap_or_else(|| id.as_str().to_string());
         let mut yaks = self.yaks.write().unwrap();
         yaks.remove(&name);
         Ok(())
     }
 
-    fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
-        let from_name = self.resolve_key(from).unwrap_or_else(|| from.to_string());
-        // `to` is the new display name, not an existing key -- don't resolve it
+    fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()> {
+        let from_name = self
+            .resolve_key(id.as_str())
+            .unwrap_or_else(|| id.as_str().to_string());
+        // `new_name` is the new display name, not an existing key -- don't resolve it
         // Reconstruct the path: keep parent prefix, replace leaf
-        let new_leaf = to.rsplit('/').next().unwrap_or(to);
+        let new_leaf = new_name
+            .as_str()
+            .rsplit('/')
+            .next()
+            .unwrap_or(new_name.as_str());
         let to_name = match from_name.rsplit_once('/') {
             Some((parent, _)) => format!("{}/{}", parent, new_leaf),
             None => new_leaf.to_string(),
@@ -138,16 +146,19 @@ impl WriteYakStore for InMemoryStorage {
         let mut yaks = self.yaks.write().unwrap();
 
         if !yaks.contains_key(&from_name) {
-            anyhow::bail!("yak '{}' not found", from);
+            anyhow::bail!("yak '{}' not found", id);
         }
 
         if yaks.contains_key(&to_name) {
-            anyhow::bail!("Yak '{}' already exists", to);
+            anyhow::bail!("Yak '{}' already exists", new_name);
         }
 
         if let Some(mut fields) = yaks.remove(&from_name) {
             // Update the name field to reflect the new name
-            fields.insert(crate::domain::NAME_FIELD.to_string(), to.to_string());
+            fields.insert(
+                crate::domain::NAME_FIELD.to_string(),
+                new_name.as_str().to_string(),
+            );
             yaks.insert(to_name.clone(), fields);
         }
 
@@ -160,12 +171,12 @@ impl WriteYakStore for InMemoryStorage {
         Ok(())
     }
 
-    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()> {
+    fn reparent_yak(&self, id: &YakId, new_parent_id: Option<&YakId>) -> Result<()> {
         // Look up current name-path from id
         let old_name = {
             let id_map = self.id_to_name.read().unwrap();
             id_map
-                .get(id)
+                .get(id.as_str())
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?
         };
@@ -178,7 +189,7 @@ impl WriteYakStore for InMemoryStorage {
             Some(pid) => {
                 let id_map = self.id_to_name.read().unwrap();
                 let parent_name = id_map
-                    .get(pid)
+                    .get(pid.as_str())
                     .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
                 format!("{}/{}", parent_name, leaf)
             }
@@ -196,21 +207,21 @@ impl WriteYakStore for InMemoryStorage {
         // Update id→name mapping
         {
             let mut id_map = self.id_to_name.write().unwrap();
-            id_map.insert(id.to_string(), new_name);
+            id_map.insert(id.as_str().to_string(), new_name);
         }
 
         Ok(())
     }
 
-    fn write_field(&self, yak_key: &str, field_name: &str, content: &str) -> Result<()> {
+    fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()> {
         let name = self
-            .resolve_key(yak_key)
-            .unwrap_or_else(|| yak_key.to_string());
+            .resolve_key(id.as_str())
+            .unwrap_or_else(|| id.as_str().to_string());
 
         // When updating the name field via id (not via name-path), also rename
         // the HashMap key if the leaf name changed.
-        if field_name == crate::domain::NAME_FIELD && name != yak_key {
-            // yak_key is an id (not name), so this is an id-based update
+        if field_name == crate::domain::NAME_FIELD && name != id.as_str() {
+            // id was resolved to a different name, so this is an id-based update
             // Extract leaf from both current key and content (content may be
             // a full path like "parent/child" or just a leaf like "newname")
             let current_leaf = name.rsplit('/').next().unwrap_or(&name);
@@ -244,7 +255,7 @@ impl WriteYakStore for InMemoryStorage {
         let mut yaks = self.yaks.write().unwrap();
         let fields = yaks
             .get_mut(&name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_key))?;
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         fields.insert(field_name.to_string(), content.to_string());
 
@@ -360,8 +371,11 @@ impl ReadYakStore for InMemoryStorage {
         Ok(result)
     }
 
-    fn yak_exists(&self, name: &str) -> bool {
-        self.yaks.read().unwrap().contains_key(name)
+    fn yak_exists(&self, id: &YakId) -> bool {
+        let name = self
+            .resolve_key(id.as_str())
+            .unwrap_or_else(|| id.as_str().to_string());
+        self.yaks.read().unwrap().contains_key(&name)
     }
 
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
@@ -424,11 +438,20 @@ mod tests {
     #[test]
     fn test_create_yak_constructs_path_from_parent_id() {
         let storage = InMemoryStorage::new();
-        storage.create_yak("parent", "parent-a1b2", None).unwrap();
         storage
-            .create_yak("child", "child-c3d4", Some("parent-a1b2"))
+            .create_yak(&Name::from("parent"), &YakId::from("parent-a1b2"), None)
             .unwrap();
-        assert!(ReadYakStore::yak_exists(&storage, "parent/child"));
+        storage
+            .create_yak(
+                &Name::from("child"),
+                &YakId::from("child-c3d4"),
+                Some(&YakId::from("parent-a1b2")),
+            )
+            .unwrap();
+        assert!(ReadYakStore::yak_exists(
+            &storage,
+            &YakId::from("parent/child")
+        ));
     }
 
     #[test]
@@ -438,7 +461,9 @@ mod tests {
         let storage = InMemoryStorage::new();
 
         // Create initial yak
-        storage.create_yak("yak0", "", None).unwrap();
+        storage
+            .create_yak(&Name::from("yak0"), &YakId::from(""), None)
+            .unwrap();
 
         let mut handles = vec![];
 
@@ -447,7 +472,7 @@ mod tests {
             let storage_clone = storage.clone();
             let handle = thread::spawn(move || {
                 storage_clone
-                    .create_yak(&format!("yak{}", i), "", None)
+                    .create_yak(&Name::from(format!("yak{}", i)), &YakId::from(""), None)
                     .unwrap();
             });
             handles.push(handle);

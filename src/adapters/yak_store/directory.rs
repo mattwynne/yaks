@@ -288,10 +288,6 @@ impl DirectoryStorage {
         children
     }
 
-    fn field_path(&self, name: &str, field_name: &str) -> PathBuf {
-        self.yak_dir(name).join(field_name)
-    }
-
     /// Build the full hierarchical name for a yak at the given path.
     /// Walks up parent directories, collecting leaf names from name files,
     /// so the directory structure determines hierarchy.
@@ -331,19 +327,19 @@ impl DirectoryStorage {
 }
 
 impl WriteYakStore for DirectoryStorage {
-    fn create_yak(&self, name: &str, id: &str, parent_id: Option<&str>) -> Result<()> {
+    fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()> {
         // Use slug (from name) as directory name for human readability.
         // Fall back to name directly for backward compat (empty id = legacy).
-        let dir_name = if id.is_empty() {
-            name.to_string()
+        let dir_name = if id.as_str().is_empty() {
+            name.as_str().to_string()
         } else {
-            slugify(name).to_string()
+            slugify(name.as_str()).to_string()
         };
 
         // Determine parent directory: base_path or parent's directory
         let parent_dir = match parent_id {
             Some(pid) => self
-                .resolve_by_id(pid)
+                .resolve_by_id(pid.as_str())
                 .ok_or_else(|| anyhow::anyhow!("Parent yak '{}' not found", pid))?,
             None => self.base_path.clone(),
         };
@@ -361,64 +357,64 @@ impl WriteYakStore for DirectoryStorage {
             .with_context(|| format!("Failed to create context.md for yak: {name}"))?;
 
         // Write name file for name→directory resolution
-        fs::write(dir.join(NAME_FIELD), name)
+        fs::write(dir.join(NAME_FIELD), name.as_str())
             .with_context(|| format!("Failed to write name file for yak: {name}"))?;
 
         // Write id file so the immutable ID is stored inside the directory
-        if !id.is_empty() {
-            fs::write(dir.join(ID_FIELD), id)
+        if !id.as_str().is_empty() {
+            fs::write(dir.join(ID_FIELD), id.as_str())
                 .with_context(|| format!("Failed to write id file for yak: {name}"))?;
         }
 
         Ok(())
     }
 
-    fn delete_yak(&self, name: &str) -> Result<()> {
-        let dir = self.yak_dir(name);
+    fn delete_yak(&self, id: &YakId) -> Result<()> {
+        let dir = self.yak_dir(id.as_str());
         if dir.exists() {
-            fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{name}'"))?;
+            fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{id}'"))?;
         }
         Ok(())
     }
 
-    fn rename_yak(&self, from: &str, to: &str) -> Result<()> {
-        let from_dir = self.yak_dir(from);
+    fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()> {
+        let from_dir = self.yak_dir(id.as_str());
 
         if !from_dir.exists() {
-            anyhow::bail!("yak '{from}' not found");
+            anyhow::bail!("yak '{}' not found", id);
         }
 
         // Compute new slug-based directory name
-        let new_slug = slugify(to).to_string();
+        let new_slug = slugify(new_name.as_str()).to_string();
 
         // Target directory is in the same parent as the current directory
         let parent_dir = from_dir
             .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory for '{from}'"))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory for '{}'", id))?;
         let to_dir = parent_dir.join(&new_slug);
 
         if to_dir.exists() {
-            anyhow::bail!("Yak '{to}' already exists");
+            anyhow::bail!("Yak '{}' already exists", new_name);
         }
 
         fs::rename(&from_dir, &to_dir)
-            .with_context(|| format!("Failed to rename '{from}' to '{to}'"))?;
+            .with_context(|| format!("Failed to rename '{}' to '{}'", id, new_name))?;
 
         // Update name file to reflect new name
-        fs::write(to_dir.join(NAME_FIELD), to)
-            .with_context(|| format!("Failed to update name file for '{to}'"))?;
+        fs::write(to_dir.join(NAME_FIELD), new_name.as_str())
+            .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
 
         Ok(())
     }
 
-    fn reparent_yak(&self, id: &str, new_parent_id: Option<&str>) -> Result<()> {
+    fn reparent_yak(&self, id: &YakId, new_parent_id: Option<&YakId>) -> Result<()> {
         let current_dir = self
-            .resolve_by_id(id)
+            .resolve_by_id(id.as_str())
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         let new_parent_dir = match new_parent_id {
             Some(pid) => self
-                .resolve_by_id(pid)
+                .resolve_by_id(pid.as_str())
                 .ok_or_else(|| anyhow::anyhow!("parent yak '{}' not found", pid))?,
             None => self.base_path.clone(),
         };
@@ -438,14 +434,14 @@ impl WriteYakStore for DirectoryStorage {
         Ok(())
     }
 
-    fn write_field(&self, yak_name: &str, field_name: &str, content: &str) -> Result<()> {
-        let dir = self.yak_dir(yak_name);
+    fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()> {
+        let dir = self.yak_dir(id.as_str());
         if !dir.exists() {
-            anyhow::bail!("yak '{}' not found", yak_name);
+            anyhow::bail!("yak '{}' not found", id);
         }
-        let field_path = self.field_path(yak_name, field_name);
+        let field_path = dir.join(field_name);
         fs::write(&field_path, content)
-            .with_context(|| format!("Failed to write field '{field_name}' for '{yak_name}'"))
+            .with_context(|| format!("Failed to write field '{field_name}' for '{id}'"))
     }
 }
 
@@ -548,9 +544,9 @@ impl ReadYakStore for DirectoryStorage {
         Ok(yaks)
     }
 
-    fn yak_exists(&self, name: &str) -> bool {
-        let context_file = self.field_path(name, CONTEXT_FIELD);
-        context_file.exists()
+    fn yak_exists(&self, id: &YakId) -> bool {
+        let dir = self.yak_dir(id.as_str());
+        dir.join(CONTEXT_FIELD).exists()
     }
 
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
@@ -736,8 +732,8 @@ mod tests {
             }))
             .unwrap();
 
-        assert!(ReadYakStore::yak_exists(&storage, "test"));
-        assert!(!ReadYakStore::yak_exists(&storage, "missing"));
+        assert!(ReadYakStore::yak_exists(&storage, &YakId::from("test")));
+        assert!(!ReadYakStore::yak_exists(&storage, &YakId::from("missing")));
     }
 
     #[test]
