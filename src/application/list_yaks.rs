@@ -1,6 +1,6 @@
 // ListYaks use case - displays all yaks
 
-use crate::domain::slug::Name;
+use crate::domain::slug::{Name, YakId};
 use crate::domain::Yak;
 // DisplayPort accessed via app.display
 use anyhow::Result;
@@ -93,83 +93,39 @@ impl ListYaks {
         Ok(())
     }
 
-    /// Build a hierarchical tree from flat list of yaks
+    /// Build a hierarchical tree from flat list of yaks using parent_id
     fn build_tree(&self, _app: &Application, yaks: Vec<Yak>) -> Vec<YakNode> {
-        let mut nodes_by_path: HashMap<String, YakNode> = HashMap::new();
+        // Index all yak IDs for validation
+        let yak_ids: std::collections::HashSet<&str> = yaks.iter().map(|y| y.id.as_str()).collect();
 
-        // First pass: create nodes for all yaks and implicit parents
+        // Group yaks by parent_id
+        let mut children_by_parent: HashMap<Option<&YakId>, Vec<&Yak>> = HashMap::new();
         for yak in &yaks {
-            let name_str = yak.name.as_str();
-            let parts: Vec<&str> = name_str.split('/').collect();
-
-            // Create implicit parent nodes if they don't exist
-            for i in 1..parts.len() {
-                let parent_path = parts[..i].join("/");
-                if !nodes_by_path.contains_key(&parent_path) {
-                    let parent_name = Name::from(parts[i - 1]);
-                    nodes_by_path.insert(
-                        parent_path.clone(),
-                        YakNode {
-                            name: parent_name,
-                            full_path: parent_path.clone(),
-                            yak: None, // Implicit parent (no actual yak)
-                            children: Vec::new(),
-                        },
-                    );
+            // Validate: if parent_id points to a yak not in the list, skip it
+            // (corrupted data - but we log and continue rather than crash)
+            if let Some(ref pid) = yak.parent_id {
+                if !yak_ids.contains(pid.as_str()) {
+                    // Orphaned parent_id - treat as root
+                    children_by_parent.entry(None).or_default().push(yak);
+                    continue;
                 }
             }
-
-            // Create node for this yak
-            let name = Name::from(parts.last().copied().unwrap_or(""));
-            nodes_by_path.insert(
-                yak.name.to_string(),
-                YakNode {
-                    name,
-                    full_path: yak.name.to_string(),
-                    yak: Some(yak.clone()),
-                    children: Vec::new(),
-                },
-            );
+            children_by_parent
+                .entry(yak.parent_id.as_ref())
+                .or_default()
+                .push(yak);
         }
 
-        // Second pass: build parent-child relationships
-        // Sort paths by depth (deepest first) to ensure children are processed before parents
-        let mut all_paths: Vec<String> = nodes_by_path.keys().cloned().collect();
-        all_paths.sort_by_key(|p| std::cmp::Reverse(p.matches('/').count()));
-
-        // Extract children from deepest to shallowest
-        for path in &all_paths {
-            let parts: Vec<&str> = path.split('/').collect();
-
-            if parts.len() == 1 {
-                // Root node - leave it
-                continue;
-            }
-
-            // Child node - attach to parent
-            let parent_path = parts[..parts.len() - 1].join("/");
-
-            // Remove child from map and attach to parent
-            if let Some(child_node) = nodes_by_path.remove(path) {
-                if let Some(parent_node) = nodes_by_path.get_mut(&parent_path) {
-                    parent_node.children.push(child_node);
-                } else {
-                    // This shouldn't happen since we created all parents in first pass
-                    // But if it does, put the node back
-                    nodes_by_path.insert(path.clone(), child_node);
-                }
-            }
-        }
-
-        // Extract root nodes and sort
-        let mut roots: Vec<YakNode> = nodes_by_path
-            .into_iter()
-            .filter(|(path, _)| !path.contains('/'))
-            .map(|(_, node)| node)
+        // Build tree recursively from roots
+        let empty = Vec::new();
+        let roots = children_by_parent.get(&None).unwrap_or(&empty);
+        let mut root_nodes: Vec<YakNode> = roots
+            .iter()
+            .map(|yak| build_node(yak, &children_by_parent, ""))
             .collect();
 
-        Self::sort_children(&mut roots);
-        roots
+        Self::sort_children(&mut root_nodes);
+        root_nodes
     }
 
     /// Sort children at this level: done first, then not-done, both alphabetically
@@ -272,5 +228,38 @@ impl ListYaks {
 impl UseCase for ListYaks {
     fn execute(&self, app: &mut Application) -> Result<()> {
         Self::execute(self, app)
+    }
+}
+
+/// Recursively build a YakNode and its children from parent_id grouping
+fn build_node(
+    yak: &Yak,
+    children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
+    parent_path: &str,
+) -> YakNode {
+    let leaf_name = yak
+        .name
+        .as_str()
+        .rsplit('/')
+        .next()
+        .unwrap_or(yak.name.as_str());
+    let full_path = if parent_path.is_empty() {
+        leaf_name.to_string()
+    } else {
+        format!("{}/{}", parent_path, leaf_name)
+    };
+
+    let empty = Vec::new();
+    let child_yaks = children_by_parent.get(&Some(&yak.id)).unwrap_or(&empty);
+    let children: Vec<YakNode> = child_yaks
+        .iter()
+        .map(|child| build_node(child, children_by_parent, &full_path))
+        .collect();
+
+    YakNode {
+        name: Name::from(leaf_name),
+        full_path,
+        yak: Some(yak.clone()),
+        children,
     }
 }
