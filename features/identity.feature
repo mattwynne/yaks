@@ -22,6 +22,13 @@ Feature: Yak identity
       And I show the "id" field of "new name"
       Then the output should include "old-name-"
 
+    Example: Child yak ID is based on its own name
+      Given I have a clean git repository
+      And I add the yak "project"
+      And I add the yak "fix the build" blocking "project"
+      When I show the "id" field of "fix the build"
+      Then the output should include "fix-the-build-"
+
   Rule: Directory names are human-readable slugs
     On disk, yak directories use a slugified version of the name
     (lowercase, hyphenated, no random suffix) rather than the ID.
@@ -31,6 +38,19 @@ Feature: Yak identity
       Given I have a clean git repository
       When I add the yak "My Cool Yak"
       Then the yak directory should be named "my-cool-yak"
+
+    @fullstack
+    Example: Special characters are stripped from the slug
+      Given I have a clean git repository
+      When I add the yak "clean up tests & docs!"
+      Then the yak directory should be named "clean-up-tests-docs"
+
+    @fullstack
+    Example: Nested yak is stored under parent's slug directory
+      Given I have a clean git repository
+      And I add the yak "My Project"
+      And I add the yak "Fix the Build" blocking "My Project"
+      Then the yak directory should be named "my-project/fix-the-build"
 
   Rule: Listing shows names, not IDs or slugs
 
