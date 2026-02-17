@@ -32,7 +32,7 @@ implementation detail invisible to the domain layer.
 Specifically:
 - `YakMap.add_yak` takes `(name, parent_id, context)`
   where name is a leaf name and parent_id references
-  the parent yak's slug ID
+  the parent yak's immutable ID (YakId)
 - `AddedEvent.name` contains only the leaf name
 - Auto-ancestor creation is removed from `add_yak`
   (parents must already exist)

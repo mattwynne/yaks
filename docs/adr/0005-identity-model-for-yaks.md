@@ -76,8 +76,13 @@ spaces replaced with hyphens, special characters removed.
 ```
 
 Slugs are used for on-disk directory names and must be unique
-among siblings (yaks sharing the same parent). When a yak is
-renamed, its slug changes to match the new name.
+among siblings (yaks sharing the same parent). Directories are
+named by slug alone (no random suffix). Each slug directory
+contains an `id` file holding the yak's full immutable ID
+(e.g. `make-the-tea-a1b2`). This is how the system maps from
+filesystem location back to identity. When a yak is renamed,
+its slug changes to match the new name (the directory is
+renamed), but the `id` file contents remain unchanged.
 
 Slugs are NOT used in events. They are a storage-layer concern
 only.
@@ -109,7 +114,11 @@ in order:
 
 1. Exact ID match
 2. Exact path match (slash-separated slugs)
+   **Note:** current implementation resolves paths using names,
+   not slugs. Slug-based path resolution is planned.
 3. Fuzzy match across IDs and names
+   **Note:** current implementation fuzzy-matches against names
+   only. Fuzzy matching on IDs is planned.
 
 This allows users to use whichever form is most convenient.
 IDs are always unambiguous; names are friendlier for
@@ -129,16 +138,24 @@ Both events reference the yak by its immutable ID.
 ### Migration
 
 Existing yaks (created before this identity model) receive
-IDs through deterministic seeding: a hash of the yak's full
-path at migration time generates the random suffix. This
-ensures the migration is reproducible and produces the same
-IDs regardless of when or where it runs.
+IDs during migration. The current implementation uses
+non-deterministic random suffixes, meaning that migrating the
+same data twice will produce different IDs.
+
+**Known gap / future work:** A planned change (tracked as the
+"make IDs deterministic" yak) will derive suffixes from a hash
+of the yak's full ancestry path, making ID generation
+deterministic and reproducible regardless of when or where it
+runs. Until then, migration should be treated as a one-time
+operation per dataset.
 
 ### Display conventions
 
 - Pretty output (`yx ls`) shows names by default.
 - Plain output (`yx ls --format plain`) shows IDs for
   scripting and automation.
+  **Note:** this is planned behavior. The current
+  implementation shows names in plain output as well.
 
 ## Consequences
 
@@ -148,6 +165,13 @@ IDs regardless of when or where it runs.
 ID. Renaming or moving a yak does not invalidate any
 historical events. The full history of a yak can be
 reconstructed by filtering events on its ID.
+
+**Bidirectional traversal.** The Yak struct maintains a
+`children: Vec<YakId>` field as a read-model concern,
+allowing efficient traversal from parent to children without
+scanning all events. This is derived from the event stream
+(specifically `AddedEvent.parent_id` and `MovedEvent`) and is
+not stored in events itself.
 
 **Filesystem safety.** On-disk directories use slugs, which
 are always filesystem-safe. Display names can contain any
@@ -181,9 +205,11 @@ use IDs. Debugging event history requires mapping between the
 two, which adds a layer of indirection.
 
 **Migration complexity.** Existing yaks need a one-time
-migration to assign IDs. The deterministic seeding approach
-keeps this reproducible but adds a migration step that must
-be tested and documented.
+migration to assign IDs. The current non-deterministic
+approach means migration is not reproducible (see Migration
+section above). This adds a migration step that must be
+tested and documented, and motivates the planned move to
+deterministic ID generation.
 
 ### Relationship to other ADRs
 
@@ -193,4 +219,6 @@ be tested and documented.
 - **ADR 0004 (Leaf-only names)**: This ADR builds on the
   separation of names from hierarchy. Names are leaf-only
   display strings; hierarchy is expressed through parent_id
-  references using immutable IDs.
+  references using immutable IDs. ADR 0004's terminology was
+  corrected alongside this ADR: `parent_id` references an
+  immutable ID (YakId), not a slug as originally stated.
