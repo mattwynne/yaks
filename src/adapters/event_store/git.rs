@@ -216,19 +216,33 @@ impl GitEventStore {
             anyhow::bail!("No yaks tree found in refs/notes/yaks");
         };
 
-        // Remove existing entries that correspond to tree entries,
-        // but preserve non-yak files (like .git, .gitignore)
+        // Clean the target directory before recreating from git.
+        // Remove yak directories (both current and stale) and files
+        // that will be recreated from the git tree.
+        // Non-yak files (e.g. notes.txt) and non-yak directories
+        // (e.g. .git) are preserved.
         if target.exists() {
-            for entry in tree.iter() {
-                if let Some(name) = entry.name() {
-                    let path = target.join(name);
-                    if path.exists() {
-                        if path.is_dir() {
-                            std::fs::remove_dir_all(&path)?;
-                        } else {
-                            std::fs::remove_file(&path)?;
-                        }
+            let tree_names: std::collections::HashSet<String> = tree
+                .iter()
+                .filter_map(|e| e.name().map(String::from))
+                .collect();
+
+            for entry in std::fs::read_dir(target)? {
+                let entry = entry?;
+                let path = entry.path();
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if path.is_dir() {
+                    // Remove directories that are in the git tree (will
+                    // be recreated) or that look like yak entries (have
+                    // a state file — these are stale).
+                    if tree_names.contains(&*name_str)
+                        || path.join("state").exists()
+                    {
+                        std::fs::remove_dir_all(&path)?;
                     }
+                } else if tree_names.contains(&*name_str) {
+                    std::fs::remove_file(&path)?;
                 }
             }
         }
@@ -606,6 +620,43 @@ mod tests {
         assert!(
             parent_tree.get_name("state").is_some(),
             "Expected parent's state file"
+        );
+    }
+
+    #[test]
+    fn materialize_tree_removes_stale_directories() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Add a yak keyed by id "my-yak" in the git tree
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("my yak"),
+                id: YakId::from("my-yak"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Pre-populate target with a stale directory (different name
+        // from the git tree key, simulating an old-style directory)
+        // plus a non-yak file that should be preserved.
+        let target = _tmp.path().join("yaks");
+        std::fs::create_dir_all(target.join("my yak")).unwrap();
+        std::fs::write(target.join("my yak/state"), "todo").unwrap();
+        std::fs::write(target.join("notes.txt"), "keep me").unwrap();
+
+        store.materialize_tree(&target).unwrap();
+
+        assert!(
+            target.join("my-yak").is_dir(),
+            "Expected 'my-yak' directory from git tree"
+        );
+        assert!(
+            !target.join("my yak").exists(),
+            "Stale 'my yak' directory should have been removed"
+        );
+        assert!(
+            target.join("notes.txt").exists(),
+            "Non-yak files should be preserved"
         );
     }
 
