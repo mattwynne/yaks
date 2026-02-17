@@ -18,7 +18,7 @@ Feature: Yak identity
     Example: ID persists across a rename
       Given I have a clean git repository
       And I add the yak "old name"
-      When I move the yak "old name" to "new name"
+      When I rename the yak "old name" to "new name"
       And I show the "id" field of "new name"
       Then the output should include "old-name-"
 
@@ -103,6 +103,6 @@ Feature: Yak identity
       Given I have a clean git repository
       And I add the yak "Make the tea"
       And I add the yak "Fix the bug"
-      When I try to move the yak "Fix the bug" to "make-the-tea"
+      When I try to rename the yak "Fix the bug" to "make-the-tea"
       Then the command should fail
       And the error should contain "already exists"

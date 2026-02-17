@@ -40,14 +40,14 @@ Feature: Yak fields
         my yak
         """
 
-  Rule: The name field is updated on move
-    When a yak is moved/renamed, the name field is updated to
+  Rule: The name field is updated on rename
+    When a yak is renamed, the name field is updated to
     match the new name.
 
-    Example: Moving a yak updates its name field
+    Example: Renaming a yak updates its name field
       Given I have a clean git repository
       And I add the yak "old name"
-      When I move the yak "old name" to "new name"
+      When I rename the yak "old name" to "new name"
       And I show the "name" field of "new name"
       Then the output should be:
         """

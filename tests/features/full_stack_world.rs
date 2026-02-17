@@ -582,6 +582,22 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["move", from, to])
     }
 
+    fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.run_yx(&["move", name, "--under", parent])
+    }
+
+    fn move_yak_to_root(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["move", name, "--to-root"])
+    }
+
+    fn try_move_yak_under_and_to_root(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.run_yx_unchecked(&["move", name, "--under", parent, "--to-root"])
+    }
+
+    fn try_move_yak_no_flags(&mut self, name: &str) -> Result<()> {
+        self.run_yx_unchecked(&["move", name])
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.run_yx_with_stdin(&["field", name, field], content)
     }
