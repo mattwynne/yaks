@@ -30,16 +30,15 @@ Feature: Add yaks
       And I show the context of "my-yak"
       Then the output should include "# My context"
 
-  Rule: Forward slash is rejected
-    Names cannot contain `/` because hierarchy is expressed via --blocks.
-    Other special characters are allowed since storage uses slugified
-    directory names.
+  Rule: Forward slash is allowed in names
+    Names can contain `/` (e.g. "fix CI/CD pipeline") because storage
+    uses slugified directory names.
 
-    Example: Forward slash in name is rejected
+    Example: Forward slash in name is allowed
       Given I have a clean git repository
-      When I try to add the yak "foo/bar"
-      Then the command should fail
-      And the error should contain "Invalid yak name"
+      When I add the yak "fix CI/CD pipeline"
+      And I list the yaks
+      Then the output should include "fix CI/CD pipeline"
 
   Rule: --blocks creates a child under a parent
     The --blocks flag nests the new yak under the specified parent.

@@ -36,18 +36,12 @@ impl Yak {
 }
 
 /// Validate a yak name provided by the user.
-/// Rejects empty names, names containing `/`, and null bytes.
-/// Most special characters are allowed because directory names use slugs.
-/// Hierarchy is created via --blocks, not by embedding / in names.
+/// Rejects empty names and null bytes.
+/// Most special characters (including `/`) are allowed because
+/// directory names use slugs.
 pub fn validate_yak_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Yak name cannot be empty".to_string());
-    }
-
-    if name.contains('/') {
-        return Err(
-            "Invalid yak name: '/' is not allowed (use --blocks for hierarchy)".to_string(),
-        );
     }
 
     if name.contains('\0') {
@@ -98,9 +92,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_yak_name_slash_forbidden() {
-        // Slash is forbidden (use --blocks for hierarchy)
-        assert!(validate_yak_name("test/name").is_err());
+    fn test_validate_yak_name_slash_allowed() {
+        // Slash is allowed (e.g. "fix CI/CD pipeline")
+        assert!(validate_yak_name("test/name").is_ok());
     }
 
     #[test]

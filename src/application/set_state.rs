@@ -30,26 +30,13 @@ impl SetState {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         let ids_to_update = if self.recursive {
-            // TODO: Move recursive descendant-finding into YakMap using parent_id
-            // relationships instead of string prefix matching on display names
+            // Find all descendants using parent_id relationships
             let all_yaks = app.store.list_yaks()?;
-            let resolved_yak = app.store.get_yak(&id)?;
-            let resolved_name = resolved_yak.name.to_string();
-            let mut yaks_to_update: Vec<(usize, YakId)> = all_yaks
-                .iter()
-                .filter(|yak| {
-                    yak.name == resolved_name
-                        || yak.name.as_str().starts_with(&format!("{resolved_name}/"))
-                })
-                .map(|yak| {
-                    let depth = yak.name.as_str().matches('/').count();
-                    (depth, yak.id.clone())
-                })
-                .collect();
-            // Sort by depth descending (leaves first) so children are
-            // marked done before parents, passing hierarchy validation
-            yaks_to_update.sort_by(|a, b| b.0.cmp(&a.0));
-            yaks_to_update.into_iter().map(|(_, id)| id).collect()
+            let mut descendants = vec![id.clone()];
+            Self::collect_descendants(&id, &all_yaks, &mut descendants);
+            // Reverse so leaves come first (children before parents)
+            descendants.reverse();
+            descendants
         } else {
             vec![id]
         };
@@ -61,6 +48,22 @@ impl SetState {
             }
             Ok(())
         })
+    }
+
+    /// Recursively collect all descendant IDs (breadth-first, parents before children).
+    fn collect_descendants(
+        parent_id: &YakId,
+        all_yaks: &[crate::domain::Yak],
+        result: &mut Vec<YakId>,
+    ) {
+        let children: Vec<&crate::domain::Yak> = all_yaks
+            .iter()
+            .filter(|yak| yak.parent_id.as_ref() == Some(parent_id))
+            .collect();
+        for child in children {
+            result.push(child.id.clone());
+            Self::collect_descendants(&child.id, all_yaks, result);
+        }
     }
 }
 
@@ -158,13 +161,10 @@ mod tests {
 
         let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
         let parent = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
-        // Find child by listing and filtering (child is nested under parent)
+        // Find child by listing and filtering (stores return leaf names)
         let all_yaks = ReadYakStore::list_yaks(&storage).unwrap();
-        let child = all_yaks.iter().find(|y| y.name == "parent/child").unwrap();
-        let grandchild = all_yaks
-            .iter()
-            .find(|y| y.name == "parent/child/grandchild")
-            .unwrap();
+        let child = all_yaks.iter().find(|y| y.name == "child").unwrap();
+        let grandchild = all_yaks.iter().find(|y| y.name == "grandchild").unwrap();
         assert_eq!(parent.state, "done");
         assert_eq!(child.state, "done");
         assert_eq!(grandchild.state, "done");

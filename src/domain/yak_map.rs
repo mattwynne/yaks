@@ -31,30 +31,15 @@ impl YakMap {
     pub fn from_store(store: &dyn ReadYakStore) -> Result<Self> {
         let yaks_list = store.list_yaks()?;
 
-        // Build name→id mapping for fallback parent derivation
-        let name_to_id: HashMap<String, YakId> = yaks_list
-            .iter()
-            .map(|yak| (yak.name.to_string(), yak.id.clone()))
-            .collect();
-
         let mut yaks = HashMap::new();
         for yak in &yaks_list {
-            let yak_name_str = yak.name.as_str();
-            let leaf = yak_name_str.rsplit('/').next().unwrap_or(yak_name_str);
-
-            // Use parent_id from Yak struct if available,
-            // otherwise fall back to name-based derivation
-            let parent_id = yak.parent_id.clone().or_else(|| {
-                crate::domain::hierarchy::get_parent(yak_name_str)
-                    .and_then(|parent_name| name_to_id.get(&parent_name))
-                    .cloned()
-            });
-
+            // Stores now return leaf names directly (no slash-splitting needed).
+            // Use parent_id from Yak struct directly.
             yaks.insert(
                 yak.id.clone(),
                 YakState {
-                    name: Name::from(leaf),
-                    parent_id,
+                    name: yak.name.clone(),
+                    parent_id: yak.parent_id.clone(),
                     state: yak.state.clone(),
                     context: yak.context.clone(),
                 },
@@ -898,7 +883,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_store_derives_parent_id() {
+    fn test_from_store_uses_parent_id_and_leaf_name() {
         use crate::domain::ports::ReadYakStore;
         use crate::domain::Yak;
 
@@ -921,9 +906,10 @@ mod tests {
                         children: vec![],
                     },
                     Yak {
+                        // Stores now return leaf names with explicit parent_id
                         id: YakId::from("child-bbbb"),
-                        name: Name::from("parent/child"),
-                        parent_id: None,
+                        name: Name::from("child"),
+                        parent_id: Some(YakId::from("parent-aaaa")),
                         state: "todo".to_string(),
                         context: None,
                         fields: std::collections::HashMap::new(),

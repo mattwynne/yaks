@@ -95,8 +95,7 @@ impl DirectoryStorage {
     }
 
     /// Resolve a yak's directory by name or id.
-    /// Tries: direct path, resolve by id, resolve by name,
-    /// resolve hierarchical name (in that order).
+    /// Tries: direct path, resolve by id, resolve by name (in that order).
     fn yak_dir(&self, key: &str) -> PathBuf {
         // Try direct path first (backward compat: dir name == yak name)
         let direct = self.base_path.join(key);
@@ -112,13 +111,6 @@ impl DirectoryStorage {
         // Try resolve by leaf name (scans name files)
         if let Some(dir) = self.resolve_by_name(key) {
             return dir;
-        }
-
-        // Try resolve hierarchical name by walking segments
-        if key.contains('/') {
-            if let Some(dir) = self.resolve_by_hierarchical_name(key) {
-                return dir;
-            }
         }
 
         // Fallback to direct path (will fail later with "not found")
@@ -161,45 +153,6 @@ impl DirectoryStorage {
             }
         }
         fallback
-    }
-
-    /// Resolve a hierarchical name like "parent/child" by walking the segments,
-    /// matching leaf name files at each level.
-    fn resolve_by_hierarchical_name(&self, name: &str) -> Option<PathBuf> {
-        let segments: Vec<&str> = name.split('/').collect();
-        let mut current_dir = self.base_path.clone();
-
-        for segment in &segments {
-            let mut found = false;
-            if let Ok(entries) = fs::read_dir(&current_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if !path.is_dir() {
-                        continue;
-                    }
-                    let name_file = path.join(NAME_FIELD);
-                    if name_file.exists() {
-                        if let Ok(stored) = fs::read_to_string(&name_file) {
-                            let leaf = stored.rsplit('/').next().unwrap_or(&stored);
-                            if leaf == *segment {
-                                current_dir = path;
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            if !found {
-                return None;
-            }
-        }
-
-        if current_dir.join(CONTEXT_FIELD).exists() {
-            Some(current_dir)
-        } else {
-            None
-        }
     }
 
     /// Scan directories recursively for one whose name file matches the given name.
@@ -304,41 +257,15 @@ impl DirectoryStorage {
         })
     }
 
-    /// Build the full hierarchical name for a yak at the given path.
-    /// Walks up parent directories, collecting leaf names from name files,
-    /// so the directory structure determines hierarchy.
-    fn build_full_name(&self, path: &std::path::Path) -> String {
-        let mut parts = Vec::new();
-        let mut current = path.to_path_buf();
-
-        loop {
-            let name_content = fs::read_to_string(current.join(NAME_FIELD)).unwrap_or_else(|_| {
-                current
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown")
-                    .to_string()
-            });
-            // Always extract just the leaf - the name file may contain a full
-            // path (old format) or just the leaf (new format after rename/move).
-            let leaf_name = name_content
-                .rsplit('/')
-                .next()
-                .unwrap_or(&name_content)
-                .to_string();
-            parts.push(leaf_name);
-
-            // Move up to parent directory
-            match current.parent() {
-                Some(parent) if parent != self.base_path && parent.join(CONTEXT_FIELD).exists() => {
-                    current = parent.to_path_buf();
-                }
-                _ => break,
-            }
-        }
-
-        parts.reverse();
-        parts.join("/")
+    /// Read the leaf name for a yak at the given path.
+    /// Returns the content of the name file, or falls back to the directory name.
+    fn read_leaf_name(&self, path: &std::path::Path) -> String {
+        fs::read_to_string(path.join(NAME_FIELD)).unwrap_or_else(|_| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        })
     }
 }
 
@@ -476,7 +403,7 @@ impl ReadYakStore for DirectoryStorage {
             })
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
-        let display_name = self.build_full_name(&dir);
+        let display_name = self.read_leaf_name(&dir);
 
         let context = fs::read_to_string(dir.join(CONTEXT_FIELD))
             .ok()
@@ -524,7 +451,7 @@ impl ReadYakStore for DirectoryStorage {
             }
 
             // Build hierarchical name from directory structure and leaf name files
-            let display_name = self.build_full_name(path);
+            let display_name = self.read_leaf_name(path);
 
             // Read id from id file, fall back to directory name (backward compat)
             let id = fs::read_to_string(path.join(ID_FIELD))
@@ -572,14 +499,15 @@ impl ReadYakStore for DirectoryStorage {
             return Ok(id);
         }
 
-        // If not found, try fuzzy match on the leaf node only
+        // If not found, try fuzzy match on the name
         let yaks = ReadYakStore::list_yaks(self)?;
         let matches: Vec<&Yak> = yaks
             .iter()
             .filter(|yak| {
-                let yak_name_str = yak.name.as_str();
-                let leaf = yak_name_str.rsplit('/').next().unwrap_or(yak_name_str);
-                leaf.to_lowercase().contains(&query.to_lowercase())
+                yak.name
+                    .as_str()
+                    .to_lowercase()
+                    .contains(&query.to_lowercase())
             })
             .collect();
 
@@ -842,7 +770,7 @@ mod tests {
 
         let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
         assert_eq!(child.id, YakId::from("child-c3d4"));
-        assert_eq!(child.name, Name::from("parent/child"));
+        assert_eq!(child.name, Name::from("child"));
     }
 
     #[test]

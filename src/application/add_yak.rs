@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_yak_rejects_slash_in_name() {
+    fn test_add_yak_allows_slash_in_name() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
 
@@ -138,8 +138,7 @@ mod tests {
         let input = InMemoryInput::new();
         let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
 
-        let result = AddYak::new("foo/bar").execute(&mut app);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid yak name"));
+        let result = AddYak::new("fix CI/CD pipeline").execute(&mut app);
+        assert!(result.is_ok());
     }
 }

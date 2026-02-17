@@ -237,12 +237,7 @@ fn build_node(
     children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
     parent_path: &str,
 ) -> YakNode {
-    let leaf_name = yak
-        .name
-        .as_str()
-        .rsplit('/')
-        .next()
-        .unwrap_or(yak.name.as_str());
+    let leaf_name = yak.name.as_str();
     let full_path = if parent_path.is_empty() {
         leaf_name.to_string()
     } else {

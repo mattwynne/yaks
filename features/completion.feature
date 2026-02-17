@@ -30,16 +30,16 @@ Feature: Tab completion
 
   Rule: Bash completion wiring
     The bash completion script integrates with bash's programmable
-    completion system, handling special cases like nested yak names
-    and flag suggestions.
+    completion system, handling flag suggestions and yak names.
 
     @bash_completion
-    Example: Completing after a slash suggests nested yak names
+    Example: Completing add suggests existing yak names
       Given I have a clean git repository
       And I add the yak "grandma"
       And I add the yak "mummy" blocking "grandma"
-      When I invoke bash completion for words: yx add "grandma" "/" ""
-      Then the completions should include "grandma/mummy/"
+      When I invoke bash completion for words: yx add ""
+      Then the completions should include "grandma"
+      And the completions should include "mummy"
 
     @bash_completion
     Example: Completing after "--" suggests flags for the command

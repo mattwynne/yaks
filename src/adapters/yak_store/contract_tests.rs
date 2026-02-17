@@ -207,35 +207,42 @@ macro_rules! yak_store_tests {
         }
 
         #[test]
-        fn fuzzy_find_yak_id_matches_leaf() {
+        fn fuzzy_find_yak_id_matches_child_by_name() {
             let (store, _guard) = $create_store;
             store
-                .create_yak(&Name::from("parent"), &YakId::from(""), None)
+                .create_yak(&Name::from("parent"), &YakId::from("parent-a1b2"), None)
                 .unwrap();
             store
-                .create_yak(&Name::from("parent/child1"), &YakId::from(""), None)
+                .create_yak(
+                    &Name::from("child1"),
+                    &YakId::from("child1-c3d4"),
+                    Some(&YakId::from("parent-a1b2")),
+                )
                 .unwrap();
 
             let result = ReadYakStore::fuzzy_find_yak_id(&store, "parent").unwrap();
-            assert_eq!(result, YakId::from("parent"));
+            assert_eq!(result, YakId::from("parent-a1b2"));
 
             // Fuzzy search for "child1" should find the child yak
-            // and the returned ID should resolve to the correct yak
             let child_id = ReadYakStore::fuzzy_find_yak_id(&store, "child1").unwrap();
             let child = ReadYakStore::get_yak(&store, &child_id).unwrap();
-            assert_eq!(child.name, "parent/child1");
+            assert_eq!(child.name, "child1");
         }
 
         #[test]
-        fn fuzzy_find_yak_id_leaf_only() {
+        fn fuzzy_find_yak_id_matches_name_substring() {
             let (store, _guard) = $create_store;
             store
-                .create_yak(&Name::from("parent/child1"), &YakId::from(""), None)
+                .create_yak(
+                    &Name::from("fix CI/CD pipeline"),
+                    &YakId::from("fix-cicd-pipeline-a1b2"),
+                    None,
+                )
                 .unwrap();
 
-            let result = ReadYakStore::fuzzy_find_yak_id(&store, "parent");
-            assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("not found"));
+            // "pipeline" is a substring of "fix CI/CD pipeline"
+            let result = ReadYakStore::fuzzy_find_yak_id(&store, "pipeline").unwrap();
+            assert_eq!(result, YakId::from("fix-cicd-pipeline-a1b2"));
         }
 
         #[test]

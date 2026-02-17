@@ -3,79 +3,86 @@
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
+use crate::domain::{Yak, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+const PARENT_ID_FIELD: &str = "_parent_id";
+
 #[derive(Clone)]
 pub struct InMemoryStorage {
-    // HashMap: yak_name -> HashMap of field_name -> field_content
+    // HashMap: storage_key -> HashMap of field_name -> field_content
+    // storage_key is either the yak id (if non-empty) or the yak name (legacy)
     yaks: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
-    // id -> name mapping for id-based lookups
-    id_to_name: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl InMemoryStorage {
     pub fn new() -> Self {
         Self {
             yaks: Arc::new(RwLock::new(HashMap::new())),
-            id_to_name: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Find direct child yak IDs by scanning for entries whose name
-    /// is exactly parent_name + "/" + leaf (one level deep).
-    fn find_children(&self, parent_name: &str) -> Vec<YakId> {
-        let yaks = self.yaks.read().unwrap();
-        let id_map = self.id_to_name.read().unwrap();
-        self.find_children_from_yaks(&yaks, &id_map, parent_name)
-    }
-
+    /// Find direct child yak IDs by scanning for entries whose
+    /// _parent_id field matches the given id.
     fn find_children_from_yaks(
-        &self,
         yaks: &HashMap<String, HashMap<String, String>>,
-        id_map: &HashMap<String, String>,
-        parent_name: &str,
+        parent_key: &str,
     ) -> Vec<YakId> {
-        let prefix = format!("{}/", parent_name);
-        let name_to_id: HashMap<&String, &String> =
-            id_map.iter().map(|(id, name)| (name, id)).collect();
-
-        yaks.keys()
-            .filter(|name| {
-                if let Some(rest) = name.strip_prefix(&prefix) {
-                    !rest.contains('/') // direct child only
-                } else {
-                    false
-                }
+        yaks.iter()
+            .filter(|(_, fields)| {
+                fields
+                    .get(PARENT_ID_FIELD)
+                    .map(|pid| pid == parent_key)
+                    .unwrap_or(false)
             })
-            .map(|name| {
-                name_to_id
-                    .get(name)
-                    .map(|id| YakId::from(id.as_str()))
-                    .unwrap_or_else(|| YakId::from(name.as_str()))
-            })
+            .map(|(key, _)| YakId::from(key.as_str()))
             .collect()
     }
 
-    /// Resolve a key (name or id) to the yak name used as HashMap key.
+    /// Resolve a key (name or id) to the storage key used in the HashMap.
     fn resolve_key(&self, key: &str) -> Option<String> {
         let yaks = self.yaks.read().unwrap();
+        Self::resolve_key_from_yaks(&yaks, key)
+    }
+
+    fn resolve_key_from_yaks(
+        yaks: &HashMap<String, HashMap<String, String>>,
+        key: &str,
+    ) -> Option<String> {
+        // Direct key match (id-based or legacy name-based)
         if yaks.contains_key(key) {
             return Some(key.to_string());
         }
-        // Try id→name lookup
-        let id_map = self.id_to_name.read().unwrap();
-        id_map.get(key).cloned()
+        // Try matching by name field
+        for (storage_key, fields) in yaks.iter() {
+            if let Some(name) = fields.get(NAME_FIELD) {
+                if name == key {
+                    return Some(storage_key.clone());
+                }
+            }
+        }
+        None
     }
 
-    /// Reverse lookup: find the YakId for a given yak name within an id_map.
-    fn id_for_name_in(id_map: &HashMap<String, String>, name: &str) -> Option<YakId> {
-        id_map
-            .iter()
-            .find(|(_, v)| **v == name)
-            .map(|(k, _)| YakId::from(k.as_str()))
+    /// Build the full display name for a yak by walking up the parent chain.
+    fn build_display_name(yaks: &HashMap<String, HashMap<String, String>>, key: &str) -> String {
+        let mut parts = Vec::new();
+        let mut current_key = Some(key.to_string());
+
+        while let Some(ref k) = current_key {
+            if let Some(fields) = yaks.get(k) {
+                let leaf = fields.get(NAME_FIELD).cloned().unwrap_or_else(|| k.clone());
+                parts.push(leaf);
+                current_key = fields.get(PARENT_ID_FIELD).cloned();
+            } else {
+                break;
+            }
+        }
+
+        parts.reverse();
+        parts.join("/")
     }
 }
 
@@ -87,174 +94,117 @@ impl Default for InMemoryStorage {
 
 impl WriteYakStore for InMemoryStorage {
     fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()> {
-        // Build path key from parent_id lookup
-        let path_key = match parent_id {
-            Some(pid) => {
-                let id_map = self.id_to_name.read().unwrap();
-                let parent_path = id_map
-                    .get(pid.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
-                format!("{}/{}", parent_path, name)
-            }
-            None => name.as_str().to_string(),
+        // Use id as storage key if available, otherwise fall back to name
+        let storage_key = if id.as_str().is_empty() {
+            name.as_str().to_string()
+        } else {
+            id.as_str().to_string()
         };
 
         let mut yaks = self.yaks.write().unwrap();
 
-        if yaks.contains_key(&path_key) {
+        if yaks.contains_key(&storage_key) {
             anyhow::bail!("Yak '{}' already exists", name);
         }
 
         let mut fields = HashMap::new();
         // Create empty context.md by default (matching DirectoryStorage behavior)
         fields.insert(CONTEXT_FIELD.to_string(), String::new());
-        yaks.insert(path_key.clone(), fields);
-
-        // Store id→name mapping
-        if !id.as_str().is_empty() {
-            let mut id_map = self.id_to_name.write().unwrap();
-            id_map.insert(id.as_str().to_string(), path_key);
+        // Store the display name
+        fields.insert(NAME_FIELD.to_string(), name.as_str().to_string());
+        // Store parent_id if present
+        if let Some(pid) = parent_id {
+            fields.insert(PARENT_ID_FIELD.to_string(), pid.as_str().to_string());
         }
+        yaks.insert(storage_key, fields);
 
         Ok(())
     }
 
     fn delete_yak(&self, id: &YakId) -> Result<()> {
-        let name = self
+        let key = self
             .resolve_key(id.as_str())
             .unwrap_or_else(|| id.as_str().to_string());
         let mut yaks = self.yaks.write().unwrap();
-        yaks.remove(&name);
+        yaks.remove(&key);
         Ok(())
     }
 
     fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()> {
-        let from_name = self
+        let key = self
             .resolve_key(id.as_str())
-            .unwrap_or_else(|| id.as_str().to_string());
-        // `new_name` is the new display name, not an existing key -- don't resolve it
-        // Reconstruct the path: keep parent prefix, replace leaf
-        let new_leaf = new_name
-            .as_str()
-            .rsplit('/')
-            .next()
-            .unwrap_or(new_name.as_str());
-        let to_name = match from_name.rsplit_once('/') {
-            Some((parent, _)) => format!("{}/{}", parent, new_leaf),
-            None => new_leaf.to_string(),
-        };
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
+
         let mut yaks = self.yaks.write().unwrap();
 
-        if !yaks.contains_key(&from_name) {
+        if !yaks.contains_key(&key) {
             anyhow::bail!("yak '{}' not found", id);
         }
 
-        if yaks.contains_key(&to_name) {
-            anyhow::bail!("Yak '{}' already exists", new_name);
+        // Check for duplicate name
+        for (other_key, other_fields) in yaks.iter() {
+            if other_key == &key {
+                continue;
+            }
+            let other_name = other_fields
+                .get(NAME_FIELD)
+                .map(|s| s.as_str())
+                .unwrap_or(other_key.as_str());
+            if other_name == new_name.as_str() {
+                anyhow::bail!("Yak '{}' already exists", new_name);
+            }
         }
 
-        if let Some(mut fields) = yaks.remove(&from_name) {
-            // Update the name field to reflect the new name
-            fields.insert(
-                crate::domain::NAME_FIELD.to_string(),
-                new_name.as_str().to_string(),
-            );
-            yaks.insert(to_name.clone(), fields);
-        }
+        // For legacy yaks (key == name), we need to re-key the HashMap
+        let fields = yaks.get(&key).unwrap();
+        let is_legacy = !fields.contains_key(NAME_FIELD)
+            || fields.get(NAME_FIELD).map(|n| n == &key).unwrap_or(false);
 
-        // Update id→name mapping
-        let mut id_map = self.id_to_name.write().unwrap();
-        if let Some((_id, stored_name)) = id_map.iter_mut().find(|(_, v)| **v == from_name) {
-            *stored_name = to_name;
+        if is_legacy && key == id.as_str() {
+            // Legacy: key is the name, so we need to move the entry
+            if let Some(mut fields) = yaks.remove(&key) {
+                fields.insert(NAME_FIELD.to_string(), new_name.as_str().to_string());
+                yaks.insert(new_name.as_str().to_string(), fields);
+            }
+        } else {
+            // ID-based: just update the name field
+            if let Some(fields) = yaks.get_mut(&key) {
+                fields.insert(NAME_FIELD.to_string(), new_name.as_str().to_string());
+            }
         }
 
         Ok(())
     }
 
     fn reparent_yak(&self, id: &YakId, new_parent_id: Option<&YakId>) -> Result<()> {
-        // Look up current name-path from id
-        let old_name = {
-            let id_map = self.id_to_name.read().unwrap();
-            id_map
-                .get(id.as_str())
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?
-        };
+        let key = self
+            .resolve_key(id.as_str())
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
-        // Extract leaf name from the old path
-        let leaf = old_name.rsplit('/').next().unwrap_or(&old_name);
+        let mut yaks = self.yaks.write().unwrap();
 
-        // Build new name-path
-        let new_name = match new_parent_id {
-            Some(pid) => {
-                let id_map = self.id_to_name.read().unwrap();
-                let parent_name = id_map
-                    .get(pid.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("parent '{}' not found", pid))?;
-                format!("{}/{}", parent_name, leaf)
+        if let Some(fields) = yaks.get_mut(&key) {
+            match new_parent_id {
+                Some(pid) => {
+                    fields.insert(PARENT_ID_FIELD.to_string(), pid.as_str().to_string());
+                }
+                None => {
+                    fields.remove(PARENT_ID_FIELD);
+                }
             }
-            None => leaf.to_string(),
-        };
-
-        // Rename in storage
-        {
-            let mut yaks = self.yaks.write().unwrap();
-            if let Some(fields) = yaks.remove(&old_name) {
-                yaks.insert(new_name.clone(), fields);
-            }
-        }
-
-        // Update id→name mapping
-        {
-            let mut id_map = self.id_to_name.write().unwrap();
-            id_map.insert(id.as_str().to_string(), new_name);
         }
 
         Ok(())
     }
 
     fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()> {
-        let name = self
+        let key = self
             .resolve_key(id.as_str())
             .unwrap_or_else(|| id.as_str().to_string());
 
-        // When updating the name field via id (not via name-path), also rename
-        // the HashMap key if the leaf name changed.
-        if field_name == crate::domain::NAME_FIELD && name != id.as_str() {
-            // id was resolved to a different name, so this is an id-based update
-            // Extract leaf from both current key and content (content may be
-            // a full path like "parent/child" or just a leaf like "newname")
-            let current_leaf = name.rsplit('/').next().unwrap_or(&name);
-            let new_leaf = content.rsplit('/').next().unwrap_or(content);
-            let new_key = if current_leaf != new_leaf {
-                // Reconstruct the path: keep parent prefix, replace leaf
-                let parent = name.rsplit_once('/').map(|(p, _)| p);
-                match parent {
-                    Some(p) => format!("{}/{}", p, new_leaf),
-                    None => new_leaf.to_string(),
-                }
-            } else {
-                name.clone()
-            };
-            if new_key != name {
-                let mut yaks = self.yaks.write().unwrap();
-                if let Some(fields) = yaks.remove(&name) {
-                    let mut updated_fields = fields;
-                    updated_fields.insert(field_name.to_string(), content.to_string());
-                    yaks.insert(new_key.clone(), updated_fields);
-                }
-                // Update id→name mapping
-                let mut id_map = self.id_to_name.write().unwrap();
-                if let Some((_id, stored_name)) = id_map.iter_mut().find(|(_, v)| **v == name) {
-                    *stored_name = new_key;
-                }
-                return Ok(());
-            }
-        }
-
         let mut yaks = self.yaks.write().unwrap();
         let fields = yaks
-            .get_mut(&name)
+            .get_mut(&key)
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         fields.insert(field_name.to_string(), content.to_string());
@@ -265,19 +215,19 @@ impl WriteYakStore for InMemoryStorage {
 
 impl ReadYakStore for InMemoryStorage {
     fn get_yak(&self, id: &YakId) -> Result<Yak> {
-        let name = {
-            let id_map = self.id_to_name.read().unwrap();
-            id_map
-                .get(id.as_str())
-                .cloned()
-                .unwrap_or_else(|| id.as_str().to_string())
-        };
-
         let yaks = self.yaks.read().unwrap();
+        let key = Self::resolve_key_from_yaks(&yaks, id.as_str())
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         let fields = yaks
-            .get(&name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))?;
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
+
+        // Return leaf name (not full display path)
+        let display_name = fields
+            .get(NAME_FIELD)
+            .cloned()
+            .unwrap_or_else(|| key.clone());
 
         // Read context field
         let context =
@@ -297,25 +247,26 @@ impl ReadYakStore for InMemoryStorage {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "todo".to_string());
 
-        // Collect custom fields (non-reserved)
+        // Collect custom fields (non-reserved, excluding internal _parent_id)
         let custom_fields: HashMap<String, String> = fields
             .iter()
-            .filter(|(k, _)| !RESERVED_FIELDS.contains(&k.as_str()))
+            .filter(|(k, _)| {
+                !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
+            })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        // Find children (entries whose name starts with this yak's name + "/")
-        let children = self.find_children(&name);
+        // Find children by parent_id
+        let children = Self::find_children_from_yaks(&yaks, &key);
 
-        // Derive parent_id from hierarchical name
-        let parent_id = crate::domain::hierarchy::get_parent(&name).and_then(|parent_name| {
-            let id_map = self.id_to_name.read().unwrap();
-            Self::id_for_name_in(&id_map, &parent_name)
-        });
+        // Read parent_id from fields
+        let parent_id = fields
+            .get(PARENT_ID_FIELD)
+            .map(|pid| YakId::from(pid.as_str()));
 
         Ok(Yak {
-            id: id.clone(),
-            name: Name::from(name),
+            id: YakId::from(key.as_str()),
+            name: Name::from(display_name),
             parent_id,
             state,
             context,
@@ -326,18 +277,14 @@ impl ReadYakStore for InMemoryStorage {
 
     fn list_yaks(&self) -> Result<Vec<Yak>> {
         let yaks = self.yaks.read().unwrap();
-        let id_map = self.id_to_name.read().unwrap();
         let mut result = Vec::new();
 
-        // Build reverse map: name -> id
-        let name_to_id: HashMap<&String, &String> =
-            id_map.iter().map(|(id, name)| (name, id)).collect();
-
-        for (name, fields) in yaks.iter() {
-            let id = name_to_id
-                .get(name)
-                .map(|id| YakId::from(id.as_str()))
-                .unwrap_or_else(|| YakId::from(name.as_str()));
+        for (key, fields) in yaks.iter() {
+            // Return leaf name (not full display path)
+            let display_name = fields
+                .get(NAME_FIELD)
+                .cloned()
+                .unwrap_or_else(|| key.clone());
 
             let context = fields.get(CONTEXT_FIELD).and_then(|c| {
                 if c.is_empty() {
@@ -352,23 +299,26 @@ impl ReadYakStore for InMemoryStorage {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "todo".to_string());
 
-            // Collect custom fields (non-reserved)
+            // Collect custom fields (non-reserved, excluding internal _parent_id)
             let custom_fields: HashMap<String, String> = fields
                 .iter()
-                .filter(|(k, _)| !RESERVED_FIELDS.contains(&k.as_str()))
+                .filter(|(k, _)| {
+                    !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
+                })
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
-            // Find children
-            let children = self.find_children_from_yaks(&yaks, &id_map, name);
+            // Find children by parent_id
+            let children = Self::find_children_from_yaks(&yaks, key);
 
-            // Derive parent_id from hierarchical name
-            let parent_id = crate::domain::hierarchy::get_parent(name)
-                .and_then(|parent_name| Self::id_for_name_in(&id_map, &parent_name));
+            // Read parent_id from fields
+            let parent_id = fields
+                .get(PARENT_ID_FIELD)
+                .map(|pid| YakId::from(pid.as_str()));
 
             result.push(Yak {
-                id,
-                name: Name::from(name.as_str()),
+                id: YakId::from(key.as_str()),
+                name: Name::from(display_name),
                 parent_id,
                 state,
                 context,
@@ -385,54 +335,65 @@ impl ReadYakStore for InMemoryStorage {
 
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         let yaks = self.yaks.read().unwrap();
-        let id_map = self.id_to_name.read().unwrap();
 
-        // First, try exact match
+        // First, try exact key match
         if yaks.contains_key(query) {
-            let id = Self::id_for_name_in(&id_map, query).unwrap_or_else(|| YakId::from(query));
-            return Ok(id);
+            return Ok(YakId::from(query));
         }
 
-        // If not found, try fuzzy match on the leaf node only
+        // Try exact name match
+        for (key, fields) in yaks.iter() {
+            if let Some(name) = fields.get(NAME_FIELD) {
+                if name == query {
+                    return Ok(YakId::from(key.as_str()));
+                }
+            }
+        }
+
+        // Try exact display name match (hierarchical path)
+        for key in yaks.keys() {
+            let display = Self::build_display_name(&yaks, key);
+            if display == query {
+                return Ok(YakId::from(key.as_str()));
+            }
+        }
+
+        // Fuzzy match on name field
         let matches: Vec<&String> = yaks
             .keys()
-            .filter(|yak_name| {
-                let leaf = yak_name.rsplit('/').next().unwrap_or(yak_name);
-                leaf.to_lowercase().contains(&query.to_lowercase())
+            .filter(|key| {
+                if let Some(fields) = yaks.get(*key) {
+                    let name = fields
+                        .get(NAME_FIELD)
+                        .map(|s| s.as_str())
+                        .unwrap_or(key.as_str());
+                    name.to_lowercase().contains(&query.to_lowercase())
+                } else {
+                    false
+                }
             })
             .collect();
 
         match matches.len() {
             0 => anyhow::bail!("yak '{}' not found", query),
-            1 => {
-                let name = matches[0];
-                let id = Self::id_for_name_in(&id_map, name)
-                    .unwrap_or_else(|| YakId::from(name.as_str()));
-                Ok(id)
-            }
+            1 => Ok(YakId::from(matches[0].as_str())),
             _ => anyhow::bail!("yak name '{}' is ambiguous", query),
         }
     }
 
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
-        let name = {
-            let id_map = self.id_to_name.read().unwrap();
-            id_map
-                .get(id.as_str())
-                .cloned()
-                .unwrap_or_else(|| id.as_str().to_string())
-        };
-
         let yaks = self.yaks.read().unwrap();
+        let key = Self::resolve_key_from_yaks(&yaks, id.as_str())
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         let fields = yaks
-            .get(&name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))?;
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
         fields
             .get(field_name)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Failed to read field '{}' for '{}'", field_name, name))
+            .ok_or_else(|| anyhow::anyhow!("Failed to read field '{}' for '{}'", field_name, id))
     }
 }
 
@@ -441,7 +402,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_create_yak_constructs_path_from_parent_id() {
+    fn test_create_yak_with_parent_id() {
         let storage = InMemoryStorage::new();
         storage
             .create_yak(&Name::from("parent"), &YakId::from("parent-a1b2"), None)
@@ -453,6 +414,7 @@ mod tests {
                 Some(&YakId::from("parent-a1b2")),
             )
             .unwrap();
+        // Should be findable by display name "parent/child"
         assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
     }
 
