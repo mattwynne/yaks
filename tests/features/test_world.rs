@@ -72,6 +72,9 @@ pub trait TestWorld {
     /// Move/rename a yak
     fn move_yak(&mut self, from: &str, to: &str) -> Result<()>;
 
+    /// Try to move/rename a yak - captures result without bailing on failure
+    fn try_move_yak(&mut self, from: &str, to: &str) -> Result<()>;
+
     /// Set a yak's field from content (simulates stdin piping)
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()>;
 

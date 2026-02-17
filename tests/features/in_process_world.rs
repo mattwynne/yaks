@@ -191,6 +191,10 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(MoveYak::new(from, to)))
     }
 
+    fn try_move_yak(&mut self, from: &str, to: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(MoveYak::new(from, to)))
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(WriteField::new(name, field)))
