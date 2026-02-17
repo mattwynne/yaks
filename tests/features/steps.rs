@@ -125,6 +125,45 @@ async fn v1_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     Ok(())
 }
 
+/// Create a yak directly in the git event store using the v2 schema format.
+/// Same as v1 (no name, no id) but with .schema-version = "2" in the root tree.
+/// This is a frozen snapshot so the migration test stays stable.
+#[given(regex = r#"^a yak "(.+)" created with the v2 schema$"#)]
+async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.init_git()?;
+    let repo_path = world.default_repo_path();
+
+    let state_oid = git_hash_object(repo_path, "todo")?;
+    let context_oid = git_hash_object(repo_path, "")?;
+    let version_oid = git_hash_object(repo_path, "2")?;
+
+    // Create yak subtree: state + context.md (no name, no id — old-style)
+    let yak_tree_input = format!(
+        "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
+        state_oid, context_oid
+    );
+    let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
+
+    // Create root tree with yak subtree + .schema-version
+    let root_tree_input = format!(
+        "040000 tree {}\t{}\n100644 blob {}\t.schema-version\n",
+        yak_tree_oid, yak_name, version_oid
+    );
+    let root_tree_oid = git_mktree(repo_path, &root_tree_input)?;
+
+    let message = format!("Added: \"{}\"", yak_name);
+    let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
+    git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
+
+    // Build the .yaks/ projection (YAK_PATH = repo_path in tests)
+    let yak_dir = repo_path.join(&yak_name);
+    std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
+    std::fs::write(yak_dir.join("state"), "todo").context("Failed to write state")?;
+    std::fs::write(yak_dir.join("context.md"), "").context("Failed to write context.md")?;
+
+    Ok(())
+}
+
 // -- Git plumbing helpers for v1 fixture --
 
 fn git_hash_object(repo_path: &std::path::Path, content: &str) -> Result<String> {
@@ -667,6 +706,60 @@ async fn file_still_exists_in_yak_dir(world: &mut FullStackWorld, filename: Stri
     let path = world.default_repo_path().join(&filename);
     if !path.exists() {
         anyhow::bail!("Expected file '{}' to still exist after reset", filename);
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^the yak "(.+)" should have a "(.+)" file containing "(.+)"$"#)]
+async fn yak_has_file_with_content(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    file_name: String,
+    expected_content: String,
+) -> Result<()> {
+    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    if !path.exists() {
+        anyhow::bail!(
+            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
+            file_name,
+            yak_name
+        );
+    }
+    let content = std::fs::read_to_string(&path)
+        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
+    if content.trim() != expected_content {
+        anyhow::bail!(
+            "Expected '{}' file to contain '{}', got '{}'",
+            file_name,
+            expected_content,
+            content.trim()
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^the yak "(.+)" should have an "(.+)" file$"#)]
+async fn yak_has_file(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    file_name: String,
+) -> Result<()> {
+    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    if !path.exists() {
+        anyhow::bail!(
+            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
+            file_name,
+            yak_name
+        );
+    }
+    let content = std::fs::read_to_string(&path)
+        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
+    if content.trim().is_empty() {
+        anyhow::bail!(
+            "Expected '{}' file for yak '{}' to be non-empty",
+            file_name,
+            yak_name
+        );
     }
     Ok(())
 }
