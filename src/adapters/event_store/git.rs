@@ -377,10 +377,15 @@ impl EventStore for GitEventStore {
 
             // Add children subtrees
             for child_id in &yak.children {
-                if let Some(child) = yak_map.get(child_id) {
-                    let child_tree = build_yak_subtree(repo, child, yak_map)?;
-                    builder.insert(child_id.as_str(), child_tree, 0o040000)?;
-                }
+                let child = yak_map.get(child_id).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "child yak '{}' referenced by '{}' not found in snapshot",
+                        child_id,
+                        yak.id
+                    )
+                })?;
+                let child_tree = build_yak_subtree(repo, child, yak_map)?;
+                builder.insert(child_id.as_str(), child_tree, 0o040000)?;
             }
 
             Ok(builder.write()?)
@@ -859,5 +864,27 @@ mod tests {
         let schema_blob = tree.get_name(".schema-version").unwrap();
         let schema = store.repo.find_blob(schema_blob.id()).unwrap();
         assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
+    }
+
+    #[test]
+    fn reset_from_snapshot_errors_on_missing_child() {
+        use std::collections::HashMap;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let parent = Yak {
+            id: YakId::from("parent-a1b2"),
+            name: Name::from("Parent Yak"),
+            state: "wip".to_string(),
+            context: None,
+            fields: HashMap::new(),
+            children: vec![YakId::from("missing-child-x1y2")], // child doesn't exist
+        };
+
+        let result = store.reset_from_snapshot(&[parent]);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("missing-child-x1y2"));
+        assert!(err_msg.contains("parent-a1b2"));
     }
 }
