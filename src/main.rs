@@ -11,7 +11,7 @@ use yx::application::{
     complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
     RemoveYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
 };
-use yx::domain::ports::ReadYakStore;
+use yx::domain::ports::{EventStore, ReadYakStore};
 use yx::infrastructure::EventBus;
 
 /// DAG-based TODO list CLI for software teams
@@ -105,7 +105,14 @@ enum Commands {
         show: bool,
     },
     /// Rebuild yaks from the git event store tree
-    Reset,
+    Reset {
+        /// Rebuild .yaks directory from git tree (default)
+        #[arg(long)]
+        disk_from_git: bool,
+        /// Rebuild git tree from .yaks directory
+        #[arg(long)]
+        git_from_disk: bool,
+    },
     /// Sync yaks with git refs
     Sync,
     /// Show event log from refs/notes/yaks
@@ -203,16 +210,34 @@ fn main() -> Result<()> {
                 app.handle(WriteField::new(&name_str, &field))
             }
         }
-        Commands::Reset => {
-            let yak_path = if let Ok(yak_path) = std::env::var("YAK_PATH") {
-                PathBuf::from(yak_path)
-            } else if let Ok(git_work_tree) = std::env::var("GIT_WORK_TREE") {
-                PathBuf::from(git_work_tree).join(".yaks")
+        Commands::Reset {
+            disk_from_git,
+            git_from_disk,
+        } => {
+            // Validate flags
+            if disk_from_git && git_from_disk {
+                anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
+            }
+
+            if git_from_disk {
+                // Rebuild git tree from .yaks directory
+                let yaks = storage.list_yaks()?;
+                let mut event_store = GitEventStore::new(&repo_path)?;
+                let count = event_store.reset_from_snapshot(&yaks)?;
+                println!("Snapshot: {} yaks", count);
             } else {
-                PathBuf::from(".yaks")
-            };
-            let event_store = GitEventStore::new(&repo_path)?;
-            event_store.materialize_tree(&yak_path)
+                // Default: rebuild .yaks directory from git tree
+                let yak_path = if let Ok(yak_path) = std::env::var("YAK_PATH") {
+                    PathBuf::from(yak_path)
+                } else if let Ok(git_work_tree) = std::env::var("GIT_WORK_TREE") {
+                    PathBuf::from(git_work_tree).join(".yaks")
+                } else {
+                    PathBuf::from(".yaks")
+                };
+                let event_store = GitEventStore::new(&repo_path)?;
+                event_store.materialize_tree(&yak_path)?;
+            }
+            Ok(())
         }
         Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),
