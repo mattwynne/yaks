@@ -529,12 +529,16 @@ mod tests {
                     name: Name::from("test1"),
                     state: "todo".to_string(),
                     context: Some("context1".to_string()),
+                    fields: std::collections::HashMap::new(),
+                    children: vec![],
                 },
                 Yak {
                     id: YakId::from("test2-bbbb"),
                     name: Name::from("test2"),
                     state: "wip".to_string(),
                     context: None,
+                    fields: std::collections::HashMap::new(),
+                    children: vec![],
                 },
             ],
         };
@@ -579,12 +583,16 @@ mod tests {
                         name: Name::from("parent"),
                         state: "wip".to_string(),
                         context: None,
+                        fields: std::collections::HashMap::new(),
+                        children: vec![],
                     },
                     Yak {
                         id: YakId::from("child-bbbb"),
                         name: Name::from("parent/child"),
                         state: "todo".to_string(),
                         context: None,
+                        fields: std::collections::HashMap::new(),
+                        children: vec![],
                     },
                 ])
             }

@@ -1,9 +1,11 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
+use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -241,6 +243,51 @@ impl DirectoryStorage {
             })
     }
 
+    /// Read custom fields (non-reserved files) from a yak directory.
+    fn read_custom_fields(&self, dir: &std::path::Path) -> HashMap<String, String> {
+        let mut fields = HashMap::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if !RESERVED_FIELDS.contains(&name) {
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            fields.insert(name.to_string(), content);
+                        }
+                    }
+                }
+            }
+        }
+        fields
+    }
+
+    /// Read direct child yak IDs from subdirectories of a yak directory.
+    fn read_children(&self, dir: &std::path::Path) -> Vec<YakId> {
+        let mut children = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if !path.join(CONTEXT_FIELD).exists() {
+                    continue;
+                }
+                let id = self.read_id_from_dir(
+                    &path,
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown"),
+                );
+                children.push(id);
+            }
+        }
+        children
+    }
+
     fn field_path(&self, name: &str, field_name: &str) -> PathBuf {
         self.yak_dir(name).join(field_name)
     }
@@ -428,11 +475,16 @@ impl ReadYakStore for DirectoryStorage {
             .trim()
             .to_string();
 
+        let fields = self.read_custom_fields(&dir);
+        let children = self.read_children(&dir);
+
         Ok(Yak {
             id: id.clone(),
             name: Name::from(display_name),
             state,
             context,
+            fields,
+            children,
         })
     }
 
@@ -480,11 +532,16 @@ impl ReadYakStore for DirectoryStorage {
                 .trim()
                 .to_string();
 
+            let fields = self.read_custom_fields(path);
+            let children = self.read_children(path);
+
             yaks.push(Yak {
                 id: YakId::from(id),
                 name: Name::from(display_name),
                 state,
                 context,
+                fields,
+                children,
             });
         }
 
@@ -791,5 +848,118 @@ mod tests {
         let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
         assert_eq!(child.id, YakId::from("child-c3d4"));
         assert_eq!(child.name, Name::from("parent/child"));
+    }
+
+    #[test]
+    fn test_get_yak_populates_custom_fields() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("my yak"),
+                id: YakId::from("my-yak-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Write a custom field
+        storage
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: YakId::from("my-yak-a1b2"),
+                field_name: "plan".to_string(),
+                content: "Step 1\nStep 2".to_string(),
+            }))
+            .unwrap();
+
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
+        assert_eq!(yak.fields.get("plan"), Some(&"Step 1\nStep 2".to_string()));
+        // Reserved fields should not appear in custom fields
+        assert!(!yak.fields.contains_key("state"));
+        assert!(!yak.fields.contains_key("context.md"));
+        assert!(!yak.fields.contains_key("name"));
+        assert!(!yak.fields.contains_key("id"));
+    }
+
+    #[test]
+    fn test_get_yak_populates_children() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("child1"),
+                id: YakId::from("child1-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("child2"),
+                id: YakId::from("child2-e5f6"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        let parent = ReadYakStore::get_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
+        assert_eq!(parent.children.len(), 2);
+        assert!(parent.children.contains(&YakId::from("child1-c3d4")));
+        assert!(parent.children.contains(&YakId::from("child2-e5f6")));
+
+        // Leaf yaks should have no children
+        let child = ReadYakStore::get_yak(&storage, &YakId::from("child1-c3d4")).unwrap();
+        assert!(child.children.is_empty());
+    }
+
+    #[test]
+    fn test_list_yaks_populates_fields_and_children() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: YakId::from("child-c3d4"),
+                field_name: "spec".to_string(),
+                content: "some spec".to_string(),
+            }))
+            .unwrap();
+
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        let parent = yaks
+            .iter()
+            .find(|y| y.id == YakId::from("parent-a1b2"))
+            .unwrap();
+        let child = yaks
+            .iter()
+            .find(|y| y.id == YakId::from("child-c3d4"))
+            .unwrap();
+
+        assert_eq!(parent.children.len(), 1);
+        assert!(parent.children.contains(&YakId::from("child-c3d4")));
+
+        assert_eq!(child.fields.get("spec"), Some(&"some spec".to_string()));
+        assert!(child.children.is_empty());
     }
 }

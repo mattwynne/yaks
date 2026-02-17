@@ -1,5 +1,6 @@
 // In-memory storage adapter - for testing only
 
+use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
 use crate::domain::{Yak, CONTEXT_FIELD, STATE_FIELD};
@@ -21,6 +22,41 @@ impl InMemoryStorage {
             yaks: Arc::new(RwLock::new(HashMap::new())),
             id_to_name: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Find direct child yak IDs by scanning for entries whose name
+    /// is exactly parent_name + "/" + leaf (one level deep).
+    fn find_children(&self, parent_name: &str) -> Vec<YakId> {
+        let yaks = self.yaks.read().unwrap();
+        let id_map = self.id_to_name.read().unwrap();
+        self.find_children_from_yaks(&yaks, &id_map, parent_name)
+    }
+
+    fn find_children_from_yaks(
+        &self,
+        yaks: &HashMap<String, HashMap<String, String>>,
+        id_map: &HashMap<String, String>,
+        parent_name: &str,
+    ) -> Vec<YakId> {
+        let prefix = format!("{}/", parent_name);
+        let name_to_id: HashMap<&String, &String> =
+            id_map.iter().map(|(id, name)| (name, id)).collect();
+
+        yaks.keys()
+            .filter(|name| {
+                if let Some(rest) = name.strip_prefix(&prefix) {
+                    !rest.contains('/') // direct child only
+                } else {
+                    false
+                }
+            })
+            .map(|name| {
+                name_to_id
+                    .get(name)
+                    .map(|id| YakId::from(id.as_str()))
+                    .unwrap_or_else(|| YakId::from(name.as_str()))
+            })
+            .collect()
     }
 
     /// Resolve a key (name or id) to the yak name used as HashMap key.
@@ -242,11 +278,23 @@ impl ReadYakStore for InMemoryStorage {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "todo".to_string());
 
+        // Collect custom fields (non-reserved)
+        let custom_fields: HashMap<String, String> = fields
+            .iter()
+            .filter(|(k, _)| !RESERVED_FIELDS.contains(&k.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        // Find children (entries whose name starts with this yak's name + "/")
+        let children = self.find_children(&name);
+
         Ok(Yak {
             id: id.clone(),
             name: Name::from(name),
             state,
             context,
+            fields: custom_fields,
+            children,
         })
     }
 
@@ -278,11 +326,23 @@ impl ReadYakStore for InMemoryStorage {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "todo".to_string());
 
+            // Collect custom fields (non-reserved)
+            let custom_fields: HashMap<String, String> = fields
+                .iter()
+                .filter(|(k, _)| !RESERVED_FIELDS.contains(&k.as_str()))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+
+            // Find children
+            let children = self.find_children_from_yaks(&yaks, &id_map, name);
+
             result.push(Yak {
                 id,
                 name: Name::from(name.as_str()),
                 state,
                 context,
+                fields: custom_fields,
+                children,
             });
         }
 

@@ -80,6 +80,8 @@ mod tests {
                 name: Name::from("test"),
                 state: "todo".to_string(),
                 context: None,
+                fields: HashMap::new(),
+                children: vec![],
             },
         );
 
@@ -99,6 +101,8 @@ mod tests {
                 name: Name::from("test"),
                 state: "todo".to_string(),
                 context: None,
+                fields: HashMap::new(),
+                children: vec![],
             },
         );
 

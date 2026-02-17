@@ -1,5 +1,7 @@
 // Yak domain model - a simple value object
 
+use std::collections::HashMap;
+
 use super::slug::{Name, YakId};
 
 const VALID_STATES: &[&str] = &["todo", "wip", "done"];
@@ -16,13 +18,14 @@ pub fn validate_state(state: &str) -> Result<(), String> {
     }
 }
 
-// TODO: Model custom fields on Yak struct to eliminate read_field port method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
     pub id: YakId,
     pub name: Name,
     pub state: String,
     pub context: Option<String>,
+    pub fields: HashMap<String, String>,
+    pub children: Vec<YakId>,
 }
 
 impl Yak {
@@ -64,6 +67,8 @@ mod tests {
             name: Name::from("test"),
             state: "todo".to_string(),
             context: None,
+            fields: HashMap::new(),
+            children: vec![],
         };
         assert!(!yak.is_done());
 
@@ -72,6 +77,8 @@ mod tests {
             name: Name::from("test"),
             state: "done".to_string(),
             context: None,
+            fields: HashMap::new(),
+            children: vec![],
         };
         assert!(done_yak.is_done());
     }
