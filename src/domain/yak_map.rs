@@ -1231,7 +1231,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_skips_done_parent_with_undone_children() {
+    fn test_prune_cascades_through_done_hierarchy() {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
@@ -1244,10 +1244,10 @@ mod tests {
 
         map.prune().unwrap();
 
-        // Child should be removed (done leaf)
+        // Both removed: child first (done leaf), then parent
+        // becomes a done leaf and is removed on the next pass.
         assert!(!map.yaks.contains_key(&child_id));
-        // Parent kept because it had children when we collected
-        assert!(map.yaks.contains_key(&parent_id));
+        assert!(!map.yaks.contains_key(&parent_id));
     }
 
     #[test]
