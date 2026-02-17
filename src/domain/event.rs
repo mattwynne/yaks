@@ -45,11 +45,11 @@ impl YakEvent {
         }
     }
 
-    /// Get the yak name this event affects (for filtering)
+    /// Get the yak ID this event affects (for filtering)
     #[cfg(any(test, feature = "test-support"))]
-    pub fn yak_name(&self) -> &str {
+    pub fn yak_id(&self) -> &str {
         match self {
-            Self::Added(e) => e.name.as_str(),
+            Self::Added(e) => e.id.as_str(),
             Self::Removed(e) => e.id.as_str(),
             Self::Moved(e) => e.id.as_str(),
             Self::Renamed(e) => e.id.as_str(),
@@ -105,11 +105,11 @@ mod tests {
     }
 
     #[test]
-    fn yak_name_returns_correct_name() {
+    fn yak_id_returns_correct_id() {
         let event = YakEvent::Moved(MovedEvent {
             id: YakId::from("old-a1b2"),
             new_parent: Some(YakId::from("new-parent-c3d4")),
         });
-        assert_eq!(event.yak_name(), "old-a1b2");
+        assert_eq!(event.yak_id(), "old-a1b2");
     }
 }

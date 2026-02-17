@@ -273,7 +273,7 @@ impl GitEventStore {
     pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
         Ok(EventStore::get_all_events(self)?
             .into_iter()
-            .filter(|e| e.yak_name() == name)
+            .filter(|e| e.yak_id() == name)
             .collect())
     }
 }

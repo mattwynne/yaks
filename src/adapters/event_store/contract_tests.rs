@@ -72,12 +72,12 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             let all = store.get_all_events().unwrap();
-            assert_eq!(all[0].yak_name(), "first");
-            assert_eq!(all[1].yak_name(), "second");
+            assert_eq!(all[0].yak_id(), "first-a1b2");
+            assert_eq!(all[1].yak_id(), "second-c3d4");
         }
 
         #[test]
-        fn filters_events_by_yak_name() {
+        fn filters_events_by_yak_id() {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(AddedEvent {
@@ -100,15 +100,11 @@ macro_rules! event_store_tests {
                 }))
                 .unwrap();
 
-            // Note: get_events filters by yak_name(), which returns
-            // the Name for Added events but the ID for all others.
-            // This is a known inconsistency (see "fix yak_name
-            // method inconsistency on YakEvent" yak).
             let foo_events = store.get_events("foo-a1b2").unwrap();
-            assert_eq!(foo_events.len(), 1); // StateUpdated only
+            assert_eq!(foo_events.len(), 2); // Added + StateUpdated
 
             let bar_events = store.get_events("bar-c3d4").unwrap();
-            assert_eq!(bar_events.len(), 0); // no non-Added events
+            assert_eq!(bar_events.len(), 1); // Added only
 
             let baz_events = store.get_events("baz").unwrap();
             assert_eq!(baz_events.len(), 0);

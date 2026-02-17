@@ -20,7 +20,7 @@ impl InMemoryEventStore {
         let events = self.events.lock().unwrap();
         Ok(events
             .iter()
-            .filter(|e| e.yak_name() == name)
+            .filter(|e| e.yak_id() == name)
             .cloned()
             .collect())
     }
