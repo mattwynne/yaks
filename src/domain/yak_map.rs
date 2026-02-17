@@ -102,10 +102,19 @@ impl YakMap {
         None
     }
 
-    /// Resolve a key, returning an error if not found.
-    fn resolve_or_bail(&self, key: &str) -> Result<YakId> {
-        self.resolve(key)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", key))
+    /// Resolve a YakId, confirming it exists in the map.
+    fn resolve_id(&self, id: &YakId) -> Option<YakId> {
+        if self.yaks.contains_key(id) {
+            Some(id.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Resolve a YakId, returning an error if not found.
+    fn resolve_id_or_bail(&self, id: &YakId) -> Result<YakId> {
+        self.resolve_id(id)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))
     }
 
     /// Find direct children of a yak by its ID.
@@ -208,12 +217,12 @@ impl YakMap {
         }
     }
 
-    pub fn update_state(&mut self, key: String, state: String) -> Result<()> {
+    pub fn update_state(&mut self, id: YakId, state: String) -> Result<()> {
         use crate::domain::validate_state;
 
         validate_state(&state).map_err(|e| anyhow::anyhow!(e))?;
 
-        let id = self.resolve_or_bail(&key)?;
+        let id = self.resolve_id_or_bail(&id)?;
 
         // Validate children if marking done
         if state == "done" {
@@ -295,8 +304,8 @@ impl YakMap {
         }
     }
 
-    pub fn update_context(&mut self, key: String, context: String) -> Result<()> {
-        let id = self.resolve_or_bail(&key)?;
+    pub fn update_context(&mut self, id: YakId, context: String) -> Result<()> {
+        let id = self.resolve_id_or_bail(&id)?;
 
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.context = Some(context.clone());
@@ -309,8 +318,8 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn update_field(&mut self, key: String, field_name: String, content: String) -> Result<()> {
-        let id = self.resolve_or_bail(&key)?;
+    pub fn update_field(&mut self, id: YakId, field_name: String, content: String) -> Result<()> {
+        let id = self.resolve_id_or_bail(&id)?;
 
         self.pending_events
             .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
@@ -322,8 +331,8 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn remove_yak(&mut self, key: String) -> Result<()> {
-        let id = self.resolve_or_bail(&key)?;
+    pub fn remove_yak(&mut self, id: YakId) -> Result<()> {
+        let id = self.resolve_id_or_bail(&id)?;
 
         // Prevent removing yak with children (referential integrity)
         let children = self.find_children_of(&id);
@@ -360,10 +369,10 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn move_yak(&mut self, old_key: String, new_name: String) -> Result<()> {
+    pub fn move_yak(&mut self, old_key: YakId, new_name: String) -> Result<()> {
         use crate::domain::validate_yak_name;
 
-        let id = self.resolve_or_bail(&old_key)?;
+        let id = self.resolve_id_or_bail(&old_key)?;
 
         // Validate each segment of the new name
         for segment in new_name.split('/') {
@@ -450,7 +459,7 @@ mod tests {
         struct MockStore;
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, _name: &str) -> Result<Yak> {
+            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
                 anyhow::bail!("empty")
             }
             fn list_yaks(&self) -> Result<Vec<Yak>> {
@@ -459,10 +468,10 @@ mod tests {
             fn yak_exists(&self, _name: &str) -> bool {
                 false
             }
-            fn find_yak(&self, _name: &str) -> Result<String> {
+            fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {
                 anyhow::bail!("empty")
             }
-            fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+            fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not implemented")
             }
         }
@@ -484,10 +493,10 @@ mod tests {
         }
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, name: &str) -> Result<Yak> {
+            fn get_yak(&self, id: &YakId) -> Result<Yak> {
                 self.yaks
                     .iter()
-                    .find(|y| y.name.as_str() == name)
+                    .find(|y| y.id == *id)
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("Yak not found"))
             }
@@ -500,15 +509,15 @@ mod tests {
                 self.yaks.iter().any(|y| y.name.as_str() == name)
             }
 
-            fn find_yak(&self, name: &str) -> Result<String> {
+            fn fuzzy_find_yak_id(&self, name: &str) -> Result<YakId> {
                 self.yaks
                     .iter()
                     .find(|y| y.name.as_str() == name)
-                    .map(|y| y.name.to_string())
+                    .map(|y| y.id.clone())
                     .ok_or_else(|| anyhow::anyhow!("Yak not found"))
             }
 
-            fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+            fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not implemented")
             }
         }
@@ -559,7 +568,7 @@ mod tests {
         struct MockStore;
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, _name: &str) -> Result<Yak> {
+            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
                 anyhow::bail!("Not needed")
             }
 
@@ -583,10 +592,10 @@ mod tests {
             fn yak_exists(&self, _name: &str) -> bool {
                 false
             }
-            fn find_yak(&self, _name: &str) -> Result<String> {
+            fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {
                 anyhow::bail!("Not needed")
             }
-            fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+            fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not needed")
             }
         }
@@ -791,25 +800,15 @@ mod tests {
         let mut map = YakMap::new();
         let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
-        map.update_state(id.to_string(), "wip".to_string()).unwrap();
-        assert_eq!(map.yaks.get(&id).unwrap().state, "wip");
-    }
-
-    #[test]
-    fn test_update_state_by_display_name() {
-        let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
-        map.take_events();
-        map.update_state("test".to_string(), "wip".to_string())
-            .unwrap();
+        map.update_state(id.clone(), "wip".to_string()).unwrap();
         assert_eq!(map.yaks.get(&id).unwrap().state, "wip");
     }
 
     #[test]
     fn test_update_state_validates_state() {
         let mut map = YakMap::new();
-        map.add_yak("test", None, None).unwrap();
-        let result = map.update_state("test".to_string(), "invalid".to_string());
+        let id = map.add_yak("test", None, None).unwrap();
+        let result = map.update_state(id, "invalid".to_string());
         assert!(result.is_err());
     }
 
@@ -818,7 +817,7 @@ mod tests {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         map.add_yak("child", Some(parent_id.clone()), None).unwrap();
-        let result = map.update_state(parent_id.to_string(), "done".to_string());
+        let result = map.update_state(parent_id, "done".to_string());
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -831,9 +830,8 @@ mod tests {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
-        map.update_state(child_id.to_string(), "done".to_string())
-            .unwrap();
-        let result = map.update_state(parent_id.to_string(), "done".to_string());
+        map.update_state(child_id, "done".to_string()).unwrap();
+        let result = map.update_state(parent_id, "done".to_string());
         assert!(result.is_ok());
     }
 
@@ -843,7 +841,7 @@ mod tests {
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
         map.take_events();
-        map.update_state(child_id.to_string(), "wip".to_string())
+        map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
         assert_eq!(map.yaks.get(&parent_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&child_id).unwrap().state, "wip");
@@ -856,8 +854,7 @@ mod tests {
         let b_id = map.add_yak("b", Some(a_id.clone()), None).unwrap();
         let c_id = map.add_yak("c", Some(b_id.clone()), None).unwrap();
         map.take_events();
-        map.update_state(c_id.to_string(), "wip".to_string())
-            .unwrap();
+        map.update_state(c_id.clone(), "wip".to_string()).unwrap();
         assert_eq!(map.yaks.get(&a_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&b_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&c_id).unwrap().state, "wip");
@@ -868,11 +865,10 @@ mod tests {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id), None).unwrap();
-        map.update_state(child_id.to_string(), "wip".to_string())
+        map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
         map.take_events();
-        map.update_state(child_id.to_string(), "done".to_string())
-            .unwrap();
+        map.update_state(child_id, "done".to_string()).unwrap();
         let events = map.take_events();
         assert_eq!(events.len(), 1); // Only child event
     }
@@ -882,12 +878,12 @@ mod tests {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
-        map.update_state(child_id.to_string(), "done".to_string())
+        map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
-        map.update_state(parent_id.to_string(), "done".to_string())
+        map.update_state(parent_id.clone(), "done".to_string())
             .unwrap();
         map.take_events();
-        map.update_state(child_id.to_string(), "wip".to_string())
+        map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
         assert_eq!(map.yaks.get(&parent_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&child_id).unwrap().state, "wip");
@@ -899,15 +895,11 @@ mod tests {
         let a_id = map.add_yak("a", None, None).unwrap();
         let b_id = map.add_yak("b", Some(a_id.clone()), None).unwrap();
         let c_id = map.add_yak("c", Some(b_id.clone()), None).unwrap();
-        map.update_state(c_id.to_string(), "done".to_string())
-            .unwrap();
-        map.update_state(b_id.to_string(), "done".to_string())
-            .unwrap();
-        map.update_state(a_id.to_string(), "done".to_string())
-            .unwrap();
+        map.update_state(c_id.clone(), "done".to_string()).unwrap();
+        map.update_state(b_id.clone(), "done".to_string()).unwrap();
+        map.update_state(a_id.clone(), "done".to_string()).unwrap();
         map.take_events();
-        map.update_state(c_id.to_string(), "wip".to_string())
-            .unwrap();
+        map.update_state(c_id.clone(), "wip".to_string()).unwrap();
         assert_eq!(map.yaks.get(&a_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&b_id).unwrap().state, "wip");
         assert_eq!(map.yaks.get(&c_id).unwrap().state, "wip");
@@ -918,12 +910,12 @@ mod tests {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
-        map.update_state(child_id.to_string(), "done".to_string())
+        map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
         // parent is wip (auto-promoted), not done
         assert_eq!(map.yaks.get(&parent_id).unwrap().state, "wip");
         map.take_events();
-        map.update_state(child_id.to_string(), "wip".to_string())
+        map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
         // parent stays wip, not affected
         assert_eq!(map.yaks.get(&parent_id).unwrap().state, "wip");
@@ -938,7 +930,7 @@ mod tests {
         let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
 
-        map.update_context(id.to_string(), "new context".to_string())
+        map.update_context(id.clone(), "new context".to_string())
             .unwrap();
 
         assert_eq!(
@@ -950,11 +942,10 @@ mod tests {
     #[test]
     fn test_update_context_emits_event() {
         let mut map = YakMap::new();
-        map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
 
-        map.update_context("test".to_string(), "new context".to_string())
-            .unwrap();
+        map.update_context(id, "new context".to_string()).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -970,7 +961,7 @@ mod tests {
     #[test]
     fn test_update_context_fails_for_nonexistent_yak() {
         let mut map = YakMap::new();
-        let result = map.update_context("nonexistent".to_string(), "context".to_string());
+        let result = map.update_context(YakId::from("nonexistent"), "context".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -979,15 +970,11 @@ mod tests {
     #[test]
     fn test_update_field_emits_event() {
         let mut map = YakMap::new();
-        map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
 
-        map.update_field(
-            "test".to_string(),
-            "notes".to_string(),
-            "some content".to_string(),
-        )
-        .unwrap();
+        map.update_field(id, "notes".to_string(), "some content".to_string())
+            .unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -1009,7 +996,7 @@ mod tests {
     fn test_update_field_fails_for_nonexistent_yak() {
         let mut map = YakMap::new();
         let result = map.update_field(
-            "nonexistent".to_string(),
+            YakId::from("nonexistent"),
             "notes".to_string(),
             "content".to_string(),
         );
@@ -1024,7 +1011,7 @@ mod tests {
         let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
 
-        map.remove_yak(id.to_string()).unwrap();
+        map.remove_yak(id.clone()).unwrap();
 
         assert!(!map.yaks.contains_key(&id));
     }
@@ -1032,10 +1019,10 @@ mod tests {
     #[test]
     fn test_remove_yak_emits_event() {
         let mut map = YakMap::new();
-        map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None).unwrap();
         map.take_events();
 
-        map.remove_yak("test".to_string()).unwrap();
+        map.remove_yak(id).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -1050,7 +1037,7 @@ mod tests {
     #[test]
     fn test_remove_yak_fails_for_nonexistent_yak() {
         let mut map = YakMap::new();
-        let result = map.remove_yak("nonexistent".to_string());
+        let result = map.remove_yak(YakId::from("nonexistent"));
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -1061,7 +1048,7 @@ mod tests {
         let parent_id = map.add_yak("parent", None, None).unwrap();
         map.add_yak("child", Some(parent_id.clone()), None).unwrap();
 
-        let result = map.remove_yak(parent_id.to_string());
+        let result = map.remove_yak(parent_id);
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -1078,7 +1065,7 @@ mod tests {
             .unwrap();
         map.take_events();
 
-        map.move_yak(id.to_string(), "new".to_string()).unwrap();
+        map.move_yak(id.clone(), "new".to_string()).unwrap();
 
         assert_eq!(map.yaks.get(&id).unwrap().name, Name::from("new"));
         assert_eq!(
@@ -1093,7 +1080,7 @@ mod tests {
         let id = map.add_yak("old", None, None).unwrap();
         map.take_events();
 
-        map.move_yak(id.to_string(), "new".to_string()).unwrap();
+        map.move_yak(id.clone(), "new".to_string()).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -1115,7 +1102,7 @@ mod tests {
         let id = map.add_yak("old", None, None).unwrap();
         map.take_events();
 
-        map.move_yak(id.to_string(), "a/b/new".to_string()).unwrap();
+        map.move_yak(id.clone(), "a/b/new".to_string()).unwrap();
 
         // The yak should now have parent chain a -> b -> new
         assert_eq!(map.yaks.get(&id).unwrap().name, Name::from("new"));
@@ -1126,7 +1113,7 @@ mod tests {
     #[test]
     fn test_move_yak_fails_for_nonexistent_yak() {
         let mut map = YakMap::new();
-        let result = map.move_yak("nonexistent".to_string(), "new".to_string());
+        let result = map.move_yak(YakId::from("nonexistent"), "new".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -1134,10 +1121,10 @@ mod tests {
     #[test]
     fn test_move_yak_fails_if_destination_exists() {
         let mut map = YakMap::new();
-        map.add_yak("old", None, None).unwrap();
+        let old_id = map.add_yak("old", None, None).unwrap();
         map.add_yak("new", None, None).unwrap();
 
-        let result = map.move_yak("old".to_string(), "new".to_string());
+        let result = map.move_yak(old_id, "new".to_string());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("already exists"));
@@ -1149,7 +1136,7 @@ mod tests {
         let parent_id = map.add_yak("parent", None, None).unwrap();
         map.add_yak("child", Some(parent_id.clone()), None).unwrap();
 
-        let result = map.move_yak(parent_id.to_string(), "newparent".to_string());
+        let result = map.move_yak(parent_id, "newparent".to_string());
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -1163,7 +1150,7 @@ mod tests {
         let mut map = YakMap::new();
         let done_id = map.add_yak("done-yak", None, None).unwrap();
         let todo_id = map.add_yak("todo-yak", None, None).unwrap();
-        map.update_state(done_id.to_string(), "done".to_string())
+        map.update_state(done_id.clone(), "done".to_string())
             .unwrap();
         map.take_events();
 
@@ -1179,9 +1166,9 @@ mod tests {
         let parent_id = map.add_yak("parent", None, None).unwrap();
         let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
         // Mark child done, then mark parent done
-        map.update_state(child_id.to_string(), "done".to_string())
+        map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
-        map.update_state(parent_id.to_string(), "done".to_string())
+        map.update_state(parent_id.clone(), "done".to_string())
             .unwrap();
         map.take_events();
 
@@ -1198,8 +1185,7 @@ mod tests {
         let mut map = YakMap::new();
         let done_id = map.add_yak("done-yak", None, None).unwrap();
         map.add_yak("todo-yak", None, None).unwrap();
-        map.update_state(done_id.to_string(), "done".to_string())
-            .unwrap();
+        map.update_state(done_id, "done".to_string()).unwrap();
         map.take_events();
 
         map.prune().unwrap();

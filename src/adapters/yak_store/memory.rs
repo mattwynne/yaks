@@ -209,11 +209,19 @@ impl WriteYakStore for InMemoryStorage {
 }
 
 impl ReadYakStore for InMemoryStorage {
-    fn get_yak(&self, name: &str) -> Result<Yak> {
+    fn get_yak(&self, id: &YakId) -> Result<Yak> {
+        let name = {
+            let id_map = self.id_to_name.read().unwrap();
+            id_map
+                .get(id.as_str())
+                .cloned()
+                .unwrap_or_else(|| id.as_str().to_string())
+        };
+
         let yaks = self.yaks.read().unwrap();
 
         let fields = yaks
-            .get(name)
+            .get(&name)
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))?;
 
         // Read context field
@@ -234,18 +242,8 @@ impl ReadYakStore for InMemoryStorage {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "todo".to_string());
 
-        // Look up actual slug id from id_to_name (reverse: find key where value == name)
-        let id = {
-            let id_map = self.id_to_name.read().unwrap();
-            id_map
-                .iter()
-                .find(|(_, v)| **v == name)
-                .map(|(k, _)| k.clone())
-                .unwrap_or_else(|| name.to_string()) // fallback for old-format (no id)
-        };
-
         Ok(Yak {
-            id: YakId::from(id),
+            id: id.clone(),
             name: Name::from(name),
             state,
             context,
@@ -254,12 +252,38 @@ impl ReadYakStore for InMemoryStorage {
 
     fn list_yaks(&self) -> Result<Vec<Yak>> {
         let yaks = self.yaks.read().unwrap();
+        let id_map = self.id_to_name.read().unwrap();
         let mut result = Vec::new();
 
-        for name in yaks.keys() {
-            if let Ok(yak) = ReadYakStore::get_yak(self, name) {
-                result.push(yak);
-            }
+        // Build reverse map: name -> id
+        let name_to_id: HashMap<&String, &String> =
+            id_map.iter().map(|(id, name)| (name, id)).collect();
+
+        for (name, fields) in yaks.iter() {
+            let id = name_to_id
+                .get(name)
+                .map(|id| YakId::from(id.as_str()))
+                .unwrap_or_else(|| YakId::from(name.as_str()));
+
+            let context = fields.get(CONTEXT_FIELD).and_then(|c| {
+                if c.is_empty() {
+                    None
+                } else {
+                    Some(c.clone())
+                }
+            });
+
+            let state = fields
+                .get(STATE_FIELD)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| "todo".to_string());
+
+            result.push(Yak {
+                id,
+                name: Name::from(name.as_str()),
+                state,
+                context,
+            });
         }
 
         // Sort by name for consistent ordering
@@ -272,42 +296,64 @@ impl ReadYakStore for InMemoryStorage {
         self.yaks.read().unwrap().contains_key(name)
     }
 
-    fn find_yak(&self, name: &str) -> Result<String> {
+    fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         let yaks = self.yaks.read().unwrap();
 
         // First, try exact match
-        if yaks.contains_key(name) {
-            return Ok(name.to_string());
+        if yaks.contains_key(query) {
+            let id_map = self.id_to_name.read().unwrap();
+            let id = id_map
+                .iter()
+                .find(|(_, v)| **v == query)
+                .map(|(k, _)| YakId::from(k.as_str()))
+                .unwrap_or_else(|| YakId::from(query));
+            return Ok(id);
         }
 
         // If not found, try fuzzy match on the leaf node only
-        let matches: Vec<String> = yaks
-            .keys()
-            .filter(|yak_name| {
-                // Extract leaf node (last segment after /)
+        let matches: Vec<(&String, &HashMap<String, String>)> = yaks
+            .iter()
+            .filter(|(yak_name, _)| {
                 let leaf = yak_name.rsplit('/').next().unwrap_or(yak_name);
-                leaf.to_lowercase().contains(&name.to_lowercase())
+                leaf.to_lowercase().contains(&query.to_lowercase())
             })
-            .cloned()
             .collect();
 
         match matches.len() {
-            0 => anyhow::bail!("yak '{}' not found", name),
-            1 => Ok(matches[0].clone()),
-            _ => anyhow::bail!("yak name '{}' is ambiguous", name),
+            0 => anyhow::bail!("yak '{}' not found", query),
+            1 => {
+                let name = matches[0].0;
+                let id_map = self.id_to_name.read().unwrap();
+                let id = id_map
+                    .iter()
+                    .find(|(_, v)| *v == name)
+                    .map(|(k, _)| YakId::from(k.as_str()))
+                    .unwrap_or_else(|| YakId::from(name.as_str()));
+                Ok(id)
+            }
+            _ => anyhow::bail!("yak name '{}' is ambiguous", query),
         }
     }
 
-    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
+    fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
+        let name = {
+            let id_map = self.id_to_name.read().unwrap();
+            id_map
+                .get(id.as_str())
+                .cloned()
+                .unwrap_or_else(|| id.as_str().to_string())
+        };
+
         let yaks = self.yaks.read().unwrap();
 
         let fields = yaks
-            .get(yak_name)
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", yak_name))?;
+            .get(&name)
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", name))?;
 
-        fields.get(field_name).cloned().ok_or_else(|| {
-            anyhow::anyhow!("Failed to read field '{}' for '{}'", field_name, yak_name)
-        })
+        fields
+            .get(field_name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Failed to read field '{}' for '{}'", field_name, name))
     }
 }
 

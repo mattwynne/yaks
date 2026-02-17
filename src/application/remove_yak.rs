@@ -16,8 +16,8 @@ impl RemoveYak {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let resolved = app.store.find_yak(&self.name)?;
-        app.with_yak_map(|yak_map| yak_map.remove_yak(resolved))
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        app.with_yak_map(|yak_map| yak_map.remove_yak(id))
     }
 }
 

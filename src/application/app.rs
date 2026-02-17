@@ -112,12 +112,13 @@ mod tests {
 
         // Create yak and mutate its state via YakMap
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), None, None)?;
-            yak_map.update_state("test".to_string(), "wip".to_string())
+            let id = yak_map.add_yak("test".to_string(), None, None)?;
+            yak_map.update_state(id, "wip".to_string())
         })
         .unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -143,7 +144,8 @@ mod tests {
 
         // Verify yak was created
         assert!(ReadYakStore::yak_exists(&storage, "test"));
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
     }
@@ -190,13 +192,14 @@ mod tests {
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {
             let parent_id = yak_map.add_yak("parent".to_string(), None, None)?;
-            yak_map.add_yak("child".to_string(), Some(parent_id), None)?;
-            yak_map.update_state("parent/child".to_string(), "wip".to_string())
+            let child_id = yak_map.add_yak("child".to_string(), Some(parent_id), None)?;
+            yak_map.update_state(child_id, "wip".to_string())
         })
         .unwrap();
 
         // Verify parent is also wip
-        let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
+        let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
+        let parent = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
         assert_eq!(parent.state, "wip");
     }
 }

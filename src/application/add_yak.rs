@@ -33,9 +33,7 @@ impl AddYak {
 
         // Resolve parent to its ID
         let parent_id = if let Some(ref parent_name) = self.parent {
-            let found = app.store.find_yak(parent_name)?;
-            let parent_yak = app.store.get_yak(&found)?;
-            Some(parent_yak.id)
+            Some(app.store.fuzzy_find_yak_id(parent_name)?)
         } else {
             None
         };
@@ -101,7 +99,8 @@ mod tests {
 
         AddYak::new("my-yak").execute(&mut app).unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "my-yak").unwrap();
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.context, Some("# My context".to_string()));
     }
 

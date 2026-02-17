@@ -24,19 +24,18 @@ impl MoveYak {
             validate_yak_name(segment).map_err(|e| anyhow::anyhow!(e))?;
         }
 
-        let resolved_from = app.store.find_yak(&self.from)?;
+        let id = app.store.fuzzy_find_yak_id(&self.from)?;
 
         // Check if destination is an existing yak (parent-only move)
         let actual_destination = if app.store.yak_exists(&self.to) {
-            // Destination exists - treat as parent-only move
-            // Extract the base name from the source (everything after last '/')
-            let base_name = resolved_from.rsplit('/').next().unwrap();
+            let source_yak = app.store.get_yak(&id)?;
+            let base_name = source_yak.name.as_str().rsplit('/').next().unwrap();
             format!("{}/{}", self.to, base_name)
         } else {
             self.to.clone()
         };
 
-        app.with_yak_map(|yak_map| yak_map.move_yak(resolved_from, actual_destination))
+        app.with_yak_map(|yak_map| yak_map.move_yak(id, actual_destination))
     }
 }
 

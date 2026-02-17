@@ -16,6 +16,7 @@ pub fn validate_state(state: &str) -> Result<(), String> {
     }
 }
 
+// TODO: Model custom fields on Yak struct to eliminate read_field port method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Yak {
     pub id: YakId,

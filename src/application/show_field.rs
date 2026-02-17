@@ -23,13 +23,13 @@ impl ShowField {
         validate_field_name_format(&self.field)?;
 
         // Find yak (handles fuzzy matching)
-        let yak_name = app.store.find_yak(&self.name)?;
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         // Get yak to display name
-        let yak = app.store.get_yak(&yak_name)?;
+        let yak = app.store.get_yak(&id)?;
 
         // Read field content
-        let content = app.store.read_field(&yak_name, &self.field)?;
+        let content = app.store.read_field(&id, &self.field)?;
 
         // Display yak name and field content
         app.display.success(yak.name.as_str());

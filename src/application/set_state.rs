@@ -25,34 +25,39 @@ impl SetState {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let resolved_name = app.store.find_yak(&self.name)?;
+        use crate::domain::slug::YakId;
 
-        let names_to_update = if self.recursive {
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+
+        let ids_to_update = if self.recursive {
+            // TODO: Move recursive descendant-finding into YakMap using parent_id
+            // relationships instead of string prefix matching on display names
             let all_yaks = app.store.list_yaks()?;
-            let mut names: Vec<String> = all_yaks
+            let resolved_yak = app.store.get_yak(&id)?;
+            let resolved_name = resolved_yak.name.to_string();
+            let mut yaks_to_update: Vec<(usize, YakId)> = all_yaks
                 .iter()
                 .filter(|yak| {
                     yak.name == resolved_name
                         || yak.name.as_str().starts_with(&format!("{resolved_name}/"))
                 })
-                .map(|yak| yak.name.to_string())
+                .map(|yak| {
+                    let depth = yak.name.as_str().matches('/').count();
+                    (depth, yak.id.clone())
+                })
                 .collect();
             // Sort by depth descending (leaves first) so children are
             // marked done before parents, passing hierarchy validation
-            names.sort_by(|a, b| {
-                let depth_a = a.matches('/').count();
-                let depth_b = b.matches('/').count();
-                depth_b.cmp(&depth_a)
-            });
-            names
+            yaks_to_update.sort_by(|a, b| b.0.cmp(&a.0));
+            yaks_to_update.into_iter().map(|(_, id)| id).collect()
         } else {
-            vec![resolved_name]
+            vec![id]
         };
 
         let state = self.state.clone();
         app.with_yak_map(move |yak_map| {
-            for name in names_to_update {
-                yak_map.update_state(name, state.clone())?;
+            for id in ids_to_update {
+                yak_map.update_state(id, state.clone())?;
             }
             Ok(())
         })
@@ -92,7 +97,8 @@ mod tests {
         AddYak::new("my yak").execute(&mut app).unwrap();
         SetState::new("my yak", "wip").execute(&mut app).unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -107,7 +113,8 @@ mod tests {
         AddYak::new("Fix the bug").execute(&mut app).unwrap();
         SetState::new("bug", "wip").execute(&mut app).unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "Fix the bug").unwrap();
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "Fix the bug").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -149,9 +156,15 @@ mod tests {
             .execute(&mut app)
             .unwrap();
 
-        let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
-        let child = ReadYakStore::get_yak(&storage, "parent/child").unwrap();
-        let grandchild = ReadYakStore::get_yak(&storage, "parent/child/grandchild").unwrap();
+        let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
+        let parent = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
+        // Find child by listing and filtering (child is nested under parent)
+        let all_yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        let child = all_yaks.iter().find(|y| y.name == "parent/child").unwrap();
+        let grandchild = all_yaks
+            .iter()
+            .find(|y| y.name == "parent/child/grandchild")
+            .unwrap();
         assert_eq!(parent.state, "done");
         assert_eq!(child.state, "done");
         assert_eq!(grandchild.state, "done");

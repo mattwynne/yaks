@@ -1,14 +1,16 @@
 // Yak store port traits - read/write abstractions for yak persistence
 
+use crate::domain::slug::YakId;
 use crate::domain::Yak;
 use anyhow::Result;
 
 pub trait ReadYakStore {
-    fn get_yak(&self, name: &str) -> Result<Yak>;
+    fn get_yak(&self, id: &YakId) -> Result<Yak>;
     fn list_yaks(&self) -> Result<Vec<Yak>>;
+    // TODO: Change yak_exists to accept &YakId instead of &str
     fn yak_exists(&self, name: &str) -> bool;
-    fn find_yak(&self, name: &str) -> Result<String>;
-    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String>;
+    fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId>;
+    fn read_field(&self, id: &YakId, field_name: &str) -> Result<String>;
 }
 
 pub trait WriteYakStore {
@@ -40,9 +42,9 @@ mod tests {
     }
 
     impl ReadYakStore for InMemoryStore {
-        fn get_yak(&self, name: &str) -> Result<Yak> {
+        fn get_yak(&self, id: &YakId) -> Result<Yak> {
             self.yaks
-                .get(name)
+                .get(id.as_str())
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Yak not found"))
         }
@@ -55,15 +57,15 @@ mod tests {
             self.yaks.contains_key(name)
         }
 
-        fn find_yak(&self, name: &str) -> Result<String> {
+        fn fuzzy_find_yak_id(&self, name: &str) -> Result<YakId> {
             if self.yaks.contains_key(name) {
-                Ok(name.to_string())
+                Ok(YakId::from(name))
             } else {
                 anyhow::bail!("Yak not found")
             }
         }
 
-        fn read_field(&self, _yak_name: &str, _field_name: &str) -> Result<String> {
+        fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
             anyhow::bail!("Field reading not implemented in test store")
         }
     }
@@ -82,7 +84,7 @@ mod tests {
         );
 
         let store = InMemoryStore { yaks };
-        let yak = store.get_yak("test").unwrap();
+        let yak = store.get_yak(&YakId::from("test")).unwrap();
 
         assert_eq!(yak.name, Name::from("test"));
     }

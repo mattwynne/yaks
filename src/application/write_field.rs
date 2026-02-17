@@ -29,10 +29,10 @@ impl WriteField {
             .context("No content provided on stdin")?;
 
         // Resolve fuzzy name before closure
-        let name = app.store.find_yak(&self.name)?;
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let field = self.field.clone();
 
-        app.with_yak_map(|yak_map| yak_map.update_field(name, field, content))
+        app.with_yak_map(|yak_map| yak_map.update_field(id, field, content))
     }
 }
 

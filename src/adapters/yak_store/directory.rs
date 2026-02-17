@@ -227,6 +227,20 @@ impl DirectoryStorage {
         None
     }
 
+    /// Read the yak ID from a directory's id file, falling back to dir name.
+    fn read_id_from_dir(&self, dir: &std::path::Path, fallback: &str) -> YakId {
+        fs::read_to_string(dir.join(ID_FIELD))
+            .map(|s| YakId::from(s.trim().to_string()))
+            .unwrap_or_else(|_| {
+                YakId::from(
+                    dir.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(fallback)
+                        .to_string(),
+                )
+            })
+    }
+
     fn field_path(&self, name: &str, field_name: &str) -> PathBuf {
         self.yak_dir(name).join(field_name)
     }
@@ -389,40 +403,33 @@ impl WriteYakStore for DirectoryStorage {
 }
 
 impl ReadYakStore for DirectoryStorage {
-    fn get_yak(&self, name: &str) -> Result<Yak> {
-        let dir = self.yak_dir(name);
+    fn get_yak(&self, id: &YakId) -> Result<Yak> {
+        let dir = self
+            .resolve_by_id(id.as_str())
+            .or_else(|| {
+                // Fallback: try yak_dir resolution for backward compat
+                let d = self.yak_dir(id.as_str());
+                if d.exists() && d.join(CONTEXT_FIELD).exists() {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
 
-        if !dir.exists() || !dir.join(CONTEXT_FIELD).exists() {
-            anyhow::bail!("yak '{name}' not found");
-        }
-
-        // Build hierarchical name from directory structure and leaf name files
         let display_name = self.build_full_name(&dir);
 
-        // Read id from id file, fall back to directory name (backward compat)
-        let id = fs::read_to_string(dir.join(ID_FIELD))
-            .unwrap_or_else(|_| {
-                dir.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or(name)
-                    .to_string()
-            })
-            .trim()
-            .to_string();
-
-        // Read context field
         let context = fs::read_to_string(dir.join(CONTEXT_FIELD))
             .ok()
             .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
-        // Read state field, default to "todo" if not present
         let state = fs::read_to_string(dir.join(STATE_FIELD))
             .unwrap_or_else(|_| "todo".to_string())
             .trim()
             .to_string();
 
         Ok(Yak {
-            id: YakId::from(id),
+            id: id.clone(),
             name: Name::from(display_name),
             state,
             context,
@@ -489,13 +496,12 @@ impl ReadYakStore for DirectoryStorage {
         context_file.exists()
     }
 
-    fn find_yak(&self, name: &str) -> Result<String> {
+    fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
         // First, try exact match via resolution (handles both old and new format)
-        let dir = self.yak_dir(name);
+        let dir = self.yak_dir(query);
         if dir.exists() && dir.join(CONTEXT_FIELD).exists() {
-            // Build the full hierarchical name from directory structure
-            let display_name = self.build_full_name(&dir);
-            return Ok(display_name);
+            let id = self.read_id_from_dir(&dir, query);
+            return Ok(id);
         }
 
         // If not found, try fuzzy match on the leaf node only
@@ -503,24 +509,35 @@ impl ReadYakStore for DirectoryStorage {
         let matches: Vec<&Yak> = yaks
             .iter()
             .filter(|yak| {
-                // Extract leaf node (last segment after /)
                 let yak_name_str = yak.name.as_str();
                 let leaf = yak_name_str.rsplit('/').next().unwrap_or(yak_name_str);
-                leaf.to_lowercase().contains(&name.to_lowercase())
+                leaf.to_lowercase().contains(&query.to_lowercase())
             })
             .collect();
 
         match matches.len() {
-            0 => anyhow::bail!("yak '{name}' not found"),
-            1 => Ok(matches[0].name.to_string()),
-            _ => anyhow::bail!("yak name '{name}' is ambiguous"),
+            0 => anyhow::bail!("yak '{query}' not found"),
+            1 => Ok(matches[0].id.clone()),
+            _ => anyhow::bail!("yak name '{query}' is ambiguous"),
         }
     }
 
-    fn read_field(&self, yak_name: &str, field_name: &str) -> Result<String> {
-        let field_path = self.field_path(yak_name, field_name);
+    fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
+        let dir = self
+            .resolve_by_id(id.as_str())
+            .or_else(|| {
+                let d = self.yak_dir(id.as_str());
+                if d.exists() {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
+
+        let field_path = dir.join(field_name);
         fs::read_to_string(&field_path)
-            .with_context(|| format!("Failed to read field '{field_name}' for '{yak_name}'"))
+            .with_context(|| format!("Failed to read field '{field_name}' for '{id}'"))
     }
 }
 
@@ -573,7 +590,7 @@ mod tests {
         storage.on_event(&event).unwrap();
 
         assert!(storage.yak_dir("test").exists());
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.state, "todo");
     }
 
@@ -598,7 +615,7 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.context, Some("new context".to_string()));
     }
 
@@ -621,7 +638,7 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -644,7 +661,7 @@ mod tests {
             }))
             .unwrap();
 
-        let yak = ReadYakStore::get_yak(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.name, Name::from("test"));
         assert_eq!(yak.state, "todo");
         assert_eq!(yak.context, Some("context".to_string()));
@@ -684,7 +701,7 @@ mod tests {
             "Expected directory 'my-yak' (slug of 'my yak') to exist"
         );
         // get_yak should resolve by name
-        let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
         assert_eq!(yak.id, YakId::from("my-yak-a1b2"));
         assert_eq!(yak.name, Name::from("my yak"));
     }
@@ -735,7 +752,7 @@ mod tests {
             .unwrap();
 
         // Verify
-        let yak = ReadYakStore::get_yak(&storage, "my yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
         assert_eq!(yak.state, "wip");
     }
 
@@ -768,10 +785,10 @@ mod tests {
         );
 
         // Both yaks should be retrievable
-        let parent = ReadYakStore::get_yak(&storage, "parent").unwrap();
+        let parent = ReadYakStore::get_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
         assert_eq!(parent.id, YakId::from("parent-a1b2"));
 
-        let child = ReadYakStore::get_yak(&storage, "child").unwrap();
+        let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
         assert_eq!(child.id, YakId::from("child-c3d4"));
         assert_eq!(child.name, Name::from("parent/child"));
     }
