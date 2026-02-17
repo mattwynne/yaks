@@ -5,7 +5,6 @@ pub mod event;
 pub mod event_format;
 pub mod events;
 pub mod field;
-pub mod hierarchy;
 pub mod ports;
 pub mod slug;
 pub mod yak;
@@ -16,7 +15,6 @@ pub use field::{
     validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, NAME_FIELD,
     STATE_FIELD,
 };
-pub use hierarchy::{find_children, get_ancestors};
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use yak::{validate_state, validate_yak_name, Yak};
 pub use yak_map::YakMap;
