@@ -38,3 +38,16 @@ Feature: Prune done yaks
         - [wip] parent
           - [todo] child2
         """
+
+    Example: Prune removes done parent when all children are also done
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" blocking "parent"
+      And I mark the yak "child" as done
+      And I mark the yak "parent" as done
+      When I prune done yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        You have no yaks. Are you done?
+        """

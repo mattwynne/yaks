@@ -347,17 +347,25 @@ impl YakMap {
     }
 
     pub fn prune(&mut self) -> Result<()> {
-        let done_leaves: Vec<YakId> = self
-            .yaks
-            .iter()
-            .filter(|(id, state)| state.state == "done" && self.find_children_of(id).is_empty())
-            .map(|(id, _)| id.clone())
-            .collect();
+        loop {
+            let done_leaves: Vec<YakId> = self
+                .yaks
+                .iter()
+                .filter(|(id, state)| {
+                    state.state == "done" && self.find_children_of(id).is_empty()
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
 
-        for id in done_leaves {
-            self.yaks.remove(&id);
-            self.pending_events
-                .push(YakEvent::Removed(RemovedEvent { id }));
+            if done_leaves.is_empty() {
+                break;
+            }
+
+            for id in done_leaves {
+                self.yaks.remove(&id);
+                self.pending_events
+                    .push(YakEvent::Removed(RemovedEvent { id }));
+            }
         }
 
         Ok(())
