@@ -307,9 +307,16 @@ impl ReadYakStore for InMemoryStorage {
         // Find children (entries whose name starts with this yak's name + "/")
         let children = self.find_children(&name);
 
+        // Derive parent_id from hierarchical name
+        let parent_id = crate::domain::hierarchy::get_parent(&name).and_then(|parent_name| {
+            let id_map = self.id_to_name.read().unwrap();
+            Self::id_for_name_in(&id_map, &parent_name)
+        });
+
         Ok(Yak {
             id: id.clone(),
             name: Name::from(name),
+            parent_id,
             state,
             context,
             fields: custom_fields,
@@ -355,9 +362,14 @@ impl ReadYakStore for InMemoryStorage {
             // Find children
             let children = self.find_children_from_yaks(&yaks, &id_map, name);
 
+            // Derive parent_id from hierarchical name
+            let parent_id = crate::domain::hierarchy::get_parent(name)
+                .and_then(|parent_name| Self::id_for_name_in(&id_map, &parent_name));
+
             result.push(Yak {
                 id,
                 name: Name::from(name.as_str()),
+                parent_id,
                 state,
                 context,
                 fields: custom_fields,

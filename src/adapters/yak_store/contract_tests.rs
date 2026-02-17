@@ -308,6 +308,61 @@ macro_rules! yak_store_tests {
             let yak = ReadYakStore::get_yak(&store, &YakId::from("test-yak")).unwrap();
             assert_eq!(yak.context, None);
         }
+
+        // --- parent_id ---
+
+        #[test]
+        fn root_yak_has_no_parent_id() {
+            let (store, _guard) = $create_store;
+            store
+                .create_yak(&Name::from("root yak"), &YakId::from("root-yak-a1b2"), None)
+                .unwrap();
+            let yak = ReadYakStore::get_yak(&store, &YakId::from("root-yak-a1b2")).unwrap();
+            assert_eq!(yak.parent_id, None);
+        }
+
+        #[test]
+        fn child_yak_has_parent_id() {
+            let (store, _guard) = $create_store;
+            store
+                .create_yak(&Name::from("parent"), &YakId::from("parent-a1b2"), None)
+                .unwrap();
+            store
+                .create_yak(
+                    &Name::from("child"),
+                    &YakId::from("child-c3d4"),
+                    Some(&YakId::from("parent-a1b2")),
+                )
+                .unwrap();
+            let child = ReadYakStore::get_yak(&store, &YakId::from("child-c3d4")).unwrap();
+            assert_eq!(child.parent_id, Some(YakId::from("parent-a1b2")));
+        }
+
+        #[test]
+        fn list_yaks_populates_parent_id() {
+            let (store, _guard) = $create_store;
+            store
+                .create_yak(&Name::from("parent"), &YakId::from("parent-a1b2"), None)
+                .unwrap();
+            store
+                .create_yak(
+                    &Name::from("child"),
+                    &YakId::from("child-c3d4"),
+                    Some(&YakId::from("parent-a1b2")),
+                )
+                .unwrap();
+            let yaks = ReadYakStore::list_yaks(&store).unwrap();
+            let parent = yaks
+                .iter()
+                .find(|y| y.id == YakId::from("parent-a1b2"))
+                .unwrap();
+            let child = yaks
+                .iter()
+                .find(|y| y.id == YakId::from("child-c3d4"))
+                .unwrap();
+            assert_eq!(parent.parent_id, None);
+            assert_eq!(child.parent_id, Some(YakId::from("parent-a1b2")));
+        }
     };
 }
 

@@ -288,6 +288,22 @@ impl DirectoryStorage {
         children
     }
 
+    /// Read the parent yak's ID from the filesystem.
+    /// If the parent directory is also a yak (has context.md), read its id file.
+    fn read_parent_id(&self, dir: &std::path::Path) -> Option<YakId> {
+        dir.parent().and_then(|parent| {
+            if parent != self.base_path && parent.join(CONTEXT_FIELD).exists() {
+                let fallback = parent
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                Some(self.read_id_from_dir(parent, fallback))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Build the full hierarchical name for a yak at the given path.
     /// Walks up parent directories, collecting leaf names from name files,
     /// so the directory structure determines hierarchy.
@@ -473,10 +489,12 @@ impl ReadYakStore for DirectoryStorage {
 
         let fields = self.read_custom_fields(&dir);
         let children = self.read_children(&dir);
+        let parent_id = self.read_parent_id(&dir);
 
         Ok(Yak {
             id: id.clone(),
             name: Name::from(display_name),
+            parent_id,
             state,
             context,
             fields,
@@ -530,10 +548,12 @@ impl ReadYakStore for DirectoryStorage {
 
             let fields = self.read_custom_fields(path);
             let children = self.read_children(path);
+            let parent_id = self.read_parent_id(path);
 
             yaks.push(Yak {
                 id: YakId::from(id),
                 name: Name::from(display_name),
+                parent_id,
                 state,
                 context,
                 fields,
