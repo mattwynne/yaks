@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use git2::{ObjectType, Repository};
 use std::path::Path;
 
-use crate::domain::slug::generate_id;
+use crate::domain::slug::{generate_id, YakId};
 
 /// The schema version this build of yx expects.
 pub const CURRENT_SCHEMA_VERSION: u32 = 3;
@@ -171,6 +171,7 @@ impl MigrateV2ToV3 {
         repo: &Repository,
         tree: &git2::Tree,
         entry_name: &str,
+        parent_yak_id: Option<&YakId>,
     ) -> Result<Option<git2::Oid>> {
         let mut modified = false;
         let mut builder = repo.treebuilder(Some(tree))?;
@@ -186,18 +187,27 @@ impl MigrateV2ToV3 {
             modified = true;
         }
 
-        if !has_id {
-            let id_value = if has_name {
-                // New-style yak: tree entry name is the ID
-                entry_name.to_string()
-            } else {
-                // Old-style yak: generate ID from display name
-                generate_id(entry_name).to_string()
-            };
+        // Determine this yak's ID (needed for recursion into children)
+        let this_yak_id = if has_id {
+            // Read existing id blob
+            let id_entry = tree.get_name("id").unwrap();
+            let blob = repo.find_blob(id_entry.id())?;
+            YakId::from(std::str::from_utf8(blob.content())?.to_string())
+        } else if has_name {
+            // New-style yak: tree entry name is the ID
+            let id_value = entry_name.to_string();
             let id_blob = repo.blob(id_value.as_bytes())?;
             builder.insert("id", id_blob, 0o100644)?;
             modified = true;
-        }
+            YakId::from(entry_name)
+        } else {
+            // Old-style yak: generate deterministic ID from name + parent
+            let generated = generate_id(entry_name, parent_yak_id);
+            let id_blob = repo.blob(generated.as_str().as_bytes())?;
+            builder.insert("id", id_blob, 0o100644)?;
+            modified = true;
+            generated
+        };
 
         // Recurse into child yak subtrees
         for i in 0..tree.len() {
@@ -211,7 +221,8 @@ impl MigrateV2ToV3 {
             };
             let child_tree = repo.find_tree(entry.id())?;
             if Self::is_yak_subtree(repo, &child_tree) {
-                if let Some(new_child_oid) = Self::migrate_subtree(repo, &child_tree, &child_name)?
+                if let Some(new_child_oid) =
+                    Self::migrate_subtree(repo, &child_tree, &child_name, Some(&this_yak_id))?
                 {
                     builder.insert(&child_name, new_child_oid, 0o040000)?;
                     modified = true;
@@ -256,7 +267,7 @@ impl Migration for MigrateV2ToV3 {
             if !Self::is_yak_subtree(repo, &subtree) {
                 continue;
             }
-            if let Some(new_oid) = Self::migrate_subtree(repo, &subtree, &entry_name)? {
+            if let Some(new_oid) = Self::migrate_subtree(repo, &subtree, &entry_name, None)? {
                 root_builder.insert(&entry_name, new_oid, 0o040000)?;
                 modified = true;
             }

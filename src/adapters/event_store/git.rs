@@ -236,9 +236,7 @@ impl GitEventStore {
                     // Remove directories that are in the git tree (will
                     // be recreated) or that look like yak entries (have
                     // a state file — these are stale).
-                    if tree_names.contains(&*name_str)
-                        || path.join("state").exists()
-                    {
+                    if tree_names.contains(&*name_str) || path.join("state").exists() {
                         std::fs::remove_dir_all(&path)?;
                     }
                 } else if tree_names.contains(&*name_str) {

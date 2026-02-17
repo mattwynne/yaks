@@ -148,7 +148,7 @@ impl YakMap {
             }
         }
 
-        let id = generate_id(name.as_str());
+        let id = generate_id(name.as_str(), parent_id.as_ref());
 
         self.yaks.insert(
             id.clone(),
@@ -227,7 +227,7 @@ impl YakMap {
             }
 
             // Create new ancestor
-            let id = generate_id(segment);
+            let id = generate_id(segment, current_parent_id.as_ref());
             let name = Name::from(segment);
             self.yaks.insert(
                 id.clone(),

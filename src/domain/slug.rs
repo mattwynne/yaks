@@ -154,22 +154,33 @@ pub fn slugify(name: &str) -> Slug {
     Slug(collapsed.trim_matches('-').to_string())
 }
 
-/// Generate a unique ID from a human-readable yak name.
+/// Generate a deterministic unique ID from a yak name and its
+/// ancestry path.
 ///
-/// Slug + 4-char random suffix. Immutable once created.
-pub fn generate_id(name: &str) -> YakId {
+/// The ID is `<slug>-<4_char_hash>` where the hash is derived from
+/// the full ancestry path: `<grandparent_id>::<parent_id>::<slug>`.
+/// For root yaks with no parent, the path is just `<slug>`.
+///
+/// This ensures:
+/// - Same name + same ancestry = same ID (deterministic)
+/// - Same name + different parent = different ID (unique)
+pub fn generate_id(name: &str, parent_id: Option<&YakId>) -> YakId {
     let slug = slugify(name);
-    let suffix = random_suffix();
+    let ancestry_path = match parent_id {
+        Some(pid) => format!("{}::{}", pid, slug),
+        None => slug.to_string(),
+    };
+    let suffix = hash_suffix(&ancestry_path);
     YakId(format!("{}-{}", slug, suffix))
 }
 
-fn random_suffix() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
+fn hash_suffix(input: &str) -> String {
+    use std::hash::{Hash, Hasher};
 
-    let state = RandomState::new();
-    let mut hasher = state.build_hasher();
-    hasher.write_u8(0);
+    // Use a fixed-seed hasher for determinism.
+    // SipHasher with known keys (0, 0) gives consistent results.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    input.hash(&mut hasher);
     let hash = hasher.finish();
 
     let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz0123456789".chars().collect();
@@ -216,8 +227,8 @@ mod tests {
     }
 
     #[test]
-    fn generate_id_includes_random_suffix() {
-        let id = generate_id("Make the tea");
+    fn generate_id_includes_hash_suffix() {
+        let id = generate_id("Make the tea", None);
         assert!(
             id.as_str().starts_with("make-the-tea-"),
             "Expected id to start with 'make-the-tea-', got '{}'",
@@ -229,10 +240,38 @@ mod tests {
     }
 
     #[test]
-    fn generate_id_produces_different_ids() {
-        let id1 = generate_id("test");
-        let id2 = generate_id("test");
-        assert_ne!(id1, id2);
+    fn generate_id_is_deterministic() {
+        let id1 = generate_id("test", None);
+        let id2 = generate_id("test", None);
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn generate_id_with_parent_is_deterministic() {
+        let parent = YakId::from("project-a1b2");
+        let id1 = generate_id("fix-build", Some(&parent));
+        let id2 = generate_id("fix-build", Some(&parent));
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn generate_id_differs_by_parent() {
+        let parent_a = YakId::from("project-a-x1y2");
+        let parent_b = YakId::from("project-b-z3w4");
+        let id_a = generate_id("fix-build", Some(&parent_a));
+        let id_b = generate_id("fix-build", Some(&parent_b));
+        assert_ne!(id_a, id_b);
+        // Both start with the same slug prefix
+        assert!(id_a.as_str().starts_with("fix-build-"));
+        assert!(id_b.as_str().starts_with("fix-build-"));
+    }
+
+    #[test]
+    fn generate_id_root_differs_from_child() {
+        let parent = YakId::from("project-a1b2");
+        let root_id = generate_id("fix-build", None);
+        let child_id = generate_id("fix-build", Some(&parent));
+        assert_ne!(root_id, child_id);
     }
 
     #[test]
