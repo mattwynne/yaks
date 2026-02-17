@@ -48,8 +48,9 @@ and Name.
 ### ID (immutable, event identity)
 
 The ID is the stable identity used in all events. It is
-composed of the initial slug plus a short random suffix,
-separated by a hyphen:
+composed of the initial slug plus a short deterministic
+suffix (4-char hash of the ancestry path), separated by a
+hyphen:
 
 ```
 make-the-tea-a1b2
@@ -61,8 +62,9 @@ when the yak is renamed or moved. All domain events
 (`AddedEvent`, `StateUpdatedEvent`, `MovedEvent`, etc.)
 reference yaks by ID.
 
-The random suffix ensures uniqueness even when two yaks are
-created with the same display name at different times.
+The suffix is derived from the ancestry path
+(`<parent_id>::<slug>`), ensuring uniqueness: the same name
+under different parents produces different IDs.
 
 ### Slug (mutable, filesystem identity)
 
@@ -138,16 +140,11 @@ Both events reference the yak by its immutable ID.
 ### Migration
 
 Existing yaks (created before this identity model) receive
-IDs during migration. The current implementation uses
-non-deterministic random suffixes, meaning that migrating the
-same data twice will produce different IDs.
-
-**Known gap / future work:** A planned change (tracked as the
-"make IDs deterministic" yak) will derive suffixes from a hash
-of the yak's full ancestry path, making ID generation
-deterministic and reproducible regardless of when or where it
-runs. Until then, migration should be treated as a one-time
-operation per dataset.
+IDs during migration. The suffix is derived from a hash of
+the yak's full ancestry path
+(`<grandparent_id>::<parent_id>::<leaf_slug>`), making ID
+generation deterministic and reproducible regardless of when
+or where it runs.
 
 ### Display conventions
 
@@ -187,6 +184,16 @@ acceptable in names since directories use slugs.
 is most natural: the friendly display name for interactive use,
 the ID for scripting, or the path for hierarchical navigation.
 
+**Different storage layers use different keys.** The git event
+store (source of truth) keys its tree entries by immutable ID
+(e.g. `parent-a1b2/child-x1y2/state`). This ensures the tree
+structure is stable across renames. The directory storage
+(read-model projection, rebuilt from events) keys by slug
+(e.g. `parent/child/state`), giving users a browsable
+filesystem layout. This divergence is intentional: the event
+store optimises for immutability, the projection optimises for
+human readability.
+
 ### What becomes harder
 
 **Three concepts instead of one.** The single-name approach
@@ -205,11 +212,9 @@ use IDs. Debugging event history requires mapping between the
 two, which adds a layer of indirection.
 
 **Migration complexity.** Existing yaks need a one-time
-migration to assign IDs. The current non-deterministic
-approach means migration is not reproducible (see Migration
-section above). This adds a migration step that must be
-tested and documented, and motivates the planned move to
-deterministic ID generation.
+migration to assign IDs. The deterministic hashing approach
+ensures migration is reproducible, but it still adds a
+migration step that must be tested and documented.
 
 ### Relationship to other ADRs
 
