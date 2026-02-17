@@ -42,3 +42,13 @@ Feature: Fuzzy match on yak names
       When I set the context of "parent" to "test context"
       And I show the context of "parent"
       Then the output should include "test context"
+
+  Rule: Fuzzy matching finds parent yaks too
+
+    Example: A parent yak can be found by fuzzy match
+      Given I have a clean git repository
+      And I add the yak "project"
+      And I add the yak "fix the build" blocking "project"
+      When I set the state of "proj" to "wip"
+      And I show the "state" field of "project"
+      Then the output should include "wip"
