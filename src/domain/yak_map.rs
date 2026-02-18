@@ -194,8 +194,9 @@ impl YakMap {
 
         if let Some(content) = context {
             self.pending_events
-                .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
+                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                     id: id.clone(),
+                    field_name: "context.md".to_string(),
                     content,
                 }));
         }
@@ -224,9 +225,10 @@ impl YakMap {
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.state = state.clone();
         self.pending_events
-            .push(YakEvent::StateUpdated(StateUpdatedEvent {
+            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: id.clone(),
-                state,
+                field_name: "state".to_string(),
+                content: state,
             }));
 
         // Propagate to ancestors if transitioning from todo
@@ -266,9 +268,10 @@ impl YakMap {
                 if parent.state == "todo" {
                     parent.state = "wip".to_string();
                     self.pending_events
-                        .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                        .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                             id: ancestor_id.clone(),
-                            state: "wip".to_string(),
+                            field_name: "state".to_string(),
+                            content: "wip".to_string(),
                         }));
                 }
             }
@@ -281,9 +284,10 @@ impl YakMap {
                 if parent.state == "done" {
                     parent.state = "wip".to_string();
                     self.pending_events
-                        .push(YakEvent::StateUpdated(StateUpdatedEvent {
+                        .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                             id: ancestor_id.clone(),
-                            state: "wip".to_string(),
+                            field_name: "state".to_string(),
+                            content: "wip".to_string(),
                         }));
                 }
             }
@@ -296,8 +300,9 @@ impl YakMap {
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.context = Some(context.clone());
         self.pending_events
-            .push(YakEvent::ContextUpdated(ContextUpdatedEvent {
+            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id,
+                field_name: "context.md".to_string(),
                 content: context,
             }));
 
@@ -378,11 +383,13 @@ impl YakMap {
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.name = Name::from(new_name.as_str());
 
-        // Emit Renamed event
-        self.pending_events.push(YakEvent::Renamed(RenamedEvent {
-            id,
-            new_name: Name::from(new_name.as_str()),
-        }));
+        // Emit FieldUpdated event for name change
+        self.pending_events
+            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id,
+                field_name: "name".to_string(),
+                content: new_name.to_string(),
+            }));
 
         Ok(())
     }
@@ -899,11 +906,16 @@ mod tests {
             _ => panic!("Expected Added event first"),
         }
         match &events[1] {
-            YakEvent::ContextUpdated(ContextUpdatedEvent { id, content }) => {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id,
+                field_name,
+                content,
+            }) => {
                 assert!(!id.as_str().is_empty());
+                assert_eq!(field_name, "context.md");
                 assert_eq!(content, "context");
             }
-            _ => panic!("Expected ContextUpdated event second"),
+            _ => panic!("Expected FieldUpdated event second"),
         }
     }
 
@@ -1133,11 +1145,16 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::ContextUpdated(ContextUpdatedEvent { id, content }) => {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id,
+                field_name,
+                content,
+            }) => {
                 assert!(!id.as_str().is_empty());
+                assert_eq!(field_name, "context.md");
                 assert_eq!(content, "new context");
             }
-            _ => panic!("Expected ContextUpdated event"),
+            _ => panic!("Expected FieldUpdated event"),
         }
     }
 
@@ -1268,14 +1285,16 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Renamed(RenamedEvent {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: event_id,
-                new_name,
+                field_name,
+                content,
             }) => {
                 assert_eq!(event_id, &id);
-                assert_eq!(new_name, &Name::from("new"));
+                assert_eq!(field_name, "name");
+                assert_eq!(content, "new");
             }
-            _ => panic!("Expected Renamed event"),
+            _ => panic!("Expected FieldUpdated event"),
         }
     }
 

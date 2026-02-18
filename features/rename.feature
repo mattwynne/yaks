@@ -43,10 +43,10 @@ Feature: yx rename command
       Then the command should fail
       And the error should contain "already exists"
 
-  Rule: Rename emits a Renamed event
-    Example: Rename emits Renamed event in the log
+  Rule: Rename emits a FieldUpdated event
+    Example: Rename emits FieldUpdated event in the log
       Given I have a clean git repository
       And I add the yak "old name"
       When I rename the yak "old name" to "new name"
       And I run yx log
-      Then the output should include "Renamed"
+      Then the output should include "FieldUpdated"
