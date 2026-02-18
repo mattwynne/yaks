@@ -515,6 +515,7 @@ impl ReadYakStore for DirectoryStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::*;
     use crate::domain::ports::EventListener;
     use crate::domain::YakEvent;
@@ -540,11 +541,14 @@ mod tests {
     fn test_directory_storage_handles_added_event() {
         let (mut storage, _temp) = setup_test_storage();
 
-        let event = YakEvent::Added(AddedEvent {
-            name: Name::from("test"),
-            id: YakId::from(""),
-            parent_id: None,
-        });
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from(""),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
 
         storage.on_event(&event).unwrap();
 
@@ -559,20 +563,26 @@ mod tests {
 
         // First add the yak
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from(""),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Then update context
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test"),
-                field_name: "context.md".to_string(),
-                content: "new context".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test"),
+                    field_name: "context.md".to_string(),
+                    content: "new context".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
@@ -584,19 +594,25 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from(""),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test"),
-                field_name: "state".to_string(),
-                content: "wip".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test"),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
@@ -608,19 +624,25 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from(""),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test"),
-                field_name: "context.md".to_string(),
-                content: "context".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test"),
+                    field_name: "context.md".to_string(),
+                    content: "context".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
@@ -633,11 +655,14 @@ mod tests {
     fn test_added_event_with_id_creates_slug_based_directory() {
         let (mut storage, _temp) = setup_test_storage();
 
-        let event = YakEvent::Added(AddedEvent {
-            name: Name::from("my yak"),
-            id: YakId::from("my-yak-a1b2"),
-            parent_id: None,
-        });
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("my yak"),
+                id: YakId::from("my-yak-a1b2"),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
 
         storage.on_event(&event).unwrap();
 
@@ -657,19 +682,25 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test1"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test1"),
+                    id: YakId::from(""),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("test2"),
-                id: YakId::from(""),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test2"),
+                    id: YakId::from(""),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yaks = ReadYakStore::list_yaks(&storage).unwrap();
@@ -682,20 +713,26 @@ mod tests {
 
         // Add yak with id
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("my yak"),
-                id: YakId::from("my-yak-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("my yak"),
+                    id: YakId::from("my-yak-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Update state using id
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("my-yak-a1b2"),
-                field_name: "state".to_string(),
-                content: "wip".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("my-yak-a1b2"),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Verify
@@ -709,20 +746,26 @@ mod tests {
 
         // Add parent
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Add child under parent
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Child directory should be nested under parent's slug-based directory
@@ -745,20 +788,26 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("my yak"),
-                id: YakId::from("my-yak-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("my yak"),
+                    id: YakId::from("my-yak-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Write a custom field
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("my-yak-a1b2"),
-                field_name: "plan".to_string(),
-                content: "Step 1\nStep 2".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("my-yak-a1b2"),
+                    field_name: "plan".to_string(),
+                    content: "Step 1\nStep 2".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
@@ -775,27 +824,36 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("child1"),
-                id: YakId::from("child1-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child1"),
+                    id: YakId::from("child1-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("child2"),
-                id: YakId::from("child2-e5f6"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child2"),
+                    id: YakId::from("child2-e5f6"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let parent = ReadYakStore::get_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
@@ -813,27 +871,36 @@ mod tests {
         let (mut storage, _temp) = setup_test_storage();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         storage
-            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("child-c3d4"),
-                field_name: "spec".to_string(),
-                content: "some spec".to_string(),
-            }))
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("child-c3d4"),
+                    field_name: "spec".to_string(),
+                    content: "some spec".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let yaks = ReadYakStore::list_yaks(&storage).unwrap();
@@ -859,18 +926,24 @@ mod tests {
 
         // Create two yaks
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("yak one"),
-                id: YakId::from("yak-one-a1b2"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak one"),
+                    id: YakId::from("yak-one-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
         storage
-            .on_event(&YakEvent::Added(AddedEvent {
-                name: Name::from("yak two"),
-                id: YakId::from("yak-two-c3d4"),
-                parent_id: None,
-            }))
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak two"),
+                    id: YakId::from("yak-two-c3d4"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Add a non-yak file

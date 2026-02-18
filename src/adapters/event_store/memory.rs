@@ -56,6 +56,7 @@ impl EventStoreReader for InMemoryEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::AddedEvent;
     use crate::domain::slug::{Name, YakId};
 
@@ -63,11 +64,14 @@ mod tests {
     fn test_in_memory_event_store() {
         let mut store = InMemoryEventStore::new();
 
-        let event = YakEvent::Added(AddedEvent {
-            name: Name::from("test"),
-            id: YakId::from(""),
-            parent_id: None,
-        });
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from(""),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
 
         store.append(&event).unwrap();
         let events = EventStore::get_all_events(&store).unwrap();

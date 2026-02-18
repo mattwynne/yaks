@@ -1,3 +1,4 @@
+use crate::domain::event_metadata::EventMetadata;
 use crate::domain::events::*;
 use crate::domain::ports::ReadYakStore;
 use crate::domain::slug::{generate_id, slugify, Name, YakId};
@@ -199,37 +200,49 @@ impl YakMap {
             },
         );
 
-        self.pending_events.push(YakEvent::Added(AddedEvent {
-            name: name.clone(),
-            id: id.clone(),
-            parent_id,
-        }));
+        self.pending_events.push(YakEvent::Added(
+            AddedEvent {
+                name: name.clone(),
+                id: id.clone(),
+                parent_id,
+            },
+            EventMetadata::default_legacy(),
+        ));
 
         if let Some(content) = context {
             self.pending_events
-                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    id: id.clone(),
-                    field_name: "context.md".to_string(),
-                    content,
-                }));
+                .push(YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: "context.md".to_string(),
+                        content,
+                    },
+                    EventMetadata::default_legacy(),
+                ));
         }
 
         if initial_state != "todo" {
             self.pending_events
-                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    id: id.clone(),
-                    field_name: "state".to_string(),
-                    content: initial_state,
-                }));
+                .push(YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: "state".to_string(),
+                        content: initial_state,
+                    },
+                    EventMetadata::default_legacy(),
+                ));
         }
 
         for (field_name, content) in fields {
             self.pending_events
-                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                    id: id.clone(),
-                    field_name,
-                    content,
-                }));
+                .push(YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name,
+                        content,
+                    },
+                    EventMetadata::default_legacy(),
+                ));
         }
 
         Ok(id)
@@ -256,11 +269,14 @@ impl YakMap {
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.state = state.clone();
         self.pending_events
-            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: id.clone(),
-                field_name: "state".to_string(),
-                content: state,
-            }));
+            .push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name: "state".to_string(),
+                    content: state,
+                },
+                EventMetadata::default_legacy(),
+            ));
 
         // Propagate to ancestors if transitioning from todo
         if transitioning_from_todo {
@@ -299,11 +315,14 @@ impl YakMap {
                 if parent.state == "todo" {
                     parent.state = "wip".to_string();
                     self.pending_events
-                        .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                            id: ancestor_id.clone(),
-                            field_name: "state".to_string(),
-                            content: "wip".to_string(),
-                        }));
+                        .push(YakEvent::FieldUpdated(
+                            FieldUpdatedEvent {
+                                id: ancestor_id.clone(),
+                                field_name: "state".to_string(),
+                                content: "wip".to_string(),
+                            },
+                            EventMetadata::default_legacy(),
+                        ));
                 }
             }
         }
@@ -315,11 +334,14 @@ impl YakMap {
                 if parent.state == "done" {
                     parent.state = "wip".to_string();
                     self.pending_events
-                        .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                            id: ancestor_id.clone(),
-                            field_name: "state".to_string(),
-                            content: "wip".to_string(),
-                        }));
+                        .push(YakEvent::FieldUpdated(
+                            FieldUpdatedEvent {
+                                id: ancestor_id.clone(),
+                                field_name: "state".to_string(),
+                                content: "wip".to_string(),
+                            },
+                            EventMetadata::default_legacy(),
+                        ));
                 }
             }
         }
@@ -331,11 +353,14 @@ impl YakMap {
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.context = Some(context.clone());
         self.pending_events
-            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name: "context.md".to_string(),
-                content: context,
-            }));
+            .push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name: "context.md".to_string(),
+                    content: context,
+                },
+                EventMetadata::default_legacy(),
+            ));
 
         Ok(())
     }
@@ -344,11 +369,14 @@ impl YakMap {
         self.ensure_exists(&id)?;
 
         self.pending_events
-            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name,
-                content,
-            }));
+            .push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name,
+                    content,
+                },
+                EventMetadata::default_legacy(),
+            ));
 
         Ok(())
     }
@@ -369,7 +397,10 @@ impl YakMap {
 
         self.yaks.remove(&id);
         self.pending_events
-            .push(YakEvent::Removed(RemovedEvent { id }));
+            .push(YakEvent::Removed(
+                RemovedEvent { id },
+                EventMetadata::default_legacy(),
+            ));
 
         Ok(())
     }
@@ -390,7 +421,10 @@ impl YakMap {
             for id in done_leaves {
                 self.yaks.remove(&id);
                 self.pending_events
-                    .push(YakEvent::Removed(RemovedEvent { id }));
+                    .push(YakEvent::Removed(
+                        RemovedEvent { id },
+                        EventMetadata::default_legacy(),
+                    ));
             }
         }
 
@@ -416,11 +450,14 @@ impl YakMap {
 
         // Emit FieldUpdated event for name change
         self.pending_events
-            .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name: "name".to_string(),
-                content: new_name.to_string(),
-            }));
+            .push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name: "name".to_string(),
+                    content: new_name.to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ));
 
         Ok(())
     }
@@ -462,10 +499,13 @@ impl YakMap {
         yak.parent_id = new_parent_id.clone();
 
         // Emit Moved event
-        self.pending_events.push(YakEvent::Moved(MovedEvent {
-            id,
-            new_parent: new_parent_id,
-        }));
+        self.pending_events.push(YakEvent::Moved(
+            MovedEvent {
+                id,
+                new_parent: new_parent_id,
+            },
+            EventMetadata::default_legacy(),
+        ));
 
         Ok(())
     }
@@ -883,11 +923,14 @@ mod tests {
     #[test]
     fn test_take_events_removes_events() {
         let mut map = YakMap::new();
-        map.pending_events.push(YakEvent::Added(AddedEvent {
-            name: Name::from("test"),
-            id: YakId::from(""),
-            parent_id: None,
-        }));
+        map.pending_events.push(YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from(""),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        ));
 
         let events = map.take_events();
 
@@ -961,7 +1004,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Added(AddedEvent { name, .. }) => {
+            YakEvent::Added(AddedEvent { name, .. }, _) => {
                 assert_eq!(name, &Name::from("test"))
             }
             _ => panic!("Expected Added event"),
@@ -985,17 +1028,20 @@ mod tests {
 
         assert_eq!(events.len(), 2);
         match &events[0] {
-            YakEvent::Added(AddedEvent { name, .. }) => {
+            YakEvent::Added(AddedEvent { name, .. }, _) => {
                 assert_eq!(name, &Name::from("test"))
             }
             _ => panic!("Expected Added event first"),
         }
         match &events[1] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert!(!id.as_str().is_empty());
                 assert_eq!(field_name, "context.md");
                 assert_eq!(content, "context");
@@ -1044,7 +1090,7 @@ mod tests {
             .unwrap();
         let events = map.take_events();
         match &events[0] {
-            YakEvent::Added(e) => {
+            YakEvent::Added(e, _) => {
                 assert_eq!(e.name, Name::from("child")); // leaf only!
                 assert_eq!(e.parent_id, Some(pid));
             }
@@ -1287,11 +1333,14 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert!(!id.as_str().is_empty());
                 assert_eq!(field_name, "context.md");
                 assert_eq!(content, "new context");
@@ -1321,11 +1370,14 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert!(!id.as_str().is_empty());
                 assert_eq!(field_name, "notes");
                 assert_eq!(content, "some content");
@@ -1369,7 +1421,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Removed(RemovedEvent { id }) => {
+            YakEvent::Removed(RemovedEvent { id }, _) => {
                 assert!(!id.as_str().is_empty())
             }
             _ => panic!("Expected Removed event"),
@@ -1430,11 +1482,14 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: event_id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: event_id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert_eq!(event_id, &id);
                 assert_eq!(field_name, "name");
                 assert_eq!(content, "new");
@@ -1522,7 +1577,7 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         match &events[0] {
-            YakEvent::Removed(RemovedEvent { id }) => {
+            YakEvent::Removed(RemovedEvent { id }, _) => {
                 assert!(!id.as_str().is_empty())
             }
             _ => panic!("Expected Removed event"),
@@ -1544,11 +1599,14 @@ mod tests {
         // Should emit Added + FieldUpdated(state=wip)
         assert_eq!(events.len(), 2);
         match &events[1] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: event_id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: event_id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert_eq!(event_id, &id);
                 assert_eq!(field_name, "state");
                 assert_eq!(content, "wip");
@@ -1614,11 +1672,14 @@ mod tests {
         // Added + 2 FieldUpdated events for custom fields
         assert_eq!(events.len(), 3);
         match &events[1] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: event_id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: event_id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert_eq!(event_id, &id);
                 assert_eq!(field_name, "plan");
                 assert_eq!(content, "my plan");
@@ -1626,11 +1687,14 @@ mod tests {
             _ => panic!("Expected FieldUpdated event for plan"),
         }
         match &events[2] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: event_id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: event_id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 assert_eq!(event_id, &id);
                 assert_eq!(field_name, "notes");
                 assert_eq!(content, "some notes");
@@ -1665,42 +1729,54 @@ mod tests {
         // Added + FieldUpdated(context.md) + FieldUpdated(state) + FieldUpdated(plan)
         assert_eq!(events.len(), 4);
         match &events[0] {
-            YakEvent::Added(AddedEvent {
-                name, id: event_id, ..
-            }) => {
+            YakEvent::Added(
+                AddedEvent {
+                    name, id: event_id, ..
+                },
+                _,
+            ) => {
                 assert_eq!(name, &Name::from("test"));
                 assert_eq!(event_id, &YakId::from("my-id"));
             }
             _ => panic!("Expected Added event first"),
         }
         match &events[1] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                field_name,
-                content,
-                ..
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    field_name,
+                    content,
+                    ..
+                },
+                _,
+            ) => {
                 assert_eq!(field_name, "context.md");
                 assert_eq!(content, "context");
             }
             _ => panic!("Expected FieldUpdated for context.md second"),
         }
         match &events[2] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                field_name,
-                content,
-                ..
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    field_name,
+                    content,
+                    ..
+                },
+                _,
+            ) => {
                 assert_eq!(field_name, "state");
                 assert_eq!(content, "wip");
             }
             _ => panic!("Expected FieldUpdated for state third"),
         }
         match &events[3] {
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                field_name,
-                content,
-                ..
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    field_name,
+                    content,
+                    ..
+                },
+                _,
+            ) => {
                 assert_eq!(field_name, "plan");
                 assert_eq!(content, "the plan");
             }

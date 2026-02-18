@@ -37,6 +37,7 @@ impl EventBus {
 mod tests {
     use super::*;
     use crate::adapters::InMemoryEventStore;
+    use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::AddedEvent;
     use crate::domain::slug::{Name, YakId};
 
@@ -56,11 +57,14 @@ mod tests {
         let store = InMemoryEventStore::new();
         let mut bus = EventBus::new(Box::new(store.clone()));
 
-        let event = YakEvent::Added(AddedEvent {
-            name: Name::from("test"),
-            id: YakId::from(""),
-            parent_id: None,
-        });
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from(""),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
 
         bus.publish(event.clone()).unwrap();
 
@@ -77,11 +81,14 @@ mod tests {
         let listener = TestListener { events: vec![] };
         bus.register(Box::new(listener));
 
-        let event = YakEvent::Added(AddedEvent {
-            name: Name::from("test"),
-            id: YakId::from(""),
-            parent_id: None,
-        });
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from(""),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
 
         bus.publish(event.clone()).unwrap();
 

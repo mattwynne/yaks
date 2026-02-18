@@ -8,11 +8,14 @@ use crate::domain::{YakEvent, NAME_FIELD, STATE_FIELD};
 impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         match event {
-            YakEvent::Added(AddedEvent {
-                name,
-                id,
-                parent_id,
-            }) => {
+            YakEvent::Added(
+                AddedEvent {
+                    name,
+                    id,
+                    parent_id,
+                },
+                _,
+            ) => {
                 self.create_yak(name, id, parent_id.as_ref())?;
                 // Use id for subsequent writes (storage resolves by id)
                 let key = if id.as_str().is_empty() {
@@ -24,19 +27,22 @@ impl<T: WriteYakStore> EventListener for T {
                 self.write_field(key, NAME_FIELD, name.as_str())?;
             }
 
-            YakEvent::Removed(RemovedEvent { id }) => {
+            YakEvent::Removed(RemovedEvent { id }, _) => {
                 self.delete_yak(id)?;
             }
 
-            YakEvent::Moved(MovedEvent { id, new_parent }) => {
+            YakEvent::Moved(MovedEvent { id, new_parent }, _) => {
                 self.reparent_yak(id, new_parent.as_ref())?;
             }
 
-            YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id,
-                field_name,
-                content,
-            }) => {
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id,
+                    field_name,
+                    content,
+                },
+                _,
+            ) => {
                 if field_name == NAME_FIELD {
                     self.rename_yak(id, &Name::from(content.as_str()))?;
                 } else {

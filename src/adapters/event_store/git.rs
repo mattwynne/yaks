@@ -209,7 +209,7 @@ impl GitEventStore {
         current_tree: Option<&git2::Tree>,
     ) -> Result<git2::Oid> {
         match event {
-            YakEvent::Added(e) => {
+            YakEvent::Added(e, _) => {
                 let yak_tree_oid = self.create_yak_tree(e.name.as_str(), "todo", "")?;
                 let path = match &e.parent_id {
                     Some(parent) => format!("{}/{}", parent, e.id),
@@ -218,12 +218,12 @@ impl GitEventStore {
                 self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
             }
 
-            YakEvent::Removed(e) => {
+            YakEvent::Removed(e, _) => {
                 let path = self.resolve_yak_path(current_tree, e.id.as_str());
                 self.set_yak_in_root(current_tree, &path, None)
             }
 
-            YakEvent::Moved(e) => {
+            YakEvent::Moved(e, _) => {
                 // Move yak subtree to new parent
                 let old_path = self.resolve_yak_path(current_tree, e.id.as_str());
                 let old_subtree_oid = self
@@ -241,7 +241,7 @@ impl GitEventStore {
                 self.set_yak_in_root(Some(&intermediate_tree), &target, old_subtree_oid)
             }
 
-            YakEvent::FieldUpdated(e) => {
+            YakEvent::FieldUpdated(e, _) => {
                 let path = self.resolve_yak_path(current_tree, e.id.as_str());
                 self.update_yak_file(current_tree, &path, &e.field_name, &e.content)
             }
@@ -299,11 +299,14 @@ impl GitEventStore {
             let id = generate_id(&name_str, parent_id);
 
             // Added event
-            events.push(YakEvent::Added(crate::domain::events::AddedEvent {
-                name: name.clone(),
-                id: id.clone(),
-                parent_id: parent_id.cloned(),
-            }));
+            events.push(YakEvent::Added(
+                crate::domain::events::AddedEvent {
+                    name: name.clone(),
+                    id: id.clone(),
+                    parent_id: parent_id.cloned(),
+                },
+                crate::domain::event_metadata::EventMetadata::default_legacy(),
+            ));
 
             // State
             if let Some(state_entry) = subtree.get_name("state") {
@@ -316,6 +319,7 @@ impl GitEventStore {
                             field_name: "state".to_string(),
                             content: state.to_string(),
                         },
+                        crate::domain::event_metadata::EventMetadata::default_legacy(),
                     ));
                 }
             }
@@ -331,6 +335,7 @@ impl GitEventStore {
                             field_name: "context.md".to_string(),
                             content: content.to_string(),
                         },
+                        crate::domain::event_metadata::EventMetadata::default_legacy(),
                     ));
                 }
             }
@@ -355,6 +360,7 @@ impl GitEventStore {
                         field_name: field_name.to_string(),
                         content: content.to_string(),
                     },
+                    crate::domain::event_metadata::EventMetadata::default_legacy(),
                 ));
             }
 
@@ -544,6 +550,7 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::FieldUpdatedEvent;
     use crate::domain::slug::{Name, YakId};
     use crate::domain::AddedEvent;
@@ -567,11 +574,14 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Verify ref exists
@@ -585,11 +595,14 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let tree = store.get_current_tree().unwrap().unwrap();
@@ -610,19 +623,25 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         store
-            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test-a1b2"),
-                field_name: "state".to_string(),
-                content: "wip".to_string(),
-            }))
+            .append(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let tree = store.get_current_tree().unwrap().unwrap();
@@ -652,20 +671,26 @@ mod tests {
 
         // Add parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Add child under parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let tree = store.get_current_tree().unwrap().unwrap();
@@ -693,11 +718,14 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
@@ -705,9 +733,9 @@ mod tests {
         // Should have an Added event with regenerated ID
         let added = events
             .iter()
-            .find(|e| matches!(e, YakEvent::Added(_)))
+            .find(|e| matches!(e, YakEvent::Added(_, _)))
             .unwrap();
-        if let YakEvent::Added(e) = added {
+        if let YakEvent::Added(e, _) = added {
             assert_eq!(e.name, Name::from("test"));
             assert!(
                 e.id.as_str().starts_with("test-"),
@@ -723,27 +751,36 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         store
-            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test-a1b2"),
-                field_name: "state".to_string(),
-                content: "wip".to_string(),
-            }))
+            .append(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         store
-            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("test-a1b2"),
-                field_name: "context.md".to_string(),
-                content: "some notes".to_string(),
-            }))
+            .append(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    field_name: "context.md".to_string(),
+                    content: "some notes".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
@@ -751,13 +788,13 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "state" && f.content == "wip")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "state" && f.content == "wip")),
             "Expected FieldUpdated event for state 'wip'"
         );
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "context.md" && f.content == "some notes")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "context.md" && f.content == "some notes")),
             "Expected FieldUpdated event for context.md"
         );
     }
@@ -767,11 +804,14 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
@@ -779,7 +819,7 @@ mod tests {
         assert!(
             !events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "state")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "state")),
             "Should not emit FieldUpdated for state when state is 'todo'"
         );
     }
@@ -790,20 +830,23 @@ mod tests {
 
         // Simulate a legacy yak where the tree key is a plain slug
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("dx"),
-                id: YakId::from("dx"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("dx"),
+                    id: YakId::from("dx"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
         let added = events
             .iter()
-            .find(|e| matches!(e, YakEvent::Added(_)))
+            .find(|e| matches!(e, YakEvent::Added(_, _)))
             .unwrap();
 
-        if let YakEvent::Added(e) = added {
+        if let YakEvent::Added(e, _) = added {
             // Should get a proper ID with suffix, not plain "dx"
             assert!(
                 e.id.as_str().starts_with("dx-") && e.id.as_str().len() > 3,
@@ -818,31 +861,37 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
         let added_events: Vec<_> = events
             .iter()
-            .filter(|e| matches!(e, YakEvent::Added(_)))
+            .filter(|e| matches!(e, YakEvent::Added(_, _)))
             .collect();
 
         assert_eq!(added_events.len(), 2, "Expected 2 Added events");
 
         // Child should have a parent_id matching the regenerated parent ID
-        if let (YakEvent::Added(parent), YakEvent::Added(child)) =
+        if let (YakEvent::Added(parent, _), YakEvent::Added(child, _)) =
             (&added_events[0], &added_events[1])
         {
             assert!(parent.parent_id.is_none());
@@ -855,11 +904,14 @@ mod tests {
         let (_tmp, mut store) = setup_test_repo();
 
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         store
@@ -869,6 +921,7 @@ mod tests {
                     field_name: "plan".to_string(),
                     content: "step 1".to_string(),
                 },
+                EventMetadata::default_legacy(),
             ))
             .unwrap();
 
@@ -876,7 +929,7 @@ mod tests {
 
         assert!(
             events.iter().any(
-                |e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "plan" && f.content == "step 1")
+                |e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "plan" && f.content == "step 1")
             ),
             "Expected FieldUpdated event for 'plan'"
         );
@@ -1034,11 +1087,14 @@ mod tests {
 
         // First, add a yak via append (creates a commit)
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("initial"),
-                id: YakId::from("initial-z9z9"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("initial"),
+                    id: YakId::from("initial-z9z9"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let first_commit_oid = store.get_latest_commit().unwrap().unwrap().id();
@@ -1125,29 +1181,38 @@ mod tests {
 
         // Add parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Add child under parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Rename the child
         store
-            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("child-c3d4"),
-                field_name: "name".to_string(),
-                content: "renamed child".to_string(),
-            }))
+            .append(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("child-c3d4"),
+                    field_name: "name".to_string(),
+                    content: "renamed child".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let tree = store.get_current_tree().unwrap().unwrap();
@@ -1184,29 +1249,38 @@ mod tests {
 
         // Add parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("parent"),
-                id: YakId::from("parent-a1b2"),
-                parent_id: None,
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Add child under parent
         store
-            .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("child"),
-                id: YakId::from("child-c3d4"),
-                parent_id: Some(YakId::from("parent-a1b2")),
-            }))
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         // Update state of nested child
         store
-            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
-                id: YakId::from("child-c3d4"),
-                field_name: "state".to_string(),
-                content: "done".to_string(),
-            }))
+            .append(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("child-c3d4"),
+                    field_name: "state".to_string(),
+                    content: "done".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
             .unwrap();
 
         let tree = store.get_current_tree().unwrap().unwrap();
