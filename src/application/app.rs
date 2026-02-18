@@ -49,6 +49,16 @@ impl<'a> Application<'a> {
         Ok(())
     }
 
+    pub fn with_yak_map_result<T, F>(&mut self, f: F) -> Result<T>
+    where
+        F: FnOnce(&mut YakMap) -> Result<T>,
+    {
+        let mut yak_map = YakMap::from_store(self.store)?;
+        let result = f(&mut yak_map)?;
+        self.save_yak_map(&mut yak_map)?;
+        Ok(result)
+    }
+
     fn save_yak_map(&mut self, yak_map: &mut YakMap) -> Result<()> {
         for event in yak_map.take_events() {
             self.event_bus.publish(event)?;

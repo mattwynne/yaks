@@ -47,10 +47,11 @@ impl AddYak {
             .request_content(None, Some(&template))?
             .filter(|content| !content.trim().is_empty());
 
-        app.with_yak_map(|yak_map| {
-            yak_map.add_yak(self.name.clone(), parent_id, context)?;
-            Ok(())
-        })
+        let id = app.with_yak_map_result(|yak_map| {
+            yak_map.add_yak(self.name.clone(), parent_id, context)
+        })?;
+        app.display.info(id.as_str());
+        Ok(())
     }
 }
 

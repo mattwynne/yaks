@@ -20,6 +20,14 @@ Feature: Add yaks
       And I list the yaks in "markdown" format
       Then the output should include "this is a test"
 
+  Rule: The assigned ID is echoed on success
+    So users can capture it (e.g., ID=$(yx add "my task"))
+
+    Example: Adding a yak prints its ID
+      Given I have a clean git repository
+      When I add the yak "Make the tea"
+      Then the output should include "make-the-tea-"
+
   Rule: Context can be piped via stdin
     When adding a yak, piped stdin is captured as context.
 
