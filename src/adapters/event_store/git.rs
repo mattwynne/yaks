@@ -209,13 +209,26 @@ impl GitEventStore {
         current_tree: Option<&git2::Tree>,
     ) -> Result<git2::Oid> {
         match event {
-            YakEvent::Added(e, _) => {
+            YakEvent::Added(e, metadata) => {
                 let yak_tree_oid = self.create_yak_tree(e.name.as_str(), "todo", "")?;
+                // Add .metadata.json to the yak subtree
+                let metadata_json = serde_json::json!({
+                    "created_by": {
+                        "name": metadata.author.name,
+                        "email": metadata.author.email
+                    },
+                    "created_at": metadata.timestamp.as_epoch_secs()
+                });
+                let metadata_blob = self.repo.blob(metadata_json.to_string().as_bytes())?;
+                let subtree = self.repo.find_tree(yak_tree_oid)?;
+                let mut builder = self.repo.treebuilder(Some(&subtree))?;
+                builder.insert(".metadata.json", metadata_blob, 0o100644)?;
+                let updated_tree_oid = builder.write()?;
                 let path = match &e.parent_id {
                     Some(parent) => format!("{}/{}", parent, e.id),
                     None => e.id.to_string(),
                 };
-                self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
+                self.set_yak_in_root(current_tree, &path, Some(updated_tree_oid))
             }
 
             YakEvent::Removed(e, _) => {
@@ -298,6 +311,45 @@ impl GitEventStore {
             let name = Name::from(name_str.as_str());
             let id = generate_id(&name_str, parent_id);
 
+            // Read .metadata.json if present
+            let added_metadata =
+                if let Some(meta_entry) = subtree.get_name(".metadata.json") {
+                    if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
+                        if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
+                            if let Ok(json) =
+                                serde_json::from_str::<serde_json::Value>(content)
+                            {
+                                use crate::domain::event_metadata::{
+                                    Author, EventMetadata, Timestamp,
+                                };
+                                EventMetadata::new(
+                                    Author {
+                                        name: json["created_by"]["name"]
+                                            .as_str()
+                                            .unwrap_or("unknown")
+                                            .to_string(),
+                                        email: json["created_by"]["email"]
+                                            .as_str()
+                                            .unwrap_or("")
+                                            .to_string(),
+                                    },
+                                    Timestamp(
+                                        json["created_at"].as_i64().unwrap_or(0),
+                                    ),
+                                )
+                            } else {
+                                crate::domain::event_metadata::EventMetadata::default_legacy()
+                            }
+                        } else {
+                            crate::domain::event_metadata::EventMetadata::default_legacy()
+                        }
+                    } else {
+                        crate::domain::event_metadata::EventMetadata::default_legacy()
+                    }
+                } else {
+                    crate::domain::event_metadata::EventMetadata::default_legacy()
+                };
+
             // Added event
             events.push(YakEvent::Added(
                 crate::domain::events::AddedEvent {
@@ -305,7 +357,7 @@ impl GitEventStore {
                     id: id.clone(),
                     parent_id: parent_id.cloned(),
                 },
-                crate::domain::event_metadata::EventMetadata::default_legacy(),
+                added_metadata,
             ));
 
             // State
@@ -958,6 +1010,40 @@ mod tests {
         let (_tmp, store) = setup_test_repo();
         let events = store.snapshot_events().unwrap();
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn snapshot_events_reads_metadata_from_tree() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Snapshot Author".to_string(),
+                email: "snap@test.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+        let added = events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(..)))
+            .unwrap();
+        assert_eq!(added.metadata().author.name, "Snapshot Author");
+        assert_eq!(added.metadata().timestamp, Timestamp(1708300800));
     }
 
     #[test]
