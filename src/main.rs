@@ -409,7 +409,9 @@ fn main() -> Result<()> {
                 ) -> Result<()> {
                     let mut use_case = AddYak::new(yak.name.as_str())
                         .with_id(Some(yak.id.as_str()))
-                        .with_context(yak.context.as_deref());
+                        .with_context(yak.context.as_deref())
+                        .with_author(Some(yak.created_by.clone()))
+                        .with_timestamp(Some(yak.created_at));
                     if yak.state != "todo" {
                         use_case = use_case.with_state(Some(&yak.state));
                     }

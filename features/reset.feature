@@ -124,3 +124,9 @@ Feature: yx reset - Rebuild yaks from git tree
       And I run yx log
       Then the output should include "Added"
       And the output should not include "Snapshot"
+
+    Example: Hard reset preserves author in event log
+      Given I add the yak "my yak"
+      When I hard reset the yaks from disk to git
+      And I run yx log
+      Then the output should include "<"
