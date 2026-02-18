@@ -33,6 +33,18 @@ enum Commands {
         /// Nest under this parent yak
         #[arg(long, alias = "below")]
         under: Option<String>,
+        /// Initial state (todo, wip, done)
+        #[arg(long)]
+        state: Option<String>,
+        /// Set context directly (skips editor)
+        #[arg(long)]
+        context: Option<String>,
+        /// Use a specific ID instead of auto-generating
+        #[arg(long)]
+        id: Option<String>,
+        /// Set a custom field (format: key=value, repeatable)
+        #[arg(long = "field", value_parser = parse_field_arg)]
+        fields: Vec<(String, String)>,
     },
     /// List yaks
     #[command(alias = "ls")]
@@ -142,6 +154,13 @@ enum Commands {
     },
 }
 
+fn parse_field_arg(s: &str) -> Result<(String, String), String> {
+    let (key, value) = s
+        .split_once('=')
+        .ok_or_else(|| format!("invalid field format '{}', expected key=value", s))?;
+    Ok((key.to_string(), value.to_string()))
+}
+
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
@@ -218,9 +237,24 @@ fn main() -> Result<()> {
     );
 
     match cli.command {
-        Commands::Add { name, under } => {
+        Commands::Add {
+            name,
+            under,
+            state,
+            context,
+            id,
+            fields,
+        } => {
             let name_str = name.join(" ");
-            app.handle(AddYak::new(&name_str).with_parent(under.as_deref()))
+            let mut use_case = AddYak::new(&name_str)
+                .with_parent(under.as_deref())
+                .with_state(state.as_deref())
+                .with_context(context.as_deref())
+                .with_id(id.as_deref());
+            for (key, value) in &fields {
+                use_case = use_case.with_field(key, value);
+            }
+            app.handle(use_case)
         }
         Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
         Commands::Done { name, recursive } => {

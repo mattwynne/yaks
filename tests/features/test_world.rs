@@ -102,6 +102,18 @@ pub trait TestWorld {
     /// Try to rename a yak - captures result without bailing on failure
     fn try_rename_yak(&mut self, from: &str, to: &str) -> Result<()>;
 
+    /// Add a yak with initial state
+    fn add_yak_with_state(&mut self, name: &str, state: &str) -> Result<()>;
+
+    /// Add a yak with context set directly
+    fn add_yak_with_context(&mut self, name: &str, context: &str) -> Result<()>;
+
+    /// Add a yak with a specific ID
+    fn add_yak_with_id(&mut self, name: &str, id: &str) -> Result<()>;
+
+    /// Add a yak with a custom field
+    fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

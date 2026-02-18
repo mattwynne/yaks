@@ -883,6 +883,23 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["rename", from, to])
     }
 
+    fn add_yak_with_state(&mut self, name: &str, state: &str) -> Result<()> {
+        self.run_yx(&["add", name, "--state", state])
+    }
+
+    fn add_yak_with_context(&mut self, name: &str, context: &str) -> Result<()> {
+        self.run_yx(&["add", name, "--context", context])
+    }
+
+    fn add_yak_with_id(&mut self, name: &str, id: &str) -> Result<()> {
+        self.run_yx(&["add", name, "--id", id])
+    }
+
+    fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()> {
+        let field_arg = format!("{}={}", key, value);
+        self.run_yx(&["add", name, "--field", &field_arg])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }

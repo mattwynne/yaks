@@ -235,6 +235,31 @@ impl TestWorld for InProcessWorld {
         self.try_execute(|app| app.handle(RenameYak::new(from, to)))
     }
 
+    fn add_yak_with_state(&mut self, name: &str, state: &str) -> Result<()> {
+        let name = name.to_string();
+        let state = state.to_string();
+        self.execute(move |app| app.handle(AddYak::new(&name).with_state(Some(&state))))
+    }
+
+    fn add_yak_with_context(&mut self, name: &str, context: &str) -> Result<()> {
+        let name = name.to_string();
+        let context = context.to_string();
+        self.execute(move |app| app.handle(AddYak::new(&name).with_context(Some(&context))))
+    }
+
+    fn add_yak_with_id(&mut self, name: &str, id: &str) -> Result<()> {
+        let name = name.to_string();
+        let id = id.to_string();
+        self.execute(move |app| app.handle(AddYak::new(&name).with_id(Some(&id))))
+    }
+
+    fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()> {
+        let name = name.to_string();
+        let key = key.to_string();
+        let value = value.to_string();
+        self.execute(move |app| app.handle(AddYak::new(&name).with_field(&key, &value)))
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }

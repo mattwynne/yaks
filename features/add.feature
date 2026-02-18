@@ -90,3 +90,61 @@ Feature: Add yaks
       When I try to add the yak "child" under "Fix"
       Then the command should fail
       And the error should contain "ambiguous"
+
+  Rule: --state sets the initial state
+
+    Example: Add yak with initial state
+      Given I have a clean git repository
+      When I add the yak "my yak" with state "wip"
+      And I list the yaks in "markdown" format
+      Then the output should include "wip"
+
+    @fullstack
+    Example: --state flag via CLI
+      Given I have a clean git repository
+      When I run yx add "my yak" --state wip
+      And I list the yaks in "markdown" format
+      Then the output should include "wip"
+
+  Rule: --context sets context directly
+
+    Example: Add yak with context
+      Given I have a clean git repository
+      When I add the yak "my yak" with context "some notes"
+      And I show the context of "my yak"
+      Then the output should include "some notes"
+
+    @fullstack
+    Example: --context flag via CLI
+      Given I have a clean git repository
+      When I run yx add "my yak" --context "some notes"
+      And I run yx context --show "my yak"
+      Then the output should include "some notes"
+
+  Rule: --id assigns a specific ID
+
+    Example: Add yak with explicit ID
+      Given I have a clean git repository
+      When I add the yak "my yak" with id "custom-id-1234"
+      Then the output should include "custom-id-1234"
+
+    @fullstack
+    Example: --id flag via CLI
+      Given I have a clean git repository
+      When I run yx add "my yak" --id "custom-id-1234"
+      Then the output should include "custom-id-1234"
+
+  Rule: --field sets custom fields at creation time
+
+    Example: Add yak with custom field
+      Given I have a clean git repository
+      When I add the yak "my yak" with field "priority" set to "high"
+      And I show the "priority" field of "my yak"
+      Then the output should include "high"
+
+    @fullstack
+    Example: --field flag via CLI
+      Given I have a clean git repository
+      When I run yx add "my yak" --field priority=high
+      And I run yx field "my yak" priority --show
+      Then the output should include "high"

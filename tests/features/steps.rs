@@ -710,6 +710,85 @@ async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Resu
     world.run_raw(&arg_vec)
 }
 
+#[when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)]
+async fn when_add_yak_with_state_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    state: String,
+) -> Result<()> {
+    world.add_yak_with_state(&yak_name, &state)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)]
+async fn when_add_yak_with_state_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    state: String,
+) -> Result<()> {
+    world.add_yak_with_state(&yak_name, &state)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)]
+async fn when_add_yak_with_context_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    context: String,
+) -> Result<()> {
+    world.add_yak_with_context(&yak_name, &context)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)]
+async fn when_add_yak_with_context_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    context: String,
+) -> Result<()> {
+    world.add_yak_with_context(&yak_name, &context)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)]
+async fn when_add_yak_with_id_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    id: String,
+) -> Result<()> {
+    world.add_yak_with_id(&yak_name, &id)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)]
+async fn when_add_yak_with_id_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    id: String,
+) -> Result<()> {
+    world.add_yak_with_id(&yak_name, &id)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)]
+async fn when_add_yak_with_field_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    world.add_yak_with_field(&yak_name, &key, &value)
+}
+
+#[when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)]
+async fn when_add_yak_with_field_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    world.add_yak_with_field(&yak_name, &key, &value)
+}
+
+#[then(regex = r#"^the output should include "(.+)"$"#)]
+async fn output_includes_in_process(world: &mut InProcessWorld, expected: String) -> Result<()> {
+    check_output_includes(world, &expected)
+}
+
 #[when(regex = r#"^I add the yak "(.+)" with context "(.+)" from stdin$"#)]
 async fn add_yak_with_stdin_full_stack(
     world: &mut FullStackWorld,
