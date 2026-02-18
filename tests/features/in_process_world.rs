@@ -188,11 +188,11 @@ impl TestWorld for InProcessWorld {
     }
 
     fn move_yak(&mut self, from: &str, to: &str) -> Result<()> {
-        self.execute(|app| app.handle(MoveYak::new(from, to)))
+        self.execute(|app| app.handle(MoveYak::under(from, to)))
     }
 
     fn try_move_yak(&mut self, from: &str, to: &str) -> Result<()> {
-        self.try_execute(|app| app.handle(MoveYak::new(from, to)))
+        self.try_execute(|app| app.handle(MoveYak::under(from, to)))
     }
 
     fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {

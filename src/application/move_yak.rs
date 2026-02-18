@@ -11,16 +11,6 @@ pub struct MoveYak {
 }
 
 impl MoveYak {
-    /// Legacy constructor (positional from/to args) - kept for backward
-    /// compatibility during migration but not used by new CLI.
-    pub fn new(from: &str, to: &str) -> Self {
-        Self {
-            name: from.to_string(),
-            under: Some(to.to_string()),
-            to_root: false,
-        }
-    }
-
     /// Move a yak under a parent (--under flag)
     pub fn under(name: &str, parent: &str) -> Self {
         Self {
