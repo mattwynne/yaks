@@ -147,9 +147,24 @@ mod tests {
 
         // Add hierarchical yaks directly via yak_map (bypasses name validation)
         app.with_yak_map(|yak_map| {
-            let parent_id = yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
-            let child_id = yak_map.add_yak("child".to_string(), Some(parent_id), None, None, None, vec![])?;
-            yak_map.add_yak("grandchild".to_string(), Some(child_id), None, None, None, vec![])?;
+            let parent_id =
+                yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
+            let child_id = yak_map.add_yak(
+                "child".to_string(),
+                Some(parent_id),
+                None,
+                None,
+                None,
+                vec![],
+            )?;
+            yak_map.add_yak(
+                "grandchild".to_string(),
+                Some(child_id),
+                None,
+                None,
+                None,
+                vec![],
+            )?;
             Ok(())
         })
         .unwrap();

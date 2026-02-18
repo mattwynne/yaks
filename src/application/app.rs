@@ -148,7 +148,14 @@ mod tests {
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
-            yak_map.add_yak("test".to_string(), None, Some("context".to_string()), None, None, vec![])?;
+            yak_map.add_yak(
+                "test".to_string(),
+                None,
+                Some("context".to_string()),
+                None,
+                None,
+                vec![],
+            )?;
             Ok(())
         })
         .unwrap();
@@ -176,8 +183,16 @@ mod tests {
 
         // Add hierarchical yak
         app.with_yak_map(|yak_map| {
-            let parent_id = yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
-            yak_map.add_yak("child".to_string(), Some(parent_id), None, None, None, vec![])?;
+            let parent_id =
+                yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
+            yak_map.add_yak(
+                "child".to_string(),
+                Some(parent_id),
+                None,
+                None,
+                None,
+                vec![],
+            )?;
             Ok(())
         })
         .unwrap();
@@ -202,8 +217,16 @@ mod tests {
 
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {
-            let parent_id = yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
-            let child_id = yak_map.add_yak("child".to_string(), Some(parent_id), None, None, None, vec![])?;
+            let parent_id =
+                yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
+            let child_id = yak_map.add_yak(
+                "child".to_string(),
+                Some(parent_id),
+                None,
+                None,
+                None,
+                vec![],
+            )?;
             yak_map.update_state(child_id, "wip".to_string())
         })
         .unwrap();
