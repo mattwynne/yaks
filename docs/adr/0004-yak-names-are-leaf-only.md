@@ -36,9 +36,8 @@ Specifically:
 - `AddedEvent.name` contains only the leaf name
 - Auto-ancestor creation is removed from `add_yak`
   (parents must already exist)
-- The `move_yak` operation still uses
-  `ensure_ancestors_exist` for implicit creation at the
-  move destination (unchanged in this ADR)
+- The `move_yak` operation also requires parents to
+  exist before moving (no implicit creation)
 
 ## Consequences
 
@@ -49,5 +48,6 @@ Specifically:
   must exist before adding children
 - DirectoryStorage needed a new hierarchical name
   resolver to look up yaks by full path names
-- Move command still uses path syntax for implicit
-  parent creation (may be revisited separately)
+- Move command uses flag-based syntax (--under <parent>,
+  --to-root) instead of path syntax; parents must exist
+  before moving (this was revisited separately)
