@@ -174,7 +174,7 @@ mod tests {
 
         // Verify both parent and child exist
         assert!(ReadYakStore::get_yak(&storage, &YakId::from("parent")).is_ok());
-        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "child").is_ok());
     }
 
     #[test]

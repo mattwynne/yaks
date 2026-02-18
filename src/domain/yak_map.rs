@@ -74,24 +74,6 @@ impl YakMap {
         parts.join("/")
     }
 
-    /// Resolve a name-path or ID to the yak's ID.
-    fn resolve(&self, key: &str) -> Option<YakId> {
-        // Try exact ID match
-        let key_as_id = YakId::from(key);
-        if self.yaks.contains_key(&key_as_id) {
-            return Some(key_as_id);
-        }
-
-        // Try matching by display name
-        for id in self.yaks.keys() {
-            if self.build_display_name(id) == key {
-                return Some(id.clone());
-            }
-        }
-
-        None
-    }
-
     /// Verify a YakId exists in the map, returning an error if not found.
     fn ensure_exists(&self, id: &YakId) -> Result<()> {
         if self.yaks.contains_key(id) {
@@ -219,78 +201,6 @@ impl YakMap {
         }
 
         Ok(id)
-    }
-
-    /// Ensure all ancestors in the path exist, returning the resolved
-    /// parent ID (i.e. the ID of the second-to-last segment).
-    ///
-    /// Processes segments left-to-right. For each segment:
-    /// 1. Try exact match (name + parent) in the current map.
-    /// 2. For the first segment only, fall back to a unique leaf-name
-    ///    match anywhere in the map (so "parent/child" finds an
-    ///    existing "parent" even if it's nested under a grandparent).
-    /// 3. If still not found, create a new yak at the current level.
-    fn ensure_ancestors_exist(&mut self, name_path: &str) -> Option<YakId> {
-        let segments: Vec<&str> = name_path.split('/').collect();
-        if segments.len() <= 1 {
-            return None;
-        }
-        let ancestor_segments = &segments[..segments.len() - 1];
-
-        let mut current_parent_id: Option<YakId> = None;
-
-        for (i, &segment) in ancestor_segments.iter().enumerate() {
-            // Try exact match: yak with this name under current parent
-            let found = self
-                .yaks
-                .iter()
-                .find(|(_, state)| {
-                    state.name.as_str() == segment && state.parent_id == current_parent_id
-                })
-                .map(|(id, _)| id.clone());
-
-            if let Some(id) = found {
-                current_parent_id = Some(id);
-                continue;
-            }
-
-            // For the first segment, try finding by leaf name anywhere
-            // (if unambiguous). This lets users write "parent/child"
-            // instead of "grandparent/parent/child".
-            if i == 0 {
-                let matches: Vec<YakId> = self
-                    .yaks
-                    .iter()
-                    .filter(|(_, state)| state.name.as_str() == segment)
-                    .map(|(id, _)| id.clone())
-                    .collect();
-                if matches.len() == 1 {
-                    current_parent_id = Some(matches[0].clone());
-                    continue;
-                }
-            }
-
-            // Create new ancestor
-            let id = generate_id(segment, current_parent_id.as_ref());
-            let name = Name::from(segment);
-            self.yaks.insert(
-                id.clone(),
-                YakState {
-                    name: name.clone(),
-                    parent_id: current_parent_id.clone(),
-                    state: "todo".to_string(),
-                    context: None,
-                },
-            );
-            self.pending_events.push(YakEvent::Added(AddedEvent {
-                name,
-                id: id.clone(),
-                parent_id: current_parent_id,
-            }));
-            current_parent_id = Some(id);
-        }
-
-        current_parent_id
     }
 
     pub fn update_state(&mut self, id: YakId, state: String) -> Result<()> {
@@ -521,75 +431,6 @@ impl YakMap {
 
         Ok(())
     }
-
-    pub fn move_yak(&mut self, id: YakId, new_name: String) -> Result<()> {
-        use crate::domain::validate_yak_name;
-
-        self.ensure_exists(&id)?;
-
-        // Validate each segment of the new name
-        for segment in new_name.split('/') {
-            validate_yak_name(segment).map_err(|e| anyhow::anyhow!(e))?;
-        }
-
-        // MVP limitation: Fail if moving a yak with children
-        let children = self.find_children_of(&id);
-        if !children.is_empty() {
-            let display = self.build_display_name(&id);
-            anyhow::bail!(
-                "Cannot move '{}': it has {} child(ren). Moving with children is not yet supported.",
-                display,
-                children.len()
-            );
-        }
-
-        // Check if destination name already exists
-        if self.resolve(&new_name).is_some() {
-            anyhow::bail!("Yak '{}' already exists", new_name);
-        }
-
-        // Ensure ancestors exist and get the resolved parent ID
-        let new_parent_id = self.ensure_ancestors_exist(&new_name);
-
-        // Determine old parent and leaf
-        let old_parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
-        let old_leaf = self.yaks.get(&id).unwrap().name.clone();
-
-        // Determine new leaf from the name-path
-        let new_leaf = new_name.rsplit('/').next().unwrap_or(&new_name);
-
-        // Check slug uniqueness among siblings at the destination
-        self.check_sibling_slug_uniqueness(new_leaf, &new_parent_id, Some(&id))?;
-
-        // Update the yak in place
-        let yak = self.yaks.get_mut(&id).unwrap();
-        yak.name = Name::from(new_leaf);
-        yak.parent_id = new_parent_id.clone();
-
-        // Emit events
-        if old_parent_id == new_parent_id {
-            // Same parent - just a rename
-            self.pending_events.push(YakEvent::Renamed(RenamedEvent {
-                id: id.clone(),
-                new_name: Name::from(new_leaf),
-            }));
-        } else {
-            // Different parent - a move
-            self.pending_events.push(YakEvent::Moved(MovedEvent {
-                id: id.clone(),
-                new_parent: new_parent_id,
-            }));
-            // Also rename if leaf name changed
-            if old_leaf.as_str() != new_leaf {
-                self.pending_events.push(YakEvent::Renamed(RenamedEvent {
-                    id: id.clone(),
-                    new_name: Name::from(new_leaf),
-                }));
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -701,7 +542,7 @@ mod tests {
         map.add_yak("Make the tea", None, None).unwrap();
         let fix_id = map.add_yak("Fix the bug", None, None).unwrap();
 
-        let result = map.move_yak(fix_id, "Make THE Tea".to_string());
+        let result = map.rename_yak(fix_id, "Make THE Tea".to_string());
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
@@ -718,52 +559,28 @@ mod tests {
         let id = map.add_yak("Make the tea", None, None).unwrap();
 
         // Rename to different capitalisation (same slug)
-        let result = map.move_yak(id, "Make The Tea".to_string());
+        let result = map.rename_yak(id, "Make The Tea".to_string());
 
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_move_rejects_colliding_slug_at_destination() {
+    fn test_move_to_rejects_colliding_slug_at_destination() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
+        map.add_yak("Fix the bug", None, None).unwrap();
         let backend = map.add_yak("Backend fixes", None, None).unwrap();
-        let fix_id = map.add_yak("Fix the bug", Some(backend), None).unwrap();
+        let nested_fix = map.add_yak("Fix the bug", Some(backend), None).unwrap();
 
-        // Move "Fix the bug" to root as "Make The Tea" - should collide
-        let result = map.move_yak(fix_id, "Make The Tea".to_string());
+        // Move nested "Fix the bug" to root - collides with root "Fix the bug"
+        let result = map.move_yak_to(nested_fix, None);
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(
-            err.contains("make-the-tea"),
+            err.contains("fix-the-bug"),
             "Error should mention slug, got: {}",
             err
         );
-    }
-
-    #[test]
-    fn test_move_allows_slug_at_different_parent() {
-        let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
-        let backend = map.add_yak("Backend fixes", None, None).unwrap();
-        let fix_id = map.add_yak("Fix the bug", None, None).unwrap();
-
-        // Move "Fix the bug" under "Backend fixes" as "Make The Tea"
-        // - different parent, so slug collision with root is OK
-        let result = map.move_yak(fix_id, "Backend fixes/Make The Tea".to_string());
-
-        assert!(
-            result.is_ok(),
-            "Should succeed: different parent. Error: {:?}",
-            result.err()
-        );
-        // Verify it's actually under backend
-        let moved = map
-            .yaks
-            .values()
-            .find(|s| s.name.as_str() == "Make The Tea" && s.parent_id == Some(backend.clone()));
-        assert!(moved.is_some());
     }
 
     #[test]
@@ -1160,21 +977,6 @@ mod tests {
         assert_eq!(map.build_display_name(&cid), "parent/child");
     }
 
-    #[test]
-    fn test_resolve_by_id() {
-        let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
-        assert_eq!(map.resolve(id.as_str()), Some(id.clone()));
-    }
-
-    #[test]
-    fn test_resolve_by_display_name() {
-        let mut map = YakMap::new();
-        let pid = map.add_yak("parent", None, None).unwrap();
-        let cid = map.add_yak("child", Some(pid), None).unwrap();
-        assert_eq!(map.resolve("parent/child"), Some(cid));
-    }
-
     // Tests for update_state
     #[test]
     fn test_update_state_changes_state() {
@@ -1437,16 +1239,16 @@ mod tests {
         assert!(err_msg.contains("child"));
     }
 
-    // Tests for move_yak
+    // Tests for rename_yak
     #[test]
-    fn test_move_yak_renames() {
+    fn test_rename_preserves_context() {
         let mut map = YakMap::new();
         let id = map
             .add_yak("old", None, Some("context".to_string()))
             .unwrap();
         map.take_events();
 
-        map.move_yak(id.clone(), "new".to_string()).unwrap();
+        map.rename_yak(id.clone(), "new".to_string()).unwrap();
 
         assert_eq!(map.yaks.get(&id).unwrap().name, Name::from("new"));
         assert_eq!(
@@ -1456,12 +1258,12 @@ mod tests {
     }
 
     #[test]
-    fn test_move_yak_emits_renamed_event_for_same_level() {
+    fn test_rename_emits_renamed_event() {
         let mut map = YakMap::new();
         let id = map.add_yak("old", None, None).unwrap();
         map.take_events();
 
-        map.move_yak(id.clone(), "new".to_string()).unwrap();
+        map.rename_yak(id.clone(), "new".to_string()).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -1477,73 +1279,15 @@ mod tests {
         }
     }
 
+    // Tests for move_yak_to
     #[test]
-    fn test_move_yak_creates_ancestors() {
-        let mut map = YakMap::new();
-        let id = map.add_yak("old", None, None).unwrap();
-        map.take_events();
-
-        map.move_yak(id.clone(), "a/b/new".to_string()).unwrap();
-
-        // The yak should now have parent chain a -> b -> new
-        assert_eq!(map.yaks.get(&id).unwrap().name, Name::from("new"));
-        assert!(map.resolve("a").is_some());
-        assert!(map.resolve("a/b").is_some());
-    }
-
-    #[test]
-    fn test_move_yak_fails_for_nonexistent_yak() {
-        let mut map = YakMap::new();
-        let result = map.move_yak(YakId::from("nonexistent"), "new".to_string());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
-
-    #[test]
-    fn test_move_yak_fails_if_destination_exists() {
-        let mut map = YakMap::new();
-        let old_id = map.add_yak("old", None, None).unwrap();
-        map.add_yak("new", None, None).unwrap();
-
-        let result = map.move_yak(old_id, "new".to_string());
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("already exists"));
-    }
-
-    #[test]
-    fn test_move_yak_under_existing_parent_by_leaf_name() {
-        let mut map = YakMap::new();
-        let grandparent_id = map.add_yak("grandparent", None, None).unwrap();
-        let parent_id = map
-            .add_yak("parent", Some(grandparent_id.clone()), None)
-            .unwrap();
-        let child_id = map.add_yak("child", None, None).unwrap();
-        let yak_count_before = map.yaks.len();
-        map.take_events();
-
-        // Move child under "parent" — should find the existing
-        // "grandparent/parent" yak, not create a new root "parent".
-        map.move_yak(child_id.clone(), "parent/child".to_string())
-            .unwrap();
-
-        let child = map.yaks.get(&child_id).unwrap();
-        assert_eq!(child.parent_id, Some(parent_id));
-        assert_eq!(child.name, Name::from("child"));
-        assert_eq!(
-            map.yaks.len(),
-            yak_count_before,
-            "Should not have created a new yak — the parent already exists"
-        );
-    }
-
-    #[test]
-    fn test_move_yak_fails_if_has_children() {
+    fn test_move_yak_to_fails_if_has_children() {
         let mut map = YakMap::new();
         let parent_id = map.add_yak("parent", None, None).unwrap();
         map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let dest_id = map.add_yak("dest", None, None).unwrap();
 
-        let result = map.move_yak(parent_id, "newparent".to_string());
+        let result = map.move_yak_to(parent_id, Some(dest_id));
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

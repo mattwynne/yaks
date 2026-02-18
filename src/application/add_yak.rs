@@ -123,7 +123,7 @@ mod tests {
             .execute(&mut app)
             .unwrap();
 
-        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "child").is_ok());
     }
 
     #[test]

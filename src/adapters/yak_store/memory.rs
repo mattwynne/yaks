@@ -65,25 +65,6 @@ impl InMemoryStorage {
         }
         None
     }
-
-    /// Build the full display name for a yak by walking up the parent chain.
-    fn build_display_name(yaks: &HashMap<String, HashMap<String, String>>, key: &str) -> String {
-        let mut parts = Vec::new();
-        let mut current_key = Some(key.to_string());
-
-        while let Some(ref k) = current_key {
-            if let Some(fields) = yaks.get(k) {
-                let leaf = fields.get(NAME_FIELD).cloned().unwrap_or_else(|| k.clone());
-                parts.push(leaf);
-                current_key = fields.get(PARENT_ID_FIELD).cloned();
-            } else {
-                break;
-            }
-        }
-
-        parts.reverse();
-        parts.join("/")
-    }
 }
 
 impl Default for InMemoryStorage {
@@ -350,14 +331,6 @@ impl ReadYakStore for InMemoryStorage {
             }
         }
 
-        // Try exact display name match (hierarchical path)
-        for key in yaks.keys() {
-            let display = Self::build_display_name(&yaks, key);
-            if display == query {
-                return Ok(YakId::from(key.as_str()));
-            }
-        }
-
         // Fuzzy match on name field
         let matches: Vec<&String> = yaks
             .keys()
@@ -414,8 +387,8 @@ mod tests {
                 Some(&YakId::from("parent-a1b2")),
             )
             .unwrap();
-        // Should be findable by display name "parent/child"
-        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "parent/child").is_ok());
+        // Should be findable by name
+        assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "child").is_ok());
     }
 
     #[test]
