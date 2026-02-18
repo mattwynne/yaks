@@ -33,6 +33,11 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             println!("{line}");
         }
     }
+
+    fn log_entry(&self, author_name: &str, author_email: &str, timestamp: &str, message: &str) {
+        println!("{} <{}>  {}", author_name, author_email, timestamp);
+        println!("{}", message);
+    }
 }
 
 #[cfg(any(test, feature = "test-support"))]

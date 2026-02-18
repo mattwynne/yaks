@@ -79,6 +79,17 @@ impl DisplayPort for InMemoryDisplay {
             .unwrap()
             .push(format!("{indent}- [{state}] {name}"));
     }
+
+    fn log_entry(&self, author_name: &str, author_email: &str, timestamp: &str, message: &str) {
+        self.info_messages
+            .write()
+            .unwrap()
+            .push(format!("{} <{}>  {}", author_name, author_email, timestamp));
+        self.info_messages
+            .write()
+            .unwrap()
+            .push(message.to_string());
+    }
 }
 
 #[cfg(test)]

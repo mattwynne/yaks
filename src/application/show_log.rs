@@ -1,6 +1,7 @@
 // ShowLog use case - displays the event log
 
 use anyhow::Result;
+use chrono::DateTime;
 
 use super::{Application, UseCase};
 
@@ -24,8 +25,20 @@ impl UseCase for ShowLog {
             .event_reader
             .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
         let events = reader.get_all_events()?;
-        for event in events {
-            println!("{}", event.format_message());
+        for (i, event) in events.iter().enumerate() {
+            if i > 0 {
+                app.display.info("");
+            }
+            let meta = event.metadata();
+            let datetime = DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0)
+                .unwrap_or_default();
+            let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
+            app.display.log_entry(
+                &meta.author.name,
+                &meta.author.email,
+                &formatted_time,
+                &event.format_message(),
+            );
         }
         Ok(())
     }
@@ -64,8 +77,6 @@ mod tests {
         );
 
         app.handle(AddYak::new("test yak")).unwrap();
-        // ShowLog prints to stdout via println!, so we
-        // just verify it doesn't error
         app.handle(ShowLog::new()).unwrap();
     }
 

@@ -19,8 +19,8 @@ Feature: Yak log
       And I add the yak "second yak"
       When I run yx log
       Then it should succeed
-      And line 1 of the output should include "first yak"
-      And line 2 of the output should include "second yak"
+      And line 2 of the output should include "first yak"
+      And line 5 of the output should include "second yak"
 
   Rule: Events reference yaks by ID
 
@@ -29,3 +29,14 @@ Feature: Yak log
       And I add the yak "Fix the Bug"
       When I run yx log
       Then the output should include "fix-the-bug-"
+
+  Rule: Log displays author and timestamp
+
+    @fullstack
+    Example: Log entries show author and timestamp
+      Given I have a clean git repository
+      And I add the yak "test yak"
+      When I run yx log
+      Then it should succeed
+      And the output should include "<"
+      And the output should include "Added"
