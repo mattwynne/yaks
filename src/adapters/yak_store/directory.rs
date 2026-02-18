@@ -206,6 +206,29 @@ impl DirectoryStorage {
         })
     }
 
+    /// Read created_by and created_at from .metadata.json in a yak directory.
+    /// Returns (Author::unknown(), Timestamp::zero()) if the file is absent or unparseable.
+    fn read_metadata(dir: &Path) -> (Author, Timestamp) {
+        let metadata_path = dir.join(".metadata.json");
+        if let Ok(content) = fs::read_to_string(&metadata_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                let author = Author {
+                    name: json["created_by"]["name"]
+                        .as_str()
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    email: json["created_by"]["email"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string(),
+                };
+                let timestamp = Timestamp(json["created_at"].as_i64().unwrap_or(0));
+                return (author, timestamp);
+            }
+        }
+        (Author::unknown(), Timestamp::zero())
+    }
+
     /// Read the leaf name for a yak at the given path.
     /// Returns the content of the name file, or falls back to the directory name.
     fn read_leaf_name(&self, path: &std::path::Path) -> String {
@@ -393,6 +416,7 @@ impl ReadYakStore for DirectoryStorage {
         let fields = self.read_custom_fields(&dir);
         let children = self.read_children(&dir);
         let parent_id = self.read_parent_id(&dir);
+        let (created_by, created_at) = Self::read_metadata(&dir);
 
         Ok(Yak {
             id: id.clone(),
@@ -402,8 +426,8 @@ impl ReadYakStore for DirectoryStorage {
             context,
             fields,
             children,
-            created_by: Author::unknown(),
-            created_at: Timestamp::zero(),
+            created_by,
+            created_at,
         })
     }
 
@@ -454,6 +478,7 @@ impl ReadYakStore for DirectoryStorage {
             let fields = self.read_custom_fields(path);
             let children = self.read_children(path);
             let parent_id = self.read_parent_id(path);
+            let (created_by, created_at) = Self::read_metadata(path);
 
             yaks.push(Yak {
                 id: YakId::from(id),
@@ -463,8 +488,8 @@ impl ReadYakStore for DirectoryStorage {
                 context,
                 fields,
                 children,
-                created_by: Author::unknown(),
-                created_at: Timestamp::zero(),
+                created_by,
+                created_at,
             });
         }
 
@@ -974,6 +999,36 @@ mod tests {
         storage.clear().unwrap();
 
         assert!(path.exists(), "Should create the directory");
+    }
+
+    #[test]
+    fn test_get_yak_populates_created_by_and_created_at() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+
+        let (mut storage, _temp) = setup_test_storage();
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Creator".to_string(),
+                email: "creator@test.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("my yak"),
+                    id: YakId::from("my-yak-a1b2"),
+                    parent_id: None,
+                },
+                metadata,
+            ))
+            .unwrap();
+
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
+        assert_eq!(yak.created_by.name, "Creator");
+        assert_eq!(yak.created_by.email, "creator@test.com");
+        assert_eq!(yak.created_at, Timestamp(1708300800));
     }
 
     #[test]
