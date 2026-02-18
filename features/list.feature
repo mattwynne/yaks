@@ -3,7 +3,8 @@ Feature: List yaks
 
   Rule: Multiple output formats are available
     The default is "pretty" (tree-style with Unicode indicators).
-    "markdown" shows state labels. "plain" shows just names (for scripting).
+    "markdown" shows state labels. "plain" shows leaf names for root yaks
+    and slash-separated paths for nested yaks (for scripting).
     Aliases: "md" for markdown, "raw" for plain.
 
     Example: Pretty format is the default

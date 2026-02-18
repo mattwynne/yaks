@@ -1,6 +1,7 @@
 Feature: Add yaks
-  Create new work items to track. Valid names contain letters, numbers,
-  spaces, hyphens, and underscores. Use --blocks to nest under a parent.
+  Create new work items to track. Names are free-form: letters, numbers,
+  spaces, slashes, and special characters are all allowed. Use --blocks
+  to nest under a parent.
 
   Rule: Yaks can be created by name
 
