@@ -657,6 +657,52 @@ async fn list_yaks_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
     world.run_yx_in_override_dir(&["ls"])
 }
 
+#[when(expr = "I list the yaks with YX_SKIP_GIT_CHECKS set")]
+async fn list_yaks_with_skip_git_checks(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_in_override_dir_skip_git_checks(&["ls"])
+}
+
+#[given(regex = r#"^a git repository with \.yaks gitignored and a yak called "([^"]+)"$"#)]
+async fn git_repo_with_gitignored_yaks_and_yak(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
+    world.setup_git_repo_with_yak(&yak_name)?;
+    world.create_subdir_in_git_repo("subdir")
+}
+
+#[given(regex = r#"^a git repository with YAK_PATH set and a yak called "([^"]+)"$"#)]
+async fn git_repo_with_explicit_yak_path_and_yak(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
+    world.setup_git_repo_with_explicit_yak_path(&yak_name)?;
+    world.create_subdir_in_git_repo("subdir")
+}
+
+#[given(expr = "YAK_PATH is set to a directory")]
+async fn yak_path_set_to_directory(world: &mut FullStackWorld) -> Result<()> {
+    let yak_path_temp_dir =
+        tempfile::tempdir().context("Failed to create yak_path temp directory")?;
+    world.explicit_yak_path = Some(yak_path_temp_dir);
+    Ok(())
+}
+
+#[when(expr = "I list the yaks from a subdirectory of that repository")]
+async fn list_yaks_from_subdir(world: &mut FullStackWorld) -> Result<()> {
+    world.list_yaks_from_subdir()
+}
+
+#[when(expr = "I list the yaks from a subdirectory using YAK_PATH")]
+async fn list_yaks_from_subdir_with_yak_path(world: &mut FullStackWorld) -> Result<()> {
+    world.list_yaks_from_subdir_with_yak_path()
+}
+
+#[then(expr = "the command should succeed")]
+async fn command_should_succeed(world: &mut FullStackWorld) -> Result<()> {
+    check_should_succeed(world)
+}
+
 #[when(regex = r#"^I run yx (.+)$"#)]
 async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Result<()> {
     let parsed = shell_split(&args);

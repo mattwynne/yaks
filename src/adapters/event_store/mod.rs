@@ -2,10 +2,12 @@ pub mod git;
 #[cfg(any(test, feature = "test-support"))]
 pub mod memory;
 pub mod migration;
+pub mod noop;
 
 pub use git::GitEventStore;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryEventStore;
+pub use noop::NoOpEventStore;
 
 #[cfg(test)]
 mod contract_tests;

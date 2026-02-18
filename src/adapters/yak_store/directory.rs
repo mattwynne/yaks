@@ -4,11 +4,11 @@ use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(Clone)]
@@ -17,32 +17,21 @@ pub struct DirectoryStorage {
 }
 
 impl DirectoryStorage {
-    pub fn new() -> Result<Self> {
-        // Skip git checks if YX_SKIP_GIT_CHECKS is set (for mutation testing and test environments)
-        let skip_git_checks = std::env::var("YX_SKIP_GIT_CHECKS").is_ok();
+    /// Create a DirectoryStorage using the provided git repo root and yaks path.
+    /// Checks that .yaks is gitignored before proceeding.
+    pub fn new(repo_root: &Path, yaks_path: &Path) -> Result<Self> {
+        check_yaks_gitignored(repo_root)?;
+        Ok(Self {
+            base_path: yaks_path.to_path_buf(),
+        })
+    }
 
-        if !skip_git_checks {
-            // Check 1: Is git command available?
-            Self::check_git_available()?;
-
-            // Check 2: Are we in a git repository?
-            Self::check_in_git_repo()?;
-
-            // Check 3: Is .yaks gitignored?
-            Self::check_yaks_gitignored()?;
-        }
-
-        // Priority: YAK_PATH env var, then GIT_WORK_TREE/.yaks, then .yaks
-        // This matches bash version behavior: YAKS_PATH="$GIT_WORK_TREE/.yaks"
-        let base_path = if let Ok(yak_path) = std::env::var("YAK_PATH") {
-            yak_path.into()
-        } else if let Ok(git_work_tree) = std::env::var("GIT_WORK_TREE") {
-            PathBuf::from(git_work_tree).join(".yaks")
-        } else {
-            ".yaks".into()
-        };
-
-        Ok(Self { base_path })
+    /// Create a DirectoryStorage without any git checks.
+    /// Used when YX_SKIP_GIT_CHECKS is set and no git repo is available.
+    pub fn without_git(yaks_path: &Path) -> Result<Self> {
+        Ok(Self {
+            base_path: yaks_path.to_path_buf(),
+        })
     }
 
     /// Creates a DirectoryStorage with an explicit path, bypassing all checks.
@@ -51,47 +40,6 @@ impl DirectoryStorage {
     #[cfg(test)]
     pub(crate) fn from_path_unchecked(base_path: PathBuf) -> Self {
         Self { base_path }
-    }
-
-    fn check_git_available() -> Result<()> {
-        // Try to run "git --version" to check if git command exists
-        let output = Command::new("git").arg("--version").output();
-
-        match output {
-            Ok(_) => Ok(()),
-            Err(_) => anyhow::bail!("Error: git command not found"),
-        }
-    }
-
-    fn check_in_git_repo() -> Result<()> {
-        // Run "git rev-parse --git-dir" to check if we're in a git repository
-        let output = Command::new("git")
-            .arg("rev-parse")
-            .arg("--git-dir")
-            .output()
-            .context("Failed to check git repository")?;
-
-        if !output.status.success() {
-            anyhow::bail!("Error: not in a git repository");
-        }
-
-        Ok(())
-    }
-
-    fn check_yaks_gitignored() -> Result<()> {
-        // Run "git check-ignore .yaks" to verify .yaks is gitignored
-        let output = Command::new("git")
-            .arg("check-ignore")
-            .arg(".yaks")
-            .output()
-            .context("Failed to check .yaks gitignore status")?;
-
-        // git check-ignore returns exit code 0 if the path is ignored
-        if !output.status.success() {
-            anyhow::bail!("Error: .yaks folder is not gitignored");
-        }
-
-        Ok(())
     }
 
     /// Resolve a yak's directory by name or id.
@@ -559,25 +507,13 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_git_checks_with_env_var() {
-        // Save original env var state
-        let original = std::env::var("YX_SKIP_GIT_CHECKS").ok();
-
-        // Set YX_SKIP_GIT_CHECKS and YAK_PATH to use a temp directory
+    fn test_without_git_stores_provided_yaks_path() {
         let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("YX_SKIP_GIT_CHECKS", "1");
-        std::env::set_var("YAK_PATH", temp_dir.path());
 
-        // This should succeed even though we're not in a git repo
-        let result = DirectoryStorage::new();
+        // without_git() should succeed without a git repo
+        let result = DirectoryStorage::without_git(temp_dir.path());
         assert!(result.is_ok());
-
-        // Cleanup
-        std::env::remove_var("YX_SKIP_GIT_CHECKS");
-        std::env::remove_var("YAK_PATH");
-        if let Some(val) = original {
-            std::env::set_var("YX_SKIP_GIT_CHECKS", val);
-        }
+        assert_eq!(result.unwrap().base_path, temp_dir.path());
     }
 
     #[test]

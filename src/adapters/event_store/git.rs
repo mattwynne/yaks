@@ -95,12 +95,7 @@ impl GitEventStore {
         self.find_yak_path_recursive(root, id, "")
     }
 
-    fn find_yak_path_recursive(
-        &self,
-        tree: &git2::Tree,
-        id: &str,
-        prefix: &str,
-    ) -> Option<String> {
+    fn find_yak_path_recursive(&self, tree: &git2::Tree, id: &str, prefix: &str) -> Option<String> {
         for entry in tree.iter() {
             if entry.kind() != Some(git2::ObjectType::Tree) {
                 continue;
