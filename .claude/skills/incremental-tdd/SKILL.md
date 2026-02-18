@@ -14,10 +14,7 @@ This is not optional. This is not flexible. This is how TDD works.
 2. Run ALL tests - watch it fail (RED)
 3. Write minimal code to pass that test (GREEN)
 4. Run ALL tests - verify all pass
-5. Refactor if needed:
-   - Check if code quality can improve
-   - Dispatch reviewer subagent with adr-review skill for ADR compliance
-   - Fix any issues found
+5. Refactor if needed
 6. Run ALL tests - verify still passing after refactoring
 7. Commit
 8. Return to step 1
@@ -40,14 +37,6 @@ The design emerges through the REFACTOR phase. Each passing test tells you what 
 
 If you write multiple failing tests first, you've already committed to a design without letting the tests guide you. You've skipped the core benefit of TDD.
 
-## ADR Review in REFACTOR Phase
-
-After tests pass (GREEN phase), dispatch a reviewer subagent with the `adr-review` skill to check if the code complies with architectural decision records (ADRs). This happens before committing.
-
-The reviewer checks structural issues and naming conventions that tests don't verify.
-
-Skip this only for trivial changes or if no ADRs exist.
-
 ## Red Flags (You're Doing Batch TDD)
 
 - Writing multiple FAILING tests before implementing any
@@ -68,7 +57,6 @@ Incremental TDD is actually faster. You avoid over-engineering and let the desig
 
 This skill works with:
 - `/commit` - commits after each RED-GREEN-REFACTOR cycle
-- `adr-review` skill - validates against ADRs during REFACTOR
 - Test runners - verifies all tests after each change
 
 ## Philosophy

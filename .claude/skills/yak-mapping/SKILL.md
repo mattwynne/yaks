@@ -60,13 +60,11 @@ No exceptions:
 
 ```
 1. Add ONE yak
-2. Show map with `yx ls`
+2. Show map with `yx ls`  (THE IRON LAW)
 3. Add context to that yak
 4. Pick ONE child to explore next
 5. Repeat
 ```
-
-**CRITICAL:** After EVERY `yx add`, run `yx ls` to show the human what changed.
 
 ### Step-by-Step Process
 
@@ -134,10 +132,6 @@ Then explore other branches or let someone start implementing leaves.
 - ❌ Approaching reveals 0 blockers and feels tiny → too granular
 - ❌ Approaching reveals 6+ blockers → too large, needs intermediate level
 
-**When to stop exploring a branch:**
-- Hit a leaf (can implement without discovering new blockers)
-- Going deeper requires actually doing the work (not just thinking)
-
 ## Context Pattern
 
 **Write contexts assuming someone else will implement - zero context assumption.**
@@ -197,48 +191,6 @@ EOF
 
 **Balance:** Specific enough for someone else to implement, but light enough that details emerge during work.
 
-## Real-Time Updates
-
-```bash
-# After each add, show structure
-yx ls
-
-# Pattern:
-yx add "parent/child"
-yx ls                    # Verify it's there
-yx context "parent"      # Add context
-yx add "parent/child/grandchild"
-yx ls                    # Show updated map
-```
-
-This keeps the human in sync with your thinking.
-
-## TDD and Yak Granularity
-
-Leaf yaks should align with TDD cycles. A well-scoped leaf yak suggests its first test:
-
-**Example - Good leaf yak context:**
-```markdown
-# Goal
-Implement in-memory storage using HashMap for testing.
-
-# Definition of Done
-- InMemoryStorage implements StoragePort
-- Unit tests pass for save/load/list/delete/exists
-- Exported from src/adapters/mod.rs
-
-# Known Knowns
-- Use Arc<RwLock<HashMap<String, Yak>>>
-- First test: save and load a yak
-
-# Known Unknowns
-- Thread-safety concerns beyond basic RwLock?
-```
-
-**The first test is obvious:** Test that you can save and load a yak. This confirms the yak is properly scoped for one TDD session.
-
-**If you can't envision the first test**, the yak might be too vague or too large - approach it to discover more structure.
-
 ## After Mapping is Complete
 
 Once you've discovered blockers and identified leaf nodes:
@@ -283,24 +235,18 @@ yx add "sync/write events to git ref"
 yx add "sync/write events to git ref/implement log"
 ```
 
-### ❌ Over-Planning Context
-Writing detailed implementation plans in context before discovering blockers.
+### Other Red Flags
 
-### ✅ Lightweight Context
-Goal + done + key decisions. Details emerge when you work on it.
+- Adding multiple yaks without `yx ls` between them (Iron Law!)
+- Showing markdown structure instead of actual `yx` commands
+- Touching .yaks directory directly instead of using yx CLI
+- Using writing-plans when user says "plan with yaks"
+- Over-planning context before discovering blockers
+- Nesting by "feels like subtask" instead of "blocks the parent"
+- Exploring 3+ levels deep before adding context to parents
+- Vague definitions of done ("make it work", "add tests")
 
-### ❌ Batch Creation
-Adding 5 yaks without showing structure between each.
-
-### ✅ Incremental Updates
-Add one, show map, add context, add next, show map.
-
-## Why This Works
-
-- **Structure emerges from reality** - actual blockers, not guessed components
-- **Parent enforces order** - can't mark parent done until children complete
-- **Leaf nodes are ready** - no unknown blockers
-- **Flexible** - structure changes as you learn
+**If you catch yourself doing these, stop and restart with approach-first.**
 
 ## Integration
 
@@ -317,19 +263,3 @@ Use with:
 | Show map | `yx ls` |
 | Add context | `yx context "name"` (uses stdin) |
 | Read context | `yx context --show "name"` |
-
-## Red Flags - Wrong Approach
-
-- **Adding multiple yaks without `yx ls` between them**
-- **Showing markdown structure instead of actual `yx` commands**
-- **Touching .yaks directory directly instead of using yx CLI**
-- **Using writing-plans or other planning skills when user says "plan with yaks"**
-- Creating all yaks before showing any structure
-- Planning "components" instead of discovering blockers
-- Writing implementation details in context before approaching work
-- Nesting by "feels like subtask" instead of "blocks the parent"
-- **Exploring 3+ levels deep before adding context to parents**
-- Definition of done too vague ("make it work", "add tests")
-- Known knowns without specifics (no file paths, patterns, or examples)
-
-**If you catch yourself doing these, stop and restart with approach-first.**

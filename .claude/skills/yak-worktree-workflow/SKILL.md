@@ -230,7 +230,7 @@ The worktree keeps your changes isolated, so iteration is safe.
 ## Integration with Other Skills
 
 - **incremental-tdd**: Use TDD workflow within your worktree
-- **discovery-tree-workflow**: Discover sub-yaks while working, add them to the main repo
+- **yak-mapping**: Discover sub-yaks while working, add them to the main repo
 
 ## Example Session
 

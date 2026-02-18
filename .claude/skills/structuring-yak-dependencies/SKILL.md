@@ -13,7 +13,7 @@ description: Use when approaching a goal and discovering blockers, to model emer
 
 Yaks implements the [Mikado Method](https://mikadomethod.info) and [Discovery Trees](https://www.fastagile.io/method/product-mapping-and-discovery-trees): you discover prerequisites by **approaching goals and finding blockers**.
 
-**Related skills:** See `mikado-method` and `discovery-tree-workflow` for the foundational techniques this pattern applies to yaks.
+**Related skills:** See `mikado-method` for the try-revert-learn cycle this pattern builds on.
 
 ## How Goals Emerge
 
