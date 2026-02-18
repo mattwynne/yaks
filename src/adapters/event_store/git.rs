@@ -440,7 +440,16 @@ impl EventStore for GitEventStore {
             }
 
             match YakEvent::parse(message) {
-                Ok(event) => events.push(event),
+                Ok(event) => {
+                    use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+                    let author = Author {
+                        name: commit.author().name().unwrap_or("unknown").to_string(),
+                        email: commit.author().email().unwrap_or("").to_string(),
+                    };
+                    let timestamp = Timestamp(commit.author().when().seconds());
+                    let metadata = EventMetadata::new(author, timestamp);
+                    events.push(event.with_metadata(metadata));
+                }
                 Err(_) => continue, // Skip unparseable commits
             }
         }
@@ -1342,6 +1351,38 @@ mod tests {
         assert_eq!(commit.author().name().unwrap(), "Custom Author");
         assert_eq!(commit.author().email().unwrap(), "custom@example.com");
         assert_eq!(commit.author().when().seconds(), 1708300800);
+    }
+
+    #[test]
+    fn get_all_events_populates_metadata_from_commits() {
+        use crate::domain::event_metadata::{Author, Timestamp};
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Reader Test".to_string(),
+                email: "reader@test.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ))
+            .unwrap();
+
+        let events = EventStore::get_all_events(&store).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].metadata().author.name, "Reader Test");
+        assert_eq!(events[0].metadata().author.email, "reader@test.com");
+        assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
     }
 
     #[test]

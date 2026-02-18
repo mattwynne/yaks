@@ -25,6 +25,15 @@ impl YakEvent {
         }
     }
 
+    pub fn with_metadata(self, metadata: EventMetadata) -> Self {
+        match self {
+            Self::Added(e, _) => Self::Added(e, metadata),
+            Self::Removed(e, _) => Self::Removed(e, metadata),
+            Self::Moved(e, _) => Self::Moved(e, metadata),
+            Self::FieldUpdated(e, _) => Self::FieldUpdated(e, metadata),
+        }
+    }
+
     pub fn format_message(&self) -> String {
         match self {
             Self::Added(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
