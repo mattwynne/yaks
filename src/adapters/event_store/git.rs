@@ -86,6 +86,65 @@ impl GitEventStore {
         Ok(Some(self.repo.find_tree(current_oid)?))
     }
 
+    /// Recursively search the git tree for a directory entry matching
+    /// the given yak ID. Returns the full path (e.g., "parent-a1b2/child-c3d4").
+    /// This is needed because events only contain the yak's own ID, but
+    /// the git tree nests children under their parent's directory.
+    fn find_yak_path(&self, root: Option<&git2::Tree>, id: &str) -> Option<String> {
+        let root = root?;
+        self.find_yak_path_recursive(root, id, "")
+    }
+
+    fn find_yak_path_recursive(
+        &self,
+        tree: &git2::Tree,
+        id: &str,
+        prefix: &str,
+    ) -> Option<String> {
+        for entry in tree.iter() {
+            if entry.kind() != Some(git2::ObjectType::Tree) {
+                continue;
+            }
+            let name = entry.name()?;
+            let full_path = if prefix.is_empty() {
+                name.to_string()
+            } else {
+                format!("{}/{}", prefix, name)
+            };
+
+            if name == id {
+                // Verify this is a yak directory (has a state or context.md blob)
+                if let Ok(subtree) = self.repo.find_tree(entry.id()) {
+                    if subtree.get_name("state").is_some()
+                        || subtree.get_name("context.md").is_some()
+                    {
+                        return Some(full_path);
+                    }
+                }
+            }
+
+            // Recurse into subtrees to find nested yaks
+            if let Ok(subtree) = self.repo.find_tree(entry.id()) {
+                if let Some(found) = self.find_yak_path_recursive(&subtree, id, &full_path) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    /// Resolve a yak ID to its full tree path.
+    /// If the ID already contains a slash (explicit path), use it directly.
+    /// Otherwise, search the tree recursively.
+    /// Falls back to the bare ID if not found (for new entries).
+    fn resolve_yak_path(&self, tree: Option<&git2::Tree>, id: &str) -> String {
+        if id.contains('/') {
+            return id.to_string();
+        }
+        self.find_yak_path(tree, id)
+            .unwrap_or_else(|| id.to_string())
+    }
+
     /// Update a file in a yak's subtree, returning new root tree OID
     fn update_yak_file(
         &self,
@@ -164,16 +223,19 @@ impl GitEventStore {
                 self.set_yak_in_root(current_tree, &path, Some(yak_tree_oid))
             }
 
-            YakEvent::Removed(e) => self.set_yak_in_root(current_tree, e.id.as_str(), None),
+            YakEvent::Removed(e) => {
+                let path = self.resolve_yak_path(current_tree, e.id.as_str());
+                self.set_yak_in_root(current_tree, &path, None)
+            }
 
             YakEvent::Moved(e) => {
                 // Move yak subtree to new parent
-                // For now, just update the tree location
+                let old_path = self.resolve_yak_path(current_tree, e.id.as_str());
                 let old_subtree_oid = self
-                    .get_yak_subtree(current_tree, e.id.as_str())?
+                    .get_yak_subtree(current_tree, &old_path)?
                     .map(|t| t.id());
 
-                let intermediate = self.set_yak_in_root(current_tree, e.id.as_str(), None)?;
+                let intermediate = self.set_yak_in_root(current_tree, &old_path, None)?;
                 let intermediate_tree = self.repo.find_tree(intermediate)?;
 
                 // Place under new parent if specified
@@ -185,20 +247,23 @@ impl GitEventStore {
             }
 
             YakEvent::Renamed(e) => {
-                // Update name file for renamed yak
-                self.update_yak_file(current_tree, e.id.as_str(), "name", e.new_name.as_str())
+                let path = self.resolve_yak_path(current_tree, e.id.as_str());
+                self.update_yak_file(current_tree, &path, "name", e.new_name.as_str())
             }
 
             YakEvent::ContextUpdated(e) => {
-                self.update_yak_file(current_tree, e.id.as_str(), "context.md", &e.content)
+                let path = self.resolve_yak_path(current_tree, e.id.as_str());
+                self.update_yak_file(current_tree, &path, "context.md", &e.content)
             }
 
             YakEvent::StateUpdated(e) => {
-                self.update_yak_file(current_tree, e.id.as_str(), "state", &e.state)
+                let path = self.resolve_yak_path(current_tree, e.id.as_str());
+                self.update_yak_file(current_tree, &path, "state", &e.state)
             }
 
             YakEvent::FieldUpdated(e) => {
-                self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
+                let path = self.resolve_yak_path(current_tree, e.id.as_str());
+                self.update_yak_file(current_tree, &path, &e.field_name, &e.content)
             }
         }
     }
@@ -446,6 +511,7 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::events::RenamedEvent;
     use crate::domain::slug::{Name, YakId};
     use crate::domain::{AddedEvent, StateUpdatedEvent};
     use tempfile::TempDir;
@@ -888,6 +954,114 @@ mod tests {
         let schema_blob = tree.get_name(".schema-version").unwrap();
         let schema = store.repo.find_blob(schema_blob.id()).unwrap();
         assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
+    }
+
+    #[test]
+    fn rename_nested_yak_updates_correct_entry() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Add parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Add child under parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        // Rename the child
+        store
+            .append(&YakEvent::Renamed(RenamedEvent {
+                id: YakId::from("child-c3d4"),
+                new_name: Name::from("renamed child"),
+            }))
+            .unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Root should still have one entry: the parent (no orphan at root)
+        let root_entries: Vec<_> = tree
+            .iter()
+            .filter(|e| e.kind() == Some(git2::ObjectType::Tree))
+            .collect();
+        assert_eq!(
+            root_entries.len(),
+            1,
+            "Expected 1 root tree entry, got {} (orphan created?)",
+            root_entries.len()
+        );
+
+        // Verify the child's name was updated in the nested position
+        let parent_entry = tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
+        let child_entry = parent_tree.get_name("child-c3d4").unwrap();
+        let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
+
+        let name_blob = child_tree.get_name("name").unwrap();
+        let name = store.repo.find_blob(name_blob.id()).unwrap();
+        assert_eq!(
+            std::str::from_utf8(name.content()).unwrap(),
+            "renamed child"
+        );
+    }
+
+    #[test]
+    fn state_update_nested_yak_updates_correct_entry() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Add parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Add child under parent
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        // Update state of nested child
+        store
+            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+                id: YakId::from("child-c3d4"),
+                state: "done".to_string(),
+            }))
+            .unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+
+        // Root should still have one entry: the parent (no orphan)
+        let root_entries: Vec<_> = tree
+            .iter()
+            .filter(|e| e.kind() == Some(git2::ObjectType::Tree))
+            .collect();
+        assert_eq!(root_entries.len(), 1);
+
+        // Verify state was updated in the nested position
+        let parent_entry = tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
+        let child_entry = parent_tree.get_name("child-c3d4").unwrap();
+        let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
+
+        let state_blob = child_tree.get_name("state").unwrap();
+        let state = store.repo.find_blob(state_blob.id()).unwrap();
+        assert_eq!(std::str::from_utf8(state.content()).unwrap(), "done");
     }
 
     #[test]
