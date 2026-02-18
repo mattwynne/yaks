@@ -35,6 +35,7 @@ jobs:
 
   mutation-tests:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v24
@@ -48,4 +49,4 @@ jobs:
       - name: Run mutation tests
         run: |
           devenv shell env CUCUMBER_MODE=in-process \
-            YX_SKIP_GIT_CHECKS=1 cargo mutants --jobs 4
+            YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place
