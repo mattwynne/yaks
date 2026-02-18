@@ -3,7 +3,7 @@
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{Yak, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -93,6 +93,10 @@ impl WriteYakStore for InMemoryStorage {
         fields.insert(CONTEXT_FIELD.to_string(), String::new());
         // Store the display name
         fields.insert(NAME_FIELD.to_string(), name.as_str().to_string());
+        // Store the id (matching DirectoryStorage which writes an id file)
+        if !id.as_str().is_empty() {
+            fields.insert(ID_FIELD.to_string(), id.as_str().to_string());
+        }
         // Store parent_id if present
         if let Some(pid) = parent_id {
             fields.insert(PARENT_ID_FIELD.to_string(), pid.as_str().to_string());
