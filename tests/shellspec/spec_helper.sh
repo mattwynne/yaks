@@ -79,14 +79,12 @@ setup_isolated_repo() {
   TEST_REPO=$(mktemp -d)
   export TEST_REPO
   setup_test_repo "$TEST_REPO"
-  export GIT_WORK_TREE="$TEST_REPO"
 }
 
 # Clean up isolated test repo
 teardown_isolated_repo() {
   rm -rf "$TEST_REPO"
   unset TEST_REPO
-  unset GIT_WORK_TREE
 }
 
 # This callback function will be invoked after core modules has been loaded.

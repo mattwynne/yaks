@@ -12,12 +12,8 @@ pub struct GitRefSync {
 
 impl GitRefSync {
     pub fn new(repo_root: &Path, yaks_path: &Path) -> Result<Self> {
-        let repo = Repository::open(repo_root).with_context(|| {
-            format!(
-                "Failed to open git repository at {}",
-                repo_root.display()
-            )
-        })?;
+        let repo = Repository::open(repo_root)
+            .with_context(|| format!("Failed to open git repository at {}", repo_root.display()))?;
 
         Ok(Self {
             repo,

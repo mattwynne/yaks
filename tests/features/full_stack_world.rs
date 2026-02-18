@@ -342,10 +342,7 @@ impl FullStackWorld {
     /// Run yx ls from the git_repo subdirectory (if set) or the repo root,
     /// without YX_SKIP_GIT_CHECKS. Does NOT pass YAK_PATH (lets yx discover it).
     pub fn list_yaks_from_subdir(&mut self) -> Result<()> {
-        let repo = self
-            .git_repo
-            .as_ref()
-            .context("No git_repo set")?;
+        let repo = self.git_repo.as_ref().context("No git_repo set")?;
         let run_dir = self
             .git_repo_subdir
             .clone()
@@ -373,10 +370,7 @@ impl FullStackWorld {
     /// Run yx ls from the git_repo subdirectory using the explicit YAK_PATH.
     /// Does NOT pass YX_SKIP_GIT_CHECKS.
     pub fn list_yaks_from_subdir_with_yak_path(&mut self) -> Result<()> {
-        let repo = self
-            .git_repo
-            .as_ref()
-            .context("No git_repo set")?;
+        let repo = self.git_repo.as_ref().context("No git_repo set")?;
         let run_dir = self
             .git_repo_subdir
             .clone()
@@ -617,7 +611,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let output = Command::new(yx_path)
             .args(args)
             .env("YAK_PATH", &yak_path)
-            .env("GIT_WORK_TREE", &repo_path)
             .env("YX_IGNORE_STDIN", "1")
             .env("YX_SKIP_GIT_CHECKS", "1")
             .current_dir(&repo_path)

@@ -3,7 +3,7 @@
 // Provides a single function to discover the git repo root from cwd,
 // replacing scattered shell-outs to `git rev-parse` and env var lookups.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -16,9 +16,8 @@ use std::process::Command;
 /// Returns the working directory (workdir) of the repository.
 /// Errors if not inside a git repo or the repo is bare.
 pub fn discover_git_root() -> Result<PathBuf> {
-    let repo = git2::Repository::discover(".").map_err(|_| {
-        anyhow::anyhow!("Error: not in a git repository")
-    })?;
+    let repo = git2::Repository::discover(".")
+        .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
 
     let workdir = repo
         .workdir()
@@ -36,12 +35,20 @@ pub fn discover_git_root() -> Result<PathBuf> {
 /// variables like `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`
 /// that tests rely on to isolate from the user's global gitconfig.
 pub fn check_yaks_gitignored(repo_root: &std::path::Path) -> Result<()> {
-    let output = Command::new("git")
+    let output = match Command::new("git")
         .arg("check-ignore")
         .arg(".yaks")
         .current_dir(repo_root)
         .output()
-        .context("Failed to check .yaks gitignore status")?;
+    {
+        Ok(output) => output,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!("Error: git command not found");
+        }
+        Err(e) => {
+            return Err(anyhow::Error::new(e).context("Failed to check .yaks gitignore status"));
+        }
+    };
 
     if !output.status.success() {
         anyhow::bail!("Error: .yaks folder is not gitignored");
