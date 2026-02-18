@@ -25,7 +25,7 @@ Feature: Yak identity
     Example: Child yak ID is based on its own name
       Given I have a clean git repository
       And I add the yak "project"
-      And I add the yak "fix the build" blocking "project"
+      And I add the yak "fix the build" under "project"
       When I show the "id" field of "fix the build"
       Then the output should include "fix-the-build-"
 
@@ -49,7 +49,7 @@ Feature: Yak identity
     Example: Nested yak is stored under parent's slug directory
       Given I have a clean git repository
       And I add the yak "My Project"
-      And I add the yak "Fix the Build" blocking "My Project"
+      And I add the yak "Fix the Build" under "My Project"
       Then the yak directory should be named "my-project/fix-the-build"
 
   Rule: Listing shows names, not IDs or slugs
@@ -75,8 +75,8 @@ Feature: Yak identity
     Example: Colliding slug under same parent is rejected
       Given I have a clean git repository
       And I add the yak "Backend fixes"
-      And I add the yak "Fix the bug" blocking "Backend fixes"
-      When I try to add the yak "fix-the-bug" blocking "Backend fixes"
+      And I add the yak "Fix the bug" under "Backend fixes"
+      When I try to add the yak "fix-the-bug" under "Backend fixes"
       Then the command should fail
       And the error should contain "already exists under"
 
@@ -84,7 +84,7 @@ Feature: Yak identity
       Given I have a clean git repository
       And I add the yak "Make the tea"
       And I add the yak "Backend fixes"
-      When I add the yak "Make the tea" blocking "Backend fixes"
+      When I add the yak "Make the tea" under "Backend fixes"
       And I list the yaks in "markdown" format
       Then the output should be:
         """

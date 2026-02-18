@@ -1,7 +1,7 @@
 Feature: Add yaks
   Create new work items to track. Names are free-form: letters, numbers,
-  spaces, slashes, and special characters are all allowed. Use --blocks
-  to nest under a parent.
+  spaces, slashes, and special characters are all allowed. Use --under
+  (or --below) to nest under a parent.
 
   Rule: Yaks can be created by name
 
@@ -49,14 +49,27 @@ Feature: Add yaks
       And I list the yaks
       Then the output should include "fix CI/CD pipeline"
 
-  Rule: --blocks creates a child under a parent
-    The --blocks flag nests the new yak under the specified parent.
-    The parent must already exist and be unambiguous.
+  Rule: --under creates a child under a parent
+    The --under flag nests the new yak under the specified parent.
+    --below is a synonym. The parent must already exist and be
+    unambiguous.
 
     Example: Adding a child under a parent
       Given I have a clean git repository
       And I add the yak "parent"
-      When I add the yak "child" blocking "parent"
+      When I add the yak "child" under "parent"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+          - [todo] child
+        """
+
+    @fullstack
+    Example: --below is a synonym for --under
+      Given I have a clean git repository
+      And I add the yak "parent"
+      When I run yx add child --below parent
       And I list the yaks in "markdown" format
       Then the output should be:
         """
@@ -66,7 +79,7 @@ Feature: Add yaks
 
     Example: Nonexistent parent is rejected
       Given I have a clean git repository
-      When I try to add the yak "child" blocking "nonexistent"
+      When I try to add the yak "child" under "nonexistent"
       Then the command should fail
       And the error should contain "not found"
 
@@ -74,6 +87,6 @@ Feature: Add yaks
       Given I have a clean git repository
       And I add the yak "Fix the build"
       And I add the yak "Fix the tests"
-      When I try to add the yak "child" blocking "Fix"
+      When I try to add the yak "child" under "Fix"
       Then the command should fail
       And the error should contain "ambiguous"

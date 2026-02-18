@@ -30,9 +30,9 @@ enum Commands {
     Add {
         /// The yak name (space-separated words)
         name: Vec<String>,
-        /// Parent yak that this new yak blocks
-        #[arg(long)]
-        blocks: Option<String>,
+        /// Nest under this parent yak
+        #[arg(long, alias = "below")]
+        under: Option<String>,
     },
     /// List yaks
     #[command(alias = "ls")]
@@ -80,7 +80,7 @@ enum Commands {
         /// The yak to move (space-separated words)
         name: Vec<String>,
         /// Move under this parent yak
-        #[arg(long)]
+        #[arg(long, alias = "below")]
         under: Option<Vec<String>>,
         /// Move to root level (un-nest)
         #[arg(long)]
@@ -218,9 +218,9 @@ fn main() -> Result<()> {
     );
 
     match cli.command {
-        Commands::Add { name, blocks } => {
+        Commands::Add { name, under } => {
             let name_str = name.join(" ");
-            app.handle(AddYak::new(&name_str).with_parent(blocks.as_deref()))
+            app.handle(AddYak::new(&name_str).with_parent(under.as_deref()))
         }
         Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
         Commands::Done { name, recursive } => {

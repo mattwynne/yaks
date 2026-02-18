@@ -736,16 +736,16 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["add", name])
     }
 
-    fn add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()> {
-        self.run_yx(&["add", name, "--blocks", parent])
+    fn add_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.run_yx(&["add", name, "--under", parent])
     }
 
     fn try_add_yak(&mut self, name: &str) -> Result<()> {
         self.run_yx_unchecked(&["add", name])
     }
 
-    fn try_add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()> {
-        self.run_yx_unchecked(&["add", name, "--blocks", parent])
+    fn try_add_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.run_yx_unchecked(&["add", name, "--under", parent])
     }
 
     fn remove_yak(&mut self, name: &str) -> Result<()> {

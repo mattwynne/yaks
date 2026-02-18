@@ -43,7 +43,7 @@ Feature: Setting yak state
     Example: Child set from done to wip demotes done parent to wip
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       And I mark the yak "child" as done
       And I mark the yak "parent" as done
       When I set the state of "child" to "wip"
@@ -57,7 +57,7 @@ Feature: Setting yak state
     Example: Child set from done to todo demotes done parent to wip
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       And I mark the yak "child" as done
       And I mark the yak "parent" as done
       When I set the state of "child" to "todo"
@@ -71,8 +71,8 @@ Feature: Setting yak state
     Example: Propagates through multiple ancestor levels
       Given I have a clean git repository
       And I add the yak "a"
-      And I add the yak "b" blocking "a"
-      And I add the yak "c" blocking "b"
+      And I add the yak "b" under "a"
+      And I add the yak "c" under "b"
       And I mark the yak "c" as done
       And I mark the yak "b" as done
       And I mark the yak "a" as done
@@ -88,7 +88,7 @@ Feature: Setting yak state
     Example: Only affects ancestors in done state
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       And I mark the yak "child" as done
       When I set the state of "child" to "wip"
       And I list the yaks in "markdown" format
@@ -101,8 +101,8 @@ Feature: Setting yak state
     Example: Sibling state is irrelevant
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child-a" blocking "parent"
-      And I add the yak "child-b" blocking "parent"
+      And I add the yak "child-a" under "parent"
+      And I add the yak "child-b" under "parent"
       And I mark the yak "child-a" as done
       And I mark the yak "child-b" as done
       And I mark the yak "parent" as done

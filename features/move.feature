@@ -17,12 +17,27 @@ Feature: Move yaks in hierarchy
           - [todo] child-yak
         """
 
+  Rule: --below is a synonym for --under
+
+    @fullstack
+    Example: Move a yak using --below
+      Given I have a clean git repository
+      And I add the yak "child-yak"
+      And I add the yak "parent"
+      When I run yx mv child-yak --below parent
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+          - [todo] child-yak
+        """
+
   Rule: --to-root moves a yak to root level
 
     Example: Move a nested yak to root
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       When I move the yak "child" to root
       And I list the yaks in "markdown" format
       Then the output should be:

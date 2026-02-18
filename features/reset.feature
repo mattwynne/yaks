@@ -22,7 +22,7 @@ Feature: yx reset - Rebuild yaks from git tree
 
     Example: Reset preserves parent-child hierarchy
       Given I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       When I reset the yaks
       And I list the yaks in "markdown" format
       Then the output should be:
@@ -54,7 +54,7 @@ Feature: yx reset - Rebuild yaks from git tree
 
     Example: Round-trip from disk to git and back preserves yaks
       Given I add the yak "alpha"
-      And I add the yak "beta" blocking "alpha"
+      And I add the yak "beta" under "alpha"
       When I set the state of "beta" to "wip"
       And I reset the yaks from disk to git
       And I reset the yaks
@@ -67,7 +67,7 @@ Feature: yx reset - Rebuild yaks from git tree
 
     Example: Reset preserves state changes on nested yaks
       Given I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       And I mark the yak "child" as done
       When I reset the yaks
       And I list the yaks in "markdown" format
@@ -79,7 +79,7 @@ Feature: yx reset - Rebuild yaks from git tree
 
     Example: Reset preserves renames on nested yaks
       Given I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       When I rename the yak "child" to "renamed child"
       And I reset the yaks
       And I list the yaks in "markdown" format

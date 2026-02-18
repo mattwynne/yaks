@@ -25,7 +25,7 @@ Feature: yx rename command
     Example: Rename a nested yak
       Given I have a clean git repository
       And I add the yak "project"
-      And I add the yak "fix the build" blocking "project"
+      And I add the yak "fix the build" under "project"
       When I rename the yak "fix the build" to "repair the build"
       And I list the yaks in "markdown" format
       Then the output should be:

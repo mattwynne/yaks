@@ -73,7 +73,7 @@ Feature: List yaks
     Example: Nested yaks are indented under their parent
       Given I have a clean git repository
       And I add the yak "first task"
-      And I add the yak "second task" blocking "first task"
+      And I add the yak "second task" under "first task"
       When I list the yaks in "markdown" format
       Then the output should be:
         """
@@ -84,8 +84,8 @@ Feature: List yaks
     Example: Done children stay under their parent
       Given I have a clean git repository
       And I add the yak "parent a"
-      And I add the yak "child 1" blocking "parent a"
-      And I add the yak "child 2" blocking "parent a"
+      And I add the yak "child 1" under "parent a"
+      And I add the yak "child 2" under "parent a"
       And I mark the yak "child 1" as done
       And I add the yak "parent b"
       When I list the yaks in "markdown" format
@@ -100,7 +100,7 @@ Feature: List yaks
     Example: Plain format shows full paths for nested yaks
       Given I have a clean git repository
       And I add the yak "parent task"
-      And I add the yak "child task" blocking "parent task"
+      And I add the yak "child task" under "parent task"
       When I list the yaks in "plain" format
       Then the output should be:
         """
@@ -147,8 +147,8 @@ Feature: List yaks
     Example: Parents are included when filtering nested yaks
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "done child" blocking "parent"
-      And I add the yak "incomplete child" blocking "parent"
+      And I add the yak "done child" under "parent"
+      And I add the yak "incomplete child" under "parent"
       And I mark the yak "done child" as done
       When I list the yaks in "markdown" format filtering by "not-done"
       Then the output should be:

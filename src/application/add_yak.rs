@@ -20,7 +20,7 @@ impl AddYak {
         }
     }
 
-    /// Set the parent yak (--blocks flag)
+    /// Set the parent yak (--under flag)
     pub fn with_parent(mut self, parent: Option<&str>) -> Self {
         self.parent = parent.map(|s| s.to_string());
         self

@@ -23,7 +23,7 @@ Feature: Mark yaks as done
     Example: Marking a nested child as done
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       When I mark the yak "child" as done
       And I list the yaks in "markdown" format
       Then the output should be:
@@ -39,7 +39,7 @@ Feature: Mark yaks as done
     Example: Error when parent has incomplete children
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child" blocking "parent"
+      And I add the yak "child" under "parent"
       When I try to mark the yak "parent" as done
       Then the command should fail
       And the error should contain "cannot mark 'parent' as done - it has incomplete children"
@@ -51,9 +51,9 @@ Feature: Mark yaks as done
     Example: Recursive done marks parent and all descendants
       Given I have a clean git repository
       And I add the yak "parent"
-      And I add the yak "child1" blocking "parent"
-      And I add the yak "child2" blocking "parent"
-      And I add the yak "grandchild" blocking "child1"
+      And I add the yak "child1" under "parent"
+      And I add the yak "child2" under "parent"
+      And I add the yak "grandchild" under "child1"
       When I mark the yak "parent" as done recursively
       And I list the yaks in "markdown" format
       Then the output should be:

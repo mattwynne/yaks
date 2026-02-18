@@ -106,7 +106,7 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(AddYak::new(name)))
     }
 
-    fn add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()> {
+    fn add_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
         let name = name.to_string();
         let parent = parent.to_string();
         self.execute(move |app| app.handle(AddYak::new(&name).with_parent(Some(&parent))))
@@ -116,7 +116,7 @@ impl TestWorld for InProcessWorld {
         self.try_execute(|app| app.handle(AddYak::new(name)))
     }
 
-    fn try_add_yak_blocking(&mut self, name: &str, parent: &str) -> Result<()> {
+    fn try_add_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
         let name = name.to_string();
         let parent = parent.to_string();
         self.try_execute(move |app| app.handle(AddYak::new(&name).with_parent(Some(&parent))))

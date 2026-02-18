@@ -36,7 +36,7 @@ Feature: Tab completion
     Example: Completing add suggests existing yak names
       Given I have a clean git repository
       And I add the yak "grandma"
-      And I add the yak "mummy" blocking "grandma"
+      And I add the yak "mummy" under "grandma"
       When I invoke bash completion for words: yx add ""
       Then the completions should include "grandma"
       And the completions should include "mummy"
