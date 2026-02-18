@@ -394,10 +394,19 @@ impl EventStore for GitEventStore {
         let parent = self.get_latest_commit()?;
         let parents: Vec<&git2::Commit> = parent.iter().collect();
 
-        let sig = self
-            .repo
-            .signature()
-            .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+        let meta = event.metadata();
+        let author_name = if meta.author.name.is_empty() {
+            "yx"
+        } else {
+            &meta.author.name
+        };
+        let author_email = if meta.author.email.is_empty() {
+            "yx@localhost"
+        } else {
+            &meta.author.email
+        };
+        let time = git2::Time::new(meta.timestamp.as_epoch_secs(), 0);
+        let sig = git2::Signature::new(author_name, author_email, &time)?;
 
         self.repo.commit(
             Some("refs/notes/yaks"),
@@ -1301,6 +1310,38 @@ mod tests {
         let state_blob = child_tree.get_name("state").unwrap();
         let state = store.repo.find_blob(state_blob.id()).unwrap();
         assert_eq!(std::str::from_utf8(state.content()).unwrap(), "done");
+    }
+
+    #[test]
+    fn append_uses_event_metadata_for_commit_signature() {
+        use crate::domain::event_metadata::{Author, Timestamp};
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Custom Author".to_string(),
+                email: "custom@example.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                metadata,
+            ))
+            .unwrap();
+
+        let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
+        let commit = store.repo.find_commit(oid).unwrap();
+        assert_eq!(commit.author().name().unwrap(), "Custom Author");
+        assert_eq!(commit.author().email().unwrap(), "custom@example.com");
+        assert_eq!(commit.author().when().seconds(), 1708300800);
     }
 
     #[test]
