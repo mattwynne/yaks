@@ -3,7 +3,7 @@
 use crate::domain::ports::SyncPort;
 use anyhow::{Context, Result};
 use git2::{Oid, Repository};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct GitRefSync {
     repo: Repository,
@@ -11,18 +11,18 @@ pub struct GitRefSync {
 }
 
 impl GitRefSync {
-    pub fn new() -> Result<Self> {
-        let git_work_tree = std::env::var("GIT_WORK_TREE")
-            .or_else(|_| std::env::current_dir().map(|p| p.display().to_string()))?;
+    pub fn new(repo_root: &Path, yaks_path: &Path) -> Result<Self> {
+        let repo = Repository::open(repo_root).with_context(|| {
+            format!(
+                "Failed to open git repository at {}",
+                repo_root.display()
+            )
+        })?;
 
-        let repo = Repository::open(&git_work_tree)
-            .with_context(|| format!("Failed to open git repository at {git_work_tree}"))?;
-
-        let yaks_path = std::env::var("YAK_PATH")
-            .unwrap_or_else(|_| ".yaks".to_string())
-            .into();
-
-        Ok(Self { repo, yaks_path })
+        Ok(Self {
+            repo,
+            yaks_path: yaks_path.to_path_buf(),
+        })
     }
 
     // Fetch refs/notes/yaks from origin into refs/remotes/origin/yaks

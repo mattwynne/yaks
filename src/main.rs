@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
 use yx::adapters::event_store::migration::Migrator;
-use yx::adapters::event_store::GitEventStore;
+use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::sync::GitRefSync;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
@@ -13,25 +13,7 @@ use yx::application::{
     WriteField,
 };
 use yx::domain::ports::{EventStore, ReadYakStore};
-use yx::domain::{Yak, YakEvent};
 use yx::infrastructure::EventBus;
-
-/// A no-op event store used when YX_SKIP_GIT_CHECKS is set outside a git repo.
-/// Events are silently discarded; reads return empty. This allows the
-/// directory-based storage to function without git infrastructure.
-struct NoOpEventStore;
-
-impl EventStore for NoOpEventStore {
-    fn append(&mut self, _event: &YakEvent) -> Result<()> {
-        Ok(())
-    }
-    fn get_all_events(&self) -> Result<Vec<YakEvent>> {
-        Ok(vec![])
-    }
-    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
-        Ok(0)
-    }
-}
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -173,33 +155,38 @@ fn main() -> Result<()> {
     let skip_git = std::env::var("YX_SKIP_GIT_CHECKS").is_ok();
 
     // Initialize event infrastructure
-    // Determine repo path: GIT_WORK_TREE env var, then current dir
-    let repo_path = std::env::var("GIT_WORK_TREE")
-        .map(PathBuf::from)
-        .unwrap_or(std::env::current_dir()?);
+    // Discover git repo root using libgit2
+    let repo_root = yx::infrastructure::discover_git_root().ok();
 
-    // Try to open the git repo. When YX_SKIP_GIT_CHECKS is set and we're
-    // outside a git repo, fall back to no-op infrastructure so that
-    // directory-based storage still works without git.
-    let in_git_repo = git2::Repository::open(&repo_path).is_ok();
+    // Resolve yaks path once: YAK_PATH env var, or <repo_root>/.yaks, or .yaks fallback
+    let yaks_path: PathBuf = if let Ok(yak_path) = std::env::var("YAK_PATH") {
+        PathBuf::from(yak_path)
+    } else if let Some(ref root) = repo_root {
+        root.join(".yaks")
+    } else {
+        PathBuf::from(".yaks")
+    };
 
-    let mut event_bus = if in_git_repo {
+    let mut event_bus = if let Some(ref root) = repo_root {
         // Run schema migration before using the event store
-        Migrator::for_current_version().run(&repo_path)?;
-        let event_store = GitEventStore::new(&repo_path)?;
+        Migrator::for_current_version().run(root)?;
+        let event_store = GitEventStore::new(root)?;
         EventBus::new(Box::new(event_store))
     } else if skip_git {
         // Outside a git repo but skipping git checks: use a no-op store
         EventBus::new(Box::new(NoOpEventStore))
     } else {
-        // Outside a git repo and not skipping: DirectoryStorage::new() below
-        // will emit the user-facing error. We need some EventBus for the
-        // type-checker; it won't be used because DirectoryStorage::new() bails.
-        EventBus::new(Box::new(NoOpEventStore))
+        // Outside a git repo and not skipping checks: error out
+        anyhow::bail!("Error: not in a git repository");
     };
 
     // Initialize storage and register as projection
-    let storage = DirectoryStorage::new()?;
+    let storage = if let Some(ref root) = repo_root {
+        DirectoryStorage::new(root, &yaks_path)?
+    } else {
+        // skip_git is true (otherwise we bailed above)
+        DirectoryStorage::without_git(&yaks_path)?
+    };
     event_bus.register(Box::new(storage.clone()));
 
     // Initialize other adapters
@@ -207,13 +194,13 @@ fn main() -> Result<()> {
     let input = ConsoleInput;
 
     // GitRefSync and a second event reader are only available when in a git repo
-    let sync = if in_git_repo {
-        GitRefSync::new().ok()
+    let sync = if let Some(ref root) = repo_root {
+        GitRefSync::new(root, &yaks_path).ok()
     } else {
         None
     };
-    let git_event_reader = if in_git_repo {
-        GitEventStore::new(&repo_path).ok()
+    let git_event_reader = if let Some(ref root) = repo_root {
+        GitEventStore::new(root).ok()
     } else {
         None
     };
@@ -302,23 +289,20 @@ fn main() -> Result<()> {
                 anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
             }
 
+            let root = repo_root
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Error: not in a git repository"))?;
+
             if git_from_disk {
                 // Rebuild git tree from .yaks directory
                 let yaks = storage.list_yaks()?;
-                let mut event_store = GitEventStore::new(&repo_path)?;
+                let mut event_store = GitEventStore::new(root)?;
                 let count = event_store.reset_from_snapshot(&yaks)?;
                 println!("Snapshot: {} yaks", count);
             } else {
                 // Default: rebuild .yaks directory from git tree
-                let yak_path = if let Ok(yak_path) = std::env::var("YAK_PATH") {
-                    PathBuf::from(yak_path)
-                } else if let Ok(git_work_tree) = std::env::var("GIT_WORK_TREE") {
-                    PathBuf::from(git_work_tree).join(".yaks")
-                } else {
-                    PathBuf::from(".yaks")
-                };
-                let event_store = GitEventStore::new(&repo_path)?;
-                event_store.materialize_tree(&yak_path)?;
+                let event_store = GitEventStore::new(root)?;
+                event_store.materialize_tree(&yaks_path)?;
             }
             Ok(())
         }
