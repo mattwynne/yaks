@@ -144,18 +144,11 @@ test() {
   cargo test --features test-support
 }
 
-# @cmd Run mutation tests (unit tests only for speed: ~6min vs ~16min)
+# @cmd Run mutation tests (unit + in-process cucumber)
 # @alias m
 mutate() {
-  # Default to unit tests only (--lib) for speed
-  # To test all including integration tests: dev mutate -- --test integration_test
-  if [[ "$*" == *"--"* ]]; then
-    # User provided their own test args
-    YX_SKIP_GIT_CHECKS=1 cargo mutants "$@"
-  else
-    # Default: unit tests only (much faster: ~6min vs ~16min)
-    YX_SKIP_GIT_CHECKS=1 cargo mutants "$@" -- --lib
-  fi
+  # Config in .cargo/mutants.toml sets features, test args, and exclusions
+  CUCUMBER_MODE=in-process YX_SKIP_GIT_CHECKS=1 cargo mutants "$@"
 }
 
 # @cmd Run all checks (tests + lint + audit) and mark as verified

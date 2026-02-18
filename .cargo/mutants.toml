@@ -1,0 +1,20 @@
+# Mutation testing configuration
+# Run with: dev mutate
+
+# Enable test-support feature so cucumber test target compiles
+features = ["test-support"]
+
+# Run both unit tests and in-process cucumber
+additional_cargo_test_args = ["--lib", "--test", "cucumber"]
+
+# Exclude infrastructure that can only be tested at integration level:
+# - ConsoleInput: stdin/pipe detection, editor launching (OS interaction)
+# - ConsoleDisplay: terminal output with colors (side effects only)
+# - GitRefSync: git remote operations (needs real git repos)
+# - main.rs: CLI wiring (tested by full-stack cucumber)
+exclude_globs = [
+  "src/adapters/user_input/console_input.rs",
+  "src/adapters/user_display/mod.rs",
+  "src/adapters/sync/git_ref.rs",
+  "src/main.rs",
+]
