@@ -29,7 +29,7 @@ Describe 'install.sh'
           git config user.email "test@example.com"
           git config user.name "Test"
           echo ".yaks" > .gitignore
-          yx add foo
+          yx add foo >/dev/null
           yx ls --format markdown
         '
 
