@@ -3,6 +3,7 @@
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
@@ -401,6 +402,8 @@ impl ReadYakStore for DirectoryStorage {
             context,
             fields,
             children,
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         })
     }
 
@@ -460,6 +463,8 @@ impl ReadYakStore for DirectoryStorage {
                 context,
                 fields,
                 children,
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
             });
         }
 

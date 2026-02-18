@@ -66,6 +66,7 @@ mod tests {
 
     #[test]
     fn test_store_get_yak() {
+        use crate::domain::event_metadata::{Author, Timestamp};
         let mut yaks = HashMap::new();
         yaks.insert(
             "test".to_string(),
@@ -77,6 +78,8 @@ mod tests {
                 context: None,
                 fields: HashMap::new(),
                 children: vec![],
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
             },
         );
 

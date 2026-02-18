@@ -3,6 +3,7 @@
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -257,6 +258,8 @@ impl ReadYakStore for InMemoryStorage {
             context,
             fields: custom_fields,
             children,
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         })
     }
 
@@ -309,6 +312,8 @@ impl ReadYakStore for InMemoryStorage {
                 context,
                 fields: custom_fields,
                 children,
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
             });
         }
 

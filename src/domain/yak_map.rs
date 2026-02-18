@@ -782,6 +782,7 @@ mod tests {
             }
         }
 
+        use crate::domain::event_metadata::{Author, Timestamp};
         let store = MockStore {
             yaks: vec![
                 Yak {
@@ -792,6 +793,8 @@ mod tests {
                     context: Some("context1".to_string()),
                     fields: std::collections::HashMap::new(),
                     children: vec![],
+                    created_by: Author::unknown(),
+                    created_at: Timestamp::zero(),
                 },
                 Yak {
                     id: YakId::from("test2-bbbb"),
@@ -801,6 +804,8 @@ mod tests {
                     context: None,
                     fields: std::collections::HashMap::new(),
                     children: vec![],
+                    created_by: Author::unknown(),
+                    created_at: Timestamp::zero(),
                 },
             ],
         };
@@ -839,6 +844,7 @@ mod tests {
             }
 
             fn list_yaks(&self) -> Result<Vec<Yak>> {
+                use crate::domain::event_metadata::{Author, Timestamp};
                 Ok(vec![
                     Yak {
                         id: YakId::from("parent-aaaa"),
@@ -848,6 +854,8 @@ mod tests {
                         context: None,
                         fields: std::collections::HashMap::new(),
                         children: vec![],
+                        created_by: Author::unknown(),
+                        created_at: Timestamp::zero(),
                     },
                     Yak {
                         // Stores now return leaf names with explicit parent_id
@@ -858,6 +866,8 @@ mod tests {
                         context: None,
                         fields: std::collections::HashMap::new(),
                         children: vec![],
+                        created_by: Author::unknown(),
+                        created_at: Timestamp::zero(),
                     },
                 ])
             }
@@ -889,6 +899,7 @@ mod tests {
             }
 
             fn list_yaks(&self) -> Result<Vec<Yak>> {
+                use crate::domain::event_metadata::{Author, Timestamp};
                 Ok(vec![
                     Yak {
                         id: YakId::from("parent-aaaa"),
@@ -898,6 +909,8 @@ mod tests {
                         context: None,
                         fields: std::collections::HashMap::new(),
                         children: vec![],
+                        created_by: Author::unknown(),
+                        created_at: Timestamp::zero(),
                     },
                     Yak {
                         id: YakId::from("child-bbbb"),
@@ -909,6 +922,8 @@ mod tests {
                         context: None,
                         fields: std::collections::HashMap::new(),
                         children: vec![],
+                        created_by: Author::unknown(),
+                        created_at: Timestamp::zero(),
                     },
                 ])
             }

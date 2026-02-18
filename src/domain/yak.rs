@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use super::event_metadata::{Author, Timestamp};
 use super::slug::{Name, YakId};
 
 const VALID_STATES: &[&str] = &["todo", "wip", "done"];
@@ -27,6 +28,8 @@ pub struct Yak {
     pub context: Option<String>,
     pub fields: HashMap<String, String>,
     pub children: Vec<YakId>,
+    pub created_by: Author,
+    pub created_at: Timestamp,
 }
 
 impl Yak {
@@ -65,6 +68,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
         assert!(!yak.is_done());
 
@@ -76,6 +81,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
         assert!(done_yak.is_done());
     }

@@ -568,7 +568,7 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::event_metadata::EventMetadata;
+    use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
     use crate::domain::events::FieldUpdatedEvent;
     use crate::domain::slug::{Name, YakId};
     use crate::domain::AddedEvent;
@@ -977,6 +977,8 @@ mod tests {
             context: Some("some context".to_string()),
             fields: fields.clone(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let yak2 = Yak {
@@ -987,6 +989,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let count = store.reset_from_snapshot(&[yak1, yak2]).unwrap();
@@ -1054,6 +1058,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let parent = Yak {
@@ -1064,6 +1070,8 @@ mod tests {
             context: Some("parent context".to_string()),
             fields: HashMap::new(),
             children: vec![YakId::from("child-x1y2")],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         store.reset_from_snapshot(&[parent, child]).unwrap();
@@ -1126,6 +1134,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         store.reset_from_snapshot(&[yak]).unwrap();
@@ -1150,6 +1160,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let yak2 = Yak {
@@ -1160,6 +1172,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let yak3 = Yak {
@@ -1170,6 +1184,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let count = store.reset_from_snapshot(&[yak1, yak2, yak3]).unwrap();
@@ -1399,6 +1415,8 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             children: vec![YakId::from("missing-child-x1y2")], // child doesn't exist
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
         };
 
         let result = store.reset_from_snapshot(&[parent]);

@@ -14,8 +14,8 @@ pub mod yak_map;
 pub use event::YakEvent;
 pub use event_metadata::{Author, EventMetadata, Timestamp};
 pub use field::{
-    validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, NAME_FIELD,
-    STATE_FIELD,
+    validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, METADATA_FIELD,
+    NAME_FIELD, STATE_FIELD,
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use yak::{validate_state, validate_yak_name, Yak};
