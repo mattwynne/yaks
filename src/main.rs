@@ -12,7 +12,7 @@ use yx::application::{
     RemoveYak, RenameYak, SetState, ShowContext, ShowField, ShowLog, StartYak, SyncYaks,
     WriteField,
 };
-use yx::domain::ports::{EventStore, ReadYakStore};
+use yx::domain::ports::{EventListener, EventStore, ReadYakStore};
 use yx::infrastructure::EventBus;
 
 /// DAG-based TODO list CLI for software teams
@@ -302,7 +302,12 @@ fn main() -> Result<()> {
             } else {
                 // Default: rebuild .yaks directory from git tree
                 let event_store = GitEventStore::new(root)?;
-                event_store.materialize_tree(&yaks_path)?;
+                let events = event_store.snapshot_events()?;
+                let mut store = storage.clone();
+                store.clear()?;
+                for event in &events {
+                    store.on_event(event)?;
+                }
             }
             Ok(())
         }

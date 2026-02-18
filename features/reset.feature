@@ -31,16 +31,17 @@ Feature: yx reset - Rebuild yaks from git tree
           - [todo] child
         """
 
-  Rule: Reset migrates old-style yaks to include name and id
+  Rule: Reset rebuilds slug-based directories with name and id
 
-    Old-style yak directories (created before the identity refactor) lack
-    `name` and `id` files. Reset runs the v2→v3 migration which adds them.
+    Old-style yak directories used raw names or IDs as directory names.
+    Reset rebuilds the disk projection using slugs for directory names,
+    with proper `name` and `id` files inside.
 
-    Example: Reset adds name and id files to old-style yaks
+    Example: Reset creates slug-based directory with name and id files
       Given a yak "my old yak" created with the v2 schema
       When I reset the yaks
-      Then the yak "my old yak" should have a "name" file containing "my old yak"
-      And the yak "my old yak" should have an "id" file
+      Then the yak "my-old-yak" should have a "name" file containing "my old yak"
+      And the yak "my-old-yak" should have an "id" file
 
   Rule: Reset only affects yak entries
 

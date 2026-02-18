@@ -262,68 +262,119 @@ impl GitEventStore {
             }
         }
     }
-    /// Materialize the git tree at HEAD of refs/notes/yaks to a filesystem path.
-    /// Removes existing yak entries, then walks the tree recursively,
-    /// writing blobs as files and creating directories for subtrees.
-    pub fn materialize_tree(&self, target: &Path) -> Result<()> {
+    /// Read the current git tree state and synthesize domain events.
+    /// All yak IDs are regenerated using `generate_id(name, parent_id)`,
+    /// making this suitable for repairing inconsistent data.
+    pub fn snapshot_events(&self) -> Result<Vec<YakEvent>> {
         let tree = self.get_current_tree()?;
         let Some(tree) = tree else {
-            anyhow::bail!("No yaks tree found in refs/notes/yaks");
+            return Ok(Vec::new());
         };
 
-        // Clean the target directory before recreating from git.
-        // Remove yak directories (both current and stale) and files
-        // that will be recreated from the git tree.
-        // Non-yak files (e.g. notes.txt) and non-yak directories
-        // (e.g. .git) are preserved.
-        if target.exists() {
-            let tree_names: std::collections::HashSet<String> = tree
-                .iter()
-                .filter_map(|e| e.name().map(String::from))
-                .collect();
-
-            for entry in std::fs::read_dir(target)? {
-                let entry = entry?;
-                let path = entry.path();
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if path.is_dir() {
-                    // Remove directories that are in the git tree (will
-                    // be recreated) or that look like yak entries (have
-                    // a state file — these are stale).
-                    if tree_names.contains(&*name_str) || path.join("state").exists() {
-                        std::fs::remove_dir_all(&path)?;
-                    }
-                } else if tree_names.contains(&*name_str) {
-                    std::fs::remove_file(&path)?;
-                }
-            }
-        }
-        std::fs::create_dir_all(target)?;
-
-        self.write_tree_to_dir(&tree, target)
+        let mut events = Vec::new();
+        self.collect_snapshot_events(&tree, None, &mut events)?;
+        Ok(events)
     }
 
-    fn write_tree_to_dir(&self, tree: &git2::Tree, dir: &Path) -> Result<()> {
-        for entry in tree.iter() {
-            let name = entry
-                .name()
-                .ok_or_else(|| anyhow::anyhow!("Tree entry has no name"))?;
-            let path = dir.join(name);
+    fn collect_snapshot_events(
+        &self,
+        tree: &git2::Tree,
+        parent_id: Option<&crate::domain::slug::YakId>,
+        events: &mut Vec<YakEvent>,
+    ) -> Result<()> {
+        use crate::domain::field::RESERVED_FIELDS;
+        use crate::domain::slug::{generate_id, Name};
 
-            match entry.kind() {
-                Some(git2::ObjectType::Blob) => {
-                    let blob = self.repo.find_blob(entry.id())?;
-                    std::fs::write(&path, blob.content())?;
-                }
-                Some(git2::ObjectType::Tree) => {
-                    std::fs::create_dir_all(&path)?;
-                    let subtree = self.repo.find_tree(entry.id())?;
-                    self.write_tree_to_dir(&subtree, &path)?;
-                }
-                _ => {} // Skip other object types
+        for entry in tree.iter() {
+            if entry.kind() != Some(git2::ObjectType::Tree) {
+                continue;
             }
+            let entry_name = match entry.name() {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+
+            let subtree = self.repo.find_tree(entry.id())?;
+
+            // A yak subtree has a `state` or `context.md` blob
+            let is_yak =
+                subtree.get_name("state").is_some() || subtree.get_name("context.md").is_some();
+            if !is_yak {
+                continue;
+            }
+
+            // Read name from `name` blob, falling back to directory entry name
+            let name_str = if let Some(name_entry) = subtree.get_name("name") {
+                let name_blob = self.repo.find_blob(name_entry.id())?;
+                std::str::from_utf8(name_blob.content())?.trim().to_string()
+            } else {
+                entry_name.clone()
+            };
+            let name = Name::from(name_str.as_str());
+            let id = generate_id(&name_str, parent_id);
+
+            // Added event
+            events.push(YakEvent::Added(crate::domain::events::AddedEvent {
+                name: name.clone(),
+                id: id.clone(),
+                parent_id: parent_id.cloned(),
+            }));
+
+            // State
+            if let Some(state_entry) = subtree.get_name("state") {
+                let state_blob = self.repo.find_blob(state_entry.id())?;
+                let state = std::str::from_utf8(state_blob.content())?.trim();
+                if state != "todo" {
+                    events.push(YakEvent::StateUpdated(
+                        crate::domain::events::StateUpdatedEvent {
+                            id: id.clone(),
+                            state: state.to_string(),
+                        },
+                    ));
+                }
+            }
+
+            // Context
+            if let Some(context_entry) = subtree.get_name("context.md") {
+                let context_blob = self.repo.find_blob(context_entry.id())?;
+                let content = std::str::from_utf8(context_blob.content())?;
+                if !content.is_empty() {
+                    events.push(YakEvent::ContextUpdated(
+                        crate::domain::events::ContextUpdatedEvent {
+                            id: id.clone(),
+                            content: content.to_string(),
+                        },
+                    ));
+                }
+            }
+
+            // Custom fields
+            for field_entry in subtree.iter() {
+                if field_entry.kind() != Some(git2::ObjectType::Blob) {
+                    continue;
+                }
+                let field_name = match field_entry.name() {
+                    Some(n) => n,
+                    None => continue,
+                };
+                if RESERVED_FIELDS.contains(&field_name) {
+                    continue;
+                }
+                let field_blob = self.repo.find_blob(field_entry.id())?;
+                let content = std::str::from_utf8(field_blob.content())?;
+                events.push(YakEvent::FieldUpdated(
+                    crate::domain::events::FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: field_name.to_string(),
+                        content: content.to_string(),
+                    },
+                ));
+            }
+
+            // Recurse into children (subtrees within this yak's subtree)
+            self.collect_snapshot_events(&subtree, Some(&id), events)?;
         }
+
         Ok(())
     }
 }
@@ -650,44 +701,37 @@ mod tests {
     }
 
     #[test]
-    fn materialize_tree_removes_stale_directories() {
+    fn snapshot_events_synthesizes_added_for_each_yak() {
         let (_tmp, mut store) = setup_test_repo();
 
-        // Add a yak keyed by id "my-yak" in the git tree
         store
             .append(&YakEvent::Added(AddedEvent {
-                name: Name::from("my yak"),
-                id: YakId::from("my-yak"),
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
                 parent_id: None,
             }))
             .unwrap();
 
-        // Pre-populate target with a stale directory (different name
-        // from the git tree key, simulating an old-style directory)
-        // plus a non-yak file that should be preserved.
-        let target = _tmp.path().join("yaks");
-        std::fs::create_dir_all(target.join("my yak")).unwrap();
-        std::fs::write(target.join("my yak/state"), "todo").unwrap();
-        std::fs::write(target.join("notes.txt"), "keep me").unwrap();
+        let events = store.snapshot_events().unwrap();
 
-        store.materialize_tree(&target).unwrap();
-
-        assert!(
-            target.join("my-yak").is_dir(),
-            "Expected 'my-yak' directory from git tree"
-        );
-        assert!(
-            !target.join("my yak").exists(),
-            "Stale 'my yak' directory should have been removed"
-        );
-        assert!(
-            target.join("notes.txt").exists(),
-            "Non-yak files should be preserved"
-        );
+        // Should have an Added event with regenerated ID
+        let added = events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(_)))
+            .unwrap();
+        if let YakEvent::Added(e) = added {
+            assert_eq!(e.name, Name::from("test"));
+            assert!(
+                e.id.as_str().starts_with("test-"),
+                "Expected regenerated ID starting with 'test-', got '{}'",
+                e.id
+            );
+            assert!(e.parent_id.is_none());
+        }
     }
 
     #[test]
-    fn materialize_tree_round_trips() {
+    fn snapshot_events_includes_state_and_context() {
         let (_tmp, mut store) = setup_test_repo();
 
         store
@@ -705,20 +749,156 @@ mod tests {
             }))
             .unwrap();
 
-        let target = _tmp.path().join("materialized");
-        store.materialize_tree(&target).unwrap();
+        store
+            .append(&YakEvent::ContextUpdated(
+                crate::domain::events::ContextUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    content: "some notes".to_string(),
+                },
+            ))
+            .unwrap();
 
-        // Verify directory structure
-        assert!(target.join("test-a1b2").is_dir());
-        assert_eq!(
-            std::fs::read_to_string(target.join("test-a1b2/state")).unwrap(),
-            "wip"
+        let events = store.snapshot_events().unwrap();
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, YakEvent::StateUpdated(s) if s.state == "wip")),
+            "Expected StateUpdated event for 'wip'"
         );
-        assert_eq!(
-            std::fs::read_to_string(target.join("test-a1b2/name")).unwrap(),
-            "test"
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, YakEvent::ContextUpdated(c) if c.content == "some notes")),
+            "Expected ContextUpdated event"
         );
-        assert!(target.join("test-a1b2/context.md").exists());
+    }
+
+    #[test]
+    fn snapshot_events_skips_state_when_todo() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, YakEvent::StateUpdated(_))),
+            "Should not emit StateUpdated when state is 'todo'"
+        );
+    }
+
+    #[test]
+    fn snapshot_events_regenerates_ids_for_legacy_yaks() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Simulate a legacy yak where the tree key is a plain slug
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("dx"),
+                id: YakId::from("dx"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+        let added = events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(_)))
+            .unwrap();
+
+        if let YakEvent::Added(e) = added {
+            // Should get a proper ID with suffix, not plain "dx"
+            assert!(
+                e.id.as_str().starts_with("dx-") && e.id.as_str().len() > 3,
+                "Expected regenerated ID like 'dx-xxxx', got '{}'",
+                e.id
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_events_handles_nested_yaks() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("parent"),
+                id: YakId::from("parent-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("child"),
+                id: YakId::from("child-c3d4"),
+                parent_id: Some(YakId::from("parent-a1b2")),
+            }))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+        let added_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, YakEvent::Added(_)))
+            .collect();
+
+        assert_eq!(added_events.len(), 2, "Expected 2 Added events");
+
+        // Child should have a parent_id matching the regenerated parent ID
+        if let (YakEvent::Added(parent), YakEvent::Added(child)) =
+            (&added_events[0], &added_events[1])
+        {
+            assert!(parent.parent_id.is_none());
+            assert_eq!(child.parent_id.as_ref(), Some(&parent.id));
+        }
+    }
+
+    #[test]
+    fn snapshot_events_includes_custom_fields() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        store
+            .append(&YakEvent::FieldUpdated(
+                crate::domain::events::FieldUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    field_name: "plan".to_string(),
+                    content: "step 1".to_string(),
+                },
+            ))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+
+        assert!(
+            events.iter().any(
+                |e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "plan" && f.content == "step 1")
+            ),
+            "Expected FieldUpdated event for 'plan'"
+        );
+    }
+
+    #[test]
+    fn snapshot_events_empty_tree() {
+        let (_tmp, store) = setup_test_repo();
+        let events = store.snapshot_events().unwrap();
+        assert!(events.is_empty());
     }
 
     #[test]

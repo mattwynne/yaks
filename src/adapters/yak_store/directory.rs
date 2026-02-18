@@ -217,6 +217,26 @@ impl DirectoryStorage {
     }
 }
 
+impl DirectoryStorage {
+    /// Remove all yak directories from the base path.
+    /// A directory is a yak if it contains a `context.md` file.
+    /// Non-yak files (e.g. `.schema-version`) are preserved.
+    pub fn clear(&self) -> Result<()> {
+        if !self.base_path.exists() {
+            fs::create_dir_all(&self.base_path)?;
+            return Ok(());
+        }
+        for entry in fs::read_dir(&self.base_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() && path.join(CONTEXT_FIELD).exists() {
+                fs::remove_dir_all(&path)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()> {
         // Use slug (from name) as directory name for human readability.
@@ -827,5 +847,50 @@ mod tests {
 
         assert_eq!(child.fields.get("spec"), Some(&"some spec".to_string()));
         assert!(child.children.is_empty());
+    }
+
+    #[test]
+    fn test_clear_removes_yak_directories() {
+        let (mut storage, temp) = setup_test_storage();
+
+        // Create two yaks
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("yak one"),
+                id: YakId::from("yak-one-a1b2"),
+                parent_id: None,
+            }))
+            .unwrap();
+        storage
+            .on_event(&YakEvent::Added(AddedEvent {
+                name: Name::from("yak two"),
+                id: YakId::from("yak-two-c3d4"),
+                parent_id: None,
+            }))
+            .unwrap();
+
+        // Add a non-yak file
+        std::fs::write(temp.path().join(".schema-version"), "3").unwrap();
+
+        assert_eq!(ReadYakStore::list_yaks(&storage).unwrap().len(), 2);
+
+        storage.clear().unwrap();
+
+        assert_eq!(ReadYakStore::list_yaks(&storage).unwrap().len(), 0);
+        assert!(
+            temp.path().join(".schema-version").exists(),
+            "Non-yak files should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_clear_on_nonexistent_directory() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("nonexistent");
+        let storage = DirectoryStorage::from_path_unchecked(path.clone());
+
+        storage.clear().unwrap();
+
+        assert!(path.exists(), "Should create the directory");
     }
 }
