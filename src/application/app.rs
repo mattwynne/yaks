@@ -50,10 +50,7 @@ impl<'a> Application<'a> {
     {
         use crate::domain::event_metadata::{EventMetadata, Timestamp};
         let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
-        let mut yak_map = YakMap::from_store(self.store, metadata)?;
-        f(&mut yak_map)?;
-        self.save_yak_map(&mut yak_map)?;
-        Ok(())
+        self.with_yak_map_result_using_metadata(metadata, f)
     }
 
     pub fn with_yak_map_result<T, F>(&mut self, f: F) -> Result<T>
@@ -62,10 +59,26 @@ impl<'a> Application<'a> {
     {
         use crate::domain::event_metadata::{EventMetadata, Timestamp};
         let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
+        self.with_yak_map_result_using_metadata(metadata, f)
+    }
+
+    pub fn with_yak_map_result_using_metadata<T, F>(
+        &mut self,
+        metadata: crate::domain::event_metadata::EventMetadata,
+        f: F,
+    ) -> Result<T>
+    where
+        F: FnOnce(&mut YakMap) -> Result<T>,
+    {
         let mut yak_map = YakMap::from_store(self.store, metadata)?;
         let result = f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(result)
+    }
+
+    /// Returns the current author from the authentication port
+    pub fn current_author(&self) -> crate::domain::event_metadata::Author {
+        self.auth.current_author()
     }
 
     fn save_yak_map(&mut self, yak_map: &mut YakMap) -> Result<()> {

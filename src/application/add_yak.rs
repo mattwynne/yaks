@@ -1,5 +1,6 @@
 // Use case: Add a new yak
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::YakId;
 use crate::domain::validate_yak_name;
 use anyhow::Result;
@@ -14,6 +15,8 @@ pub struct AddYak {
     context: Option<String>,
     id: Option<String>,
     fields: Vec<(String, String)>,
+    author_override: Option<Author>,
+    timestamp_override: Option<Timestamp>,
 }
 
 impl AddYak {
@@ -26,6 +29,8 @@ impl AddYak {
             context: None,
             id: None,
             fields: vec![],
+            author_override: None,
+            timestamp_override: None,
         }
     }
 
@@ -59,8 +64,22 @@ impl AddYak {
         self
     }
 
+    /// Override the author on the event metadata (used for replaying events)
+    pub fn with_author(mut self, author: Option<Author>) -> Self {
+        self.author_override = author;
+        self
+    }
+
+    /// Override the timestamp on the event metadata (used for replaying events)
+    pub fn with_timestamp(mut self, timestamp: Option<Timestamp>) -> Self {
+        self.timestamp_override = timestamp;
+        self
+    }
+
     /// Execute the use case with the application's infrastructure
     pub fn execute(&self, app: &mut Application) -> Result<()> {
+        use crate::domain::event_metadata::EventMetadata;
+
         // Validate user-provided name
         validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
 
@@ -81,7 +100,14 @@ impl AddYak {
                 .filter(|content| !content.trim().is_empty())
         };
 
-        let id = app.with_yak_map_result(|yak_map| {
+        let metadata = EventMetadata::new(
+            self.author_override
+                .clone()
+                .unwrap_or_else(|| app.current_author()),
+            self.timestamp_override.unwrap_or_else(Timestamp::now),
+        );
+
+        let id = app.with_yak_map_result_using_metadata(metadata, |yak_map| {
             yak_map.add_yak(
                 self.name.clone(),
                 parent_id,
@@ -108,6 +134,7 @@ mod tests {
     use crate::adapters::{
         InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
     };
+    use crate::domain::event_metadata::{Author, Timestamp};
     use crate::domain::ports::ReadYakStore;
     use crate::domain::slug::YakId;
     use crate::infrastructure::EventBus;
@@ -288,5 +315,38 @@ mod tests {
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let content = ReadYakStore::read_field(&storage, &id, "plan").unwrap();
         assert_eq!(content, "step 1");
+    }
+
+    #[test]
+    fn test_add_yak_with_author_override() {
+        use crate::domain::ports::EventStore;
+
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store.clone()));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+
+        let custom_author = Author {
+            name: "Original Author".to_string(),
+            email: "original@example.com".to_string(),
+        };
+
+        AddYak::new("test")
+            .with_author(Some(custom_author.clone()))
+            .with_timestamp(Some(Timestamp(1708300800)))
+            .execute(&mut app)
+            .unwrap();
+
+        let events = EventStore::get_all_events(&event_store).unwrap();
+        assert!(!events.is_empty(), "Expected at least one event");
+        assert_eq!(events[0].metadata().author, custom_author);
+        assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
     }
 }
