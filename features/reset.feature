@@ -89,3 +89,38 @@ Feature: yx reset - Rebuild yaks from git tree
         - [todo] parent
           - [todo] renamed child
         """
+
+  Rule: Hard reset replays yaks through the Application layer
+
+    When --hard is used with --git-from-disk, the git event
+    history is wiped and rebuilt by replaying each yak through
+    AddYak. This produces clean individual event commits.
+
+    Example: Hard reset preserves yak data
+      Given I add the yak "alpha"
+      And I add the yak "beta" under "alpha"
+      When I set the state of "beta" to "wip"
+      And I hard reset the yaks from disk to git
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] alpha
+          - [wip] beta
+        """
+
+    Example: Hard reset preserves context and custom fields
+      When I add the yak "my yak" with context "important notes"
+      And I set the "plan" field of "my yak" to "step one"
+      And I hard reset the yaks from disk to git
+      And I show the context of "my yak"
+      Then the output should include "important notes"
+      When I show the "plan" field of "my yak"
+      Then the output should include "step one"
+
+    Example: Hard reset produces clean event log
+      Given I add the yak "one"
+      And I add the yak "two"
+      When I hard reset the yaks from disk to git
+      And I run yx log
+      Then the output should include "Added"
+      And the output should not include "Snapshot"

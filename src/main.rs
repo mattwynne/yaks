@@ -141,6 +141,9 @@ enum Commands {
         /// Rebuild git tree from .yaks directory
         #[arg(long)]
         git_from_disk: bool,
+        /// Wipe git history and replay through Application layer
+        #[arg(long, requires = "git_from_disk")]
+        hard: bool,
     },
     /// Sync yaks with git refs
     Sync,
@@ -317,6 +320,7 @@ fn main() -> Result<()> {
         Commands::Reset {
             disk_from_git,
             git_from_disk,
+            hard,
         } => {
             // Validate flags
             if disk_from_git && git_from_disk {
@@ -327,7 +331,99 @@ fn main() -> Result<()> {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Error: not in a git repository"))?;
 
-            if git_from_disk {
+            if git_from_disk && hard {
+                // Hard reset: wipe git history and replay through Application
+                let yaks = storage.list_yaks()?;
+
+                // Delete refs/notes/yaks to wipe git event history
+                {
+                    let repo = git2::Repository::open(root)?;
+                    let delete_result = repo.find_reference("refs/notes/yaks");
+                    if let Ok(mut reference) = delete_result {
+                        reference.delete()?;
+                    }
+                }
+
+                // Clear disk
+                storage.clear()?;
+
+                // Create fresh event infrastructure for replay
+                let replay_store = GitEventStore::new(root)?;
+                let mut replay_bus = EventBus::new(Box::new(replay_store));
+                replay_bus.register(Box::new(storage.clone()));
+
+                let replay_display = ConsoleDisplay;
+                let replay_input = ConsoleInput;
+                let mut replay_app = Application::new(
+                    &mut replay_bus,
+                    &storage,
+                    &replay_display,
+                    &replay_input,
+                    None,
+                    None,
+                );
+
+                // Build index for topological traversal
+                use std::collections::HashMap;
+                let yak_index: HashMap<&yx::domain::slug::YakId, &yx::domain::Yak> =
+                    yaks.iter().map(|y| (&y.id, y)).collect();
+
+                // Find roots (yaks not appearing in any children list)
+                let mut child_ids = std::collections::HashSet::new();
+                for yak in &yaks {
+                    for child_id in &yak.children {
+                        child_ids.insert(child_id);
+                    }
+                }
+                let roots: Vec<&yx::domain::Yak> =
+                    yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
+
+                // Replay each yak through AddYak in topological order
+                fn replay_yak(
+                    app: &mut Application,
+                    yak: &yx::domain::Yak,
+                    yak_index: &HashMap<&yx::domain::slug::YakId, &yx::domain::Yak>,
+                    parent_id: Option<&str>,
+                ) -> Result<()> {
+                    let mut use_case = AddYak::new(yak.name.as_str())
+                        .with_id(Some(yak.id.as_str()))
+                        .with_context(yak.context.as_deref());
+                    if yak.state != "todo" {
+                        use_case = use_case.with_state(Some(&yak.state));
+                    }
+                    if let Some(pid) = parent_id {
+                        use_case = use_case.with_parent(Some(pid));
+                    }
+                    for (key, value) in &yak.fields {
+                        use_case = use_case.with_field(key, value);
+                    }
+                    app.handle(use_case)?;
+
+                    for child_id in &yak.children {
+                        if let Some(child) = yak_index.get(child_id) {
+                            replay_yak(app, child, yak_index, Some(yak.id.as_str()))?;
+                        }
+                    }
+                    Ok(())
+                }
+
+                for root_yak in &roots {
+                    replay_yak(&mut replay_app, root_yak, &yak_index, None)?;
+                }
+
+                // Stamp schema version on the new event history
+                {
+                    let repo = git2::Repository::open(root)?;
+                    if repo.find_reference("refs/notes/yaks").is_ok() {
+                        yx::adapters::event_store::migration::write_schema_version(
+                            &repo,
+                            yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION,
+                        )?;
+                    }
+                }
+
+                println!("Hard reset: {} yaks", yaks.len());
+            } else if git_from_disk {
                 // Rebuild git tree from .yaks directory
                 let yaks = storage.list_yaks()?;
                 let mut event_store = GitEventStore::new(root)?;
