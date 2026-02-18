@@ -1,6 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
-use crate::domain::ports::{DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort};
+use crate::domain::ports::{
+    AuthenticationPort, DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort,
+};
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
 use anyhow::Result;
@@ -18,6 +20,7 @@ pub struct Application<'a> {
     pub input: &'a dyn InputPort,
     pub sync: Option<&'a dyn SyncPort>,
     pub event_reader: Option<&'a dyn EventStoreReader>,
+    auth: &'a dyn AuthenticationPort,
 }
 
 impl<'a> Application<'a> {
@@ -28,6 +31,7 @@ impl<'a> Application<'a> {
         input: &'a dyn InputPort,
         sync: Option<&'a dyn SyncPort>,
         event_reader: Option<&'a dyn EventStoreReader>,
+        auth: &'a dyn AuthenticationPort,
     ) -> Self {
         Self {
             event_bus,
@@ -36,6 +40,7 @@ impl<'a> Application<'a> {
             input,
             sync,
             event_reader,
+            auth,
         }
     }
 
@@ -43,8 +48,9 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut YakMap) -> Result<()>,
     {
-        use crate::domain::event_metadata::EventMetadata;
-        let mut yak_map = YakMap::from_store(self.store, EventMetadata::default_legacy())?;
+        use crate::domain::event_metadata::{EventMetadata, Timestamp};
+        let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
+        let mut yak_map = YakMap::from_store(self.store, metadata)?;
         f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(())
@@ -54,8 +60,9 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut YakMap) -> Result<T>,
     {
-        use crate::domain::event_metadata::EventMetadata;
-        let mut yak_map = YakMap::from_store(self.store, EventMetadata::default_legacy())?;
+        use crate::domain::event_metadata::{EventMetadata, Timestamp};
+        let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
+        let mut yak_map = YakMap::from_store(self.store, metadata)?;
         let result = f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(result)
@@ -84,9 +91,79 @@ impl<'a> Application<'a> {
 mod tests {
     use super::*;
     use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
-    use crate::domain::ports::ReadYakStore;
+    use crate::domain::event_metadata::Author;
+    use crate::domain::ports::{AuthenticationPort, ReadYakStore};
     use crate::domain::slug::YakId;
     use crate::infrastructure::EventBus;
+
+    struct TestAuth {
+        name: String,
+        email: String,
+    }
+
+    impl TestAuth {
+        fn new(name: &str, email: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                email: email.to_string(),
+            }
+        }
+    }
+
+    impl AuthenticationPort for TestAuth {
+        fn current_author(&self) -> Author {
+            Author {
+                name: self.name.clone(),
+                email: self.email.clone(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_application_stamps_author_on_events() {
+        use crate::domain::ports::EventStore;
+
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store.clone()));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = TestAuth::new("Test Author", "test@example.com");
+
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
+
+        app.with_yak_map(|yak_map| {
+            yak_map.add_yak("test".to_string(), None, None, None, None, vec![])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let events = EventStore::get_all_events(&event_store).unwrap();
+        assert!(!events.is_empty(), "Expected at least one event");
+        let first_event = &events[0];
+        let metadata = first_event.metadata();
+        assert_eq!(
+            metadata.author.name,
+            "Test Author",
+            "Event should carry author from auth port"
+        );
+        assert_eq!(
+            metadata.author.email,
+            "test@example.com",
+            "Event should carry email from auth port"
+        );
+    }
 
     #[test]
     fn test_application_create_yak_via_yak_map() {
@@ -98,8 +175,10 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         app.with_yak_map(|yak_map| {
             yak_map.add_yak("test".to_string(), None, None, None, None, vec![])?;
@@ -120,8 +199,10 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         // Create yak and mutate its state via YakMap
         app.with_yak_map(|yak_map| {
@@ -145,8 +226,10 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
@@ -180,8 +263,10 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         // Add hierarchical yak
         app.with_yak_map(|yak_map| {
@@ -214,8 +299,10 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
+use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::sync::GitRefSync;
@@ -164,6 +165,15 @@ fn parse_field_arg(s: &str) -> Result<(String, String), String> {
     Ok((key.to_string(), value.to_string()))
 }
 
+/// Fallback authentication adapter used when not in a git repository
+struct UnknownAuthentication;
+
+impl yx::domain::ports::AuthenticationPort for UnknownAuthentication {
+    fn current_author(&self) -> yx::domain::event_metadata::Author {
+        yx::domain::event_metadata::Author::unknown()
+    }
+}
+
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
@@ -227,6 +237,15 @@ fn main() -> Result<()> {
         None
     };
 
+    // Initialize authentication: use git config when in a repo, fallback otherwise
+    let auth: Box<dyn yx::domain::ports::AuthenticationPort> =
+        if let Some(ref root) = repo_root {
+            Box::new(GitAuthentication::new(root)?)
+        } else {
+            // skip_git mode: no git repo available, use unknown author
+            Box::new(UnknownAuthentication)
+        };
+
     // Create application with injected dependencies
     let mut app = Application::new(
         &mut event_bus,
@@ -237,6 +256,7 @@ fn main() -> Result<()> {
         git_event_reader
             .as_ref()
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
+        auth.as_ref(),
     );
 
     match cli.command {
@@ -354,6 +374,7 @@ fn main() -> Result<()> {
 
                 let replay_display = ConsoleDisplay;
                 let replay_input = ConsoleInput;
+                let replay_auth = GitAuthentication::new(root)?;
                 let mut replay_app = Application::new(
                     &mut replay_bus,
                     &storage,
@@ -361,6 +382,7 @@ fn main() -> Result<()> {
                     &replay_input,
                     None,
                     None,
+                    &replay_auth,
                 );
 
                 // Build index for topological traversal

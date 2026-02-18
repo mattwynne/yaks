@@ -31,7 +31,9 @@ impl UseCase for SyncYaks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::adapters::{
+        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    };
     use crate::domain::ports::SyncPort;
     use crate::infrastructure::EventBus;
     use std::cell::RefCell;
@@ -70,6 +72,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let sync = MockSync::new();
+        let auth = InMemoryAuthentication::new();
 
         let mut app = Application::new(
             &mut event_bus,
@@ -78,6 +81,7 @@ mod tests {
             &input,
             Some(&sync),
             None,
+            &auth,
         );
 
         app.handle(SyncYaks::new()).unwrap();
@@ -96,7 +100,9 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let auth = InMemoryAuthentication::new();
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         let result = app.handle(SyncYaks::new());
         assert!(result.is_err());

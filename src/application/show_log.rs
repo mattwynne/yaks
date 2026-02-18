@@ -34,7 +34,9 @@ impl UseCase for ShowLog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::adapters::{
+        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    };
     use crate::application::AddYak;
     use crate::infrastructure::EventBus;
 
@@ -50,6 +52,7 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
+        let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
             &mut event_bus,
             &storage,
@@ -57,6 +60,7 @@ mod tests {
             &input,
             None,
             Some(&reader),
+            &auth,
         );
 
         app.handle(AddYak::new("test yak")).unwrap();
@@ -76,7 +80,9 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
 
-        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+        let auth = InMemoryAuthentication::new();
+        let mut app =
+            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
 
         let result = app.handle(ShowLog::new());
         assert!(result.is_err());

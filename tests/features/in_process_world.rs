@@ -4,7 +4,9 @@ use anyhow::Result;
 use cucumber::World as CucumberWorld;
 
 use super::test_world::TestWorld;
-use yx::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+use yx::adapters::{
+    InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+};
 use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
     SetState, ShowContext, ShowField, StartYak, WriteField,
@@ -19,6 +21,7 @@ pub struct InProcessWorld {
     storage: InMemoryStorage,
     display: InMemoryDisplay,
     input: InMemoryInput,
+    auth: InMemoryAuthentication,
     error: String,
     exit_code: i32,
 }
@@ -45,6 +48,7 @@ impl InProcessWorld {
             storage,
             display: InMemoryDisplay::new(),
             input: InMemoryInput::new(),
+            auth: InMemoryAuthentication::new(),
             error: String::new(),
             exit_code: 0,
         })
@@ -64,6 +68,7 @@ impl InProcessWorld {
             &self.input,
             None,
             None,
+            &self.auth,
         );
         let result = f(&mut app);
 
@@ -86,6 +91,7 @@ impl InProcessWorld {
             &self.input,
             None,
             None,
+            &self.auth,
         );
         let result = f(&mut app);
 

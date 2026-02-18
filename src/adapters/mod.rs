@@ -9,6 +9,8 @@ pub mod yak_store;
 
 // Re-export test adapters for use in tests across the crate
 #[cfg(any(test, feature = "test-support"))]
+pub use authentication::InMemoryAuthentication;
+#[cfg(any(test, feature = "test-support"))]
 pub use event_store::InMemoryEventStore;
 #[cfg(any(test, feature = "test-support"))]
 pub use user_display::InMemoryDisplay;
