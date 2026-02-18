@@ -1,5 +1,6 @@
 // Adapters - implementations of port traits for specific technologies
 
+pub mod authentication;
 pub mod event_store;
 pub mod sync;
 pub mod user_display;
