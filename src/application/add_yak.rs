@@ -1,5 +1,6 @@
 // Use case: Add a new yak
 
+use crate::domain::slug::YakId;
 use crate::domain::validate_yak_name;
 use anyhow::Result;
 
@@ -9,6 +10,10 @@ use super::{Application, UseCase};
 pub struct AddYak {
     name: String,
     parent: Option<String>,
+    state: Option<String>,
+    context: Option<String>,
+    id: Option<String>,
+    fields: Vec<(String, String)>,
 }
 
 impl AddYak {
@@ -17,12 +22,40 @@ impl AddYak {
         Self {
             name: name.to_string(),
             parent: None,
+            state: None,
+            context: None,
+            id: None,
+            fields: vec![],
         }
     }
 
     /// Set the parent yak (--under flag)
     pub fn with_parent(mut self, parent: Option<&str>) -> Self {
         self.parent = parent.map(|s| s.to_string());
+        self
+    }
+
+    /// Set the initial state (e.g. "wip", "done")
+    pub fn with_state(mut self, state: Option<&str>) -> Self {
+        self.state = state.map(|s| s.to_string());
+        self
+    }
+
+    /// Set context directly, skipping the editor/stdin prompt
+    pub fn with_context(mut self, context: Option<&str>) -> Self {
+        self.context = context.map(|s| s.to_string());
+        self
+    }
+
+    /// Set an explicit ID instead of auto-generating one
+    pub fn with_id(mut self, id: Option<&str>) -> Self {
+        self.id = id.map(|s| s.to_string());
+        self
+    }
+
+    /// Add a custom field (e.g. "plan", "notes")
+    pub fn with_field(mut self, name: &str, value: &str) -> Self {
+        self.fields.push((name.to_string(), value.to_string()));
         self
     }
 
@@ -38,17 +71,25 @@ impl AddYak {
             None
         };
 
-        // Generate template
-        let template = format!("# {}\n\n", self.name);
-
-        // Request content via input port
-        let context = app
-            .input
-            .request_content(None, Some(&template))?
-            .filter(|content| !content.trim().is_empty());
+        // Get context: use explicit value or prompt via input port
+        let context = if let Some(ref ctx) = self.context {
+            Some(ctx.clone())
+        } else {
+            let template = format!("# {}\n\n", self.name);
+            app.input
+                .request_content(None, Some(&template))?
+                .filter(|content| !content.trim().is_empty())
+        };
 
         let id = app.with_yak_map_result(|yak_map| {
-            yak_map.add_yak(self.name.clone(), parent_id, context, None, None, vec![])
+            yak_map.add_yak(
+                self.name.clone(),
+                parent_id,
+                context,
+                self.state.clone(),
+                self.id.as_ref().map(|s| YakId::from(s.as_str())),
+                self.fields.clone(),
+            )
         })?;
         app.display.info(id.as_str());
         Ok(())
@@ -141,5 +182,93 @@ mod tests {
 
         let result = AddYak::new("fix CI/CD pipeline").execute(&mut app);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_yak_with_state() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("test")
+            .with_state(Some("wip"))
+            .execute(&mut app)
+            .unwrap();
+
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert_eq!(yak.state, "wip");
+    }
+
+    #[test]
+    fn test_add_yak_with_context_skips_prompt() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        // Set input to return different content - if the prompt is
+        // skipped, the yak will have "my notes", not "from input"
+        let input = InMemoryInput::with_content("from input".to_string());
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("test")
+            .with_context(Some("my notes"))
+            .execute(&mut app)
+            .unwrap();
+
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert_eq!(yak.context, Some("my notes".to_string()));
+    }
+
+    #[test]
+    fn test_add_yak_with_explicit_id() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("test")
+            .with_id(Some("custom-id"))
+            .execute(&mut app)
+            .unwrap();
+
+        assert!(ReadYakStore::get_yak(&storage, &YakId::from("custom-id")).is_ok());
+    }
+
+    #[test]
+    fn test_add_yak_with_fields() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let mut app = Application::new(&mut event_bus, &storage, &display, &input, None, None);
+
+        AddYak::new("test")
+            .with_field("plan", "step 1")
+            .execute(&mut app)
+            .unwrap();
+
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let content = ReadYakStore::read_field(&storage, &id, "plan").unwrap();
+        assert_eq!(content, "step 1");
     }
 }
