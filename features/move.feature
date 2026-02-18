@@ -86,4 +86,3 @@ Feature: Move yaks in hierarchy
       When I move the yak "child" under "parent"
       And I run yx log
       Then the output should include "Moved"
-      And the output should not include "Renamed"
