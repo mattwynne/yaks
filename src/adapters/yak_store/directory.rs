@@ -568,8 +568,9 @@ mod tests {
 
         // Then update context
         storage
-            .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("test"),
+                field_name: "context.md".to_string(),
                 content: "new context".to_string(),
             }))
             .unwrap();
@@ -591,9 +592,10 @@ mod tests {
             .unwrap();
 
         storage
-            .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("test"),
-                state: "wip".to_string(),
+                field_name: "state".to_string(),
+                content: "wip".to_string(),
             }))
             .unwrap();
 
@@ -614,8 +616,9 @@ mod tests {
             .unwrap();
 
         storage
-            .on_event(&YakEvent::ContextUpdated(ContextUpdatedEvent {
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("test"),
+                field_name: "context.md".to_string(),
                 content: "context".to_string(),
             }))
             .unwrap();
@@ -688,9 +691,10 @@ mod tests {
 
         // Update state using id
         storage
-            .on_event(&YakEvent::StateUpdated(StateUpdatedEvent {
+            .on_event(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("my-yak-a1b2"),
-                state: "wip".to_string(),
+                field_name: "state".to_string(),
+                content: "wip".to_string(),
             }))
             .unwrap();
 

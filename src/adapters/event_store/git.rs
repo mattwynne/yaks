@@ -241,21 +241,6 @@ impl GitEventStore {
                 self.set_yak_in_root(Some(&intermediate_tree), &target, old_subtree_oid)
             }
 
-            YakEvent::Renamed(e) => {
-                let path = self.resolve_yak_path(current_tree, e.id.as_str());
-                self.update_yak_file(current_tree, &path, "name", e.new_name.as_str())
-            }
-
-            YakEvent::ContextUpdated(e) => {
-                let path = self.resolve_yak_path(current_tree, e.id.as_str());
-                self.update_yak_file(current_tree, &path, "context.md", &e.content)
-            }
-
-            YakEvent::StateUpdated(e) => {
-                let path = self.resolve_yak_path(current_tree, e.id.as_str());
-                self.update_yak_file(current_tree, &path, "state", &e.state)
-            }
-
             YakEvent::FieldUpdated(e) => {
                 let path = self.resolve_yak_path(current_tree, e.id.as_str());
                 self.update_yak_file(current_tree, &path, &e.field_name, &e.content)
@@ -559,9 +544,9 @@ impl EventStoreReader for GitEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::events::RenamedEvent;
+    use crate::domain::events::FieldUpdatedEvent;
     use crate::domain::slug::{Name, YakId};
-    use crate::domain::{AddedEvent, StateUpdatedEvent};
+    use crate::domain::AddedEvent;
     use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, GitEventStore) {
@@ -633,9 +618,10 @@ mod tests {
             .unwrap();
 
         store
-            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("test-a1b2"),
-                state: "wip".to_string(),
+                field_name: "state".to_string(),
+                content: "wip".to_string(),
             }))
             .unwrap();
 
@@ -745,19 +731,19 @@ mod tests {
             .unwrap();
 
         store
-            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("test-a1b2"),
-                state: "wip".to_string(),
+                field_name: "state".to_string(),
+                content: "wip".to_string(),
             }))
             .unwrap();
 
         store
-            .append(&YakEvent::ContextUpdated(
-                crate::domain::events::ContextUpdatedEvent {
-                    id: YakId::from("test-a1b2"),
-                    content: "some notes".to_string(),
-                },
-            ))
+            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: YakId::from("test-a1b2"),
+                field_name: "context.md".to_string(),
+                content: "some notes".to_string(),
+            }))
             .unwrap();
 
         let events = store.snapshot_events().unwrap();
@@ -1157,9 +1143,10 @@ mod tests {
 
         // Rename the child
         store
-            .append(&YakEvent::Renamed(RenamedEvent {
+            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("child-c3d4"),
-                new_name: Name::from("renamed child"),
+                field_name: "name".to_string(),
+                content: "renamed child".to_string(),
             }))
             .unwrap();
 
@@ -1215,9 +1202,10 @@ mod tests {
 
         // Update state of nested child
         store
-            .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+            .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                 id: YakId::from("child-c3d4"),
-                state: "done".to_string(),
+                field_name: "state".to_string(),
+                content: "done".to_string(),
             }))
             .unwrap();
 

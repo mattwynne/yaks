@@ -21,7 +21,4 @@ pub use yak_map::YakMap;
 
 // Re-exports used only in tests
 #[cfg(test)]
-pub use events::{
-    AddedEvent, ContextUpdatedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent, RenamedEvent,
-    StateUpdatedEvent,
-};
+pub use events::{AddedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent};

@@ -5,16 +5,15 @@
 /// The `_guard` keeps any resources (like TempDir) alive for the test duration.
 /// For implementations that don't need a guard, pass `()`.
 ///
-/// Content fields (ContextUpdatedEvent.content, FieldUpdatedEvent.content) may
-/// be empty when read back from implementations that store content in trees
-/// rather than commit messages. Tests only check event count, not content equality.
+/// Content fields (FieldUpdatedEvent.content) may be empty when read back from
+/// implementations that store content in trees rather than commit messages.
+/// Tests only check event count, not content equality.
 macro_rules! event_store_tests {
     ($create_store:expr) => {
         use crate::domain::ports::EventStore;
         use crate::domain::slug::{Name, YakId};
         use crate::domain::{
-            AddedEvent, ContextUpdatedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent,
-            StateUpdatedEvent, YakEvent,
+            AddedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent, YakEvent,
         };
 
         #[test]
@@ -94,14 +93,15 @@ macro_rules! event_store_tests {
                 }))
                 .unwrap();
             store
-                .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+                .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                     id: YakId::from("foo-a1b2"),
-                    state: "wip".to_string(),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
                 }))
                 .unwrap();
 
             let foo_events = store.get_events("foo-a1b2").unwrap();
-            assert_eq!(foo_events.len(), 2); // Added + StateUpdated
+            assert_eq!(foo_events.len(), 2); // Added + FieldUpdated
 
             let bar_events = store.get_events("bar-c3d4").unwrap();
             assert_eq!(bar_events.len(), 1); // Added only
@@ -128,9 +128,10 @@ macro_rules! event_store_tests {
                 }))
                 .unwrap();
             store
-                .append(&YakEvent::StateUpdated(StateUpdatedEvent {
+                .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                     id: YakId::from("test-a1b2"),
-                    state: "wip".to_string(),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
                 }))
                 .unwrap();
             store
@@ -140,8 +141,9 @@ macro_rules! event_store_tests {
                 }))
                 .unwrap();
             store
-                .append(&YakEvent::ContextUpdated(ContextUpdatedEvent {
+                .append(&YakEvent::FieldUpdated(FieldUpdatedEvent {
                     id: YakId::from("test2-c3d4"),
+                    field_name: "context.md".to_string(),
                     content: "some context".to_string(),
                 }))
                 .unwrap();

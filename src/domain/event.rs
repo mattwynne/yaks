@@ -2,17 +2,15 @@
 
 use anyhow::Result;
 
-use super::event_format::EventFormat;
+use super::event_format::{parse_quoted_values, EventFormat};
 use super::events::*;
+use super::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum YakEvent {
     Added(AddedEvent),
     Removed(RemovedEvent),
     Moved(MovedEvent),
-    Renamed(RenamedEvent),
-    ContextUpdated(ContextUpdatedEvent),
-    StateUpdated(StateUpdatedEvent),
     FieldUpdated(FieldUpdatedEvent),
 }
 
@@ -22,9 +20,6 @@ impl YakEvent {
             Self::Added(e) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Removed(e) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Moved(e) => format!("{}: {}", e.event_tag(), e.format_data()),
-            Self::Renamed(e) => format!("{}: {}", e.event_tag(), e.format_data()),
-            Self::ContextUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
-            Self::StateUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::FieldUpdated(e) => format!("{}: {}", e.event_tag(), e.format_data()),
         }
     }
@@ -37,10 +32,35 @@ impl YakEvent {
             "Added" => Ok(Self::Added(AddedEvent::parse_data(data)?)),
             "Removed" => Ok(Self::Removed(RemovedEvent::parse_data(data)?)),
             "Moved" => Ok(Self::Moved(MovedEvent::parse_data(data)?)),
-            "Renamed" => Ok(Self::Renamed(RenamedEvent::parse_data(data)?)),
-            "ContextUpdated" => Ok(Self::ContextUpdated(ContextUpdatedEvent::parse_data(data)?)),
-            "StateUpdated" => Ok(Self::StateUpdated(StateUpdatedEvent::parse_data(data)?)),
             "FieldUpdated" => Ok(Self::FieldUpdated(FieldUpdatedEvent::parse_data(data)?)),
+            // Backward-compatible parsing of old event formats
+            "Renamed" => {
+                let values = parse_quoted_values(data)?;
+                anyhow::ensure!(values.len() >= 2, "Renamed event requires id and new_name");
+                Ok(Self::FieldUpdated(FieldUpdatedEvent {
+                    id: YakId::from(values[0].as_str()),
+                    field_name: "name".to_string(),
+                    content: values[1].clone(),
+                }))
+            }
+            "StateUpdated" => {
+                let values = parse_quoted_values(data)?;
+                anyhow::ensure!(values.len() >= 2, "StateUpdated event requires id and state");
+                Ok(Self::FieldUpdated(FieldUpdatedEvent {
+                    id: YakId::from(values[0].as_str()),
+                    field_name: "state".to_string(),
+                    content: values[1].clone(),
+                }))
+            }
+            "ContextUpdated" => {
+                let values = parse_quoted_values(data)?;
+                anyhow::ensure!(!values.is_empty(), "ContextUpdated event requires an id");
+                Ok(Self::FieldUpdated(FieldUpdatedEvent {
+                    id: YakId::from(values[0].as_str()),
+                    field_name: "context.md".to_string(),
+                    content: String::new(),
+                }))
+            }
             _ => anyhow::bail!("Unknown event type: {}", tag),
         }
     }
@@ -52,9 +72,6 @@ impl YakEvent {
             Self::Added(e) => e.id.as_str(),
             Self::Removed(e) => e.id.as_str(),
             Self::Moved(e) => e.id.as_str(),
-            Self::Renamed(e) => e.id.as_str(),
-            Self::ContextUpdated(e) => e.id.as_str(),
-            Self::StateUpdated(e) => e.id.as_str(),
             Self::FieldUpdated(e) => e.id.as_str(),
         }
     }
@@ -79,12 +96,16 @@ mod tests {
     }
 
     #[test]
-    fn format_message_state_updated() {
-        let event = YakEvent::StateUpdated(StateUpdatedEvent {
+    fn format_message_field_updated() {
+        let event = YakEvent::FieldUpdated(FieldUpdatedEvent {
             id: YakId::from("test"),
-            state: "wip".to_string(),
+            field_name: "state".to_string(),
+            content: "wip".to_string(),
         });
-        assert_eq!(event.format_message(), "StateUpdated: \"test\" \"wip\"");
+        assert_eq!(
+            event.format_message(),
+            "FieldUpdated: \"test\" \"state\""
+        );
     }
 
     #[test]
@@ -111,5 +132,44 @@ mod tests {
             new_parent: Some(YakId::from("new-parent-c3d4")),
         });
         assert_eq!(event.yak_id(), "old-a1b2");
+    }
+
+    #[test]
+    fn parse_legacy_renamed_as_field_updated() {
+        let event = YakEvent::parse("Renamed: \"my-yak-a1b2\" \"new name\"").unwrap();
+        match event {
+            YakEvent::FieldUpdated(e) => {
+                assert_eq!(e.id, YakId::from("my-yak-a1b2"));
+                assert_eq!(e.field_name, "name");
+                assert_eq!(e.content, "new name");
+            }
+            _ => panic!("Expected FieldUpdated"),
+        }
+    }
+
+    #[test]
+    fn parse_legacy_state_updated_as_field_updated() {
+        let event = YakEvent::parse("StateUpdated: \"test-a1b2\" \"wip\"").unwrap();
+        match event {
+            YakEvent::FieldUpdated(e) => {
+                assert_eq!(e.id, YakId::from("test-a1b2"));
+                assert_eq!(e.field_name, "state");
+                assert_eq!(e.content, "wip");
+            }
+            _ => panic!("Expected FieldUpdated"),
+        }
+    }
+
+    #[test]
+    fn parse_legacy_context_updated_as_field_updated() {
+        let event = YakEvent::parse("ContextUpdated: \"test-a1b2\"").unwrap();
+        match event {
+            YakEvent::FieldUpdated(e) => {
+                assert_eq!(e.id, YakId::from("test-a1b2"));
+                assert_eq!(e.field_name, "context.md");
+                assert_eq!(e.content, "");
+            }
+            _ => panic!("Expected FieldUpdated"),
+        }
     }
 }

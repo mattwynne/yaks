@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{YakEvent, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakEvent, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
@@ -30,18 +30,6 @@ impl<T: WriteYakStore> EventListener for T {
 
             YakEvent::Moved(MovedEvent { id, new_parent }) => {
                 self.reparent_yak(id, new_parent.as_ref())?;
-            }
-
-            YakEvent::Renamed(RenamedEvent { id, new_name }) => {
-                self.rename_yak(id, new_name)?;
-            }
-
-            YakEvent::ContextUpdated(ContextUpdatedEvent { id, content }) => {
-                self.write_field(id, CONTEXT_FIELD, content)?;
-            }
-
-            YakEvent::StateUpdated(StateUpdatedEvent { id, state }) => {
-                self.write_field(id, STATE_FIELD, state)?;
             }
 
             YakEvent::FieldUpdated(FieldUpdatedEvent {
