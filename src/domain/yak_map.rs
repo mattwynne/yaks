@@ -161,8 +161,21 @@ impl YakMap {
         name: impl Into<Name>,
         parent_id: Option<YakId>,
         context: Option<String>,
+        state: Option<String>,
+        explicit_id: Option<YakId>,
+        fields: Vec<(String, String)>,
     ) -> Result<YakId> {
+        use crate::domain::validate_state;
+
         let name = name.into();
+
+        // Validate state if provided
+        let initial_state = if let Some(ref s) = state {
+            validate_state(s).map_err(|e| anyhow::anyhow!(e))?;
+            s.clone()
+        } else {
+            "todo".to_string()
+        };
 
         // Validate parent exists
         if let Some(ref pid) = parent_id {
@@ -174,14 +187,14 @@ impl YakMap {
         // Check slug uniqueness among siblings
         self.check_sibling_slug_uniqueness(name.as_str(), &parent_id, None)?;
 
-        let id = generate_id(name.as_str(), parent_id.as_ref());
+        let id = explicit_id.unwrap_or_else(|| generate_id(name.as_str(), parent_id.as_ref()));
 
         self.yaks.insert(
             id.clone(),
             YakState {
                 name: name.clone(),
                 parent_id: parent_id.clone(),
-                state: "todo".to_string(),
+                state: initial_state.clone(),
                 context: context.clone(),
             },
         );
@@ -197,6 +210,24 @@ impl YakMap {
                 .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
                     id: id.clone(),
                     field_name: "context.md".to_string(),
+                    content,
+                }));
+        }
+
+        if initial_state != "todo" {
+            self.pending_events
+                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name: "state".to_string(),
+                    content: initial_state,
+                }));
+        }
+
+        for (field_name, content) in fields {
+            self.pending_events
+                .push(YakEvent::FieldUpdated(FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name,
                     content,
                 }));
         }
@@ -452,9 +483,9 @@ mod tests {
     #[test]
     fn test_add_yak_rejects_colliding_slug_at_root() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
+        map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
 
-        let result = map.add_yak("make-the-tea", None, None);
+        let result = map.add_yak("make-the-tea", None, None, None, None, vec![]);
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
@@ -478,10 +509,10 @@ mod tests {
     #[test]
     fn test_add_yak_rejects_extra_spaces_colliding_slug_at_root() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
+        map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
 
         // "Make  the  tea" slugifies to "make-the-tea" (same slug)
-        let result = map.add_yak("Make  the  tea", None, None);
+        let result = map.add_yak("Make  the  tea", None, None, None, None, vec![]);
 
         assert!(result.is_err());
     }
@@ -489,10 +520,10 @@ mod tests {
     #[test]
     fn test_add_yak_allows_different_slug_at_root() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
+        map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
 
         // "Make the_tea" slugifies to "make-thetea" (different slug)
-        let result = map.add_yak("Make the_tea", None, None);
+        let result = map.add_yak("Make the_tea", None, None, None, None, vec![]);
 
         assert!(result.is_ok());
     }
@@ -500,11 +531,11 @@ mod tests {
     #[test]
     fn test_add_yak_rejects_colliding_slug_under_same_parent() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("Backend fixes", None, None).unwrap();
-        map.add_yak("Fix the bug", Some(parent_id.clone()), None)
+        let parent_id = map.add_yak("Backend fixes", None, None, None, None, vec![]).unwrap();
+        map.add_yak("Fix the bug", Some(parent_id.clone()), None, None, None, vec![])
             .unwrap();
 
-        let result = map.add_yak("fix-the-bug", Some(parent_id.clone()), None);
+        let result = map.add_yak("fix-the-bug", Some(parent_id.clone()), None, None, None, vec![]);
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
@@ -523,10 +554,10 @@ mod tests {
     #[test]
     fn test_add_yak_allows_same_slug_under_different_parent() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
-        let parent_id = map.add_yak("Backend fixes", None, None).unwrap();
+        map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
+        let parent_id = map.add_yak("Backend fixes", None, None, None, None, vec![]).unwrap();
 
-        let result = map.add_yak("Make the tea", Some(parent_id), None);
+        let result = map.add_yak("Make the tea", Some(parent_id), None, None, None, vec![]);
 
         assert!(result.is_ok());
     }
@@ -534,11 +565,11 @@ mod tests {
     #[test]
     fn test_add_yak_allows_same_slug_under_different_parents() {
         let mut map = YakMap::new();
-        let backend = map.add_yak("Backend fixes", None, None).unwrap();
-        let frontend = map.add_yak("Frontend fixes", None, None).unwrap();
-        map.add_yak("Fix the bug", Some(backend), None).unwrap();
+        let backend = map.add_yak("Backend fixes", None, None, None, None, vec![]).unwrap();
+        let frontend = map.add_yak("Frontend fixes", None, None, None, None, vec![]).unwrap();
+        map.add_yak("Fix the bug", Some(backend), None, None, None, vec![]).unwrap();
 
-        let result = map.add_yak("Fix the bug", Some(frontend), None);
+        let result = map.add_yak("Fix the bug", Some(frontend), None, None, None, vec![]);
 
         assert!(result.is_ok());
     }
@@ -546,8 +577,8 @@ mod tests {
     #[test]
     fn test_rename_rejects_colliding_slug_with_sibling() {
         let mut map = YakMap::new();
-        map.add_yak("Make the tea", None, None).unwrap();
-        let fix_id = map.add_yak("Fix the bug", None, None).unwrap();
+        map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
+        let fix_id = map.add_yak("Fix the bug", None, None, None, None, vec![]).unwrap();
 
         let result = map.rename_yak(fix_id, "Make THE Tea".to_string());
 
@@ -563,7 +594,7 @@ mod tests {
     #[test]
     fn test_rename_allows_same_slug_for_self() {
         let mut map = YakMap::new();
-        let id = map.add_yak("Make the tea", None, None).unwrap();
+        let id = map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
 
         // Rename to different capitalisation (same slug)
         let result = map.rename_yak(id, "Make The Tea".to_string());
@@ -574,11 +605,12 @@ mod tests {
     #[test]
     fn test_move_to_rejects_colliding_slug_at_destination() {
         let mut map = YakMap::new();
-        map.add_yak("Fix the bug", None, None).unwrap();
-        let backend = map.add_yak("Backend fixes", None, None).unwrap();
-        let nested_fix = map.add_yak("Fix the bug", Some(backend), None).unwrap();
+        map.add_yak("Fix the bug", None, None, None, None, vec![]).unwrap();
+        let backend = map.add_yak("Backend fixes", None, None, None, None, vec![]).unwrap();
+        let nested_fix = map.add_yak("Fix the bug", Some(backend), None, None, None, vec![]).unwrap();
 
         // Move nested "Fix the bug" to root - collides with root "Fix the bug"
+
         let result = map.move_yak_to(nested_fix, None);
 
         assert!(result.is_err());
@@ -830,7 +862,7 @@ mod tests {
     fn test_add_yak_creates_yak_with_todo_state() {
         let mut map = YakMap::new();
 
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
 
         assert!(map.yaks.contains_key(&id));
         assert_eq!(map.yaks.get(&id).unwrap().state, "todo");
@@ -841,7 +873,7 @@ mod tests {
     fn test_add_yak_generates_slug_id() {
         let mut map = YakMap::new();
 
-        let id = map.add_yak("Make the tea", None, None).unwrap();
+        let id = map.add_yak("Make the tea", None, None, None, None, vec![]).unwrap();
 
         assert!(
             id.as_str().starts_with("make-the-tea-"),
@@ -855,7 +887,7 @@ mod tests {
     fn test_add_yak_stores_name_in_yak_state() {
         let mut map = YakMap::new();
 
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
 
         assert_eq!(map.yaks.get(&id).unwrap().name, Name::from("test"));
     }
@@ -865,7 +897,7 @@ mod tests {
         let mut map = YakMap::new();
 
         let id = map
-            .add_yak("test", None, Some("context".to_string()))
+            .add_yak("test", None, Some("context".to_string()), None, None, vec![])
             .unwrap();
 
         assert_eq!(
@@ -878,7 +910,7 @@ mod tests {
     fn test_add_yak_emits_added_event() {
         let mut map = YakMap::new();
 
-        map.add_yak("test", None, None).unwrap();
+        map.add_yak("test", None, None, None, None, vec![]).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);
@@ -894,7 +926,7 @@ mod tests {
     fn test_add_yak_with_context_emits_two_events() {
         let mut map = YakMap::new();
 
-        map.add_yak("test", None, Some("context".to_string()))
+        map.add_yak("test", None, Some("context".to_string()), None, None, vec![])
             .unwrap();
         let events = map.take_events();
 
@@ -922,8 +954,8 @@ mod tests {
     #[test]
     fn test_add_yak_with_parent_id() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
 
         let child = map.yaks.get(&child_id).unwrap();
         assert_eq!(child.parent_id, Some(parent_id));
@@ -933,16 +965,16 @@ mod tests {
     #[test]
     fn test_add_yak_with_nonexistent_parent_fails() {
         let mut map = YakMap::new();
-        let result = map.add_yak("child", Some(YakId::from("nonexistent-id")), None);
+        let result = map.add_yak("child", Some(YakId::from("nonexistent-id")), None, None, None, vec![]);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_add_yak_emits_leaf_name_in_event() {
         let mut map = YakMap::new();
-        let pid = map.add_yak("parent", None, None).unwrap();
+        let pid = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
         map.take_events();
-        map.add_yak("child", Some(pid.clone()), None).unwrap();
+        map.add_yak("child", Some(pid.clone()), None, None, None, vec![]).unwrap();
         let events = map.take_events();
         match &events[0] {
             YakEvent::Added(e) => {
@@ -957,11 +989,11 @@ mod tests {
     fn test_add_yak_child_preserves_parent_context() {
         let mut map = YakMap::new();
         let parent_id = map
-            .add_yak("parent", None, Some("context".to_string()))
+            .add_yak("parent", None, Some("context".to_string()), None, None, vec![])
             .unwrap();
         map.take_events();
 
-        map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
 
         // Parent context should be preserved
         assert_eq!(
@@ -977,15 +1009,15 @@ mod tests {
     #[test]
     fn test_build_display_name_root() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         assert_eq!(map.build_display_name(&id), "test");
     }
 
     #[test]
     fn test_build_display_name_nested() {
         let mut map = YakMap::new();
-        let pid = map.add_yak("parent", None, None).unwrap();
-        let cid = map.add_yak("child", Some(pid), None).unwrap();
+        let pid = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let cid = map.add_yak("child", Some(pid), None, None, None, vec![]).unwrap();
         assert_eq!(map.build_display_name(&cid), "parent/child");
     }
 
@@ -993,7 +1025,7 @@ mod tests {
     #[test]
     fn test_update_state_changes_state() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
         map.update_state(id.clone(), "wip".to_string()).unwrap();
         assert_eq!(map.yaks.get(&id).unwrap().state, "wip");
@@ -1002,7 +1034,7 @@ mod tests {
     #[test]
     fn test_update_state_validates_state() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         let result = map.update_state(id, "invalid".to_string());
         assert!(result.is_err());
     }
@@ -1010,8 +1042,8 @@ mod tests {
     #[test]
     fn test_update_state_prevents_marking_parent_done_with_incomplete_children() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         let result = map.update_state(parent_id, "done".to_string());
         assert!(result.is_err());
         assert!(result
@@ -1023,8 +1055,8 @@ mod tests {
     #[test]
     fn test_update_state_allows_marking_parent_done_with_all_children_done() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         map.update_state(child_id, "done".to_string()).unwrap();
         let result = map.update_state(parent_id, "done".to_string());
         assert!(result.is_ok());
@@ -1033,8 +1065,8 @@ mod tests {
     #[test]
     fn test_update_state_propagates_to_parent_on_todo_transition() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         map.take_events();
         map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
@@ -1045,9 +1077,9 @@ mod tests {
     #[test]
     fn test_update_state_propagates_through_multiple_levels() {
         let mut map = YakMap::new();
-        let a_id = map.add_yak("a", None, None).unwrap();
-        let b_id = map.add_yak("b", Some(a_id.clone()), None).unwrap();
-        let c_id = map.add_yak("c", Some(b_id.clone()), None).unwrap();
+        let a_id = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b_id = map.add_yak("b", Some(a_id.clone()), None, None, None, vec![]).unwrap();
+        let c_id = map.add_yak("c", Some(b_id.clone()), None, None, None, vec![]).unwrap();
         map.take_events();
         map.update_state(c_id.clone(), "wip".to_string()).unwrap();
         assert_eq!(map.yaks.get(&a_id).unwrap().state, "wip");
@@ -1058,8 +1090,8 @@ mod tests {
     #[test]
     fn test_update_state_only_propagates_on_todo_transition() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id), None, None, None, vec![]).unwrap();
         map.update_state(child_id.clone(), "wip".to_string())
             .unwrap();
         map.take_events();
@@ -1071,8 +1103,8 @@ mod tests {
     #[test]
     fn test_update_state_demotes_done_parent_when_child_leaves_done() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
         map.update_state(parent_id.clone(), "done".to_string())
@@ -1087,9 +1119,9 @@ mod tests {
     #[test]
     fn test_update_state_demotes_through_multiple_levels() {
         let mut map = YakMap::new();
-        let a_id = map.add_yak("a", None, None).unwrap();
-        let b_id = map.add_yak("b", Some(a_id.clone()), None).unwrap();
-        let c_id = map.add_yak("c", Some(b_id.clone()), None).unwrap();
+        let a_id = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b_id = map.add_yak("b", Some(a_id.clone()), None, None, None, vec![]).unwrap();
+        let c_id = map.add_yak("c", Some(b_id.clone()), None, None, None, vec![]).unwrap();
         map.update_state(c_id.clone(), "done".to_string()).unwrap();
         map.update_state(b_id.clone(), "done".to_string()).unwrap();
         map.update_state(a_id.clone(), "done".to_string()).unwrap();
@@ -1103,8 +1135,8 @@ mod tests {
     #[test]
     fn test_update_state_only_demotes_done_ancestors() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
         // parent is wip (auto-promoted), not done
@@ -1122,7 +1154,7 @@ mod tests {
     #[test]
     fn test_update_context_updates_context() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.update_context(id.clone(), "new context".to_string())
@@ -1137,7 +1169,7 @@ mod tests {
     #[test]
     fn test_update_context_emits_event() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.update_context(id, "new context".to_string()).unwrap();
@@ -1170,7 +1202,7 @@ mod tests {
     #[test]
     fn test_update_field_emits_event() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.update_field(id, "notes".to_string(), "some content".to_string())
@@ -1208,7 +1240,7 @@ mod tests {
     #[test]
     fn test_remove_yak_removes_yak() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.remove_yak(id.clone()).unwrap();
@@ -1219,7 +1251,7 @@ mod tests {
     #[test]
     fn test_remove_yak_emits_event() {
         let mut map = YakMap::new();
-        let id = map.add_yak("test", None, None).unwrap();
+        let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.remove_yak(id).unwrap();
@@ -1245,8 +1277,8 @@ mod tests {
     #[test]
     fn test_remove_yak_fails_if_has_children() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
 
         let result = map.remove_yak(parent_id);
 
@@ -1261,7 +1293,7 @@ mod tests {
     fn test_rename_preserves_context() {
         let mut map = YakMap::new();
         let id = map
-            .add_yak("old", None, Some("context".to_string()))
+            .add_yak("old", None, Some("context".to_string()), None, None, vec![])
             .unwrap();
         map.take_events();
 
@@ -1277,7 +1309,7 @@ mod tests {
     #[test]
     fn test_rename_emits_renamed_event() {
         let mut map = YakMap::new();
-        let id = map.add_yak("old", None, None).unwrap();
+        let id = map.add_yak("old", None, None, None, None, vec![]).unwrap();
         map.take_events();
 
         map.rename_yak(id.clone(), "new".to_string()).unwrap();
@@ -1302,9 +1334,9 @@ mod tests {
     #[test]
     fn test_move_yak_to_fails_if_has_children() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        map.add_yak("child", Some(parent_id.clone()), None).unwrap();
-        let dest_id = map.add_yak("dest", None, None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
+        let dest_id = map.add_yak("dest", None, None, None, None, vec![]).unwrap();
 
         let result = map.move_yak_to(parent_id, Some(dest_id));
 
@@ -1318,8 +1350,8 @@ mod tests {
     #[test]
     fn test_prune_removes_done_leaf_yaks() {
         let mut map = YakMap::new();
-        let done_id = map.add_yak("done-yak", None, None).unwrap();
-        let todo_id = map.add_yak("todo-yak", None, None).unwrap();
+        let done_id = map.add_yak("done-yak", None, None, None, None, vec![]).unwrap();
+        let todo_id = map.add_yak("todo-yak", None, None, None, None, vec![]).unwrap();
         map.update_state(done_id.clone(), "done".to_string())
             .unwrap();
         map.take_events();
@@ -1333,8 +1365,8 @@ mod tests {
     #[test]
     fn test_prune_cascades_through_done_hierarchy() {
         let mut map = YakMap::new();
-        let parent_id = map.add_yak("parent", None, None).unwrap();
-        let child_id = map.add_yak("child", Some(parent_id.clone()), None).unwrap();
+        let parent_id = map.add_yak("parent", None, None, None, None, vec![]).unwrap();
+        let child_id = map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![]).unwrap();
         // Mark child done, then mark parent done
         map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
@@ -1353,8 +1385,8 @@ mod tests {
     #[test]
     fn test_prune_emits_removed_events() {
         let mut map = YakMap::new();
-        let done_id = map.add_yak("done-yak", None, None).unwrap();
-        map.add_yak("todo-yak", None, None).unwrap();
+        let done_id = map.add_yak("done-yak", None, None, None, None, vec![]).unwrap();
+        map.add_yak("todo-yak", None, None, None, None, vec![]).unwrap();
         map.update_state(done_id, "done".to_string()).unwrap();
         map.take_events();
 
@@ -1367,6 +1399,187 @@ mod tests {
                 assert!(!id.as_str().is_empty())
             }
             _ => panic!("Expected Removed event"),
+        }
+    }
+
+    // Tests for enriched add_yak parameters
+    #[test]
+    fn test_add_yak_with_initial_state() {
+        let mut map = YakMap::new();
+
+        let id = map
+            .add_yak("test", None, None, Some("wip".to_string()), None, vec![])
+            .unwrap();
+
+        assert_eq!(map.yaks.get(&id).unwrap().state, "wip");
+
+        let events = map.take_events();
+        // Should emit Added + FieldUpdated(state=wip)
+        assert_eq!(events.len(), 2);
+        match &events[1] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: event_id,
+                field_name,
+                content,
+            }) => {
+                assert_eq!(event_id, &id);
+                assert_eq!(field_name, "state");
+                assert_eq!(content, "wip");
+            }
+            _ => panic!("Expected FieldUpdated event for state"),
+        }
+    }
+
+    #[test]
+    fn test_add_yak_with_invalid_state_fails() {
+        let mut map = YakMap::new();
+
+        let result = map.add_yak(
+            "test",
+            None,
+            None,
+            Some("invalid".to_string()),
+            None,
+            vec![],
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_yak_with_explicit_id() {
+        let mut map = YakMap::new();
+
+        let id = map
+            .add_yak(
+                "test",
+                None,
+                None,
+                None,
+                Some(YakId::from("custom-id")),
+                vec![],
+            )
+            .unwrap();
+
+        assert_eq!(id, YakId::from("custom-id"));
+        assert!(map.yaks.contains_key(&YakId::from("custom-id")));
+    }
+
+    #[test]
+    fn test_add_yak_with_fields() {
+        let mut map = YakMap::new();
+
+        let id = map
+            .add_yak(
+                "test",
+                None,
+                None,
+                None,
+                None,
+                vec![
+                    ("plan".to_string(), "my plan".to_string()),
+                    ("notes".to_string(), "some notes".to_string()),
+                ],
+            )
+            .unwrap();
+
+        let events = map.take_events();
+        // Added + 2 FieldUpdated events for custom fields
+        assert_eq!(events.len(), 3);
+        match &events[1] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: event_id,
+                field_name,
+                content,
+            }) => {
+                assert_eq!(event_id, &id);
+                assert_eq!(field_name, "plan");
+                assert_eq!(content, "my plan");
+            }
+            _ => panic!("Expected FieldUpdated event for plan"),
+        }
+        match &events[2] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                id: event_id,
+                field_name,
+                content,
+            }) => {
+                assert_eq!(event_id, &id);
+                assert_eq!(field_name, "notes");
+                assert_eq!(content, "some notes");
+            }
+            _ => panic!("Expected FieldUpdated event for notes"),
+        }
+    }
+
+    #[test]
+    fn test_add_yak_with_all_options() {
+        let mut map = YakMap::new();
+
+        let id = map
+            .add_yak(
+                "test",
+                None,
+                Some("context".to_string()),
+                Some("wip".to_string()),
+                Some(YakId::from("my-id")),
+                vec![("plan".to_string(), "the plan".to_string())],
+            )
+            .unwrap();
+
+        assert_eq!(id, YakId::from("my-id"));
+        assert_eq!(map.yaks.get(&id).unwrap().state, "wip");
+        assert_eq!(
+            map.yaks.get(&id).unwrap().context,
+            Some("context".to_string())
+        );
+
+        let events = map.take_events();
+        // Added + FieldUpdated(context.md) + FieldUpdated(state) + FieldUpdated(plan)
+        assert_eq!(events.len(), 4);
+        match &events[0] {
+            YakEvent::Added(AddedEvent {
+                name,
+                id: event_id,
+                ..
+            }) => {
+                assert_eq!(name, &Name::from("test"));
+                assert_eq!(event_id, &YakId::from("my-id"));
+            }
+            _ => panic!("Expected Added event first"),
+        }
+        match &events[1] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                field_name,
+                content,
+                ..
+            }) => {
+                assert_eq!(field_name, "context.md");
+                assert_eq!(content, "context");
+            }
+            _ => panic!("Expected FieldUpdated for context.md second"),
+        }
+        match &events[2] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                field_name,
+                content,
+                ..
+            }) => {
+                assert_eq!(field_name, "state");
+                assert_eq!(content, "wip");
+            }
+            _ => panic!("Expected FieldUpdated for state third"),
+        }
+        match &events[3] {
+            YakEvent::FieldUpdated(FieldUpdatedEvent {
+                field_name,
+                content,
+                ..
+            }) => {
+                assert_eq!(field_name, "plan");
+                assert_eq!(content, "the plan");
+            }
+            _ => panic!("Expected FieldUpdated for plan fourth"),
         }
     }
 }

@@ -48,7 +48,7 @@ impl AddYak {
             .filter(|content| !content.trim().is_empty());
 
         let id = app.with_yak_map_result(|yak_map| {
-            yak_map.add_yak(self.name.clone(), parent_id, context)
+            yak_map.add_yak(self.name.clone(), parent_id, context, None, None, vec![])
         })?;
         app.display.info(id.as_str());
         Ok(())
