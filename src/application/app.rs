@@ -43,7 +43,8 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut YakMap) -> Result<()>,
     {
-        let mut yak_map = YakMap::from_store(self.store)?;
+        use crate::domain::event_metadata::EventMetadata;
+        let mut yak_map = YakMap::from_store(self.store, EventMetadata::default_legacy())?;
         f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(())
@@ -53,7 +54,8 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut YakMap) -> Result<T>,
     {
-        let mut yak_map = YakMap::from_store(self.store)?;
+        use crate::domain::event_metadata::EventMetadata;
+        let mut yak_map = YakMap::from_store(self.store, EventMetadata::default_legacy())?;
         let result = f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(result)

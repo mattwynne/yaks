@@ -17,6 +17,7 @@ pub(crate) struct YakState {
 pub struct YakMap {
     yaks: HashMap<YakId, YakState>,
     pending_events: Vec<YakEvent>,
+    metadata: EventMetadata,
 }
 
 impl YakMap {
@@ -26,10 +27,19 @@ impl YakMap {
         Self {
             yaks: HashMap::new(),
             pending_events: Vec::new(),
+            metadata: EventMetadata::default_legacy(),
         }
     }
 
-    pub fn from_store(store: &dyn ReadYakStore) -> Result<Self> {
+    pub fn with_metadata(metadata: EventMetadata) -> Self {
+        Self {
+            yaks: HashMap::new(),
+            pending_events: Vec::new(),
+            metadata,
+        }
+    }
+
+    pub fn from_store(store: &dyn ReadYakStore, metadata: EventMetadata) -> Result<Self> {
         let yaks_list = store.list_yaks()?;
 
         let mut yaks = HashMap::new();
@@ -50,6 +60,7 @@ impl YakMap {
         Ok(Self {
             yaks,
             pending_events: Vec::new(),
+            metadata,
         })
     }
 
@@ -206,7 +217,7 @@ impl YakMap {
                 id: id.clone(),
                 parent_id,
             },
-            EventMetadata::default_legacy(),
+            self.metadata.clone(),
         ));
 
         if let Some(content) = context {
@@ -217,7 +228,7 @@ impl YakMap {
                         field_name: "context.md".to_string(),
                         content,
                     },
-                    EventMetadata::default_legacy(),
+                    self.metadata.clone(),
                 ));
         }
 
@@ -229,7 +240,7 @@ impl YakMap {
                         field_name: "state".to_string(),
                         content: initial_state,
                     },
-                    EventMetadata::default_legacy(),
+                    self.metadata.clone(),
                 ));
         }
 
@@ -241,7 +252,7 @@ impl YakMap {
                         field_name,
                         content,
                     },
-                    EventMetadata::default_legacy(),
+                    self.metadata.clone(),
                 ));
         }
 
@@ -275,7 +286,7 @@ impl YakMap {
                     field_name: "state".to_string(),
                     content: state,
                 },
-                EventMetadata::default_legacy(),
+                self.metadata.clone(),
             ));
 
         // Propagate to ancestors if transitioning from todo
@@ -321,7 +332,7 @@ impl YakMap {
                                 field_name: "state".to_string(),
                                 content: "wip".to_string(),
                             },
-                            EventMetadata::default_legacy(),
+                            self.metadata.clone(),
                         ));
                 }
             }
@@ -340,7 +351,7 @@ impl YakMap {
                                 field_name: "state".to_string(),
                                 content: "wip".to_string(),
                             },
-                            EventMetadata::default_legacy(),
+                            self.metadata.clone(),
                         ));
                 }
             }
@@ -359,7 +370,7 @@ impl YakMap {
                     field_name: "context.md".to_string(),
                     content: context,
                 },
-                EventMetadata::default_legacy(),
+                self.metadata.clone(),
             ));
 
         Ok(())
@@ -375,7 +386,7 @@ impl YakMap {
                     field_name,
                     content,
                 },
-                EventMetadata::default_legacy(),
+                self.metadata.clone(),
             ));
 
         Ok(())
@@ -399,7 +410,7 @@ impl YakMap {
         self.pending_events
             .push(YakEvent::Removed(
                 RemovedEvent { id },
-                EventMetadata::default_legacy(),
+                self.metadata.clone(),
             ));
 
         Ok(())
@@ -423,7 +434,7 @@ impl YakMap {
                 self.pending_events
                     .push(YakEvent::Removed(
                         RemovedEvent { id },
-                        EventMetadata::default_legacy(),
+                        self.metadata.clone(),
                     ));
             }
         }
@@ -456,7 +467,7 @@ impl YakMap {
                     field_name: "name".to_string(),
                     content: new_name.to_string(),
                 },
-                EventMetadata::default_legacy(),
+                self.metadata.clone(),
             ));
 
         Ok(())
@@ -504,7 +515,7 @@ impl YakMap {
                 id,
                 new_parent: new_parent_id,
             },
-            EventMetadata::default_legacy(),
+            self.metadata.clone(),
         ));
 
         Ok(())
@@ -730,7 +741,7 @@ mod tests {
         }
 
         let store = MockStore;
-        let map = YakMap::from_store(&store).unwrap();
+        let map = YakMap::from_store(&store, EventMetadata::default_legacy()).unwrap();
 
         assert_eq!(map.yaks.len(), 0);
         assert_eq!(map.pending_events.len(), 0);
@@ -793,7 +804,7 @@ mod tests {
                 },
             ],
         };
-        let map = YakMap::from_store(&store).unwrap();
+        let map = YakMap::from_store(&store, EventMetadata::default_legacy()).unwrap();
 
         assert_eq!(map.yaks.len(), 2);
         assert_eq!(
@@ -859,7 +870,7 @@ mod tests {
             }
         }
 
-        let map = YakMap::from_store(&MockStore).unwrap();
+        let map = YakMap::from_store(&MockStore, EventMetadata::default_legacy()).unwrap();
         let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
         assert_eq!(child.name, Name::from("child"));
         assert_eq!(child.parent_id, Some(YakId::from("parent-aaaa")));
@@ -910,7 +921,7 @@ mod tests {
             }
         }
 
-        let map = YakMap::from_store(&MockStore).unwrap();
+        let map = YakMap::from_store(&MockStore, EventMetadata::default_legacy()).unwrap();
         let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
         assert_eq!(child.name, Name::from("child"));
         assert_eq!(
@@ -1701,6 +1712,24 @@ mod tests {
             }
             _ => panic!("Expected FieldUpdated event for notes"),
         }
+    }
+
+    #[test]
+    fn test_add_yak_stamps_provided_metadata() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Matt".to_string(),
+                email: "matt@example.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+        let mut map = YakMap::with_metadata(metadata.clone());
+        map.add_yak("test", None, None, None, None, vec![]).unwrap();
+        let events = map.take_events();
+
+        assert_eq!(events[0].metadata(), &metadata);
     }
 
     #[test]
