@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
-use crate::domain::slug::YakId;
+use crate::domain::slug::{Name, YakId};
 use crate::domain::{YakEvent, CONTEXT_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
@@ -49,7 +49,11 @@ impl<T: WriteYakStore> EventListener for T {
                 field_name,
                 content,
             }) => {
-                self.write_field(id, field_name, content)?;
+                if field_name == NAME_FIELD {
+                    self.rename_yak(id, &Name::from(content.as_str()))?;
+                } else {
+                    self.write_field(id, field_name, content)?;
+                }
             }
         }
         Ok(())

@@ -325,10 +325,11 @@ impl GitEventStore {
                 let state_blob = self.repo.find_blob(state_entry.id())?;
                 let state = std::str::from_utf8(state_blob.content())?.trim();
                 if state != "todo" {
-                    events.push(YakEvent::StateUpdated(
-                        crate::domain::events::StateUpdatedEvent {
+                    events.push(YakEvent::FieldUpdated(
+                        crate::domain::events::FieldUpdatedEvent {
                             id: id.clone(),
-                            state: state.to_string(),
+                            field_name: "state".to_string(),
+                            content: state.to_string(),
                         },
                     ));
                 }
@@ -339,9 +340,10 @@ impl GitEventStore {
                 let context_blob = self.repo.find_blob(context_entry.id())?;
                 let content = std::str::from_utf8(context_blob.content())?;
                 if !content.is_empty() {
-                    events.push(YakEvent::ContextUpdated(
-                        crate::domain::events::ContextUpdatedEvent {
+                    events.push(YakEvent::FieldUpdated(
+                        crate::domain::events::FieldUpdatedEvent {
                             id: id.clone(),
+                            field_name: "context.md".to_string(),
                             content: content.to_string(),
                         },
                     ));
@@ -763,14 +765,14 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::StateUpdated(s) if s.state == "wip")),
-            "Expected StateUpdated event for 'wip'"
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "state" && f.content == "wip")),
+            "Expected FieldUpdated event for state 'wip'"
         );
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::ContextUpdated(c) if c.content == "some notes")),
-            "Expected ContextUpdated event"
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "context.md" && f.content == "some notes")),
+            "Expected FieldUpdated event for context.md"
         );
     }
 
@@ -791,8 +793,8 @@ mod tests {
         assert!(
             !events
                 .iter()
-                .any(|e| matches!(e, YakEvent::StateUpdated(_))),
-            "Should not emit StateUpdated when state is 'todo'"
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f) if f.field_name == "state")),
+            "Should not emit FieldUpdated for state when state is 'todo'"
         );
     }
 
