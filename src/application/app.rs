@@ -92,7 +92,7 @@ impl<'a> Application<'a> {
     ///
     /// # Example
     /// ```ignore
-    /// let app = Application::new(&mut event_bus, &store, &display, &input, None, None);
+    /// let app = Application::new(&mut event_bus, &store, &display, &input, None, None, &auth);
     /// app.handle(AddYak::new("my yak"))?;
     /// ```
     pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {

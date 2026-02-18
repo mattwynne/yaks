@@ -556,6 +556,17 @@ impl EventStore for GitEventStore {
                 builder.insert(field_name, field_blob, 0o100644)?;
             }
 
+            // Write .metadata.json
+            let metadata_json = serde_json::json!({
+                "created_by": {
+                    "name": yak.created_by.name,
+                    "email": yak.created_by.email
+                },
+                "created_at": yak.created_at.as_epoch_secs()
+            });
+            let metadata_blob = repo.blob(metadata_json.to_string().as_bytes())?;
+            builder.insert(".metadata.json", metadata_blob, 0o100644)?;
+
             // Add children subtrees
             for child_id in &yak.children {
                 let child = yak_map.get(child_id).ok_or_else(|| {

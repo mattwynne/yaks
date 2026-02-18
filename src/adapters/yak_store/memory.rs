@@ -250,6 +250,22 @@ impl ReadYakStore for InMemoryStorage {
             .get(PARENT_ID_FIELD)
             .map(|pid| YakId::from(pid.as_str()));
 
+        let (created_by, created_at) = fields
+            .get(".metadata.json")
+            .and_then(|content| serde_json::from_str::<serde_json::Value>(content).ok())
+            .map(|json| {
+                let author = Author {
+                    name: json["created_by"]["name"]
+                        .as_str()
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    email: json["created_by"]["email"].as_str().unwrap_or("").to_string(),
+                };
+                let timestamp = Timestamp(json["created_at"].as_i64().unwrap_or(0));
+                (author, timestamp)
+            })
+            .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
+
         Ok(Yak {
             id: YakId::from(key.as_str()),
             name: Name::from(display_name),
@@ -258,8 +274,8 @@ impl ReadYakStore for InMemoryStorage {
             context,
             fields: custom_fields,
             children,
-            created_by: Author::unknown(),
-            created_at: Timestamp::zero(),
+            created_by,
+            created_at,
         })
     }
 
@@ -304,6 +320,25 @@ impl ReadYakStore for InMemoryStorage {
                 .get(PARENT_ID_FIELD)
                 .map(|pid| YakId::from(pid.as_str()));
 
+            let (created_by, created_at) = fields
+                .get(".metadata.json")
+                .and_then(|content| serde_json::from_str::<serde_json::Value>(content).ok())
+                .map(|json| {
+                    let author = Author {
+                        name: json["created_by"]["name"]
+                            .as_str()
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        email: json["created_by"]["email"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string(),
+                    };
+                    let timestamp = Timestamp(json["created_at"].as_i64().unwrap_or(0));
+                    (author, timestamp)
+                })
+                .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
+
             result.push(Yak {
                 id: YakId::from(key.as_str()),
                 name: Name::from(display_name),
@@ -312,8 +347,8 @@ impl ReadYakStore for InMemoryStorage {
                 context,
                 fields: custom_fields,
                 children,
-                created_by: Author::unknown(),
-                created_at: Timestamp::zero(),
+                created_by,
+                created_at,
             });
         }
 

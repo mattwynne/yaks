@@ -78,6 +78,18 @@ mod tests {
 
         app.handle(AddYak::new("test yak")).unwrap();
         app.handle(ShowLog::new()).unwrap();
+
+        let messages = display.get_all_messages();
+        assert!(
+            messages.iter().any(|m| m.contains("test@test.com")),
+            "Expected log to contain author email 'test@test.com', got: {:?}",
+            messages
+        );
+        assert!(
+            messages.iter().any(|m| m.contains("Added")),
+            "Expected log to contain 'Added' event message, got: {:?}",
+            messages
+        );
     }
 
     #[test]
