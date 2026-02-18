@@ -13,7 +13,25 @@ use yx::application::{
     WriteField,
 };
 use yx::domain::ports::{EventStore, ReadYakStore};
+use yx::domain::{Yak, YakEvent};
 use yx::infrastructure::EventBus;
+
+/// A no-op event store used when YX_SKIP_GIT_CHECKS is set outside a git repo.
+/// Events are silently discarded; reads return empty. This allows the
+/// directory-based storage to function without git infrastructure.
+struct NoOpEventStore;
+
+impl EventStore for NoOpEventStore {
+    fn append(&mut self, _event: &YakEvent) -> Result<()> {
+        Ok(())
+    }
+    fn get_all_events(&self) -> Result<Vec<YakEvent>> {
+        Ok(vec![])
+    }
+    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
+        Ok(0)
+    }
+}
 
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
@@ -152,16 +170,33 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    let skip_git = std::env::var("YX_SKIP_GIT_CHECKS").is_ok();
+
     // Initialize event infrastructure
     // Determine repo path: GIT_WORK_TREE env var, then current dir
     let repo_path = std::env::var("GIT_WORK_TREE")
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
-    // Run schema migration before using the event store
-    Migrator::for_current_version().run(&repo_path)?;
 
-    let event_store = GitEventStore::new(&repo_path)?;
-    let mut event_bus = EventBus::new(Box::new(event_store));
+    // Try to open the git repo. When YX_SKIP_GIT_CHECKS is set and we're
+    // outside a git repo, fall back to no-op infrastructure so that
+    // directory-based storage still works without git.
+    let in_git_repo = git2::Repository::open(&repo_path).is_ok();
+
+    let mut event_bus = if in_git_repo {
+        // Run schema migration before using the event store
+        Migrator::for_current_version().run(&repo_path)?;
+        let event_store = GitEventStore::new(&repo_path)?;
+        EventBus::new(Box::new(event_store))
+    } else if skip_git {
+        // Outside a git repo but skipping git checks: use a no-op store
+        EventBus::new(Box::new(NoOpEventStore))
+    } else {
+        // Outside a git repo and not skipping: DirectoryStorage::new() below
+        // will emit the user-facing error. We need some EventBus for the
+        // type-checker; it won't be used because DirectoryStorage::new() bails.
+        EventBus::new(Box::new(NoOpEventStore))
+    };
 
     // Initialize storage and register as projection
     let storage = DirectoryStorage::new()?;
@@ -170,8 +205,18 @@ fn main() -> Result<()> {
     // Initialize other adapters
     let display = ConsoleDisplay;
     let input = ConsoleInput;
-    let sync = GitRefSync::new()?;
-    let event_reader = GitEventStore::new(&repo_path)?;
+
+    // GitRefSync and a second event reader are only available when in a git repo
+    let sync = if in_git_repo {
+        GitRefSync::new().ok()
+    } else {
+        None
+    };
+    let git_event_reader = if in_git_repo {
+        GitEventStore::new(&repo_path).ok()
+    } else {
+        None
+    };
 
     // Create application with injected dependencies
     let mut app = Application::new(
@@ -179,8 +224,10 @@ fn main() -> Result<()> {
         &storage,
         &display,
         &input,
-        Some(&sync),
-        Some(&event_reader),
+        sync.as_ref().map(|s| s as &dyn yx::domain::ports::SyncPort),
+        git_event_reader
+            .as_ref()
+            .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
     );
 
     match cli.command {

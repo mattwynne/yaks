@@ -23,6 +23,12 @@ pub struct FullStackWorld {
     pub override_dir: Option<TempDir>,
     /// Named repositories for multi-repo scenarios (e.g., sync tests)
     pub repos: HashMap<String, TempDir>,
+    /// A real git repo with .yaks gitignored, used for subdirectory discovery tests
+    pub git_repo: Option<TempDir>,
+    /// Subdirectory path within git_repo to run commands from
+    pub git_repo_subdir: Option<PathBuf>,
+    /// An explicit YAK_PATH used alongside git_repo for YAK_PATH tests
+    pub explicit_yak_path: Option<TempDir>,
 }
 
 impl FullStackWorld {
@@ -38,6 +44,9 @@ impl FullStackWorld {
             exit_code: 0,
             override_dir: None,
             repos: HashMap::new(),
+            git_repo: None,
+            git_repo_subdir: None,
+            explicit_yak_path: None,
         })
     }
 
@@ -138,22 +147,258 @@ impl FullStackWorld {
 
     /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
     /// Used for testing git environment checks (not-in-repo, no gitignore).
+    /// If explicit_yak_path is set, passes YAK_PATH to the command.
     pub fn run_yx_in_override_dir(&mut self, args: &[&str]) -> Result<()> {
         let dir = self
             .override_dir
             .as_ref()
             .context("No override directory set")?;
         let yx_path = env!("CARGO_BIN_EXE_yx");
+        let explicit_yak_path = self
+            .explicit_yak_path
+            .as_ref()
+            .map(|d| d.path().to_path_buf());
 
-        let output = Command::new(yx_path)
-            .args(args)
+        let mut cmd = Command::new(yx_path);
+        cmd.args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("YX_IGNORE_STDIN", "1")
             .env_remove("YX_SKIP_GIT_CHECKS")
-            .current_dir(dir.path())
+            .current_dir(dir.path());
+
+        if let Some(yak_path) = explicit_yak_path {
+            cmd.env("YAK_PATH", yak_path);
+        } else {
+            cmd.env_remove("YAK_PATH");
+        }
+
+        let output = cmd.output().context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
+    /// Run yx in the override directory WITH YX_SKIP_GIT_CHECKS set.
+    /// Used for testing that YX_SKIP_GIT_CHECKS bypasses git requirements.
+    /// If explicit_yak_path is set, passes YAK_PATH to the command.
+    pub fn run_yx_in_override_dir_skip_git_checks(&mut self, args: &[&str]) -> Result<()> {
+        let dir = self
+            .override_dir
+            .as_ref()
+            .context("No override directory set")?;
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+        let explicit_yak_path = self
+            .explicit_yak_path
+            .as_ref()
+            .map(|d| d.path().to_path_buf());
+
+        let mut cmd = Command::new(yx_path);
+        cmd.args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("YX_IGNORE_STDIN", "1")
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .current_dir(dir.path());
+
+        if let Some(yak_path) = explicit_yak_path {
+            cmd.env("YAK_PATH", yak_path);
+        } else {
+            cmd.env_remove("YAK_PATH");
+        }
+
+        let output = cmd.output().context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
+    /// Create a real git repo with .yaks gitignored.
+    /// Returns the repo root path.
+    fn init_git_repo_with_gitignore(temp_dir: &TempDir) -> Result<()> {
+        let repo_path = temp_dir.path();
+
+        let status = Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .current_dir(repo_path)
+            .status()
+            .context("Failed to run git init")?;
+        if !status.success() {
+            anyhow::bail!("git init failed");
+        }
+
+        Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo_path)
+            .status()
+            .context("Failed to set git user.email")?;
+
+        Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(repo_path)
+            .status()
+            .context("Failed to set git user.name")?;
+
+        // Write .gitignore with .yaks entry
+        std::fs::write(repo_path.join(".gitignore"), ".yaks\n")
+            .context("Failed to write .gitignore")?;
+
+        Ok(())
+    }
+
+    /// Set up a git repo with .yaks gitignored and add a yak to it.
+    /// Stores the repo in self.git_repo.
+    pub fn setup_git_repo_with_yak(&mut self, yak_name: &str) -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+        Self::init_git_repo_with_gitignore(&temp_dir)?;
+
+        let repo_path = temp_dir.path().to_path_buf();
+        let yak_path = repo_path.join(".yaks");
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        // Add the yak from the repo root
+        let output = Command::new(yx_path)
+            .args(["add", yak_name])
+            .env("YAK_PATH", &yak_path)
+            .env("YX_IGNORE_STDIN", "1")
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .current_dir(&repo_path)
             .output()
-            .context("Failed to run yx command")?;
+            .context("Failed to run yx add")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "yx add failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+
+        self.git_repo = Some(temp_dir);
+        Ok(())
+    }
+
+    /// Set up a git repo with .yaks gitignored, an explicit YAK_PATH directory,
+    /// and add a yak to that YAK_PATH.
+    pub fn setup_git_repo_with_explicit_yak_path(&mut self, yak_name: &str) -> Result<()> {
+        let repo_temp_dir = tempfile::tempdir().context("Failed to create repo temp dir")?;
+        Self::init_git_repo_with_gitignore(&repo_temp_dir)?;
+
+        // Create a separate directory for the explicit YAK_PATH
+        let yak_path_temp_dir =
+            tempfile::tempdir().context("Failed to create yak_path temp dir")?;
+        let yak_path = yak_path_temp_dir.path().to_path_buf();
+
+        let repo_path = repo_temp_dir.path().to_path_buf();
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        // Add the yak using the explicit YAK_PATH
+        let output = Command::new(yx_path)
+            .args(["add", yak_name])
+            .env("YAK_PATH", &yak_path)
+            .env("YX_IGNORE_STDIN", "1")
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .current_dir(&repo_path)
+            .output()
+            .context("Failed to run yx add")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "yx add failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+
+        self.git_repo = Some(repo_temp_dir);
+        self.explicit_yak_path = Some(yak_path_temp_dir);
+        Ok(())
+    }
+
+    /// Create a subdirectory within the git_repo.
+    pub fn create_subdir_in_git_repo(&mut self, subdir_name: &str) -> Result<()> {
+        let repo = self
+            .git_repo
+            .as_ref()
+            .context("No git_repo set; call setup_git_repo_with_yak first")?;
+        let subdir = repo.path().join(subdir_name);
+        std::fs::create_dir_all(&subdir).context("Failed to create subdirectory")?;
+        self.git_repo_subdir = Some(subdir);
+        Ok(())
+    }
+
+    /// Run yx ls from the git_repo subdirectory (if set) or the repo root,
+    /// without YX_SKIP_GIT_CHECKS. Does NOT pass YAK_PATH (lets yx discover it).
+    pub fn list_yaks_from_subdir(&mut self) -> Result<()> {
+        let repo = self
+            .git_repo
+            .as_ref()
+            .context("No git_repo set")?;
+        let run_dir = self
+            .git_repo_subdir
+            .clone()
+            .unwrap_or_else(|| repo.path().to_path_buf());
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let output = Command::new(yx_path)
+            .args(["ls"])
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("YX_IGNORE_STDIN", "1")
+            .env_remove("YX_SKIP_GIT_CHECKS")
+            .env_remove("YAK_PATH")
+            .current_dir(&run_dir)
+            .output()
+            .context("Failed to run yx ls")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
+    /// Run yx ls from the git_repo subdirectory using the explicit YAK_PATH.
+    /// Does NOT pass YX_SKIP_GIT_CHECKS.
+    pub fn list_yaks_from_subdir_with_yak_path(&mut self) -> Result<()> {
+        let repo = self
+            .git_repo
+            .as_ref()
+            .context("No git_repo set")?;
+        let run_dir = self
+            .git_repo_subdir
+            .clone()
+            .unwrap_or_else(|| repo.path().to_path_buf());
+        let yak_path = self
+            .explicit_yak_path
+            .as_ref()
+            .context("No explicit_yak_path set")?
+            .path()
+            .to_path_buf();
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let output = Command::new(yx_path)
+            .args(["ls"])
+            .env("YAK_PATH", &yak_path)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("YX_IGNORE_STDIN", "1")
+            .env_remove("YX_SKIP_GIT_CHECKS")
+            .current_dir(&run_dir)
+            .output()
+            .context("Failed to run yx ls")?;
 
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();
