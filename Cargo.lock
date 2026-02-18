@@ -1711,6 +1711,7 @@ dependencies = [
  "libc",
  "regex",
  "serde",
+ "serde_json",
  "serial_test",
  "tempfile",
  "thiserror",

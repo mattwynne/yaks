@@ -975,4 +975,37 @@ mod tests {
 
         assert!(path.exists(), "Should create the directory");
     }
+
+    #[test]
+    fn test_added_event_writes_metadata_json() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+
+        let (mut storage, temp) = setup_test_storage();
+
+        let metadata = EventMetadata::new(
+            Author {
+                name: "Test".to_string(),
+                email: "test@test.com".to_string(),
+            },
+            Timestamp(1708300800),
+        );
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("my yak"),
+                id: YakId::from("my-yak-a1b2"),
+                parent_id: None,
+            },
+            metadata,
+        );
+
+        storage.on_event(&event).unwrap();
+
+        // The yak directory is slug-based (from name), not id-based
+        let content =
+            std::fs::read_to_string(temp.path().join("my-yak/.metadata.json")).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(json["created_by"]["name"], "Test");
+        assert_eq!(json["created_by"]["email"], "test@test.com");
+        assert_eq!(json["created_at"], 1708300800);
+    }
 }
