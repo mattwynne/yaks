@@ -3,6 +3,7 @@
 
 pub mod event;
 pub mod event_format;
+pub mod event_metadata;
 pub mod events;
 pub mod field;
 pub mod ports;
@@ -11,6 +12,7 @@ pub mod yak;
 pub mod yak_map;
 
 pub use event::YakEvent;
+pub use event_metadata::{Author, EventMetadata, Timestamp};
 pub use field::{
     validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, NAME_FIELD,
     STATE_FIELD,
