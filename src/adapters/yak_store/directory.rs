@@ -336,6 +336,13 @@ impl WriteYakStore for DirectoryStorage {
             .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory for '{}'", id))?;
         let to_dir = parent_dir.join(&new_slug);
 
+        if to_dir == from_dir {
+            // Slug unchanged - just update the name file
+            fs::write(from_dir.join(NAME_FIELD), new_name.as_str())
+                .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
+            return Ok(());
+        }
+
         if to_dir.exists() {
             anyhow::bail!("Yak '{}' already exists", new_name);
         }
