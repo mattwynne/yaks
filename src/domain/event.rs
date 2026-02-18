@@ -45,7 +45,10 @@ impl YakEvent {
             }
             "StateUpdated" => {
                 let values = parse_quoted_values(data)?;
-                anyhow::ensure!(values.len() >= 2, "StateUpdated event requires id and state");
+                anyhow::ensure!(
+                    values.len() >= 2,
+                    "StateUpdated event requires id and state"
+                );
                 Ok(Self::FieldUpdated(FieldUpdatedEvent {
                     id: YakId::from(values[0].as_str()),
                     field_name: "state".to_string(),
@@ -102,10 +105,7 @@ mod tests {
             field_name: "state".to_string(),
             content: "wip".to_string(),
         });
-        assert_eq!(
-            event.format_message(),
-            "FieldUpdated: \"test\" \"state\""
-        );
+        assert_eq!(event.format_message(), "FieldUpdated: \"test\" \"state\"");
     }
 
     #[test]

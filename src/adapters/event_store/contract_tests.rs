@@ -12,9 +12,7 @@ macro_rules! event_store_tests {
     ($create_store:expr) => {
         use crate::domain::ports::EventStore;
         use crate::domain::slug::{Name, YakId};
-        use crate::domain::{
-            AddedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent, YakEvent,
-        };
+        use crate::domain::{AddedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent, YakEvent};
 
         #[test]
         fn appends_and_retrieves_single_event() {
