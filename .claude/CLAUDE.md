@@ -189,6 +189,15 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 
 ## CRITICAL: Picking Up a Yak
 
+**First action when picking up ANY yak: mark it as WIP.**
+
+```bash
+yx state "<yak-name>" wip
+```
+
+Do this BEFORE reading context, creating worktrees, or starting any work.
+This signals to other agents and to the human what's being worked on.
+
 **If a yak needs requirements fleshed out**, use the `preparing-a-yak` skill first.
 
 **When ready to implement**, use the `yak-worktree-workflow` skill. Follow it exactly.

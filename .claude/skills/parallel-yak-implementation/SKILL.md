@@ -31,12 +31,17 @@ independence: check their plans don't touch the same files.
 
 ### 2. Mark ALL as WIP Before Dispatching
 
+**This is the FIRST thing you do after identifying yaks.**
+
 ```bash
 yx state "<yak-name>" wip
 ```
 
 Do this for EVERY yak BEFORE launching any agents. This signals
 to the human (and future sessions) what's being worked on.
+
+**Verify with `yx ls`** - all target yaks should show as wip
+before you proceed to step 3.
 
 ### 3. Dispatch One Agent Per Yak
 

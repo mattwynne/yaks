@@ -19,6 +19,17 @@ description: Use when a yak needs requirements, examples, and a plan before impl
 - Yak already has context, examples, and plan
 - Yak is a simple, obvious task (just pick it up)
 
+## First: Mark the Yak as WIP
+
+**Before doing anything else**, claim the yak:
+
+```bash
+yx state "yak name" wip
+```
+
+Preparation is active work. Other agents and the human need to
+see that this yak is being worked on. Do this BEFORE Phase 1.
+
 ## The Three Phases
 
 ### Phase 1: Brainstorm the Spec

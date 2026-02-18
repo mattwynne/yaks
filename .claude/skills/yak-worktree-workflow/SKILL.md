@@ -19,7 +19,18 @@ yx list
 
 Ask the user which yak to work on, or let them pick one for you.
 
-### 2. Read the Yak Context
+### 2. Mark the Yak as WIP
+
+**Immediately after choosing a yak, claim it:**
+
+```bash
+yx state "yak name" wip
+```
+
+Do this BEFORE reading context, creating worktrees, or anything else.
+This signals to other agents and the human that work has begun.
+
+### 3. Read the Yak Context
 
 **CRITICAL**: Always read the yak's context before starting work.
 
@@ -35,7 +46,7 @@ The context contains:
 
 **Never skip this step.** The yak name alone doesn't tell you what to build.
 
-### 2a. Verify Context is Sufficient
+### 3a. Verify Context is Sufficient
 
 **CRITICAL**: If the context is missing, empty, or too vague, **STOP and ASK THE USER** for clarification.
 
@@ -52,7 +63,7 @@ Ask specific questions:
 
 **Only create the worktree after you have sufficient context to proceed.**
 
-### 3. Create a Worktree
+### 4. Create a Worktree
 
 Create a worktree in `.worktrees/` with a descriptive branch name:
 
@@ -66,19 +77,16 @@ Example:
 git worktree add .worktrees/sort-ls-results -b sort-ls-results
 ```
 
-### 4. Mark Yak as WIP and Record Worktree Location
-
-Signal to other agents that you're working on this yak:
+### 5. Record Worktree Location
 
 ```bash
 cd /path/to/main/repo  # Go back to main repo
-yx state "yak name" wip
 yx field "yak name" worktree ".worktrees/descriptive-name"
 ```
 
-This prevents other agents from picking up the same yak and helps track where work is happening.
+This helps track where work is happening. (WIP was already set in step 2.)
 
-### 5. Switch to the Worktree
+### 6. Switch to the Worktree
 
 ```bash
 cd .worktrees/descriptive-name
@@ -86,7 +94,7 @@ cd .worktrees/descriptive-name
 
 All your work happens here. You're now on an isolated branch.
 
-### 6. Do the Work
+### 7. Do the Work
 
 Follow your normal development process:
 - Write tests (use incremental-tdd skill if applicable)
@@ -96,7 +104,7 @@ Follow your normal development process:
 
 The commits stay on your feature branch, isolated from main.
 
-### 7. Demo Your Work
+### 8. Demo Your Work
 
 **CRITICAL**: Before merging, demonstrate your work to the user.
 
@@ -113,7 +121,7 @@ This lets the user:
 
 **Wait for user approval before proceeding to merge.**
 
-### 8. Merge Back to Main
+### 9. Merge Back to Main
 
 After the user approves the demo, return to the main repo and merge:
 
@@ -122,7 +130,7 @@ cd /path/to/main/repo  # Back to main repo
 git merge descriptive-name
 ```
 
-### 9. Mark the Yak Done
+### 10. Mark the Yak Done
 
 ```bash
 yx done "yak name here"
@@ -130,7 +138,7 @@ yx done "yak name here"
 
 Use the exact yak name (with spaces if needed). This automatically clears the "wip" state.
 
-### 10. Clean Up
+### 11. Clean Up
 
 Remove the worktree and delete the branch:
 
@@ -232,36 +240,37 @@ The worktree keeps your changes isolated, so iteration is safe.
 # 1. Check what's available
 yx list
 
-# 2. Read context (from main repo)
+# 2. Mark as WIP immediately
+yx state "sort ls results somehow" wip
+
+# 3. Read context (from main repo)
 yx context --show "sort ls results somehow"
 # Output: "Sort by done first, then by creation date..."
 
-# 3. Create worktree
+# 4. Create worktree
 git worktree add .worktrees/sort-ls-results -b sort-ls-results
 
-# 4. Mark as WIP and record worktree location
-cd /path/to/main/repo
-yx state "sort ls results somehow" wip
+# 5. Record worktree location
 yx field "sort ls results somehow" worktree ".worktrees/sort-ls-results"
 
-# 5. Switch to worktree
+# 6. Switch to worktree
 cd .worktrees/sort-ls-results
 
-# 6. Do the work (write tests, implement, commit)
+# 7. Do the work (write tests, implement, commit)
 # ... work happens here ...
 
-# 7. Demo the work
+# 8. Demo the work
 # Show test results, example usage, explain changes
 # Wait for user approval
 
-# 8. Return to main and merge (after approval)
+# 9. Return to main and merge (after approval)
 cd ../../..
 git merge sort-ls-results
 
-# 9. Mark done
+# 10. Mark done
 yx done "sort ls results somehow"
 
-# 10. Cleanup
+# 11. Cleanup
 git worktree remove .worktrees/sort-ls-results
 git branch -d sort-ls-results
 ```
