@@ -64,3 +64,27 @@ Feature: yx reset - Rebuild yaks from git tree
         - [wip] alpha
           - [wip] beta
         """
+
+    Example: Reset preserves state changes on nested yaks
+      Given I add the yak "parent"
+      And I add the yak "child" blocking "parent"
+      And I mark the yak "child" as done
+      When I reset the yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [done] child
+        """
+
+    Example: Reset preserves renames on nested yaks
+      Given I add the yak "parent"
+      And I add the yak "child" blocking "parent"
+      When I rename the yak "child" to "renamed child"
+      And I reset the yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+          - [todo] renamed child
+        """
