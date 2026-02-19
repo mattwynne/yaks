@@ -1,0 +1,5 @@
+src/adapters/user_display/memory_display.rs:50:9: replace <impl DisplayPort for InMemoryDisplay>::success with ()
+src/adapters/user_display/memory_display.rs:57:9: replace <impl DisplayPort for InMemoryDisplay>::info with ()
+src/adapters/user_display/memory_display.rs:64:9: replace <impl DisplayPort for InMemoryDisplay>::display_yak_pretty with ()
+src/adapters/user_display/memory_display.rs:76:9: replace <impl DisplayPort for InMemoryDisplay>::display_yak_markdown with ()
+src/adapters/user_display/memory_display.rs:84:9: replace <impl DisplayPort for InMemoryDisplay>::log_entry with ()

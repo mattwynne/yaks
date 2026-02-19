@@ -1,0 +1,29 @@
+--- src/adapters/user_display/memory_display.rs
++++ replace <impl DisplayPort for InMemoryDisplay>::display_yak_pretty with ()
+@@ -56,25 +56,17 @@
+     fn info(&self, message: &str) {
+         self.info_messages
+             .write()
+             .unwrap()
+             .push(message.to_string());
+     }
+ 
+     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
+-        let indicator = match state {
+-            "wip" => "●",
+-            "done" => "●",
+-            _ => "○",
+-        };
+-        self.info_messages
+-            .write()
+-            .unwrap()
+-            .push(format!("{prefix}{indicator} {name}"));
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str) {
+         let indent = "  ".repeat(depth);
+         self.info_messages
+             .write()
+             .unwrap()
+             .push(format!("{indent}- [{state}] {name}"));

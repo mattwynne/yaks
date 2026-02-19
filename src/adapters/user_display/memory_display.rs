@@ -95,6 +95,7 @@ impl DisplayPort for InMemoryDisplay {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::slug::Name;
 
     #[test]
     fn test_success_message() {
@@ -162,5 +163,68 @@ mod tests {
 
         assert_eq!(output.get_success_messages().len(), 10);
         assert_eq!(output.get_info_messages().len(), 10);
+    }
+
+    #[test]
+    fn test_display_yak_pretty_wip_indicator() {
+        let output = InMemoryDisplay::new();
+        let name = Name::from("test-yak");
+        output.display_yak_pretty("", &name, "wip");
+
+        let messages = output.get_info_messages();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            messages[0].contains("●"),
+            "Expected wip state to use filled circle (●), got: {}",
+            messages[0]
+        );
+        assert!(messages[0].contains("test-yak"));
+    }
+
+    #[test]
+    fn test_display_yak_pretty_done_indicator() {
+        let output = InMemoryDisplay::new();
+        let name = Name::from("test-yak");
+        output.display_yak_pretty("", &name, "done");
+
+        let messages = output.get_info_messages();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            messages[0].contains("●"),
+            "Expected done state to use filled circle (●), got: {}",
+            messages[0]
+        );
+        assert!(messages[0].contains("test-yak"));
+    }
+
+    #[test]
+    fn test_display_yak_pretty_todo_indicator() {
+        let output = InMemoryDisplay::new();
+        let name = Name::from("test-yak");
+        output.display_yak_pretty("", &name, "todo");
+
+        let messages = output.get_info_messages();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            messages[0].contains("○"),
+            "Expected todo state to use empty circle (○), got: {}",
+            messages[0]
+        );
+        assert!(messages[0].contains("test-yak"));
+    }
+
+    #[test]
+    fn test_display_yak_pretty_with_prefix() {
+        let output = InMemoryDisplay::new();
+        let name = Name::from("test-yak");
+        output.display_yak_pretty("  ", &name, "wip");
+
+        let messages = output.get_info_messages();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            messages[0].starts_with("  ●"),
+            "Expected output to start with '  ●', got: {}",
+            messages[0]
+        );
     }
 }
