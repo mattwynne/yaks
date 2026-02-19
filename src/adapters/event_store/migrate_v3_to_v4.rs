@@ -103,11 +103,32 @@ impl Migration for MigrateV3ToV4 {
         let mut yaks = Vec::new();
         Self::collect_yaks_recursive(location.repo, &root_tree, None, &mut yaks)?;
 
-        let has_nested = yaks.iter().any(|(_, _, pid)| pid.is_some());
-        if !has_nested && !yaks.is_empty() {
+        if yaks.is_empty() {
             return Ok(());
         }
-        if yaks.is_empty() {
+
+        // Check if any work is needed: nesting to flatten OR entry keys
+        // that don't match their id (e.g., old-style names with spaces)
+        let has_nested = yaks.iter().any(|(_, _, pid)| pid.is_some());
+        let has_miskeyed = root_tree.iter().any(|entry| {
+            if entry.kind() != Some(ObjectType::Tree) {
+                return false;
+            }
+            let entry_name = match entry.name() {
+                Some(n) => n,
+                None => return false,
+            };
+            let subtree = match location.repo.find_tree(entry.id()) {
+                Ok(t) => t,
+                Err(_) => return false,
+            };
+            match Self::read_id(location.repo, &subtree, entry_name) {
+                Ok(id) => id != entry_name,
+                Err(_) => false,
+            }
+        });
+
+        if !has_nested && !has_miskeyed {
             return Ok(());
         }
 
@@ -569,7 +590,9 @@ mod tests {
     fn make_tree_with_only_context(repo: &Repository) -> git2::Tree<'_> {
         let context_blob = repo.blob(b"some notes").unwrap();
         let mut builder = repo.treebuilder(None).unwrap();
-        builder.insert("context.md", context_blob, 0o100644).unwrap();
+        builder
+            .insert("context.md", context_blob, 0o100644)
+            .unwrap();
         let oid = builder.write().unwrap();
         repo.find_tree(oid).unwrap()
     }
@@ -626,7 +649,9 @@ mod tests {
         let yak_id_blob = repo.blob(b"alpha-a1b2").unwrap();
         let mut yak_builder = repo.treebuilder(None).unwrap();
         yak_builder.insert("state", state_blob, 0o100644).unwrap();
-        yak_builder.insert("context.md", ctx_blob, 0o100644).unwrap();
+        yak_builder
+            .insert("context.md", ctx_blob, 0o100644)
+            .unwrap();
         yak_builder.insert("name", yak_name_blob, 0o100644).unwrap();
         yak_builder.insert("id", yak_id_blob, 0o100644).unwrap();
         let yak_tree = yak_builder.write().unwrap();
@@ -663,6 +688,69 @@ mod tests {
         assert!(
             read_yak_blob(&repo, "alpha-a1b2", "name").is_some(),
             "yak should remain after migration"
+        );
+    }
+
+    #[test]
+    fn v3_to_v4_renames_entry_keys_to_match_id() {
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a flat v3 tree where the tree entry key has spaces
+        // but the id blob has the proper slugified version.
+        // This happens when v2→v3 runs on old-style yaks.
+        let state = repo.blob(b"todo").unwrap();
+        let ctx = repo.blob(b"").unwrap();
+        let name = repo.blob(b"fix the tests").unwrap();
+        let id = repo.blob(b"fix-the-tests-a1b2").unwrap();
+
+        let mut yak_builder = repo.treebuilder(None).unwrap();
+        yak_builder.insert("state", state, 0o100644).unwrap();
+        yak_builder.insert("context.md", ctx, 0o100644).unwrap();
+        yak_builder.insert("name", name, 0o100644).unwrap();
+        yak_builder.insert("id", id, 0o100644).unwrap();
+        let yak_tree = yak_builder.write().unwrap();
+
+        let version_blob = repo.blob(b"3").unwrap();
+        let mut root_builder = repo.treebuilder(None).unwrap();
+        // Key point: entry key is "fix the tests" (with spaces)
+        root_builder
+            .insert("fix the tests", yak_tree, 0o040000)
+            .unwrap();
+        root_builder
+            .insert(".schema-version", version_blob, 0o100644)
+            .unwrap();
+        let root_oid = root_builder.write().unwrap();
+        let root_tree = repo.find_tree(root_oid).unwrap();
+
+        let sig = repo.signature().unwrap();
+        repo.commit(
+            Some("refs/notes/yaks"),
+            &sig,
+            &sig,
+            "v3 flat tree with mismatched entry key",
+            &root_tree,
+            &[],
+        )
+        .unwrap();
+
+        let migration = MigrateV3ToV4;
+        migration.migrate(&location_for(&repo)).unwrap();
+
+        // After migration, the yak should be keyed by its id, not the old name
+        assert_eq!(
+            read_yak_blob(&repo, "fix-the-tests-a1b2", "name"),
+            Some("fix the tests".to_string()),
+            "yak should be keyed by id after migration"
+        );
+        assert_eq!(
+            read_yak_blob(&repo, "fix-the-tests-a1b2", "id"),
+            Some("fix-the-tests-a1b2".to_string()),
+        );
+        // The old entry key should no longer exist
+        assert_eq!(
+            read_yak_blob(&repo, "fix the tests", "name"),
+            None,
+            "old space-containing entry key should be gone"
         );
     }
 }
