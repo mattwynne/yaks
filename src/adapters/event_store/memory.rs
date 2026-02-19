@@ -79,4 +79,21 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0], event);
     }
+
+    #[test]
+    fn test_get_all_events_empty_store() {
+        let store = InMemoryEventStore::new();
+        let events = EventStore::get_all_events(&store).unwrap();
+
+        assert_eq!(events.len(), 0);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_reset_from_snapshot_returns_zero() {
+        let mut store = InMemoryEventStore::new();
+        let result = store.reset_from_snapshot(&[]).unwrap();
+
+        assert_eq!(result, 0);
+    }
 }

@@ -1,0 +1,22 @@
+--- src/adapters/user_display/memory_display.rs
++++ replace InMemoryDisplay::clear with ()
+@@ -29,18 +29,17 @@
+     pub fn get_all_messages(&self) -> Vec<String> {
+         let mut all = Vec::new();
+         all.extend(self.success_messages.read().unwrap().clone());
+         all.extend(self.info_messages.read().unwrap().clone());
+         all
+     }
+ 
+     pub fn clear(&self) {
+-        self.success_messages.write().unwrap().clear();
+-        self.info_messages.write().unwrap().clear();
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Default for InMemoryDisplay {
+     fn default() -> Self {
+         Self::new()
+     }
+ }

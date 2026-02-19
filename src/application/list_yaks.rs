@@ -231,6 +231,194 @@ impl UseCase for ListYaks {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::{
+        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    };
+    use crate::application::{AddYak, Application, SetState};
+    use crate::infrastructure::EventBus;
+
+    fn make_app<'a>(
+        event_bus: &'a mut EventBus,
+        storage: &'a InMemoryStorage,
+        display: &'a InMemoryDisplay,
+        input: &'a InMemoryInput,
+        auth: &'a InMemoryAuthentication,
+    ) -> Application<'a> {
+        Application::new(event_bus, storage, display, input, None, None, auth)
+    }
+
+    // Mutant 1 (line 89): only markdown format shows "You have no yaks"
+    // when a filter produces no results. Pretty format should stay silent.
+    #[test]
+    fn filtered_list_shows_no_yaks_message_only_in_markdown() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+
+        // Add a yak that is NOT done so the "done" filter produces no output
+        app.handle(AddYak::new("pending-yak")).unwrap();
+        display.clear();
+
+        // Markdown format: should emit the "no yaks" message
+        app.handle(ListYaks::new("markdown", Some("done"))).unwrap();
+        let markdown_messages = display.get_info_messages();
+        assert!(
+            markdown_messages
+                .iter()
+                .any(|m| m.contains("You have no yaks")),
+            "Markdown format should show 'You have no yaks' when filter has no results, got: {:?}",
+            markdown_messages
+        );
+
+        display.clear();
+
+        // Pretty format: should NOT emit the "no yaks" message
+        app.handle(ListYaks::new("pretty", Some("done"))).unwrap();
+        let pretty_messages = display.get_info_messages();
+        assert!(
+            !pretty_messages
+                .iter()
+                .any(|m| m.contains("You have no yaks")),
+            "Pretty format should NOT show 'You have no yaks', got: {:?}",
+            pretty_messages
+        );
+    }
+
+    // Mutant 2 (line 140): done items sort before non-done items in pretty output
+    #[test]
+    fn done_yaks_sort_before_not_done_yaks() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+
+        // Add two yaks; "beta" will be done, "alpha" will remain todo
+        // Use names that would sort "alpha" before "beta" alphabetically
+        // so any name-only sorting would put alpha first
+        app.handle(AddYak::new("alpha")).unwrap();
+        app.handle(AddYak::new("beta")).unwrap();
+        app.handle(SetState::new("beta", "done")).unwrap();
+        display.clear();
+
+        app.handle(ListYaks::new("pretty", None)).unwrap();
+        let messages = display.get_info_messages();
+
+        // Find positions of alpha and beta in the output
+        let beta_pos = messages.iter().position(|m| m.contains("beta"));
+        let alpha_pos = messages.iter().position(|m| m.contains("alpha"));
+
+        assert!(
+            beta_pos.is_some() && alpha_pos.is_some(),
+            "Both yaks should appear in the output, got: {:?}",
+            messages
+        );
+        assert!(
+            beta_pos.unwrap() < alpha_pos.unwrap(),
+            "Done yak 'beta' should appear before non-done 'alpha', got: {:?}",
+            messages
+        );
+    }
+
+    // Mutants 3 & 4 (line 162): last child uses ╰─ connector, others use ├─
+    #[test]
+    fn tree_connectors_distinguish_last_from_non_last_child() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+
+        // Parent with two children: sorted alphabetically, "aaa" first, "zzz" last
+        app.handle(AddYak::new("parent")).unwrap();
+        app.handle(AddYak::new("aaa").with_parent(Some("parent"))).unwrap();
+        app.handle(AddYak::new("zzz").with_parent(Some("parent"))).unwrap();
+        display.clear();
+
+        app.handle(ListYaks::new("pretty", None)).unwrap();
+        let messages = display.get_info_messages();
+
+        let aaa_line = messages.iter().find(|m| m.contains("aaa"));
+        let zzz_line = messages.iter().find(|m| m.contains("zzz"));
+
+        assert!(aaa_line.is_some(), "Expected 'aaa' in output: {:?}", messages);
+        assert!(zzz_line.is_some(), "Expected 'zzz' in output: {:?}", messages);
+
+        // "aaa" is non-last child (alphabetically first), should use ├─
+        assert!(
+            aaa_line.unwrap().contains("├─"),
+            "Non-last child 'aaa' should use ├─ connector, got: {:?}",
+            aaa_line
+        );
+
+        // "zzz" is last child (alphabetically last), should use ╰─
+        assert!(
+            zzz_line.unwrap().contains("╰─"),
+            "Last child 'zzz' should use ╰─ connector, got: {:?}",
+            zzz_line
+        );
+    }
+
+    // Mutant 5 (line 209): prefix.lines.len() == 1 distinguishes depth-1 from depth-2+.
+    // At depth 1, both branches produce identical output (continuations is empty).
+    // At depth 2+, the mutant (== to !=) drops continuation indentation.
+    // We need a grandchild to detect the difference.
+    #[test]
+    fn grandchild_has_continuation_indent_in_pretty_format() {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+
+        // root → parent → grandchild (depth 2)
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("parent").with_parent(Some("root"))).unwrap();
+        app.handle(AddYak::new("grandchild").with_parent(Some("parent"))).unwrap();
+        display.clear();
+
+        app.handle(ListYaks::new("pretty", None)).unwrap();
+        let messages = display.get_info_messages();
+
+        let gc_line = messages.iter().find(|m| m.contains("grandchild"));
+        assert!(
+            gc_line.is_some(),
+            "Expected 'grandchild' in output: {:?}",
+            messages
+        );
+
+        let line = gc_line.unwrap();
+        // At depth 2, the correct prefix is "  {continuation}{connector}"
+        // where continuation is "   " (3 chars for last-child) or "│  ".
+        // The mutant would produce "  {connector}" (missing continuation).
+        // So grandchild line should be wider than "  ╰─" (5 chars before indicator).
+        assert!(
+            !line.starts_with("  ╰─") && !line.starts_with("  ├─"),
+            "Grandchild (depth 2) should NOT start with '  ╰─' or '  ├─' (that's depth-1 format). \
+             It should have continuation indent before the connector. Got: {:?}",
+            line
+        );
+    }
+
+}
+
 /// Recursively build a YakNode and its children from parent_id grouping
 fn build_node(
     yak: &Yak,

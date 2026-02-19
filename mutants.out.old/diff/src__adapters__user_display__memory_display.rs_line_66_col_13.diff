@@ -1,0 +1,21 @@
+--- src/adapters/user_display/memory_display.rs
++++ delete match arm "done" in <impl DisplayPort for InMemoryDisplay>::display_yak_pretty
+@@ -58,17 +58,17 @@
+             .write()
+             .unwrap()
+             .push(message.to_string());
+     }
+ 
+     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
+         let indicator = match state {
+             "wip" => "●",
+-            "done" => "●",
++             /* ~ changed by cargo-mutants ~ */
+             _ => "○",
+         };
+         self.info_messages
+             .write()
+             .unwrap()
+             .push(format!("{prefix}{indicator} {name}"));
+     }
+ 

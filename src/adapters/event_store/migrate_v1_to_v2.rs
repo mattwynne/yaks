@@ -19,3 +19,16 @@ impl Migration for MigrateV1ToV2 {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::event_store::migration::Migration;
+
+    #[test]
+    fn version_constants() {
+        let m = MigrateV1ToV2;
+        assert_eq!(m.source_version(), 1);
+        assert_eq!(m.target_version(), 2);
+    }
+}

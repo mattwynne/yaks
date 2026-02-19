@@ -1,0 +1,740 @@
+
+*** src/adapters/user_display/memory_display.rs:26:9: replace InMemoryDisplay::get_info_messages -> Vec<String> with vec!["xyzzy".into()]
+
+*** mutation diff:
+--- src/adapters/user_display/memory_display.rs
++++ replace InMemoryDisplay::get_info_messages -> Vec<String> with vec!["xyzzy".into()]
+@@ -18,17 +18,17 @@
+         }
+     }
+ 
+     pub fn get_success_messages(&self) -> Vec<String> {
+         self.success_messages.read().unwrap().clone()
+     }
+ 
+     pub fn get_info_messages(&self) -> Vec<String> {
+-        self.info_messages.read().unwrap().clone()
++        vec!["xyzzy".into()] /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn get_all_messages(&self) -> Vec<String> {
+         let mut all = Vec::new();
+         all.extend(self.success_messages.read().unwrap().clone());
+         all.extend(self.info_messages.read().unwrap().clone());
+         all
+     }
+
+
+*** /nix/store/xss1dpxmam40hd4y2zp215ihkzmpa4wz-rust-toolchain-nixpkgs/bin/cargo test --no-run --verbose --package=yx@0.1.0 --features=test-support
+warning: failed to save last-use data
+This may prevent cargo from accurately tracking what is being used in its global cache. This information is used for automatically removing unused data in the cache.
+
+attempt to write a readonly database
+
+Caused by:
+  Error code 8: Attempt to write a readonly database
+       Fresh unicode-ident v1.0.22
+       Fresh find-msvc-tools v0.1.9
+       Fresh shlex v1.3.0
+       Fresh stable_deref_trait v1.2.1
+       Fresh pkg-config v0.3.32
+       Fresh memchr v2.8.0
+       Fresh regex-syntax v0.8.9
+       Fresh vcpkg v0.2.15
+       Fresh smallvec v1.15.1
+       Fresh writeable v0.6.2
+       Fresh bitflags v2.10.0
+       Fresh proc-macro2 v1.0.106
+       Fresh litemap v0.8.1
+       Fresh heck v0.4.1
+       Fresh itoa v1.0.17
+       Fresh log v0.4.29
+       Fresh cfg-if v1.0.4
+       Fresh minimal-lexical v0.2.1
+       Fresh quote v1.0.44
+       Fresh libc v0.2.180
+       Fresh serde_core v1.0.228
+       Fresh zmij v1.0.20
+       Fresh aho-corasick v1.1.4
+       Fresh utf8parse v0.2.2
+       Fresh once_cell v1.21.3
+       Fresh anstyle v1.0.13
+       Fresh is_terminal_polyfill v1.70.2
+       Fresh anstyle-query v1.1.5
+       Fresh syn v2.0.114
+       Fresh jobserver v0.1.34
+       Fresh errno v0.3.14
+       Fresh icu_normalizer_data v2.1.1
+       Fresh icu_properties_data v2.1.2
+       Fresh anstyle-parse v0.2.7
+       Fresh regex-automata v0.4.14
+       Fresh futures-sink v0.3.31
+       Fresh pin-project-lite v0.2.16
+       Fresh bytecount v0.6.9
+       Fresh futures-core v0.3.31
+       Fresh autocfg v1.5.0
+       Fresh colorchoice v1.0.4
+       Fresh same-file v1.0.6
+       Fresh either v1.15.0
+       Fresh synstructure v0.13.2
+       Fresh cc v1.2.55
+       Fresh zerovec-derive v0.11.2
+       Fresh displaydoc v0.2.5
+       Fresh rustix v1.1.3
+       Fresh serde_derive v1.0.228
+       Fresh sealed v0.5.0
+       Fresh anstream v0.6.21
+       Fresh thiserror-impl v1.0.69
+       Fresh walkdir v2.5.0
+       Fresh crossbeam-utils v0.8.21
+       Fresh futures-channel v0.3.31
+       Fresh futures-macro v0.3.31
+       Fresh zerofrom-derive v0.1.6
+       Fresh yoke-derive v0.8.1
+       Fresh serde v1.0.228
+       Fresh terminal_size v0.4.3
+       Fresh slab v0.4.12
+       Fresh clap_lex v0.7.7
+       Fresh futures-io v0.3.31
+       Fresh futures-task v0.3.31
+       Fresh pin-utils v0.1.0
+       Fresh strsim v0.11.1
+       Fresh utf8_iter v1.0.4
+       Fresh heck v0.5.0
+       Fresh zerofrom v0.1.6
+       Fresh percent-encoding v2.3.2
+       Fresh clap_builder v4.5.56
+       Fresh clap_derive v4.5.55
+       Fresh futures-util v0.3.31
+       Fresh thiserror v1.0.69
+       Fresh synthez-core v0.3.1
+       Fresh crossbeam-epoch v0.9.18
+       Fresh derive_more v0.99.20
+       Fresh yoke v0.8.1
+       Fresh openssl-sys v0.9.111
+       Fresh libz-sys v1.1.23
+       Fresh form_urlencoded v1.2.2
+       Fresh bstr v1.12.1
+       Fresh core-foundation-sys v0.8.7
+       Fresh scopeguard v1.2.0
+       Fresh peg-runtime v0.6.3
+       Fresh unicode-width v0.2.2
+       Fresh regex-syntax v0.7.5
+       Fresh parking_lot_core v0.9.12
+       Fresh clap v4.5.56
+       Fresh crossbeam-deque v0.8.6
+       Fresh zerovec v0.11.5
+       Fresh zerotrie v0.2.3
+       Fresh libssh2-sys v0.3.1
+       Fresh lock_api v0.4.14
+       Fresh anyhow v1.0.100
+       Fresh peg-macros v0.6.3
+       Fresh iana-time-zone v0.1.65
+       Fresh globset v0.4.18
+       Fresh futures-executor v0.3.31
+       Fresh synthez-codegen v0.3.1
+       Fresh getrandom v0.3.4
+       Fresh num-traits v0.2.19
+       Fresh typed-builder-macro v0.15.2
+       Fresh regex v1.12.3
+       Fresh nom v7.1.3
+       Fresh fastrand v2.3.0
+       Fresh tinystr v0.8.2
+       Fresh potential_utf v0.1.4
+       Fresh libgit2-sys v0.17.0+1.8.1
+       Fresh smawk v0.3.2
+       Fresh unicode-linebreak v0.1.5
+       Fresh ignore v0.4.25
+       Fresh chrono v0.4.43
+       Fresh typed-builder v0.15.2
+       Fresh parking_lot v0.12.5
+       Fresh synthez v0.3.1
+       Fresh peg v0.6.3
+       Fresh tempfile v3.24.0
+       Fresh nom_locate v4.2.0
+       Fresh lazy-regex-proc_macros v3.5.1
+       Fresh itertools v0.13.0
+       Fresh icu_locale_core v2.1.1
+       Fresh icu_collections v2.1.1
+       Fresh textwrap v0.16.2
+       Fresh pin-project-internal v1.1.10
+       Fresh atty v0.2.14
+       Fresh serde_json v1.0.149
+       Fresh inflections v1.1.1
+       Fresh sdd v3.0.10
+       Fresh globwalk v0.9.1
+       Fresh cucumber-expressions v0.3.0
+       Fresh lazy-regex v3.5.1
+       Fresh futures v0.3.31
+       Fresh console v0.15.11
+       Fresh smart-default v0.7.1
+       Fresh signal-hook-registry v1.4.8
+       Fresh tokio-macros v2.6.0
+       Fresh serial_test_derive v3.3.1
+       Fresh icu_provider v2.1.1
+       Fresh pin-project v1.1.10
+       Fresh scc v2.4.0
+       Fresh cucumber-codegen v0.21.1
+       Fresh gherkin v0.14.0
+       Fresh socket2 v0.6.2
+       Fresh mio v1.1.1
+       Fresh humantime v2.3.0
+       Fresh linked-hash-map v0.5.6
+       Fresh inventory v0.3.21
+       Fresh bytes v1.11.1
+       Fresh drain_filter_polyfill v0.1.3
+       Fresh icu_normalizer v2.1.1
+       Fresh icu_properties v2.1.2
+       Fresh tokio v1.49.0
+       Fresh cucumber v0.21.1
+       Fresh serial_test v3.3.1
+       Fresh idna_adapter v1.2.1
+       Fresh idna v1.1.0
+       Fresh url v2.5.8
+       Fresh git2 v0.19.0
+       Dirty yx v0.1.0 (/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp): the file `src/adapters/user_display/memory_display.rs` has changed (1771477938.600678112s, 3s after last build at 1771477935.631375134s)
+   Compiling yx v0.1.0 (/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp)
+     Running `rustc --crate-name yx --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --deny=warnings --test --cfg 'feature="default"' --cfg 'feature="test-support"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "test-support"))' -C metadata=618cefef7b00ba51 -C extra-filename=-508d6da744785bac --out-dir /private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps -C incremental=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/incremental -L dependency=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps --extern anyhow=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libanyhow-3fda6e2cbcb10e62.rlib --extern atty=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libatty-11b14f6b9c07211e.rlib --extern chrono=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libchrono-268c73073b5dbb23.rlib --extern clap=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libclap-b8b309e74e5b9418.rlib --extern cucumber=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libcucumber-648ca81f6cca102f.rlib --extern git2=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libgit2-fdc44a09c5eee8f8.rlib --extern libc=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/liblibc-f366397ae4a48c69.rlib --extern regex=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libregex-91d0732e234d4d56.rlib --extern serde=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde-0d266b1ec44382a5.rlib --extern serde_json=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde_json-6beab41f3d1e375e.rlib --extern serial_test=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserial_test-8baaf76feb48fb44.rlib --extern tempfile=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtempfile-10f5bfb142d373f5.rlib --extern thiserror=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libthiserror-7e9fa17344a57716.rlib --extern tokio=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtokio-01e3e5c78eb81c0b.rlib --extern walkdir=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libwalkdir-a3c464dab323c0c3.rlib -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libgit2-sys-3ee7afe1f17aba50/out/build -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libssh2-sys-cd6fbfea6add1939/out/build -L native=/nix/store/2cmpxhlznqq6hw33lk47d2hv45hr2af7-zlib-1.3.1/lib -L 'native=/opt/homebrew/opt/openssl@3/lib'`
+     Running `rustc --crate-name yx --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --deny=warnings --cfg 'feature="default"' --cfg 'feature="test-support"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "test-support"))' -C metadata=ba328b4db070ea6d -C extra-filename=-dc33b475a3a12594 --out-dir /private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps -C incremental=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/incremental -L dependency=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps --extern anyhow=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libanyhow-3fda6e2cbcb10e62.rmeta --extern atty=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libatty-11b14f6b9c07211e.rmeta --extern chrono=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libchrono-268c73073b5dbb23.rmeta --extern clap=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libclap-b8b309e74e5b9418.rmeta --extern git2=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libgit2-fdc44a09c5eee8f8.rmeta --extern libc=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/liblibc-f366397ae4a48c69.rmeta --extern serde=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde-0d266b1ec44382a5.rmeta --extern serde_json=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde_json-6beab41f3d1e375e.rmeta --extern tempfile=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtempfile-10f5bfb142d373f5.rmeta --extern thiserror=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libthiserror-7e9fa17344a57716.rmeta --extern walkdir=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libwalkdir-a3c464dab323c0c3.rmeta -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libgit2-sys-3ee7afe1f17aba50/out/build -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libssh2-sys-cd6fbfea6add1939/out/build -L native=/nix/store/2cmpxhlznqq6hw33lk47d2hv45hr2af7-zlib-1.3.1/lib -L 'native=/opt/homebrew/opt/openssl@3/lib'`
+     Running `rustc --crate-name yx --edition=2021 src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --deny=warnings --test --cfg 'feature="default"' --cfg 'feature="test-support"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "test-support"))' -C metadata=2d396f86ffa2e35a -C extra-filename=-dd25629645d56f42 --out-dir /private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps -C incremental=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/incremental -L dependency=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps --extern anyhow=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libanyhow-3fda6e2cbcb10e62.rlib --extern atty=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libatty-11b14f6b9c07211e.rlib --extern chrono=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libchrono-268c73073b5dbb23.rlib --extern clap=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libclap-b8b309e74e5b9418.rlib --extern cucumber=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libcucumber-648ca81f6cca102f.rlib --extern git2=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libgit2-fdc44a09c5eee8f8.rlib --extern libc=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/liblibc-f366397ae4a48c69.rlib --extern regex=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libregex-91d0732e234d4d56.rlib --extern serde=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde-0d266b1ec44382a5.rlib --extern serde_json=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde_json-6beab41f3d1e375e.rlib --extern serial_test=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserial_test-8baaf76feb48fb44.rlib --extern tempfile=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtempfile-10f5bfb142d373f5.rlib --extern thiserror=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libthiserror-7e9fa17344a57716.rlib --extern tokio=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtokio-01e3e5c78eb81c0b.rlib --extern walkdir=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libwalkdir-a3c464dab323c0c3.rlib --extern yx=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libyx-dc33b475a3a12594.rlib -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libgit2-sys-3ee7afe1f17aba50/out/build -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libssh2-sys-cd6fbfea6add1939/out/build -L native=/nix/store/2cmpxhlznqq6hw33lk47d2hv45hr2af7-zlib-1.3.1/lib -L 'native=/opt/homebrew/opt/openssl@3/lib'`
+     Running `rustc --crate-name cucumber --edition=2021 tests/cucumber.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --deny=warnings --test --cfg 'feature="default"' --cfg 'feature="test-support"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "test-support"))' -C metadata=60f91fc5cf865591 -C extra-filename=-6914c9f41a1df1a4 --out-dir /private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps -C incremental=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/incremental -L dependency=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps --extern anyhow=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libanyhow-3fda6e2cbcb10e62.rlib --extern atty=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libatty-11b14f6b9c07211e.rlib --extern chrono=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libchrono-268c73073b5dbb23.rlib --extern clap=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libclap-b8b309e74e5b9418.rlib --extern cucumber=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libcucumber-648ca81f6cca102f.rlib --extern git2=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libgit2-fdc44a09c5eee8f8.rlib --extern libc=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/liblibc-f366397ae4a48c69.rlib --extern regex=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libregex-91d0732e234d4d56.rlib --extern serde=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde-0d266b1ec44382a5.rlib --extern serde_json=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde_json-6beab41f3d1e375e.rlib --extern serial_test=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserial_test-8baaf76feb48fb44.rlib --extern tempfile=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtempfile-10f5bfb142d373f5.rlib --extern thiserror=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libthiserror-7e9fa17344a57716.rlib --extern tokio=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtokio-01e3e5c78eb81c0b.rlib --extern walkdir=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libwalkdir-a3c464dab323c0c3.rlib --extern yx=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libyx-dc33b475a3a12594.rlib -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libgit2-sys-3ee7afe1f17aba50/out/build -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libssh2-sys-cd6fbfea6add1939/out/build -L native=/nix/store/2cmpxhlznqq6hw33lk47d2hv45hr2af7-zlib-1.3.1/lib -L 'native=/opt/homebrew/opt/openssl@3/lib'`
+     Running `rustc --crate-name yx --edition=2021 src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --deny=warnings --cfg 'feature="default"' --cfg 'feature="test-support"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "test-support"))' -C metadata=7863e61305ec473c -C extra-filename=-c82535ff6af6af1b --out-dir /private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps -C incremental=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/incremental -L dependency=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps --extern anyhow=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libanyhow-3fda6e2cbcb10e62.rlib --extern atty=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libatty-11b14f6b9c07211e.rlib --extern chrono=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libchrono-268c73073b5dbb23.rlib --extern clap=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libclap-b8b309e74e5b9418.rlib --extern git2=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libgit2-fdc44a09c5eee8f8.rlib --extern libc=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/liblibc-f366397ae4a48c69.rlib --extern serde=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde-0d266b1ec44382a5.rlib --extern serde_json=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libserde_json-6beab41f3d1e375e.rlib --extern tempfile=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libtempfile-10f5bfb142d373f5.rlib --extern thiserror=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libthiserror-7e9fa17344a57716.rlib --extern walkdir=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libwalkdir-a3c464dab323c0c3.rlib --extern yx=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/libyx-dc33b475a3a12594.rlib -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libgit2-sys-3ee7afe1f17aba50/out/build -L native=/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/build/libssh2-sys-cd6fbfea6add1939/out/build -L native=/nix/store/2cmpxhlznqq6hw33lk47d2hv45hr2af7-zlib-1.3.1/lib -L 'native=/opt/homebrew/opt/openssl@3/lib'`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+  Executable `/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/yx-508d6da744785bac`
+  Executable `/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/yx-dd25629645d56f42`
+  Executable `/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/cucumber-6914c9f41a1df1a4`
+
+*** result: Success
+
+*** /nix/store/xss1dpxmam40hd4y2zp215ihkzmpa4wz-rust-toolchain-nixpkgs/bin/cargo test --verbose --package=yx@0.1.0 --features=test-support --lib --test cucumber
+warning: failed to save last-use data
+This may prevent cargo from accurately tracking what is being used in its global cache. This information is used for automatically removing unused data in the cache.
+
+attempt to write a readonly database
+
+Caused by:
+  Error code 8: Attempt to write a readonly database
+       Fresh unicode-ident v1.0.22
+       Fresh stable_deref_trait v1.2.1
+       Fresh find-msvc-tools v0.1.9
+       Fresh shlex v1.3.0
+       Fresh pkg-config v0.3.32
+       Fresh memchr v2.8.0
+       Fresh vcpkg v0.2.15
+       Fresh regex-syntax v0.8.9
+       Fresh smallvec v1.15.1
+       Fresh writeable v0.6.2
+       Fresh bitflags v2.10.0
+       Fresh proc-macro2 v1.0.106
+       Fresh litemap v0.8.1
+       Fresh heck v0.4.1
+       Fresh minimal-lexical v0.2.1
+       Fresh log v0.4.29
+       Fresh itoa v1.0.17
+       Fresh cfg-if v1.0.4
+       Fresh quote v1.0.44
+       Fresh libc v0.2.180
+       Fresh serde_core v1.0.228
+       Fresh zmij v1.0.20
+       Fresh aho-corasick v1.1.4
+       Fresh once_cell v1.21.3
+       Fresh utf8parse v0.2.2
+       Fresh autocfg v1.5.0
+       Fresh futures-core v0.3.31
+       Fresh same-file v1.0.6
+       Fresh syn v2.0.114
+       Fresh jobserver v0.1.34
+       Fresh errno v0.3.14
+       Fresh icu_properties_data v2.1.2
+       Fresh icu_normalizer_data v2.1.1
+       Fresh regex-automata v0.4.14
+       Fresh anstyle-parse v0.2.7
+       Fresh pin-project-lite v0.2.16
+       Fresh is_terminal_polyfill v1.70.2
+       Fresh anstyle-query v1.1.5
+       Fresh anstyle v1.0.13
+       Fresh bytecount v0.6.9
+       Fresh colorchoice v1.0.4
+       Fresh futures-sink v0.3.31
+       Fresh walkdir v2.5.0
+       Fresh synstructure v0.13.2
+       Fresh cc v1.2.55
+       Fresh zerovec-derive v0.11.2
+       Fresh displaydoc v0.2.5
+       Fresh rustix v1.1.3
+       Fresh serde_derive v1.0.228
+       Fresh thiserror-impl v1.0.69
+       Fresh sealed v0.5.0
+       Fresh anstream v0.6.21
+       Fresh futures-macro v0.3.31
+       Fresh futures-channel v0.3.31
+       Fresh crossbeam-utils v0.8.21
+       Fresh strsim v0.11.1
+       Fresh zerofrom-derive v0.1.6
+       Fresh yoke-derive v0.8.1
+       Fresh serde v1.0.228
+       Fresh terminal_size v0.4.3
+       Fresh clap_lex v0.7.7
+       Fresh futures-task v0.3.31
+       Fresh pin-utils v0.1.0
+       Fresh utf8_iter v1.0.4
+       Fresh heck v0.5.0
+       Fresh slab v0.4.12
+       Fresh either v1.15.0
+       Fresh percent-encoding v2.3.2
+       Fresh zerofrom v0.1.6
+       Fresh futures-io v0.3.31
+       Fresh form_urlencoded v1.2.2
+       Fresh clap_builder v4.5.56
+       Fresh clap_derive v4.5.55
+       Fresh thiserror v1.0.69
+       Fresh synthez-core v0.3.1
+       Fresh crossbeam-epoch v0.9.18
+       Fresh derive_more v0.99.20
+       Fresh yoke v0.8.1
+       Fresh openssl-sys v0.9.111
+       Fresh libz-sys v1.1.23
+       Fresh futures-util v0.3.31
+       Fresh bstr v1.12.1
+       Fresh core-foundation-sys v0.8.7
+       Fresh peg-runtime v0.6.3
+       Fresh scopeguard v1.2.0
+       Fresh regex-syntax v0.7.5
+       Fresh unicode-width v0.2.2
+       Fresh synthez-codegen v0.3.1
+       Fresh clap v4.5.56
+       Fresh num-traits v0.2.19
+       Fresh crossbeam-deque v0.8.6
+       Fresh parking_lot_core v0.9.12
+       Fresh zerovec v0.11.5
+       Fresh zerotrie v0.2.3
+       Fresh libssh2-sys v0.3.1
+       Fresh getrandom v0.3.4
+       Fresh peg-macros v0.6.3
+       Fresh iana-time-zone v0.1.65
+       Fresh futures-executor v0.3.31
+       Fresh globset v0.4.18
+       Fresh lock_api v0.4.14
+       Fresh anyhow v1.0.100
+       Fresh typed-builder-macro v0.15.2
+       Fresh regex v1.12.3
+       Fresh nom v7.1.3
+       Fresh unicode-linebreak v0.1.5
+       Fresh tinystr v0.8.2
+       Fresh potential_utf v0.1.4
+       Fresh libgit2-sys v0.17.0+1.8.1
+       Fresh smawk v0.3.2
+       Fresh fastrand v2.3.0
+       Fresh parking_lot v0.12.5
+       Fresh nom_locate v4.2.0
+       Fresh typed-builder v0.15.2
+       Fresh peg v0.6.3
+       Fresh ignore v0.4.25
+       Fresh chrono v0.4.43
+       Fresh synthez v0.3.1
+       Fresh itertools v0.13.0
+       Fresh lazy-regex-proc_macros v3.5.1
+       Fresh pin-project-internal v1.1.10
+       Fresh icu_locale_core v2.1.1
+       Fresh icu_collections v2.1.1
+       Fresh textwrap v0.16.2
+       Fresh tempfile v3.24.0
+       Fresh atty v0.2.14
+       Fresh serde_json v1.0.149
+       Fresh sdd v3.0.10
+       Fresh inflections v1.1.1
+       Fresh pin-project v1.1.10
+       Fresh globwalk v0.9.1
+       Fresh cucumber-expressions v0.3.0
+       Fresh lazy-regex v3.5.1
+       Fresh futures v0.3.31
+       Fresh console v0.15.11
+       Fresh smart-default v0.7.1
+       Fresh serial_test_derive v3.3.1
+       Fresh signal-hook-registry v1.4.8
+       Fresh icu_provider v2.1.1
+       Fresh cucumber-codegen v0.21.1
+       Fresh scc v2.4.0
+       Fresh gherkin v0.14.0
+       Fresh tokio-macros v2.6.0
+       Fresh socket2 v0.6.2
+       Fresh mio v1.1.1
+       Fresh humantime v2.3.0
+       Fresh drain_filter_polyfill v0.1.3
+       Fresh inventory v0.3.21
+       Fresh linked-hash-map v0.5.6
+       Fresh bytes v1.11.1
+       Fresh icu_normalizer v2.1.1
+       Fresh icu_properties v2.1.2
+       Fresh serial_test v3.3.1
+       Fresh tokio v1.49.0
+       Fresh cucumber v0.21.1
+       Fresh idna_adapter v1.2.1
+       Fresh idna v1.1.0
+       Fresh url v2.5.8
+       Fresh git2 v0.19.0
+       Fresh yx v0.1.0 (/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `/private/tmp/claude/cargo-mutants-fix-missed-mutants-QqrjhY.tmp/target/debug/deps/yx-508d6da744785bac`
+
+running 300 tests
+test adapters::authentication::git::tests::falls_back_when_git_config_missing ... ok
+test adapters::authentication::git::tests::reads_author_from_git_config ... ok
+test adapters::event_store::git::tests::snapshot_events_empty_tree ... ok
+test adapters::event_store::git::tests::reset_from_snapshot_empty_list ... ok
+test adapters::event_store::git::tests::get_all_events_populates_metadata_from_commits ... ok
+test adapters::event_store::git::tests::append_creates_commit_on_refs_notes_yaks ... ok
+test adapters::event_store::git::tests::added_with_id_keys_tree_entry_by_id ... ok
+test adapters::event_store::git::tests::append_uses_event_metadata_for_commit_signature ... ok
+test adapters::event_store::git::tests::reset_from_snapshot_handles_children ... ok
+test adapters::event_store::git::tests::snapshot_events_includes_custom_fields ... ok
+test adapters::event_store::git::tests::reset_from_snapshot_returns_yak_count ... ok
+test adapters::event_store::git::tests::added_with_parent_id_stores_flat_with_parent_id_blob ... ok
+test adapters::event_store::git::tests::snapshot_events_handles_flat_yaks_with_parent_id ... ok
+test adapters::event_store::git::tests::snapshot_events_reads_metadata_from_tree ... ok
+test adapters::event_store::in_memory_contract::appends_and_retrieves_single_event ... ok
+test adapters::event_store::in_memory_contract::appends_multiple_events ... ok
+test adapters::event_store::in_memory_contract::filters_events_by_yak_id ... ok
+test adapters::event_store::in_memory_contract::returns_empty_when_no_events ... ok
+test adapters::event_store::in_memory_contract::returns_events_in_chronological_order ... ok
+test adapters::event_store::git::tests::reset_from_snapshot_builds_correct_tree ... ok
+test adapters::event_store::in_memory_contract::roundtrips_all_event_types ... ok
+test adapters::event_store::git::tests::reset_from_snapshot_parents_to_existing_commit ... ok
+test adapters::event_store::memory::tests::test_get_all_events_empty_store ... ok
+test adapters::event_store::memory::tests::test_in_memory_event_store ... ok
+test adapters::event_store::memory::tests::test_reset_from_snapshot_returns_zero ... ok
+test adapters::event_store::git::tests::snapshot_events_regenerates_ids_for_legacy_yaks ... ok
+test adapters::event_store::git::tests::rename_nested_yak_updates_correct_entry ... ok
+test adapters::event_store::git::tests::snapshot_events_includes_state_and_context ... ok
+test adapters::event_store::git_contract::returns_empty_when_no_events ... ok
+test adapters::event_store::git::tests::snapshot_events_skips_state_when_todo ... ok
+test adapters::event_store::git::tests::snapshot_events_synthesizes_added_for_each_yak ... ok
+test adapters::event_store::git_contract::appends_and_retrieves_single_event ... ok
+test adapters::event_store::git::tests::state_update_after_add_uses_same_tree_entry ... ok
+test adapters::event_store::migration::tests::brand_new_repo_skips_migrations ... ok
+test adapters::event_store::migration::tests::no_ref_means_brand_new_repo ... ok
+test adapters::event_store::git_contract::appends_multiple_events ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_noop_for_already_flat ... ok
+test adapters::event_store::git_contract::returns_events_in_chronological_order ... ok
+test adapters::event_store::git::tests::state_update_nested_yak_updates_correct_entry ... ok
+test adapters::event_store::git_contract::filters_events_by_yak_id ... ok
+test adapters::event_store::migration::tests::newer_version_errors ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_flattens_two_level_nesting ... ok
+test adapters::user_display::memory_display::tests::test_clear ... FAILED
+test adapters::user_display::memory_display::tests::test_display_yak_pretty_done_indicator ... FAILED
+test adapters::user_display::memory_display::tests::test_display_yak_pretty_todo_indicator ... FAILED
+test adapters::user_display::memory_display::tests::test_display_yak_pretty_wip_indicator ... FAILED
+test adapters::event_store::migration::tests::no_schema_version_blob_means_v1 ... ok
+test adapters::user_display::memory_display::tests::test_display_yak_pretty_with_prefix ... FAILED
+test adapters::user_display::memory_display::tests::test_info_message ... FAILED
+test adapters::user_display::memory_display::tests::test_success_message ... ok
+test adapters::user_display::memory_display::tests::test_multiple_messages ... ok
+test adapters::user_input::in_memory_input::tests::test_ignores_initial_content_and_template ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_no_parent_id_blob_for_root_yaks ... ok
+test adapters::user_display::memory_display::tests::test_thread_safety ... FAILED
+test adapters::user_input::in_memory_input::tests::test_new_returns_none ... ok
+test adapters::user_input::in_memory_input::tests::test_set_content_updates_content ... ok
+test adapters::user_input::in_memory_input::tests::test_with_content_returns_content ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_preserves_all_blobs ... ok
+test adapters::yak_store::directory::tests::test_clear_on_nonexistent_directory ... ok
+test adapters::yak_store::directory::tests::test_added_event_writes_metadata_json ... ok
+test adapters::yak_store::directory::tests::test_added_event_with_id_creates_slug_based_directory ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_flattens_three_level_nesting ... ok
+test adapters::yak_store::directory::tests::test_directory_storage_handles_context_updated_event ... ok
+test adapters::yak_store::directory::tests::test_directory_storage_handles_added_event ... ok
+test adapters::event_store::migration::tests::reads_explicit_schema_version ... ok
+test adapters::yak_store::directory::tests::test_directory_storage_handles_state_updated_event ... ok
+test adapters::yak_store::directory::tests::test_child_yak_nested_under_parent_directory ... ok
+test adapters::event_store::migrate_v3_to_v4::tests::v3_to_v4_preserves_custom_fields ... ok
+test adapters::yak_store::directory::tests::test_directory_storage_read_yak_store_get_yak ... ok
+test adapters::yak_store::directory::tests::test_clear_removes_yak_directories ... ok
+test adapters::yak_store::directory::tests::test_without_git_stores_provided_yaks_path ... ok
+test adapters::yak_store::directory::tests::test_get_yak_populates_created_by_and_created_at ... ok
+test adapters::yak_store::directory::tests::test_directory_storage_read_yak_store_list_yaks ... ok
+test adapters::yak_store::directory_contract::create_duplicate_yak_errors ... ok
+test adapters::yak_store::directory::tests::test_get_yak_populates_custom_fields ... ok
+test adapters::yak_store::directory_contract::context_via_field ... ok
+test adapters::yak_store::directory_contract::child_yak_has_parent_id ... ok
+test adapters::yak_store::directory_contract::delete_nonexistent_yak_succeeds ... ok
+test adapters::yak_store::directory::tests::test_state_update_by_id ... ok
+test adapters::yak_store::directory_contract::create_yak_is_retrievable ... ok
+test adapters::yak_store::directory_contract::delete_yak_removes_it ... ok
+test adapters::event_store::migration::tests::runs_pending_migrations_in_order ... ok
+test adapters::event_store::git_contract::roundtrips_all_event_types ... ok
+test adapters::yak_store::directory_contract::empty_context_is_none ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_exact_match ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_fuzzy_match ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_not_found ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_case_insensitive ... ok
+test adapters::yak_store::directory_contract::list_yaks_empty ... ok
+test adapters::yak_store::directory_contract::get_nonexistent_yak_errors ... ok
+test adapters::yak_store::directory::tests::test_get_yak_populates_children ... ok
+test adapters::yak_store::directory::tests::test_list_yaks_populates_fields_and_children ... ok
+test adapters::yak_store::directory_contract::rename_nonexistent_yak_errors ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_ambiguous ... ok
+test adapters::yak_store::directory_contract::get_yak_defaults ... ok
+test adapters::yak_store::directory_contract::read_nonexistent_field_errors ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_matches_name_substring ... ok
+test adapters::yak_store::directory_contract::write_field_nonexistent_yak_errors ... ok
+test adapters::yak_store::directory_contract::fuzzy_find_yak_id_matches_child_by_name ... ok
+test adapters::yak_store::in_memory_contract::child_yak_has_parent_id ... ok
+test adapters::yak_store::in_memory_contract::context_via_field ... ok
+test adapters::yak_store::directory_contract::list_yaks_returns_all ... ok
+test adapters::yak_store::in_memory_contract::create_duplicate_yak_errors ... ok
+test adapters::yak_store::directory_contract::rename_to_existing_yak_errors ... ok
+test adapters::yak_store::directory_contract::rename_yak_moves_with_fields ... ok
+test adapters::yak_store::in_memory_contract::delete_nonexistent_yak_succeeds ... ok
+test adapters::yak_store::in_memory_contract::create_yak_is_retrievable ... ok
+test adapters::yak_store::in_memory_contract::delete_yak_removes_it ... ok
+test adapters::yak_store::in_memory_contract::empty_context_is_none ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_exact_match ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_ambiguous ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_case_insensitive ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_fuzzy_match ... ok
+test adapters::yak_store::directory_contract::root_yak_has_no_parent_id ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_matches_child_by_name ... ok
+test adapters::yak_store::directory_contract::list_yaks_populates_parent_id ... ok
+test adapters::yak_store::in_memory_contract::get_nonexistent_yak_errors ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_matches_name_substring ... ok
+test adapters::yak_store::in_memory_contract::fuzzy_find_yak_id_not_found ... ok
+test adapters::yak_store::in_memory_contract::get_yak_defaults ... ok
+test adapters::yak_store::in_memory_contract::list_yaks_empty ... ok
+test adapters::yak_store::in_memory_contract::list_yaks_populates_parent_id ... ok
+test adapters::yak_store::in_memory_contract::list_yaks_returns_all ... ok
+test adapters::yak_store::in_memory_contract::read_nonexistent_field_errors ... ok
+test adapters::yak_store::directory_contract::write_field_is_readable ... ok
+test adapters::yak_store::in_memory_contract::rename_nonexistent_yak_errors ... ok
+test adapters::yak_store::in_memory_contract::rename_to_existing_yak_errors ... ok
+test adapters::yak_store::in_memory_contract::rename_yak_moves_with_fields ... ok
+test adapters::yak_store::in_memory_contract::root_yak_has_no_parent_id ... ok
+test adapters::yak_store::in_memory_contract::state_done_via_field ... ok
+test adapters::yak_store::in_memory_contract::write_field_is_readable ... ok
+test adapters::yak_store::in_memory_contract::write_field_nonexistent_yak_errors ... ok
+test adapters::yak_store::in_memory_contract::write_field_with_dots_in_name ... ok
+test adapters::yak_store::memory::tests::test_create_yak_with_parent_id ... ok
+test application::add_yak::tests::test_add_yak_allows_slash_in_name ... ok
+test application::add_yak::tests::test_add_yak_creates_yak ... ok
+test application::add_yak::tests::test_add_yak_with_author_override ... ok
+test application::add_yak::tests::test_add_yak_stores_context_from_input ... ok
+test application::add_yak::tests::test_add_yak_with_context_skips_prompt ... ok
+test application::add_yak::tests::test_add_yak_with_explicit_id ... ok
+test application::add_yak::tests::test_add_yak_with_fields ... ok
+test adapters::yak_store::memory::tests::test_thread_safety ... ok
+test application::add_yak::tests::test_add_yak_with_parent ... ok
+test application::add_yak::tests::test_add_yak_with_state ... ok
+test application::app::tests::test_application_create_yak_via_yak_map ... ok
+test application::app::tests::test_application_mutate_yak_via_yak_map ... ok
+test application::app::tests::test_application_stamps_author_on_events ... ok
+test application::app::tests::test_application_with_yak_map ... ok
+test application::app::tests::test_application_with_yak_map_hierarchy ... ok
+test adapters::yak_store::directory_contract::state_done_via_field ... ok
+test application::app::tests::test_application_with_yak_map_state_propagation ... ok
+test application::completions::tests::add_filters_yak_names_by_prefix ... ok
+test application::completions::tests::completes_yak_names_for_context ... ok
+test application::completions::tests::add_offers_yak_names ... ok
+test application::completions::tests::completes_yak_names_for_rm ... ok
+test application::completions::tests::done_shows_only_incomplete_yaks ... ok
+test application::completions::tests::filters_commands_by_prefix ... ok
+test application::completions::tests::filters_flags_by_prefix ... ok
+test application::completions::tests::filters_yak_names_by_prefix ... ok
+test application::completions::tests::lists_all_commands_when_no_subcommand ... ok
+test application::completions::tests::no_yak_names_for_prune ... ok
+test application::completions::tests::offers_flags_and_yaks_together ... ok
+test application::completions::tests::offers_flags_for_done ... ok
+test application::completions::tests::offers_show_flag_for_context ... ok
+test application::set_state::tests::errors_on_not_found ... ok
+test application::set_state::tests::errors_on_ambiguous_fuzzy_name ... ok
+test application::set_state::tests::resolves_fuzzy_name ... ok
+test application::show_log::tests::test_show_log_fails_when_not_configured ... ok
+test application::set_state::tests::sets_state_with_exact_name ... ok
+test adapters::yak_store::directory_contract::write_field_with_dots_in_name ... ok
+test application::sync_yaks::tests::test_sync_calls_sync_port ... ok
+test application::sync_yaks::tests::test_sync_fails_when_not_configured ... ok
+test application::show_log::tests::test_show_log_displays_events ... ok
+test domain::event::tests::format_message_added ... ok
+test application::set_state::tests::sets_state_recursively ... ok
+test domain::event::tests::format_message_field_updated ... ok
+test domain::event::tests::metadata_returns_event_metadata ... ok
+test domain::event::tests::parse_legacy_context_updated_as_field_updated ... ok
+test domain::event::tests::parse_legacy_renamed_as_field_updated ... ok
+test domain::event::tests::parse_legacy_state_updated_as_field_updated ... ok
+test domain::event::tests::parse_roundtrip ... ok
+test domain::event::tests::parse_unknown_tag_errors ... ok
+test domain::event::tests::yak_id_returns_correct_id ... ok
+test domain::event_format::tests::errors_on_missing_quote ... ok
+test domain::event_format::tests::errors_on_unterminated_quote ... ok
+test domain::event_format::tests::parses_multiple_quoted_values ... ok
+test domain::event_format::tests::parses_single_quoted_value ... ok
+test domain::event_format::tests::parses_values_with_spaces ... ok
+test domain::events::added::tests::event_tag ... ok
+test domain::events::added::tests::parse_v2_event_without_id_or_parent ... ok
+test domain::events::added::tests::parse_v3_event_without_parent ... ok
+test domain::events::added::tests::roundtrip ... ok
+test domain::events::added::tests::roundtrip_with_parent_id ... ok
+test domain::events::added::tests::roundtrip_without_parent_id ... ok
+test domain::events::field_updated::tests::format_excludes_content ... ok
+test domain::events::field_updated::tests::parse_sets_empty_content ... ok
+test domain::events::moved::tests::roundtrip_to_root ... ok
+test domain::events::moved::tests::roundtrip_with_parent ... ok
+test domain::events::removed::tests::roundtrip ... ok
+test domain::field::tests::test_validate_field_name_empty ... ok
+test domain::field::tests::test_validate_field_name_format_allows_reserved ... ok
+test domain::field::tests::test_validate_field_name_invalid_slash ... ok
+test domain::field::tests::test_validate_field_name_invalid_special_chars ... ok
+test domain::field::tests::test_validate_field_name_reserved_context ... ok
+test domain::field::tests::test_validate_field_name_reserved_name ... ok
+test domain::field::tests::test_validate_field_name_reserved_parent_id ... ok
+test domain::field::tests::test_validate_field_name_reserved_state ... ok
+test domain::field::tests::test_validate_field_name_valid ... ok
+test domain::ports::event_listener::tests::test_event_listener_receives_events ... ok
+test domain::ports::yak_store::tests::test_store_get_yak ... ok
+test domain::slug::tests::generate_id_differs_by_parent ... ok
+test domain::slug::tests::generate_id_includes_hash_suffix ... ok
+test domain::slug::tests::generate_id_is_deterministic ... ok
+test domain::slug::tests::generate_id_root_differs_from_child ... ok
+test domain::slug::tests::generate_id_with_parent_is_deterministic ... ok
+test domain::slug::tests::name_display ... ok
+test domain::slug::tests::name_from_string ... ok
+test domain::slug::tests::slugify_collapses_multiple_hyphens ... ok
+test domain::slug::tests::slugify_is_deterministic ... ok
+test domain::slug::tests::slug_display ... ok
+test domain::slug::tests::slugify_lowercases_and_hyphenates ... ok
+test domain::slug::tests::slugify_preserves_kebab_case ... ok
+test domain::slug::tests::slugify_strips_special_characters ... ok
+test domain::slug::tests::slugify_trims_leading_and_trailing_whitespace ... ok
+test domain::slug::tests::yak_id_as_ref_str ... ok
+test domain::slug::tests::yak_id_display ... ok
+test domain::slug::tests::yak_id_from_string ... ok
+test domain::yak::tests::test_is_done_derived_from_state ... ok
+test domain::yak::tests::test_validate_yak_name_empty ... ok
+test domain::yak::tests::test_validate_yak_name_null_byte_forbidden ... ok
+test domain::yak::tests::test_validate_yak_name_slash_allowed ... ok
+test domain::yak::tests::test_validate_yak_name_special_chars_allowed ... ok
+test domain::yak::tests::test_validate_yak_name_valid ... ok
+test domain::yak_map::tests::test_add_yak_allows_different_slug_at_root ... ok
+test domain::yak_map::tests::test_add_yak_allows_same_slug_under_different_parent ... ok
+test domain::yak_map::tests::test_add_yak_allows_same_slug_under_different_parents ... ok
+test domain::yak_map::tests::test_add_yak_child_preserves_parent_context ... ok
+test domain::yak_map::tests::test_add_yak_creates_yak_with_todo_state ... ok
+test domain::yak_map::tests::test_add_yak_emits_added_event ... ok
+test domain::yak_map::tests::test_add_yak_emits_leaf_name_in_event ... ok
+test domain::yak_map::tests::test_add_yak_generates_slug_id ... ok
+test adapters::event_store::migration::tests::version_matches_is_noop ... ok
+test domain::yak_map::tests::test_add_yak_rejects_colliding_slug_at_root ... ok
+test domain::yak_map::tests::test_add_yak_rejects_colliding_slug_under_same_parent ... ok
+test domain::yak_map::tests::test_add_yak_rejects_extra_spaces_colliding_slug_at_root ... ok
+test domain::yak_map::tests::test_add_yak_stamps_provided_metadata ... ok
+test domain::yak_map::tests::test_add_yak_stores_name_in_yak_state ... ok
+test domain::yak_map::tests::test_add_yak_with_all_options ... ok
+test domain::yak_map::tests::test_add_yak_with_context ... ok
+test domain::yak_map::tests::test_add_yak_with_context_emits_two_events ... ok
+test domain::yak_map::tests::test_add_yak_with_explicit_id ... ok
+test domain::yak_map::tests::test_add_yak_with_fields ... ok
+test domain::yak_map::tests::test_add_yak_with_initial_state ... ok
+test domain::yak_map::tests::test_add_yak_with_invalid_state_fails ... ok
+test domain::yak_map::tests::test_add_yak_with_nonexistent_parent_fails ... ok
+test domain::yak_map::tests::test_add_yak_with_parent_id ... ok
+test domain::yak_map::tests::test_build_display_name_nested ... ok
+test domain::yak_map::tests::test_build_display_name_root ... ok
+test domain::yak_map::tests::test_from_store_empty ... ok
+test domain::yak_map::tests::test_from_store_uses_parent_id_and_leaf_name ... ok
+test domain::yak_map::tests::test_from_store_uses_parent_id_from_yak ... ok
+test domain::yak_map::tests::test_from_store_with_yaks ... ok
+test domain::yak_map::tests::test_move_to_rejects_colliding_slug_at_destination ... ok
+test domain::yak_map::tests::test_new_yak_map_is_empty ... ok
+test domain::yak_map::tests::test_move_yak_to_fails_if_has_children ... ok
+test domain::yak_map::tests::test_prune_cascades_through_done_hierarchy ... ok
+test domain::yak_map::tests::test_prune_emits_removed_events ... ok
+test domain::yak_map::tests::test_prune_removes_done_leaf_yaks ... ok
+test domain::yak_map::tests::test_remove_yak_emits_event ... ok
+test domain::yak_map::tests::test_remove_yak_fails_for_nonexistent_yak ... ok
+test domain::yak_map::tests::test_remove_yak_fails_if_has_children ... ok
+test domain::yak_map::tests::test_remove_yak_removes_yak ... ok
+test domain::yak_map::tests::test_rename_allows_same_slug_for_self ... ok
+test domain::yak_map::tests::test_rename_emits_renamed_event ... ok
+test domain::yak_map::tests::test_rename_preserves_context ... ok
+test domain::yak_map::tests::test_rename_rejects_colliding_slug_with_sibling ... ok
+test domain::yak_map::tests::test_take_events_removes_events ... ok
+test domain::yak_map::tests::test_update_context_emits_event ... ok
+test domain::yak_map::tests::test_update_context_fails_for_nonexistent_yak ... ok
+test domain::yak_map::tests::test_update_context_updates_context ... ok
+test domain::yak_map::tests::test_update_field_fails_for_nonexistent_yak ... ok
+test domain::yak_map::tests::test_update_field_emits_event ... ok
+test domain::yak_map::tests::test_update_state_allows_marking_parent_done_with_all_children_done ... ok
+test domain::yak_map::tests::test_update_state_changes_state ... ok
+test domain::yak_map::tests::test_update_state_demotes_done_parent_when_child_leaves_done ... ok
+test domain::yak_map::tests::test_update_state_demotes_through_multiple_levels ... ok
+test domain::yak_map::tests::test_update_state_only_propagates_on_todo_transition ... ok
+test domain::yak_map::tests::test_update_state_prevents_marking_parent_done_with_incomplete_children ... ok
+test domain::yak_map::tests::test_update_state_only_demotes_done_ancestors ... ok
+test domain::yak_map::tests::test_update_state_propagates_through_multiple_levels ... ok
+test domain::yak_map::tests::test_update_state_validates_state ... ok
+test domain::yak_map::tests::test_update_state_propagates_to_parent_on_todo_transition ... ok
+test infrastructure::event_bus::tests::test_event_bus_notifies_listeners ... ok
+test infrastructure::event_bus::tests::test_event_bus_publishes_to_store ... ok
+test adapters::event_store::migration::tests::v2_to_v3_adds_name_and_id_to_old_style_yak ... ok
+test adapters::event_store::migration::tests::v2_to_v3_preserves_existing_name_and_id ... ok
+test adapters::event_store::migration::tests::v2_to_v3_adds_id_to_new_style_yak_missing_id ... ok
+test adapters::event_store::migration::tests::v2_to_v3_handles_old_parent_with_new_child ... ok
+test adapters::event_store::migration::tests::v2_to_v3_preserves_schema_version_blob ... ok
+test adapters::event_store::migration::tests::v2_to_v3_handles_nested_old_style_yaks ... ok
+
+failures:
+
+---- adapters::user_display::memory_display::tests::test_clear stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_clear' (69180438) panicked at src/adapters/user_display/memory_display.rs:141:9:
+assertion `left == right` failed
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- adapters::user_display::memory_display::tests::test_display_yak_pretty_done_indicator stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_display_yak_pretty_done_indicator' (69180439) panicked at src/adapters/user_display/memory_display.rs:192:9:
+Expected done state to use filled circle (●), got: xyzzy
+
+---- adapters::user_display::memory_display::tests::test_display_yak_pretty_todo_indicator stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_display_yak_pretty_todo_indicator' (69180440) panicked at src/adapters/user_display/memory_display.rs:208:9:
+Expected todo state to use empty circle (○), got: xyzzy
+
+---- adapters::user_display::memory_display::tests::test_display_yak_pretty_wip_indicator stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_display_yak_pretty_wip_indicator' (69180441) panicked at src/adapters/user_display/memory_display.rs:176:9:
+Expected wip state to use filled circle (●), got: xyzzy
+
+---- adapters::user_display::memory_display::tests::test_display_yak_pretty_with_prefix stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_display_yak_pretty_with_prefix' (69180442) panicked at src/adapters/user_display/memory_display.rs:224:9:
+Expected output to start with '  ●', got: xyzzy
+
+---- adapters::user_display::memory_display::tests::test_info_message stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_info_message' (69180443) panicked at src/adapters/user_display/memory_display.rs:117:9:
+assertion `left == right` failed
+  left: "xyzzy"
+ right: "Information"
+
+---- adapters::user_display::memory_display::tests::test_thread_safety stdout ----
+
+thread 'adapters::user_display::memory_display::tests::test_thread_safety' (69180446) panicked at src/adapters/user_display/memory_display.rs:165:9:
+assertion `left == right` failed
+  left: 1
+ right: 10
+
+
+failures:
+    adapters::user_display::memory_display::tests::test_clear
+    adapters::user_display::memory_display::tests::test_display_yak_pretty_done_indicator
+    adapters::user_display::memory_display::tests::test_display_yak_pretty_todo_indicator
+    adapters::user_display::memory_display::tests::test_display_yak_pretty_wip_indicator
+    adapters::user_display::memory_display::tests::test_display_yak_pretty_with_prefix
+    adapters::user_display::memory_display::tests::test_info_message
+    adapters::user_display::memory_display::tests::test_thread_safety
+
+test result: FAILED. 293 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+error: test failed, to rerun pass `-p yx --lib`
+
+*** result: Failure(101)

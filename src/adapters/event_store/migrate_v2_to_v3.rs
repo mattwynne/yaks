@@ -147,3 +147,69 @@ impl Migration for MigrateV2ToV3 {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::event_store::migration::Migration;
+    use crate::adapters::event_store::migration::tests::setup_test_repo;
+
+    #[test]
+    fn version_constants() {
+        let m = MigrateV2ToV3;
+        assert_eq!(m.source_version(), 2);
+        assert_eq!(m.target_version(), 3);
+    }
+
+    fn make_tree_with_only_state(repo: &Repository) -> git2::Tree<'_> {
+        let state_blob = repo.blob(b"todo").unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder.insert("state", state_blob, 0o100644).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    fn make_tree_with_only_context(repo: &Repository) -> git2::Tree<'_> {
+        let context_blob = repo.blob(b"some notes").unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder.insert("context.md", context_blob, 0o100644).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    fn make_empty_tree(repo: &Repository) -> git2::Tree<'_> {
+        let builder = repo.treebuilder(None).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    #[test]
+    fn is_yak_subtree_detects_tree_with_only_state() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_tree_with_only_state(&repo);
+        assert!(
+            MigrateV2ToV3::is_yak_subtree(&repo, &tree),
+            "a tree with only 'state' should be detected as a yak subtree"
+        );
+    }
+
+    #[test]
+    fn is_yak_subtree_detects_tree_with_only_context() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_tree_with_only_context(&repo);
+        assert!(
+            MigrateV2ToV3::is_yak_subtree(&repo, &tree),
+            "a tree with only 'context.md' should be detected as a yak subtree"
+        );
+    }
+
+    #[test]
+    fn is_yak_subtree_rejects_empty_tree() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_empty_tree(&repo);
+        assert!(
+            !MigrateV2ToV3::is_yak_subtree(&repo, &tree),
+            "an empty tree should not be detected as a yak subtree"
+        );
+    }
+}

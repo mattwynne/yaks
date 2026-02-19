@@ -121,4 +121,73 @@ mod tests {
             "Event reader not configured"
         );
     }
+
+    #[test]
+    fn test_show_log_separates_multiple_events_with_blank_line() {
+        let event_store = InMemoryEventStore::new();
+        let reader = event_store.clone();
+        let mut event_bus = EventBus::new(Box::new(event_store));
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+
+        let auth = InMemoryAuthentication::new();
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            Some(&reader),
+            &auth,
+        );
+
+        // Add two yaks to create two events
+        app.handle(AddYak::new("first yak")).unwrap();
+        app.handle(AddYak::new("second yak")).unwrap();
+
+        // Clear display to isolate ShowLog messages from AddYak messages
+        display.clear();
+
+        app.handle(ShowLog::new()).unwrap();
+
+        let info_messages = display.get_info_messages();
+        // With 2 events, there should be exactly 1 blank separator between them
+        // The separator is an empty string added via display.info("")
+        // log_entry adds 2 messages per event (author line + message line)
+        // Expected order for 2 events:
+        // - Event 1 author line
+        // - Event 1 message line
+        // - Blank separator (only if i > 0, so before event 2)
+        // - Event 2 author line
+        // - Event 2 message line
+        // So we expect a blank line at index 2 (0-indexed)
+
+        // Find the index of the blank line
+        let blank_indices: Vec<usize> = info_messages
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, m)| if m.is_empty() { Some(idx) } else { None })
+            .collect();
+
+        assert_eq!(
+            blank_indices.len(),
+            1,
+            "Expected exactly 1 blank separator, got {}. Full messages: {:?}",
+            blank_indices.len(),
+            info_messages
+        );
+
+        // The blank line should be at index 2 (after first event's 2 lines)
+        assert_eq!(
+            blank_indices[0],
+            2,
+            "Expected blank line at index 2 (between events), got index {}. Messages: {:?}",
+            blank_indices[0],
+            info_messages
+        );
+    }
 }

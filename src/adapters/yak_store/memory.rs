@@ -471,4 +471,165 @@ mod tests {
         let yaks = ReadYakStore::list_yaks(&storage).unwrap();
         assert_eq!(yaks.len(), 6);
     }
+
+    // Mutant 1: find_children_from_yaks pid == parent_key comparison
+    // Verifies that children are only returned for the correct parent,
+    // not for every other yak (which would happen if == became !=).
+    #[test]
+    fn test_find_children_returns_only_correct_parent_children() {
+        let storage = InMemoryStorage::new();
+        let parent_id = YakId::from("parent-id-001");
+        let other_id = YakId::from("other-id-002");
+        let child_id = YakId::from("child-id-003");
+        let unrelated_id = YakId::from("unrelated-id-004");
+
+        storage
+            .create_yak(&Name::from("parent"), &parent_id, None)
+            .unwrap();
+        storage
+            .create_yak(&Name::from("other"), &other_id, None)
+            .unwrap();
+        storage
+            .create_yak(
+                &Name::from("child"),
+                &child_id,
+                Some(&parent_id),
+            )
+            .unwrap();
+        storage
+            .create_yak(&Name::from("unrelated"), &unrelated_id, None)
+            .unwrap();
+
+        let parent_yak = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
+        assert_eq!(parent_yak.children.len(), 1);
+        assert_eq!(parent_yak.children[0], child_id);
+
+        // other yak has no children
+        let other_yak = ReadYakStore::get_yak(&storage, &other_id).unwrap();
+        assert!(other_yak.children.is_empty());
+
+        // unrelated yak has no children
+        let unrelated_yak = ReadYakStore::get_yak(&storage, &unrelated_id).unwrap();
+        assert!(unrelated_yak.children.is_empty());
+    }
+
+    // Mutant 2: rename_yak `!fields.contains_key(NAME_FIELD)` — legacy detection
+    // Mutant 3: rename_yak `is_legacy && key == id.as_str()` — re-keying logic
+    // An id-based yak (has a real id, not empty) should remain retrievable
+    // by its original id after renaming, and only the name field should change.
+    #[test]
+    fn test_rename_id_based_yak_keeps_original_id_as_key() {
+        let storage = InMemoryStorage::new();
+        let yak_id = YakId::from("my-yak-abc123");
+
+        storage
+            .create_yak(&Name::from("original-name"), &yak_id, None)
+            .unwrap();
+
+        storage
+            .rename_yak(&yak_id, &Name::from("new-name"))
+            .unwrap();
+
+        // Must still be retrievable by original id
+        let yak = ReadYakStore::get_yak(&storage, &yak_id).unwrap();
+        assert_eq!(yak.name.as_str(), "new-name");
+        assert_eq!(yak.id, yak_id);
+    }
+
+    // Complement to mutant 3: legacy yak (key == name) should get re-keyed
+    // so it becomes retrievable under the new name after rename.
+    #[test]
+    fn test_rename_legacy_yak_updates_key() {
+        let storage = InMemoryStorage::new();
+        // Legacy yak: empty id means key is the name
+        storage
+            .create_yak(&Name::from("legacy-name"), &YakId::from(""), None)
+            .unwrap();
+
+        let legacy_id = ReadYakStore::fuzzy_find_yak_id(&storage, "legacy-name").unwrap();
+        storage
+            .rename_yak(&legacy_id, &Name::from("renamed-legacy"))
+            .unwrap();
+
+        // New name should be findable
+        let yak = ReadYakStore::fuzzy_find_yak_id(&storage, "renamed-legacy");
+        assert!(yak.is_ok());
+
+        // Old name should no longer exist
+        let old = ReadYakStore::fuzzy_find_yak_id(&storage, "legacy-name");
+        assert!(old.is_err());
+    }
+
+    // Mutants 4-6: get_yak custom field filtering
+    // Verifies that:
+    //   - custom fields ARE included in get_yak result
+    //   - reserved fields (state, context.md, name, id) are NOT included
+    //   - the internal _parent_id field is NOT included
+    #[test]
+    fn test_get_yak_custom_fields_excludes_reserved_and_parent_id() {
+        let storage = InMemoryStorage::new();
+        let yak_id = YakId::from("field-test-id");
+
+        storage
+            .create_yak(&Name::from("field-test"), &yak_id, Some(&YakId::from("p-001")))
+            .unwrap();
+
+        // Write a custom field
+        WriteYakStore::write_field(&storage, &yak_id, "notes", "some note").unwrap();
+        WriteYakStore::write_field(&storage, &yak_id, "priority", "high").unwrap();
+
+        let yak = ReadYakStore::get_yak(&storage, &yak_id).unwrap();
+
+        // Custom fields must be present
+        assert_eq!(yak.fields.get("notes").map(|s| s.as_str()), Some("some note"));
+        assert_eq!(yak.fields.get("priority").map(|s| s.as_str()), Some("high"));
+
+        // Reserved fields must not appear in custom fields map
+        assert!(!yak.fields.contains_key("state"));
+        assert!(!yak.fields.contains_key("context.md"));
+        assert!(!yak.fields.contains_key("name"));
+        assert!(!yak.fields.contains_key("id"));
+
+        // Internal _parent_id field must not appear
+        assert!(!yak.fields.contains_key("_parent_id"));
+    }
+
+    // Mutant 7: list_yaks custom field filtering (same three mutations as get_yak)
+    // Verifies the same invariants but through list_yaks instead of get_yak.
+    #[test]
+    fn test_list_yaks_custom_fields_excludes_reserved_and_parent_id() {
+        let storage = InMemoryStorage::new();
+        let yak_id = YakId::from("list-field-test-id");
+
+        storage
+            .create_yak(
+                &Name::from("list-field-test"),
+                &yak_id,
+                Some(&YakId::from("parent-xyz")),
+            )
+            .unwrap();
+
+        WriteYakStore::write_field(&storage, &yak_id, "notes", "listed note").unwrap();
+
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        let yak = yaks
+            .iter()
+            .find(|y| y.id == yak_id)
+            .expect("yak not found in list");
+
+        // Custom field present
+        assert_eq!(
+            yak.fields.get("notes").map(|s| s.as_str()),
+            Some("listed note")
+        );
+
+        // Reserved fields absent
+        assert!(!yak.fields.contains_key("state"));
+        assert!(!yak.fields.contains_key("context.md"));
+        assert!(!yak.fields.contains_key("name"));
+        assert!(!yak.fields.contains_key("id"));
+
+        // Internal _parent_id absent
+        assert!(!yak.fields.contains_key("_parent_id"));
+    }
 }
