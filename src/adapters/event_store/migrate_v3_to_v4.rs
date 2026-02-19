@@ -450,10 +450,7 @@ mod tests {
 
         // Schema version unchanged (migration doesn't bump it)
         use crate::adapters::event_store::migration::read_schema_version;
-        assert_eq!(
-            read_schema_version(&location_for(&repo)).unwrap(),
-            Some(3)
-        );
+        assert_eq!(read_schema_version(&location_for(&repo)).unwrap(), Some(3));
     }
 
     #[test]

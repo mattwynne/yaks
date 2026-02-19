@@ -1,5 +1,6 @@
 // Git ref sync adapter - synchronizes yaks via git refs/notes/yaks
 
+use crate::adapters::event_store::migration::{EventStoreLocation, Migrator};
 use crate::domain::ports::SyncPort;
 use anyhow::{Context, Result};
 use git2::{Oid, Repository};
@@ -442,6 +443,15 @@ impl SyncPort for GitRefSync {
         // Step 1: Fetch remote
         self.fetch_remote()?;
 
+        // Migrate remote data to current schema before merging
+        if self.get_remote_ref()?.is_some() {
+            let location = EventStoreLocation {
+                repo: &self.repo,
+                ref_name: "refs/remotes/origin/yaks",
+            };
+            Migrator::for_current_version().ensure_schema(&location)?;
+        }
+
         let remote_ref = self.get_remote_ref()?;
         let local_ref = self.get_local_ref()?;
 
@@ -493,5 +503,106 @@ impl SyncPort for GitRefSync {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn setup_repo_pair() -> (TempDir, TempDir, Repository, Repository) {
+        let remote_dir = TempDir::new().unwrap();
+        let remote_repo = Repository::init_bare(remote_dir.path()).unwrap();
+        let mut config = remote_repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+
+        let local_dir = TempDir::new().unwrap();
+        let local_repo = Repository::init(local_dir.path()).unwrap();
+        let mut config = local_repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+        local_repo
+            .remote("origin", remote_dir.path().to_str().unwrap())
+            .unwrap();
+
+        (remote_dir, local_dir, remote_repo, local_repo)
+    }
+
+    #[test]
+    fn sync_migrates_v1_remote_before_merging() {
+        let (_remote_dir, local_dir, remote_repo, _local_repo) = setup_repo_pair();
+
+        // Create V1-format yak on remote's refs/notes/yaks
+        // (no .schema-version, no name/id blobs)
+        let state_blob = remote_repo.blob(b"todo").unwrap();
+        let context_blob = remote_repo.blob(b"").unwrap();
+
+        let mut yak_builder = remote_repo.treebuilder(None).unwrap();
+        yak_builder.insert("state", state_blob, 0o100644).unwrap();
+        yak_builder
+            .insert("context.md", context_blob, 0o100644)
+            .unwrap();
+        let yak_tree = yak_builder.write().unwrap();
+
+        let mut root_builder = remote_repo.treebuilder(None).unwrap();
+        root_builder
+            .insert("fix the tests", yak_tree, 0o040000)
+            .unwrap();
+        let root_tree_oid = root_builder.write().unwrap();
+        let root_tree = remote_repo.find_tree(root_tree_oid).unwrap();
+
+        let sig = remote_repo.signature().unwrap();
+        remote_repo
+            .commit(
+                Some("refs/notes/yaks"),
+                &sig,
+                &sig,
+                "Added: fix the tests",
+                &root_tree,
+                &[],
+            )
+            .unwrap();
+
+        // Create local .yaks directory with one v4-format yak
+        let yaks_path = local_dir.path().join(".yaks");
+        std::fs::create_dir_all(yaks_path.join("local-yak-a1b2")).unwrap();
+        std::fs::write(yaks_path.join("local-yak-a1b2/state"), "todo").unwrap();
+        std::fs::write(yaks_path.join("local-yak-a1b2/context.md"), "").unwrap();
+        std::fs::write(yaks_path.join("local-yak-a1b2/name"), "local yak").unwrap();
+        std::fs::write(yaks_path.join("local-yak-a1b2/id"), "local-yak-a1b2").unwrap();
+
+        // Run sync
+        let sync = GitRefSync::new(local_dir.path(), &yaks_path).unwrap();
+        sync.sync().unwrap();
+
+        // Verify: local yak still exists
+        assert!(
+            yaks_path.join("local-yak-a1b2/state").exists(),
+            "local yak should still exist after sync"
+        );
+
+        // Verify: remote yak was migrated and appears with name/id
+        let mut found_remote_yak = false;
+        for entry in std::fs::read_dir(&yaks_path).unwrap() {
+            let entry = entry.unwrap();
+            let name_path = entry.path().join("name");
+            if name_path.exists() {
+                let name = std::fs::read_to_string(&name_path).unwrap();
+                if name == "fix the tests" {
+                    found_remote_yak = true;
+                    assert!(
+                        entry.path().join("id").exists(),
+                        "migrated remote yak should have id file"
+                    );
+                    break;
+                }
+            }
+        }
+        assert!(
+            found_remote_yak,
+            "remote yak 'fix the tests' should exist after sync"
+        );
     }
 }

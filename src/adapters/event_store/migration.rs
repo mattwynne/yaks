@@ -242,9 +242,7 @@ pub(crate) mod tests {
         let yak_tree = yak_builder.write().unwrap();
 
         let mut root_builder = repo.treebuilder(None).unwrap();
-        root_builder
-            .insert("test-yak", yak_tree, 0o040000)
-            .unwrap();
+        root_builder.insert("test-yak", yak_tree, 0o040000).unwrap();
         let root_tree_oid = root_builder.write().unwrap();
         let root_tree = repo.find_tree(root_tree_oid).unwrap();
 
@@ -275,9 +273,7 @@ pub(crate) mod tests {
         yak_builder.insert("state", state_blob, 0o100644).unwrap();
         let yak_tree = yak_builder.write().unwrap();
         let mut root_builder = repo.treebuilder(None).unwrap();
-        root_builder
-            .insert("test-yak", yak_tree, 0o040000)
-            .unwrap();
+        root_builder.insert("test-yak", yak_tree, 0o040000).unwrap();
         let root_tree_oid = root_builder.write().unwrap();
         let root_tree = repo.find_tree(root_tree_oid).unwrap();
         let sig = repo.signature().unwrap();
