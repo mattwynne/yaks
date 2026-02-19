@@ -130,3 +130,9 @@ Feature: yx reset - Rebuild yaks from git tree
       When I hard reset the yaks from disk to git
       And I run yx log
       Then the output should include "<"
+
+    Example: Hard reset uses current user for legacy yaks without metadata
+      Given a yak "legacy yak" created with the v2 schema
+      When I hard reset the yaks from disk to git
+      And I run yx log
+      Then the output should not include "unknown"
