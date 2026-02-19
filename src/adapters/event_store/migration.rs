@@ -9,6 +9,13 @@ use super::migrate_v3_to_v4::MigrateV3ToV4;
 /// The schema version this build of yx expects.
 pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
+/// A reference to a specific event store location in a git repository.
+/// Bundles the repo and ref name to avoid threading them separately.
+pub struct EventStoreLocation<'a> {
+    pub repo: &'a Repository,
+    pub ref_name: &'a str,
+}
+
 /// A migration that transforms the event store from one schema version to the next.
 pub trait Migration {
     fn source_version(&self) -> u32;
@@ -55,7 +62,11 @@ impl Migrator {
     /// - Older version: runs migrations in order, stamps new version.
     /// - Newer version: errors with "please update yx".
     pub fn ensure_schema(&self, repo: &Repository) -> Result<()> {
-        let current = match read_schema_version(repo)? {
+        let location = EventStoreLocation {
+            repo,
+            ref_name: "refs/notes/yaks",
+        };
+        let current = match read_schema_version(&location)? {
             Some(v) => v,
             None => return Ok(()), // Brand new repo — version stamped on first write
         };
@@ -87,16 +98,16 @@ impl Migrator {
     }
 }
 
-/// Read the schema version from the event store tree in refs/notes/yaks.
-/// Returns None if refs/notes/yaks doesn't exist (brand new repo).
+/// Read the schema version from the event store tree at the given location.
+/// Returns None if the ref doesn't exist (brand new repo).
 /// Returns 1 if the ref exists but has no .schema-version blob.
-pub fn read_schema_version(repo: &Repository) -> Result<Option<u32>> {
-    let oid = match repo.refname_to_id("refs/notes/yaks") {
+pub fn read_schema_version(location: &EventStoreLocation) -> Result<Option<u32>> {
+    let oid = match location.repo.refname_to_id(location.ref_name) {
         Ok(oid) => oid,
         Err(_) => return Ok(None),
     };
 
-    let commit = repo.find_commit(oid)?;
+    let commit = location.repo.find_commit(oid)?;
     let tree = commit.tree()?;
 
     let entry_id = match tree.get_name(".schema-version") {
@@ -104,7 +115,7 @@ pub fn read_schema_version(repo: &Repository) -> Result<Option<u32>> {
         None => return Ok(Some(1)),
     };
 
-    let blob = repo.find_blob(entry_id)?;
+    let blob = location.repo.find_blob(entry_id)?;
     let content = std::str::from_utf8(blob.content())?;
     let version: u32 = content.trim().parse()?;
     Ok(Some(version))
@@ -217,9 +228,55 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn read_schema_version_from_custom_ref() {
+        let (_tmp, repo) = setup_test_repo();
+        let state_blob = repo.blob(b"todo").unwrap();
+        let context_blob = repo.blob(b"").unwrap();
+
+        let mut yak_builder = repo.treebuilder(None).unwrap();
+        yak_builder.insert("state", state_blob, 0o100644).unwrap();
+        yak_builder
+            .insert("context.md", context_blob, 0o100644)
+            .unwrap();
+        let yak_tree = yak_builder.write().unwrap();
+
+        let mut root_builder = repo.treebuilder(None).unwrap();
+        root_builder
+            .insert("test-yak", yak_tree, 0o040000)
+            .unwrap();
+        let root_tree_oid = root_builder.write().unwrap();
+        let root_tree = repo.find_tree(root_tree_oid).unwrap();
+
+        let sig = repo.signature().unwrap();
+        repo.commit(
+            Some("refs/custom/test"),
+            &sig,
+            &sig,
+            "test event on custom ref",
+            &root_tree,
+            &[],
+        )
+        .unwrap();
+
+        let location = EventStoreLocation {
+            repo: &repo,
+            ref_name: "refs/custom/test",
+        };
+        let version = read_schema_version(&location).unwrap();
+        assert_eq!(version, Some(1));
+    }
+
+    fn location_for<'a>(repo: &'a Repository) -> EventStoreLocation<'a> {
+        EventStoreLocation {
+            repo,
+            ref_name: "refs/notes/yaks",
+        }
+    }
+
+    #[test]
     fn no_ref_means_brand_new_repo() {
         let (_tmp, repo) = setup_test_repo();
-        let version = read_schema_version(&repo).unwrap();
+        let version = read_schema_version(&location_for(&repo)).unwrap();
         assert_eq!(version, None);
     }
 
@@ -227,7 +284,7 @@ pub(crate) mod tests {
     fn no_schema_version_blob_means_v1() {
         let (_tmp, repo) = setup_test_repo();
         create_v1_event(&repo, "test-yak");
-        let version = read_schema_version(&repo).unwrap();
+        let version = read_schema_version(&location_for(&repo)).unwrap();
         assert_eq!(version, Some(1));
     }
 
@@ -236,7 +293,7 @@ pub(crate) mod tests {
         let (_tmp, repo) = setup_test_repo();
         create_v1_event(&repo, "test-yak");
         write_schema_version(&repo, 2).unwrap();
-        let version = read_schema_version(&repo).unwrap();
+        let version = read_schema_version(&location_for(&repo)).unwrap();
         assert_eq!(version, Some(2));
     }
 
@@ -284,7 +341,7 @@ pub(crate) mod tests {
         let migrator = Migrator::new(1, vec![]);
         migrator.ensure_schema(&repo).unwrap();
         // No error, no version change
-        assert_eq!(read_schema_version(&repo).unwrap(), Some(1));
+        assert_eq!(read_schema_version(&location_for(&repo)).unwrap(), Some(1));
     }
 
     #[test]
@@ -321,7 +378,7 @@ pub(crate) mod tests {
 
         assert!(m1.was_called(), "Migration 1→2 should have run");
         assert!(m2.was_called(), "Migration 2→3 should have run");
-        assert_eq!(read_schema_version(&repo).unwrap(), Some(3));
+        assert_eq!(read_schema_version(&location_for(&repo)).unwrap(), Some(3));
     }
 
     #[test]
@@ -661,7 +718,7 @@ pub(crate) mod tests {
         migration.migrate(&repo).unwrap();
 
         // .schema-version should still be readable (preserved in root tree)
-        let version = read_schema_version(&repo).unwrap();
+        let version = read_schema_version(&location_for(&repo)).unwrap();
         assert_eq!(version, Some(2)); // Migration doesn't bump version itself
     }
 }

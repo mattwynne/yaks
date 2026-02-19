@@ -446,8 +446,12 @@ mod tests {
         );
 
         // Schema version unchanged (migration doesn't bump it)
-        use crate::adapters::event_store::migration::read_schema_version;
-        assert_eq!(read_schema_version(&repo).unwrap(), Some(3));
+        use crate::adapters::event_store::migration::{read_schema_version, EventStoreLocation};
+        let location = EventStoreLocation {
+            repo: &repo,
+            ref_name: "refs/notes/yaks",
+        };
+        assert_eq!(read_schema_version(&location).unwrap(), Some(3));
     }
 
     #[test]
