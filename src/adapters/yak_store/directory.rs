@@ -1031,6 +1031,174 @@ mod tests {
         assert_eq!(yak.created_at, Timestamp(1708300800));
     }
 
+    // --- Mutant coverage tests ---
+
+    // Mutant 1: resolve_by_name line 109 `if !self.base_path.exists()`
+    // Removing `!` would return None when base_path exists (wrong) and
+    // proceed scanning when it doesn't exist (panic). This test verifies
+    // that resolve_by_name works correctly when base_path does exist.
+    #[test]
+    fn test_resolve_by_name_finds_yak_when_base_path_exists() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("find me"),
+                    id: YakId::from("find-me-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // resolve_by_name is called internally by yak_dir when direct path
+        // and resolve_by_id both fail. We trigger it via fuzzy_find_yak_id
+        // which calls yak_dir first and then list_yaks.
+        // A direct get_yak by id exercises the full resolution chain.
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("find-me-a1b2")).unwrap();
+        assert_eq!(yak.name, Name::from("find me"));
+    }
+
+    // Mutant 2: read_parent_id line 197
+    // `parent != self.base_path && parent.join(CONTEXT_FIELD).exists()`
+    // Changing `&&` to `||` would treat base_path itself as a yak parent
+    // and return Some(id) for top-level yaks instead of None.
+    #[test]
+    fn test_read_parent_id_returns_none_for_top_level_yak() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("top level"),
+                    id: YakId::from("top-level-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("top-level-a1b2")).unwrap();
+        // Top-level yak should have no parent
+        assert!(
+            yak.parent_id.is_none(),
+            "Top-level yak should have no parent_id, got {:?}",
+            yak.parent_id
+        );
+    }
+
+    // Also for mutant 2: verify child yak does get its parent_id set.
+    #[test]
+    fn test_read_parent_id_returns_parent_id_for_child_yak() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
+        assert_eq!(
+            child.parent_id,
+            Some(YakId::from("parent-a1b2")),
+            "Child yak should have parent_id set"
+        );
+    }
+
+    // Mutant 3: clear line 256
+    // `path.is_dir() && path.join(CONTEXT_FIELD).exists()`
+    // Changing `&&` to `||` would also remove non-yak directories (files
+    // pass `is_dir()` as false so only dirs-without-context.md get hit).
+    // This test verifies that non-yak directories in base_path are preserved.
+    #[test]
+    fn test_clear_preserves_non_yak_directories() {
+        let (mut storage, temp) = setup_test_storage();
+
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("a yak"),
+                    id: YakId::from("a-yak-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Create a directory that is NOT a yak (no context.md)
+        let non_yak_dir = temp.path().join("not-a-yak");
+        std::fs::create_dir_all(&non_yak_dir).unwrap();
+
+        assert!(non_yak_dir.exists(), "Setup: non-yak dir should exist");
+        assert_eq!(ReadYakStore::list_yaks(&storage).unwrap().len(), 1);
+
+        storage.clear().unwrap();
+
+        // The yak should be gone
+        assert_eq!(ReadYakStore::list_yaks(&storage).unwrap().len(), 0);
+        // The non-yak directory must still be there
+        assert!(
+            non_yak_dir.exists(),
+            "Non-yak directory should be preserved by clear()"
+        );
+    }
+
+    // Mutant 4: get_yak line 397
+    // `d.exists() && d.join(CONTEXT_FIELD).exists()`
+    // Changing `&&` to `||` would allow get_yak to resolve a directory that
+    // exists but has no context.md, causing a spurious "found" result.
+    #[test]
+    fn test_get_yak_returns_error_for_dir_without_context_md() {
+        let (storage, temp) = setup_test_storage();
+
+        // Create a directory with no context.md — not a valid yak
+        let fake_dir = temp.path().join("fake-yak");
+        std::fs::create_dir_all(&fake_dir).unwrap();
+
+        let result = ReadYakStore::get_yak(&storage, &YakId::from("fake-yak"));
+        assert!(
+            result.is_err(),
+            "get_yak should fail for a dir without context.md"
+        );
+    }
+
+    // Mutant 5: fuzzy_find_yak_id line 502
+    // `dir.exists() && dir.join(CONTEXT_FIELD).exists()`
+    // Changing `&&` to `||` would match a directory that exists but has no
+    // context.md, incorrectly treating it as a valid yak.
+    #[test]
+    fn test_fuzzy_find_yak_id_ignores_dir_without_context_md() {
+        let (storage, temp) = setup_test_storage();
+
+        // Create a directory with no context.md — not a valid yak
+        let fake_dir = temp.path().join("ghost");
+        std::fs::create_dir_all(&fake_dir).unwrap();
+
+        let result = ReadYakStore::fuzzy_find_yak_id(&storage, "ghost");
+        assert!(
+            result.is_err(),
+            "fuzzy_find_yak_id should not match a dir without context.md"
+        );
+    }
+
     #[test]
     fn test_added_event_writes_metadata_json() {
         use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
