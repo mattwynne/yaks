@@ -89,6 +89,27 @@ The codebase is evolving toward **CQRS (Command Query Responsibility Segregation
 - **Rust unit tests**: Internal logic (`cargo test`)
 - **Integration tests**: Exercise use cases with mock adapters
 
+### Mutation Testing
+Mutation testing validates test quality by injecting small code
+changes (mutants) and checking that tests catch them.
+
+```bash
+dev mutate              # Run all (~7 min, 440 mutants)
+dev mutate -F 'slug'    # Filter to specific files
+```
+
+**When to run:** After adding tests or changing core logic, to
+verify your tests actually catch regressions. Runs in CI on
+every push.
+
+**Config:** `.cargo/mutants.toml` — excludes infrastructure-only
+files (console I/O, git sync, main.rs) that need full-stack
+integration tests.
+
+**Reading results:** Check `mutants.out/missed.txt` for mutants
+that survived. Each missed mutant is a code change your tests
+didn't detect — a potential real bug that could slip through.
+
 ## CLI Design Philosophy
 
 **When making changes to the command-line interface, refer to `docs/cli-design-philosophy.md`.**
