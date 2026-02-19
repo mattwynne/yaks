@@ -94,21 +94,32 @@ Mutation testing validates test quality by injecting small code
 changes (mutants) and checking that tests catch them.
 
 ```bash
-dev mutate              # Run all (~7 min, 440 mutants)
-dev mutate -F 'slug'    # Filter to specific files
+dev mutate-diff         # Fast: only mutants in your changes (~seconds)
+dev mutate              # Full run (~7 min, ~400 mutants)
+dev mutate -F 'slug'    # Full run filtered to specific files
+dev mutate-sync         # Sync missed mutants to yaks
 ```
 
-**When to run:** After adding tests or changing core logic, to
-verify your tests actually catch regressions. Runs in CI on
-every push.
+**Daily workflow:** Use `dev mutate-diff` (alias `dev md`)
+while coding. It runs `cargo mutants --in-diff` against only
+your changes since main — seconds instead of minutes.
+
+**After a full run:** Run `dev mutate-sync` (alias `dev ms`)
+to parse `mutants.out/missed.txt` and create/update yaks
+under "fix missed mutants". Each source file with missed
+mutants gets its own yak. Then `yx sync` to share results.
+
+**CI:** PRs get a fast diff-only mutation check (blocking).
+Post-merge to main, a full run syncs results to yaks via
+`yx sync`.
 
 **Config:** `.cargo/mutants.toml` — excludes infrastructure-only
 files (console I/O, git sync, main.rs) that need full-stack
 integration tests.
 
-**Reading results:** Check `mutants.out/missed.txt` for mutants
-that survived. Each missed mutant is a code change your tests
-didn't detect — a potential real bug that could slip through.
+**Triage:** Leave real test gaps as `todo` yaks. For
+acceptable misses, add to `exclude_globs` in
+`.cargo/mutants.toml` — the next sync auto-resolves the yak.
 
 ## CLI Design Philosophy
 

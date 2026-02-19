@@ -132,24 +132,25 @@ Tab completion works for yak names after sourcing the completion script.
 
 ## Testing
 
-Uses [ShellSpec](https://shellspec.info/) for testing:
-
 ```bash
-shellspec
+dev check               # Run all checks (tests + lint + audit)
+cargo test --features test-support  # Cucumber + unit tests
+shellspec               # ShellSpec tests (tmux, git, installer)
 ```
 
-### Installer Tests
-
-The installer is tested in a Docker container to verify
-end-to-end installation:
+### Mutation Testing
 
 ```bash
-shellspec spec/features/install.sh
+dev mutate-diff         # Fast: only your changes (~seconds)
+dev mutate              # Full run (~7 min)
+dev mutate-sync         # Sync results to yak tracker
 ```
 
-This test runs install.sh in a clean Ubuntu 22.04
-container using a local release zip, then runs smoke
-tests to verify the installation works.
+Mutation testing validates that your tests actually catch
+regressions. Use `dev mutate-diff` during development for
+fast feedback. Missed mutants are tracked as yaks under
+"fix missed mutants" — run `dev mutate-sync` after a full
+run to update them.
 
 ## License
 
