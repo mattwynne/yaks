@@ -201,7 +201,7 @@ fn main() -> Result<()> {
 
     let mut event_bus = if let Some(ref root) = repo_root {
         // Run schema migration before using the event store
-        Migrator::for_current_version().run(root)?;
+        Migrator::for_current_version().run(root, "refs/notes/yaks")?;
         let event_store = GitEventStore::new(root)?;
         EventBus::new(Box::new(event_store))
     } else if skip_git {
@@ -447,8 +447,12 @@ fn main() -> Result<()> {
                 {
                     let repo = git2::Repository::open(root)?;
                     if repo.find_reference("refs/notes/yaks").is_ok() {
+                        let location = yx::adapters::event_store::migration::EventStoreLocation {
+                            repo: &repo,
+                            ref_name: "refs/notes/yaks",
+                        };
                         yx::adapters::event_store::migration::write_schema_version(
-                            &repo,
+                            &location,
                             yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION,
                         )?;
                     }

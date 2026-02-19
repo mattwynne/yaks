@@ -1,7 +1,7 @@
 use anyhow::Result;
 use git2::{ObjectType, Repository};
 
-use super::migration::Migration;
+use super::migration::{EventStoreLocation, Migration};
 
 /// Migration that flattens nested yak tree structure.
 ///
@@ -95,29 +95,24 @@ impl Migration for MigrateV3ToV4 {
     fn target_version(&self) -> u32 {
         4
     }
-    fn migrate(&self, repo: &Repository) -> Result<()> {
-        let oid = repo.refname_to_id("refs/notes/yaks")?;
-        let parent_commit = repo.find_commit(oid)?;
+    fn migrate(&self, location: &EventStoreLocation) -> Result<()> {
+        let oid = location.repo.refname_to_id(location.ref_name)?;
+        let parent_commit = location.repo.find_commit(oid)?;
         let root_tree = parent_commit.tree()?;
 
-        // Collect all yaks recursively
         let mut yaks = Vec::new();
-        Self::collect_yaks_recursive(repo, &root_tree, None, &mut yaks)?;
+        Self::collect_yaks_recursive(location.repo, &root_tree, None, &mut yaks)?;
 
-        // If no nested yaks found, check if already flat (no-op)
         let has_nested = yaks.iter().any(|(_, _, pid)| pid.is_some());
         if !has_nested && !yaks.is_empty() {
-            // Already flat, nothing to do
             return Ok(());
         }
         if yaks.is_empty() {
             return Ok(());
         }
 
-        // Build new flat root tree
-        let mut root_builder = repo.treebuilder(None)?;
+        let mut root_builder = location.repo.treebuilder(None)?;
 
-        // Preserve non-yak entries from root (like .schema-version)
         for entry in root_tree.iter() {
             if entry.kind() == Some(ObjectType::Blob) {
                 let name = match entry.name() {
@@ -128,20 +123,20 @@ impl Migration for MigrateV3ToV4 {
             }
         }
 
-        // Insert all yaks flat at root
         for (yak_id, subtree_oid, _) in &yaks {
             root_builder.insert(yak_id, *subtree_oid, 0o040000)?;
         }
 
         let new_root_oid = root_builder.write()?;
-        let new_root_tree = repo.find_tree(new_root_oid)?;
+        let new_root_tree = location.repo.find_tree(new_root_oid)?;
 
-        let sig = repo
+        let sig = location
+            .repo
             .signature()
             .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
 
-        repo.commit(
-            Some("refs/notes/yaks"),
+        location.repo.commit(
+            Some(location.ref_name),
             &sig,
             &sig,
             "Migration v3→v4: flatten nested yak tree structure",
@@ -157,6 +152,14 @@ impl Migration for MigrateV3ToV4 {
 mod tests {
     use super::*;
     use crate::adapters::event_store::migration::tests::{read_yak_blob, setup_test_repo};
+    use crate::adapters::event_store::migration::EventStoreLocation;
+
+    fn location_for(repo: &Repository) -> EventStoreLocation<'_> {
+        EventStoreLocation {
+            repo,
+            ref_name: "refs/notes/yaks",
+        }
+    }
 
     /// Helper: create a v3 tree with two-level nesting (parent → child).
     fn create_v3_nested_two_level(repo: &Repository) {
@@ -325,7 +328,7 @@ mod tests {
         create_v3_nested_two_level(&repo);
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Both yaks should be at root level
         assert!(
@@ -353,7 +356,7 @@ mod tests {
         create_v3_nested_three_level(&repo);
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // All three yaks at root
         assert!(read_yak_blob(&repo, "grandparent-a1b2", "name").is_some());
@@ -378,7 +381,7 @@ mod tests {
         create_v3_nested_two_level(&repo);
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Parent blobs preserved
         assert_eq!(
@@ -422,7 +425,7 @@ mod tests {
         create_v3_nested_two_level(&repo);
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // After flattening, the parent yak's tree should NOT contain
         // a "child-c3d4" subtree entry. The child is now at root level.
@@ -449,7 +452,7 @@ mod tests {
         create_v3_nested_two_level(&repo);
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         assert_eq!(
             read_yak_blob(&repo, "parent-a1b2", "parent_id"),
@@ -466,7 +469,7 @@ mod tests {
         let oid_before = repo.refname_to_id("refs/notes/yaks").unwrap();
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // No new commit should have been created
         let oid_after = repo.refname_to_id("refs/notes/yaks").unwrap();
@@ -477,7 +480,7 @@ mod tests {
 
         // Schema version unchanged (migration doesn't bump it)
         use crate::adapters::event_store::migration::read_schema_version;
-        assert_eq!(read_schema_version(&repo).unwrap(), Some(3));
+        assert_eq!(read_schema_version(&location_for(&repo)).unwrap(), Some(3));
     }
 
     #[test]
@@ -539,7 +542,7 @@ mod tests {
         .unwrap();
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Custom field preserved on flattened child
         assert_eq!(
@@ -654,7 +657,7 @@ mod tests {
         .unwrap();
 
         let migration = MigrateV3ToV4;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Only the real yak should appear at root (non-yak tree skipped)
         assert!(
