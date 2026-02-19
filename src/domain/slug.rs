@@ -340,12 +340,13 @@ mod tests {
     #[test]
     fn name_partial_eq_str() {
         let name = Name::from("hello");
-        assert_eq!(name, "hello");
-        assert_ne!(name, "world");
+        // Explicitly exercise PartialEq<str> (line 84), not PartialEq<&str> (line 90)
+        assert!(<Name as PartialEq<str>>::eq(&name, "hello"));
+        assert!(!<Name as PartialEq<str>>::eq(&name, "world"));
 
         let empty_name = Name::from("");
-        assert_eq!(empty_name, "");
-        assert_ne!(empty_name, "something");
+        assert!(<Name as PartialEq<str>>::eq(&empty_name, ""));
+        assert!(!<Name as PartialEq<str>>::eq(&empty_name, "something"));
     }
 
     #[test]

@@ -1037,6 +1037,8 @@ mod tests {
     // Removing `!` would return None when base_path exists (wrong) and
     // proceed scanning when it doesn't exist (panic). This test verifies
     // that resolve_by_name works correctly when base_path does exist.
+    // We look up by display name (not ID) so that resolve_by_id fails
+    // and the lookup falls through to resolve_by_name.
     #[test]
     fn test_resolve_by_name_finds_yak_when_base_path_exists() {
         let (mut storage, _temp) = setup_test_storage();
@@ -1052,11 +1054,10 @@ mod tests {
             ))
             .unwrap();
 
-        // resolve_by_name is called internally by yak_dir when direct path
-        // and resolve_by_id both fail. We trigger it via fuzzy_find_yak_id
-        // which calls yak_dir first and then list_yaks.
-        // A direct get_yak by id exercises the full resolution chain.
-        let yak = ReadYakStore::get_yak(&storage, &YakId::from("find-me-a1b2")).unwrap();
+        // Use display name "find me" as YakId — this won't match direct path
+        // (directory is "find-me") or resolve_by_id (id is "find-me-a1b2"),
+        // forcing the lookup through resolve_by_name.
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("find me")).unwrap();
         assert_eq!(yak.name, Name::from("find me"));
     }
 
@@ -1064,9 +1065,17 @@ mod tests {
     // `parent != self.base_path && parent.join(CONTEXT_FIELD).exists()`
     // Changing `&&` to `||` would treat base_path itself as a yak parent
     // and return Some(id) for top-level yaks instead of None.
+    //
+    // Without context.md in base_path: both && and || give false (same result).
+    // With context.md in base_path: && gives false, || gives true (detectable!).
     #[test]
     fn test_read_parent_id_returns_none_for_top_level_yak() {
-        let (mut storage, _temp) = setup_test_storage();
+        let (mut storage, temp) = setup_test_storage();
+
+        // Place a context.md in base_path itself so the || mutant is detectable.
+        // With &&: parent == base_path → false && true = false → None (correct).
+        // With ||: parent == base_path → false || true = true → Some(id) (wrong!).
+        std::fs::write(temp.path().join(CONTEXT_FIELD), "").unwrap();
 
         storage
             .on_event(&YakEvent::Added(

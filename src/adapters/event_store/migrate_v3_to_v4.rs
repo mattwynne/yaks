@@ -413,6 +413,36 @@ mod tests {
         );
     }
 
+    // Mutant: line 59 `.filter(|e| e.kind() == Some(ObjectType::Tree))`
+    // Changing == to != would skip tree entries, leaving child subtrees
+    // inside the parent's flattened tree. This test verifies they're removed.
+    #[test]
+    fn v3_to_v4_removes_child_subtrees_from_parent() {
+        let (_tmp, repo) = setup_test_repo();
+        create_v3_nested_two_level(&repo);
+
+        let migration = MigrateV3ToV4;
+        migration.migrate(&repo).unwrap();
+
+        // After flattening, the parent yak's tree should NOT contain
+        // a "child-c3d4" subtree entry. The child is now at root level.
+        let oid = repo.refname_to_id("refs/notes/yaks").unwrap();
+        let commit = repo.find_commit(oid).unwrap();
+        let root_tree = commit.tree().unwrap();
+        let parent_entry = root_tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = repo.find_tree(parent_entry.id()).unwrap();
+
+        assert!(
+            parent_tree.get_name("child-c3d4").is_none(),
+            "Parent's tree should not contain child subtree after flattening. \
+             Found entries: {:?}",
+            parent_tree
+                .iter()
+                .filter_map(|e| e.name().map(|n| n.to_string()))
+                .collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn v3_to_v4_no_parent_id_blob_for_root_yaks() {
         let (_tmp, repo) = setup_test_repo();

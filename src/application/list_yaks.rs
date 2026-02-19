@@ -373,10 +373,12 @@ mod tests {
         );
     }
 
-    // Mutant 5 (line 209): prefix.lines.len() == 1 branch produces correct connector format
-    // for direct children of root nodes (depth 1)
+    // Mutant 5 (line 209): prefix.lines.len() == 1 distinguishes depth-1 from depth-2+.
+    // At depth 1, both branches produce identical output (continuations is empty).
+    // At depth 2+, the mutant (== to !=) drops continuation indentation.
+    // We need a grandchild to detect the difference.
     #[test]
-    fn direct_child_of_root_uses_tree_connector_format() {
+    fn grandchild_has_continuation_indent_in_pretty_format() {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new(Box::new(event_store));
         let storage = InMemoryStorage::new();
@@ -386,38 +388,35 @@ mod tests {
         let auth = InMemoryAuthentication::new();
         let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
 
-        app.handle(AddYak::new("parent")).unwrap();
-        app.handle(AddYak::new("child").with_parent(Some("parent"))).unwrap();
+        // root → parent → grandchild (depth 2)
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("parent").with_parent(Some("root"))).unwrap();
+        app.handle(AddYak::new("grandchild").with_parent(Some("parent"))).unwrap();
         display.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
         let messages = display.get_info_messages();
 
-        let child_line = messages.iter().find(|m| m.contains("child"));
+        let gc_line = messages.iter().find(|m| m.contains("grandchild"));
         assert!(
-            child_line.is_some(),
-            "Expected 'child' in output: {:?}",
+            gc_line.is_some(),
+            "Expected 'grandchild' in output: {:?}",
             messages
         );
 
-        // Direct child of root uses the len==1 branch: "  ╰─ "
-        // The format is "  {connector}{indicator} {name}"
-        // where connector is "╰─ " (last child) or "├─ " (non-last)
-        let line = child_line.unwrap();
+        let line = gc_line.unwrap();
+        // At depth 2, the correct prefix is "  {continuation}{connector}"
+        // where continuation is "   " (3 chars for last-child) or "│  ".
+        // The mutant would produce "  {connector}" (missing continuation).
+        // So grandchild line should be wider than "  ╰─" (5 chars before indicator).
         assert!(
-            line.contains("╰─") || line.contains("├─"),
-            "Direct child should use tree connector (╰─ or ├─), got: {:?}",
-            line
-        );
-        // The prefix for depth-1 nodes is "  connector" (2 leading spaces + connector)
-        // As opposed to "  {continuations}connector" for deeper nodes
-        // Verify the line starts with "  " followed by a connector (not extra continuation chars)
-        assert!(
-            line.starts_with("  ╰─") || line.starts_with("  ├─"),
-            "Direct child connector should start with exactly '  ╰─' or '  ├─', got: {:?}",
+            !line.starts_with("  ╰─") && !line.starts_with("  ├─"),
+            "Grandchild (depth 2) should NOT start with '  ╰─' or '  ├─' (that's depth-1 format). \
+             It should have continuation indent before the connector. Got: {:?}",
             line
         );
     }
+
 }
 
 /// Recursively build a YakNode and its children from parent_id grouping
