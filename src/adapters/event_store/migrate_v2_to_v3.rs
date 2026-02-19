@@ -3,7 +3,7 @@ use git2::{ObjectType, Repository};
 
 use crate::domain::slug::{generate_id, YakId};
 
-use super::migration::Migration;
+use super::migration::{EventStoreLocation, Migration};
 
 /// Migration that adds missing `name` and `id` blobs to yak subtrees.
 ///
@@ -100,15 +100,14 @@ impl Migration for MigrateV2ToV3 {
     fn target_version(&self) -> u32 {
         3
     }
-    fn migrate(&self, repo: &Repository) -> Result<()> {
-        let oid = repo.refname_to_id("refs/notes/yaks")?;
-        let parent = repo.find_commit(oid)?;
+    fn migrate(&self, location: &EventStoreLocation) -> Result<()> {
+        let oid = location.repo.refname_to_id(location.ref_name)?;
+        let parent = location.repo.find_commit(oid)?;
         let root_tree = parent.tree()?;
 
-        let mut root_builder = repo.treebuilder(Some(&root_tree))?;
+        let mut root_builder = location.repo.treebuilder(Some(&root_tree))?;
         let mut modified = false;
 
-        // Walk root-level entries looking for yak subtrees
         for i in 0..root_tree.len() {
             let entry = root_tree.get(i).unwrap();
             if entry.kind() != Some(ObjectType::Tree) {
@@ -118,11 +117,13 @@ impl Migration for MigrateV2ToV3 {
                 Some(n) => n.to_string(),
                 None => continue,
             };
-            let subtree = repo.find_tree(entry.id())?;
-            if !Self::is_yak_subtree(repo, &subtree) {
+            let subtree = location.repo.find_tree(entry.id())?;
+            if !Self::is_yak_subtree(location.repo, &subtree) {
                 continue;
             }
-            if let Some(new_oid) = Self::migrate_subtree(repo, &subtree, &entry_name, None)? {
+            if let Some(new_oid) =
+                Self::migrate_subtree(location.repo, &subtree, &entry_name, None)?
+            {
                 root_builder.insert(&entry_name, new_oid, 0o040000)?;
                 modified = true;
             }
@@ -130,12 +131,13 @@ impl Migration for MigrateV2ToV3 {
 
         if modified {
             let new_root_oid = root_builder.write()?;
-            let new_root_tree = repo.find_tree(new_root_oid)?;
-            let sig = repo
+            let new_root_tree = location.repo.find_tree(new_root_oid)?;
+            let sig = location
+                .repo
                 .signature()
                 .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
-            repo.commit(
-                Some("refs/notes/yaks"),
+            location.repo.commit(
+                Some(location.ref_name),
                 &sig,
                 &sig,
                 "Migration v2→v3: add name and id to yak subtrees",

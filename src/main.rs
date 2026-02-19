@@ -201,7 +201,7 @@ fn main() -> Result<()> {
 
     let mut event_bus = if let Some(ref root) = repo_root {
         // Run schema migration before using the event store
-        Migrator::for_current_version().run(root)?;
+        Migrator::for_current_version().run(root, "refs/notes/yaks")?;
         let event_store = GitEventStore::new(root)?;
         EventBus::new(Box::new(event_store))
     } else if skip_git {

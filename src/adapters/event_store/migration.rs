@@ -20,7 +20,7 @@ pub struct EventStoreLocation<'a> {
 pub trait Migration {
     fn source_version(&self) -> u32;
     fn target_version(&self) -> u32;
-    fn migrate(&self, repo: &Repository) -> Result<()>;
+    fn migrate(&self, location: &EventStoreLocation) -> Result<()>;
 }
 
 /// Manages schema versioning and migration for the git event store.
@@ -50,23 +50,23 @@ impl Migrator {
     }
 
     /// Run migration against a repo at the given path.
-    pub fn run(&self, repo_path: &Path) -> Result<()> {
+    pub fn run(&self, repo_path: &Path, ref_name: &str) -> Result<()> {
         let repo = Repository::open(repo_path)
             .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
-        self.ensure_schema(&repo)
+        let location = EventStoreLocation {
+            repo: &repo,
+            ref_name,
+        };
+        self.ensure_schema(&location)
     }
 
     /// Ensure the event store is at the expected schema version.
-    /// - Brand new repo (no refs/notes/yaks): stamps expected version on first write.
+    /// - Brand new repo (no ref): stamps expected version on first write.
     /// - Version matches: no-op.
     /// - Older version: runs migrations in order, stamps new version.
     /// - Newer version: errors with "please update yx".
-    pub fn ensure_schema(&self, repo: &Repository) -> Result<()> {
-        let location = EventStoreLocation {
-            repo,
-            ref_name: "refs/notes/yaks",
-        };
-        let current = match read_schema_version(&location)? {
+    pub fn ensure_schema(&self, location: &EventStoreLocation) -> Result<()> {
+        let current = match read_schema_version(location)? {
             Some(v) => v,
             None => return Ok(()), // Brand new repo — version stamped on first write
         };
@@ -88,12 +88,12 @@ impl Migrator {
         let mut version = current;
         for migration in &self.migrations {
             if migration.source_version() == version {
-                migration.migrate(repo)?;
+                migration.migrate(location)?;
                 version = migration.target_version();
             }
         }
 
-        write_schema_version(&location, self.expected_version)?;
+        write_schema_version(location, self.expected_version)?;
         Ok(())
     }
 }
@@ -365,7 +365,7 @@ pub(crate) mod tests {
         fn target_version(&self) -> u32 {
             self.to
         }
-        fn migrate(&self, _repo: &Repository) -> Result<()> {
+        fn migrate(&self, _location: &EventStoreLocation) -> Result<()> {
             self.call_count.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -376,7 +376,7 @@ pub(crate) mod tests {
         let (_tmp, repo) = setup_test_repo();
         create_v1_event(&repo, "test-yak");
         let migrator = Migrator::new(1, vec![]);
-        migrator.ensure_schema(&repo).unwrap();
+        migrator.ensure_schema(&location_for(&repo)).unwrap();
         // No error, no version change
         assert_eq!(read_schema_version(&location_for(&repo)).unwrap(), Some(1));
     }
@@ -387,7 +387,7 @@ pub(crate) mod tests {
         create_v1_event(&repo, "test-yak");
         write_schema_version(&location_for(&repo), 3).unwrap();
         let migrator = Migrator::new(2, vec![]);
-        let err = migrator.ensure_schema(&repo).unwrap_err();
+        let err = migrator.ensure_schema(&location_for(&repo)).unwrap_err();
         assert!(
             err.to_string().contains("Please update yx"),
             "Expected 'Please update yx' error, got: {}",
@@ -411,7 +411,7 @@ pub(crate) mod tests {
                 Box::new(ArcMigration(m2.clone())),
             ],
         );
-        migrator.ensure_schema(&repo).unwrap();
+        migrator.ensure_schema(&location_for(&repo)).unwrap();
 
         assert!(m1.was_called(), "Migration 1→2 should have run");
         assert!(m2.was_called(), "Migration 2→3 should have run");
@@ -424,7 +424,7 @@ pub(crate) mod tests {
         // No refs/notes/yaks at all
         let m1 = std::sync::Arc::new(NoopMigration::new(1, 2));
         let migrator = Migrator::new(2, vec![Box::new(ArcMigration(m1.clone()))]);
-        migrator.ensure_schema(&repo).unwrap();
+        migrator.ensure_schema(&location_for(&repo)).unwrap();
         assert!(!m1.was_called(), "Should not run migrations on new repo");
     }
 
@@ -438,8 +438,8 @@ pub(crate) mod tests {
         fn target_version(&self) -> u32 {
             self.0.target_version()
         }
-        fn migrate(&self, repo: &Repository) -> Result<()> {
-            self.0.migrate(repo)
+        fn migrate(&self, location: &EventStoreLocation) -> Result<()> {
+            self.0.migrate(location)
         }
     }
 
@@ -489,7 +489,7 @@ pub(crate) mod tests {
         create_v2_tree_with_old_yak(&repo, "my test yak");
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Name should be the tree entry name
         assert_eq!(
@@ -545,7 +545,7 @@ pub(crate) mod tests {
         write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Should be unchanged
         assert_eq!(
@@ -568,7 +568,7 @@ pub(crate) mod tests {
         create_v2_tree_with_new_yak(&repo, "make-tea-x1y2", "Make tea");
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Name should be preserved
         assert_eq!(
@@ -634,7 +634,7 @@ pub(crate) mod tests {
         write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Parent should have name and id
         assert_eq!(
@@ -725,7 +725,7 @@ pub(crate) mod tests {
         write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // Old parent gets name and generated id
         assert_eq!(
@@ -752,7 +752,7 @@ pub(crate) mod tests {
         create_v2_tree_with_old_yak(&repo, "test-yak");
 
         let migration = MigrateV2ToV3;
-        migration.migrate(&repo).unwrap();
+        migration.migrate(&location_for(&repo)).unwrap();
 
         // .schema-version should still be readable (preserved in root tree)
         let version = read_schema_version(&location_for(&repo)).unwrap();
