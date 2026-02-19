@@ -33,11 +33,13 @@ jobs:
             exit $exit_code
           fi
 
-  mutation-tests:
+  mutation-check:
     runs-on: ubuntu-latest
-    continue-on-error: true
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: cachix/install-nix-action@v24
       - uses: cachix/cachix-action@v15
         with:
@@ -46,7 +48,13 @@ jobs:
         run: nix profile install --accept-flake-config github:cachix/devenv/latest
       - name: Install cargo-mutants
         run: devenv shell cargo install cargo-mutants
-      - name: Run mutation tests
+      - name: Diff-only mutation check
         run: |
+          git diff origin/main...HEAD > /tmp/pr.diff
+          if [ ! -s /tmp/pr.diff ]; then
+            echo "No changes vs main — skipping."
+            exit 0
+          fi
           devenv shell env CUCUMBER_MODE=in-process \
-            YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place
+            YX_SKIP_GIT_CHECKS=1 cargo mutants \
+            --in-diff /tmp/pr.diff
