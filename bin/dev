@@ -151,6 +151,21 @@ mutate() {
   CUCUMBER_MODE=in-process YX_SKIP_GIT_CHECKS=1 cargo mutants "$@"
 }
 
+# @cmd Run mutation tests on changed files only (fast)
+# @alias md
+mutate-diff() {
+  local diff_file
+  diff_file=$(mktemp)
+  trap 'rm -f "$diff_file"' EXIT
+  git diff main...HEAD -- '*.rs' > "$diff_file"
+  if [ ! -s "$diff_file" ]; then
+    echo "No Rust changes vs main — nothing to mutate."
+    return 0
+  fi
+  CUCUMBER_MODE=in-process YX_SKIP_GIT_CHECKS=1 \
+    cargo mutants --in-diff "$diff_file" "$@"
+}
+
 # @cmd Run all checks (tests + lint + audit) and mark as verified
 # @alias c
 check() {
