@@ -150,8 +150,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let use_case = AddYak::new("test-yak");
         use_case.execute(&mut app).unwrap();
@@ -170,8 +177,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::with_content("# My context".to_string());
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("my-yak").execute(&mut app).unwrap();
 
@@ -191,8 +205,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("parent").execute(&mut app).unwrap();
         AddYak::new("child")
@@ -214,8 +235,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let result = AddYak::new("fix CI/CD pipeline").execute(&mut app);
         assert!(result.is_ok());
@@ -232,8 +260,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("test")
             .with_state(Some("wip"))
@@ -258,8 +293,15 @@ mod tests {
         // skipped, the yak will have "my notes", not "from input"
         let input = InMemoryInput::with_content("from input".to_string());
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("test")
             .with_context(Some("my notes"))
@@ -282,8 +324,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("test")
             .with_id(Some("custom-id"))
@@ -304,8 +353,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("test")
             .with_field("plan", "step 1")
@@ -330,8 +386,15 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let custom_author = Author {
             name: "Original Author".to_string(),

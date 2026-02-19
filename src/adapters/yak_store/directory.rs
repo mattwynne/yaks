@@ -1,9 +1,9 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
@@ -1056,8 +1056,7 @@ mod tests {
         storage.on_event(&event).unwrap();
 
         // The yak directory is slug-based (from name), not id-based
-        let content =
-            std::fs::read_to_string(temp.path().join("my-yak/.metadata.json")).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("my-yak/.metadata.json")).unwrap();
         let json: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(json["created_by"]["name"], "Test");
         assert_eq!(json["created_by"]["email"], "test@test.com");

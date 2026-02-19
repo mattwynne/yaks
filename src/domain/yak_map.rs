@@ -221,39 +221,36 @@ impl YakMap {
         ));
 
         if let Some(content) = context {
-            self.pending_events
-                .push(YakEvent::FieldUpdated(
-                    FieldUpdatedEvent {
-                        id: id.clone(),
-                        field_name: "context.md".to_string(),
-                        content,
-                    },
-                    self.metadata.clone(),
-                ));
+            self.pending_events.push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name: "context.md".to_string(),
+                    content,
+                },
+                self.metadata.clone(),
+            ));
         }
 
         if initial_state != "todo" {
-            self.pending_events
-                .push(YakEvent::FieldUpdated(
-                    FieldUpdatedEvent {
-                        id: id.clone(),
-                        field_name: "state".to_string(),
-                        content: initial_state,
-                    },
-                    self.metadata.clone(),
-                ));
+            self.pending_events.push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name: "state".to_string(),
+                    content: initial_state,
+                },
+                self.metadata.clone(),
+            ));
         }
 
         for (field_name, content) in fields {
-            self.pending_events
-                .push(YakEvent::FieldUpdated(
-                    FieldUpdatedEvent {
-                        id: id.clone(),
-                        field_name,
-                        content,
-                    },
-                    self.metadata.clone(),
-                ));
+            self.pending_events.push(YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: id.clone(),
+                    field_name,
+                    content,
+                },
+                self.metadata.clone(),
+            ));
         }
 
         Ok(id)
@@ -279,15 +276,14 @@ impl YakMap {
         // Update this yak
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.state = state.clone();
-        self.pending_events
-            .push(YakEvent::FieldUpdated(
-                FieldUpdatedEvent {
-                    id: id.clone(),
-                    field_name: "state".to_string(),
-                    content: state,
-                },
-                self.metadata.clone(),
-            ));
+        self.pending_events.push(YakEvent::FieldUpdated(
+            FieldUpdatedEvent {
+                id: id.clone(),
+                field_name: "state".to_string(),
+                content: state,
+            },
+            self.metadata.clone(),
+        ));
 
         // Propagate to ancestors if transitioning from todo
         if transitioning_from_todo {
@@ -325,15 +321,14 @@ impl YakMap {
             if let Some(parent) = self.yaks.get_mut(&ancestor_id) {
                 if parent.state == "todo" {
                     parent.state = "wip".to_string();
-                    self.pending_events
-                        .push(YakEvent::FieldUpdated(
-                            FieldUpdatedEvent {
-                                id: ancestor_id.clone(),
-                                field_name: "state".to_string(),
-                                content: "wip".to_string(),
-                            },
-                            self.metadata.clone(),
-                        ));
+                    self.pending_events.push(YakEvent::FieldUpdated(
+                        FieldUpdatedEvent {
+                            id: ancestor_id.clone(),
+                            field_name: "state".to_string(),
+                            content: "wip".to_string(),
+                        },
+                        self.metadata.clone(),
+                    ));
                 }
             }
         }
@@ -344,15 +339,14 @@ impl YakMap {
             if let Some(parent) = self.yaks.get_mut(&ancestor_id) {
                 if parent.state == "done" {
                     parent.state = "wip".to_string();
-                    self.pending_events
-                        .push(YakEvent::FieldUpdated(
-                            FieldUpdatedEvent {
-                                id: ancestor_id.clone(),
-                                field_name: "state".to_string(),
-                                content: "wip".to_string(),
-                            },
-                            self.metadata.clone(),
-                        ));
+                    self.pending_events.push(YakEvent::FieldUpdated(
+                        FieldUpdatedEvent {
+                            id: ancestor_id.clone(),
+                            field_name: "state".to_string(),
+                            content: "wip".to_string(),
+                        },
+                        self.metadata.clone(),
+                    ));
                 }
             }
         }
@@ -363,15 +357,14 @@ impl YakMap {
 
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.context = Some(context.clone());
-        self.pending_events
-            .push(YakEvent::FieldUpdated(
-                FieldUpdatedEvent {
-                    id,
-                    field_name: "context.md".to_string(),
-                    content: context,
-                },
-                self.metadata.clone(),
-            ));
+        self.pending_events.push(YakEvent::FieldUpdated(
+            FieldUpdatedEvent {
+                id,
+                field_name: "context.md".to_string(),
+                content: context,
+            },
+            self.metadata.clone(),
+        ));
 
         Ok(())
     }
@@ -379,15 +372,14 @@ impl YakMap {
     pub fn update_field(&mut self, id: YakId, field_name: String, content: String) -> Result<()> {
         self.ensure_exists(&id)?;
 
-        self.pending_events
-            .push(YakEvent::FieldUpdated(
-                FieldUpdatedEvent {
-                    id,
-                    field_name,
-                    content,
-                },
-                self.metadata.clone(),
-            ));
+        self.pending_events.push(YakEvent::FieldUpdated(
+            FieldUpdatedEvent {
+                id,
+                field_name,
+                content,
+            },
+            self.metadata.clone(),
+        ));
 
         Ok(())
     }
@@ -407,11 +399,10 @@ impl YakMap {
         }
 
         self.yaks.remove(&id);
-        self.pending_events
-            .push(YakEvent::Removed(
-                RemovedEvent { id },
-                self.metadata.clone(),
-            ));
+        self.pending_events.push(YakEvent::Removed(
+            RemovedEvent { id },
+            self.metadata.clone(),
+        ));
 
         Ok(())
     }
@@ -431,11 +422,10 @@ impl YakMap {
 
             for id in done_leaves {
                 self.yaks.remove(&id);
-                self.pending_events
-                    .push(YakEvent::Removed(
-                        RemovedEvent { id },
-                        self.metadata.clone(),
-                    ));
+                self.pending_events.push(YakEvent::Removed(
+                    RemovedEvent { id },
+                    self.metadata.clone(),
+                ));
             }
         }
 
@@ -460,15 +450,14 @@ impl YakMap {
         yak.name = Name::from(new_name.as_str());
 
         // Emit FieldUpdated event for name change
-        self.pending_events
-            .push(YakEvent::FieldUpdated(
-                FieldUpdatedEvent {
-                    id,
-                    field_name: "name".to_string(),
-                    content: new_name.to_string(),
-                },
-                self.metadata.clone(),
-            ));
+        self.pending_events.push(YakEvent::FieldUpdated(
+            FieldUpdatedEvent {
+                id,
+                field_name: "name".to_string(),
+                content: new_name.to_string(),
+            },
+            self.metadata.clone(),
+        ));
 
         Ok(())
     }

@@ -52,7 +52,10 @@ impl YakEvent {
             "Added" => Ok(Self::Added(AddedEvent::parse_data(data)?, meta)),
             "Removed" => Ok(Self::Removed(RemovedEvent::parse_data(data)?, meta)),
             "Moved" => Ok(Self::Moved(MovedEvent::parse_data(data)?, meta)),
-            "FieldUpdated" => Ok(Self::FieldUpdated(FieldUpdatedEvent::parse_data(data)?, meta)),
+            "FieldUpdated" => Ok(Self::FieldUpdated(
+                FieldUpdatedEvent::parse_data(data)?,
+                meta,
+            )),
             // Backward-compatible parsing of old event formats
             "Renamed" => {
                 let values = parse_quoted_values(data)?;

@@ -101,8 +101,15 @@ mod tests {
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let result = app.handle(SyncYaks::new());
         assert!(result.is_err());

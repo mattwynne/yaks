@@ -1,9 +1,9 @@
 // In-memory storage adapter - for testing only
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -259,7 +259,10 @@ impl ReadYakStore for InMemoryStorage {
                         .as_str()
                         .unwrap_or("unknown")
                         .to_string(),
-                    email: json["created_by"]["email"].as_str().unwrap_or("").to_string(),
+                    email: json["created_by"]["email"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string(),
                 };
                 let timestamp = Timestamp(json["created_at"].as_i64().unwrap_or(0));
                 (author, timestamp)

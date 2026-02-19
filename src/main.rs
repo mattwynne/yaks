@@ -238,13 +238,12 @@ fn main() -> Result<()> {
     };
 
     // Initialize authentication: use git config when in a repo, fallback otherwise
-    let auth: Box<dyn yx::domain::ports::AuthenticationPort> =
-        if let Some(ref root) = repo_root {
-            Box::new(GitAuthentication::new(root)?)
-        } else {
-            // skip_git mode: no git repo available, use unknown author
-            Box::new(UnknownAuthentication)
-        };
+    let auth: Box<dyn yx::domain::ports::AuthenticationPort> = if let Some(ref root) = repo_root {
+        Box::new(GitAuthentication::new(root)?)
+    } else {
+        // skip_git mode: no git repo available, use unknown author
+        Box::new(UnknownAuthentication)
+    };
 
     // Create application with injected dependencies
     let mut app = Application::new(
@@ -407,8 +406,7 @@ fn main() -> Result<()> {
                     yak_index: &HashMap<&yx::domain::slug::YakId, &yx::domain::Yak>,
                     parent_id: Option<&str>,
                 ) -> Result<()> {
-                    let has_real_metadata =
-                        yak.created_at != yx::domain::Timestamp::zero();
+                    let has_real_metadata = yak.created_at != yx::domain::Timestamp::zero();
                     let mut use_case = AddYak::new(yak.name.as_str())
                         .with_id(Some(yak.id.as_str()))
                         .with_context(yak.context.as_deref())

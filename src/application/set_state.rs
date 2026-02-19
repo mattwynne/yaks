@@ -98,8 +98,15 @@ mod tests {
         let mut event_bus = EventBus::new(Box::new(event_store));
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("my yak").execute(&mut app).unwrap();
         SetState::new("my yak", "wip").execute(&mut app).unwrap();
@@ -116,8 +123,15 @@ mod tests {
         let mut event_bus = EventBus::new(Box::new(event_store));
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("Fix the bug").execute(&mut app).unwrap();
         SetState::new("bug", "wip").execute(&mut app).unwrap();
@@ -134,8 +148,15 @@ mod tests {
         let mut event_bus = EventBus::new(Box::new(event_store));
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         AddYak::new("Fix the bug").execute(&mut app).unwrap();
         AddYak::new("Report the bug").execute(&mut app).unwrap();
@@ -152,8 +173,15 @@ mod tests {
         let mut event_bus = EventBus::new(Box::new(event_store));
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         // Add hierarchical yaks directly via yak_map (bypasses name validation)
         app.with_yak_map(|yak_map| {
@@ -202,8 +230,15 @@ mod tests {
         let mut event_bus = EventBus::new(Box::new(event_store));
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let result = SetState::new("nonexistent", "wip").execute(&mut app);
 

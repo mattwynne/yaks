@@ -167,13 +167,11 @@ mod tests {
         let first_event = &events[0];
         let metadata = first_event.metadata();
         assert_eq!(
-            metadata.author.name,
-            "Test Author",
+            metadata.author.name, "Test Author",
             "Event should carry author from auth port"
         );
         assert_eq!(
-            metadata.author.email,
-            "test@example.com",
+            metadata.author.email, "test@example.com",
             "Event should carry email from auth port"
         );
     }
@@ -190,8 +188,15 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         app.with_yak_map(|yak_map| {
             yak_map.add_yak("test".to_string(), None, None, None, None, vec![])?;
@@ -214,8 +219,15 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         // Create yak and mutate its state via YakMap
         app.with_yak_map(|yak_map| {
@@ -241,8 +253,15 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         // Use YakMap to add a yak
         app.with_yak_map(|yak_map| {
@@ -278,8 +297,15 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         // Add hierarchical yak
         app.with_yak_map(|yak_map| {
@@ -314,8 +340,15 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         // Add hierarchical yak and update child state
         app.with_yak_map(|yak_map| {

@@ -30,8 +30,8 @@ impl UseCase for ShowLog {
                 app.display.info("");
             }
             let meta = event.metadata();
-            let datetime = DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0)
-                .unwrap_or_default();
+            let datetime =
+                DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
             let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
             app.display.log_entry(
                 &meta.author.name,
@@ -104,8 +104,15 @@ mod tests {
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
-        let mut app =
-            Application::new(&mut event_bus, &storage, &display, &input, None, None, &auth);
+        let mut app = Application::new(
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            None,
+            &auth,
+        );
 
         let result = app.handle(ShowLog::new());
         assert!(result.is_err());
