@@ -166,6 +166,111 @@ mutate-diff() {
     cargo mutants --in-diff "$diff_file" "$@"
 }
 
+# @cmd Sync mutation test results to yaks
+# @alias ms
+mutate-sync() {
+  # Ensure yx is on PATH (needed in CI where direnv isn't active)
+  export PATH="$PWD/bin:$PWD/target/release:$PATH"
+
+  local missed="mutants.out/missed.txt"
+  if [ ! -f "$missed" ]; then
+    echo "Error: $missed not found."
+    echo "Run 'dev mutate' first to generate results."
+    return 1
+  fi
+
+  local parent="fix missed mutants"
+
+  # Ensure parent yak exists
+  if ! yx ls --format plain | grep -Fqx "dx/mutation-tests/$parent"; then
+    yx add "$parent" --under mutation-tests
+  fi
+
+  # Build list of expected yak names from missed.txt
+  local -A missed_files
+  while IFS= read -r line; do
+    # Extract file path (everything before first :line:col)
+    local file_path
+    file_path=$(echo "$line" | sed 's/^\(src\/[^:]*\.rs\):.*/\1/')
+    if [ -n "$file_path" ]; then
+      missed_files["$file_path"]=1
+    fi
+  done < "$missed"
+
+  # For each file with misses, create/update yak
+  for file_path in "${!missed_files[@]}"; do
+    # Build yak name: strip src/ and .rs, replace / with -
+    local yak_name
+    yak_name=$(echo "$file_path" \
+      | sed 's|^src/||' \
+      | sed 's|\.rs$||' \
+      | sed 's|/|-|g')
+    yak_name="$yak_name mutants"
+
+    # Build context from all mutants for this file
+    local context
+    context=$(grep -F "${file_path}:" "$missed" | sort)
+
+    # Check if yak exists and its state
+    local full_path="dx/mutation-tests/$parent/$yak_name"
+    local exists=false
+    local state=""
+    if yx ls --format plain | grep -Fqx "$full_path"; then
+      exists=true
+      state=$(yx field --show "$yak_name" state 2>/dev/null \
+        | tail -1)
+    fi
+
+    if [ "$exists" = true ]; then
+      # Update context (even for wip yaks)
+      echo "$context" | yx context "$yak_name"
+      # Reopen done yaks
+      if [ "$state" = "done" ]; then
+        echo "  ↻ Reopening $yak_name (new misses)"
+        yx state "$yak_name" todo
+      else
+        echo "  ↻ Updated $yak_name ($state)"
+      fi
+    else
+      echo "  + Creating $yak_name"
+      yx add "$yak_name" --under "$parent" \
+        --context "$context"
+    fi
+  done
+
+  # Mark yaks done if their file has zero misses now
+  local existing_yaks
+  existing_yaks=$(yx ls --format plain \
+    | grep "^dx/mutation-tests/$parent/" \
+    | sed "s|^dx/mutation-tests/$parent/||")
+
+  while IFS= read -r yak_name; do
+    [ -z "$yak_name" ] && continue
+    # Skip sub-children (only process direct children)
+    echo "$yak_name" | grep -q '/' && continue
+
+    # Reconstruct file path from yak name
+    local file_path
+    file_path="src/$(echo "$yak_name" \
+      | sed 's| mutants$||' \
+      | sed 's|-|/|g').rs"
+
+    # Check if this file has any misses
+    if [ -z "${missed_files[$file_path]+x}" ]; then
+      local state
+      state=$(yx field --show "$yak_name" state 2>/dev/null \
+        | tail -1)
+      if [ "$state" != "done" ] && [ "$state" != "wip" ]; then
+        echo "  ✓ Marking $yak_name done (no more misses)"
+        yx done "$yak_name"
+      fi
+    fi
+  done <<< "$existing_yaks"
+
+  echo ""
+  echo "Sync complete. Run 'yx sync' to push changes."
+}
+
 # @cmd Run all checks (tests + lint + audit) and mark as verified
 # @alias c
 check() {
