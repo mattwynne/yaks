@@ -93,7 +93,7 @@ impl Migrator {
             }
         }
 
-        write_schema_version(repo, self.expected_version)?;
+        write_schema_version(&location, self.expected_version)?;
         Ok(())
     }
 }
@@ -121,25 +121,26 @@ pub fn read_schema_version(location: &EventStoreLocation) -> Result<Option<u32>>
     Ok(Some(version))
 }
 
-/// Write the schema version to .schema-version in the refs/notes/yaks tree.
-/// Creates a new commit on refs/notes/yaks with the updated tree.
-pub fn write_schema_version(repo: &Repository, version: u32) -> Result<()> {
-    let oid = repo.refname_to_id("refs/notes/yaks")?;
-    let parent = repo.find_commit(oid)?;
+/// Write the schema version to .schema-version in the event store tree.
+/// Creates a new commit on the location's ref with the updated tree.
+pub fn write_schema_version(location: &EventStoreLocation, version: u32) -> Result<()> {
+    let oid = location.repo.refname_to_id(location.ref_name)?;
+    let parent = location.repo.find_commit(oid)?;
     let current_tree = parent.tree()?;
 
-    let version_blob = repo.blob(version.to_string().as_bytes())?;
-    let mut builder = repo.treebuilder(Some(&current_tree))?;
+    let version_blob = location.repo.blob(version.to_string().as_bytes())?;
+    let mut builder = location.repo.treebuilder(Some(&current_tree))?;
     builder.insert(".schema-version", version_blob, 0o100644)?;
     let new_tree_oid = builder.write()?;
-    let new_tree = repo.find_tree(new_tree_oid)?;
+    let new_tree = location.repo.find_tree(new_tree_oid)?;
 
-    let sig = repo
+    let sig = location
+        .repo
         .signature()
         .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
 
-    repo.commit(
-        Some("refs/notes/yaks"),
+    location.repo.commit(
+        Some(location.ref_name),
         &sig,
         &sig,
         &format!("Schema version: {}", version),
@@ -266,6 +267,42 @@ pub(crate) mod tests {
         assert_eq!(version, Some(1));
     }
 
+    #[test]
+    fn write_schema_version_to_custom_ref() {
+        let (_tmp, repo) = setup_test_repo();
+        let state_blob = repo.blob(b"todo").unwrap();
+        let mut yak_builder = repo.treebuilder(None).unwrap();
+        yak_builder.insert("state", state_blob, 0o100644).unwrap();
+        let yak_tree = yak_builder.write().unwrap();
+        let mut root_builder = repo.treebuilder(None).unwrap();
+        root_builder
+            .insert("test-yak", yak_tree, 0o040000)
+            .unwrap();
+        let root_tree_oid = root_builder.write().unwrap();
+        let root_tree = repo.find_tree(root_tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        repo.commit(
+            Some("refs/custom/test"),
+            &sig,
+            &sig,
+            "test event",
+            &root_tree,
+            &[],
+        )
+        .unwrap();
+
+        let location = EventStoreLocation {
+            repo: &repo,
+            ref_name: "refs/custom/test",
+        };
+        write_schema_version(&location, 3).unwrap();
+        let version = read_schema_version(&location).unwrap();
+        assert_eq!(version, Some(3));
+
+        // Verify it didn't create refs/notes/yaks
+        assert!(repo.refname_to_id("refs/notes/yaks").is_err());
+    }
+
     fn location_for<'a>(repo: &'a Repository) -> EventStoreLocation<'a> {
         EventStoreLocation {
             repo,
@@ -292,7 +329,7 @@ pub(crate) mod tests {
     fn reads_explicit_schema_version() {
         let (_tmp, repo) = setup_test_repo();
         create_v1_event(&repo, "test-yak");
-        write_schema_version(&repo, 2).unwrap();
+        write_schema_version(&location_for(&repo), 2).unwrap();
         let version = read_schema_version(&location_for(&repo)).unwrap();
         assert_eq!(version, Some(2));
     }
@@ -348,7 +385,7 @@ pub(crate) mod tests {
     fn newer_version_errors() {
         let (_tmp, repo) = setup_test_repo();
         create_v1_event(&repo, "test-yak");
-        write_schema_version(&repo, 3).unwrap();
+        write_schema_version(&location_for(&repo), 3).unwrap();
         let migrator = Migrator::new(2, vec![]);
         let err = migrator.ensure_schema(&repo).unwrap_err();
         assert!(
@@ -411,7 +448,7 @@ pub(crate) mod tests {
     /// Create a v2 tree with an old-style yak (no name, no id) and schema version 2.
     pub fn create_v2_tree_with_old_yak(repo: &Repository, yak_name: &str) {
         create_v1_event(repo, yak_name);
-        write_schema_version(repo, 2).unwrap();
+        write_schema_version(&location_for(repo), 2).unwrap();
     }
 
     /// Create a v2 tree with a new-style yak (has name, no id) and schema version 2.
@@ -443,7 +480,7 @@ pub(crate) mod tests {
             &[],
         )
         .unwrap();
-        write_schema_version(repo, 2).unwrap();
+        write_schema_version(&location_for(repo), 2).unwrap();
     }
 
     #[test]
@@ -505,7 +542,7 @@ pub(crate) mod tests {
             &[],
         )
         .unwrap();
-        write_schema_version(&repo, 2).unwrap();
+        write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
         migration.migrate(&repo).unwrap();
@@ -594,7 +631,7 @@ pub(crate) mod tests {
             &[],
         )
         .unwrap();
-        write_schema_version(&repo, 2).unwrap();
+        write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
         migration.migrate(&repo).unwrap();
@@ -685,7 +722,7 @@ pub(crate) mod tests {
             &[],
         )
         .unwrap();
-        write_schema_version(&repo, 2).unwrap();
+        write_schema_version(&location_for(&repo), 2).unwrap();
 
         let migration = MigrateV2ToV3;
         migration.migrate(&repo).unwrap();

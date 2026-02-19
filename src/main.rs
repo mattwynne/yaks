@@ -447,8 +447,12 @@ fn main() -> Result<()> {
                 {
                     let repo = git2::Repository::open(root)?;
                     if repo.find_reference("refs/notes/yaks").is_ok() {
+                        let location = yx::adapters::event_store::migration::EventStoreLocation {
+                            repo: &repo,
+                            ref_name: "refs/notes/yaks",
+                        };
                         yx::adapters::event_store::migration::write_schema_version(
-                            &repo,
+                            &location,
                             yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION,
                         )?;
                     }
