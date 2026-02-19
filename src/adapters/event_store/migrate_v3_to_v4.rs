@@ -517,4 +517,119 @@ mod tests {
             Some("step 1".to_string())
         );
     }
+
+    #[test]
+    fn version_constants() {
+        let m = MigrateV3ToV4;
+        assert_eq!(m.source_version(), 3);
+        assert_eq!(m.target_version(), 4);
+    }
+
+    fn make_tree_with_only_state(repo: &Repository) -> git2::Tree<'_> {
+        let state_blob = repo.blob(b"todo").unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder.insert("state", state_blob, 0o100644).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    fn make_tree_with_only_context(repo: &Repository) -> git2::Tree<'_> {
+        let context_blob = repo.blob(b"some notes").unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder.insert("context.md", context_blob, 0o100644).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    fn make_empty_tree(repo: &Repository) -> git2::Tree<'_> {
+        let builder = repo.treebuilder(None).unwrap();
+        let oid = builder.write().unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    #[test]
+    fn is_yak_subtree_detects_tree_with_only_state() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_tree_with_only_state(&repo);
+        assert!(
+            MigrateV3ToV4::is_yak_subtree(&repo, &tree),
+            "a tree with only 'state' should be detected as a yak subtree"
+        );
+    }
+
+    #[test]
+    fn is_yak_subtree_detects_tree_with_only_context() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_tree_with_only_context(&repo);
+        assert!(
+            MigrateV3ToV4::is_yak_subtree(&repo, &tree),
+            "a tree with only 'context.md' should be detected as a yak subtree"
+        );
+    }
+
+    #[test]
+    fn is_yak_subtree_rejects_empty_tree() {
+        let (_tmp, repo) = setup_test_repo();
+        let tree = make_empty_tree(&repo);
+        assert!(
+            !MigrateV3ToV4::is_yak_subtree(&repo, &tree),
+            "an empty tree should not be detected as a yak subtree"
+        );
+    }
+
+    #[test]
+    fn collect_yaks_skips_non_tree_entries() {
+        let (_tmp, repo) = setup_test_repo();
+
+        // Build a root with a blob and a non-yak tree (no state or context.md)
+        let blob = repo.blob(b"data").unwrap();
+        let mut non_yak_builder = repo.treebuilder(None).unwrap();
+        non_yak_builder.insert("readme", blob, 0o100644).unwrap();
+        let non_yak_tree = non_yak_builder.write().unwrap();
+
+        let state_blob = repo.blob(b"todo").unwrap();
+        let ctx_blob = repo.blob(b"").unwrap();
+        let yak_name_blob = repo.blob(b"alpha").unwrap();
+        let yak_id_blob = repo.blob(b"alpha-a1b2").unwrap();
+        let mut yak_builder = repo.treebuilder(None).unwrap();
+        yak_builder.insert("state", state_blob, 0o100644).unwrap();
+        yak_builder.insert("context.md", ctx_blob, 0o100644).unwrap();
+        yak_builder.insert("name", yak_name_blob, 0o100644).unwrap();
+        yak_builder.insert("id", yak_id_blob, 0o100644).unwrap();
+        let yak_tree = yak_builder.write().unwrap();
+
+        let schema_blob = repo.blob(b"3").unwrap();
+        let mut root_builder = repo.treebuilder(None).unwrap();
+        root_builder
+            .insert("not-a-yak", non_yak_tree, 0o040000)
+            .unwrap();
+        root_builder
+            .insert("alpha-a1b2", yak_tree, 0o040000)
+            .unwrap();
+        root_builder
+            .insert(".schema-version", schema_blob, 0o100644)
+            .unwrap();
+        let root_oid = root_builder.write().unwrap();
+        let root_tree = repo.find_tree(root_oid).unwrap();
+
+        let sig = repo.signature().unwrap();
+        repo.commit(
+            Some("refs/notes/yaks"),
+            &sig,
+            &sig,
+            "root with mixed entries",
+            &root_tree,
+            &[],
+        )
+        .unwrap();
+
+        let migration = MigrateV3ToV4;
+        migration.migrate(&repo).unwrap();
+
+        // Only the real yak should appear at root (non-yak tree skipped)
+        assert!(
+            read_yak_blob(&repo, "alpha-a1b2", "name").is_some(),
+            "yak should remain after migration"
+        );
+    }
 }
