@@ -60,6 +60,38 @@ Feature: Move yaks in hierarchy
           - [todo] standalone
         """
 
+  Rule: Moving a yak with children moves the whole subtree
+
+    Example: Move a subtree under another yak
+      Given I have a clean git repository
+      And I add the yak "epic"
+      And I add the yak "story" under "epic"
+      And I add the yak "task" under "story"
+      And I add the yak "backlog"
+      When I move the yak "epic" under "backlog"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] backlog
+          - [todo] epic
+            - [todo] story
+              - [todo] task
+        """
+
+    Example: Move a subtree to root
+      Given I have a clean git repository
+      And I add the yak "Make the tea"
+      And I add the yak "Boil the kettle" under "Make the tea"
+      And I add the yak "Fill the kettle" under "Boil the kettle"
+      When I move the yak "Boil the kettle" to root
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] Boil the kettle
+          - [todo] Fill the kettle
+        - [todo] Make the tea
+        """
+
   Rule: --under and --to-root are mutually exclusive
 
     Example: Using both flags errors

@@ -472,17 +472,6 @@ impl YakMap {
             self.ensure_exists(pid)?;
         }
 
-        // MVP limitation: Fail if moving a yak with children
-        let children = self.find_children_of(&id);
-        if !children.is_empty() {
-            let display = self.build_display_name(&id);
-            anyhow::bail!(
-                "Cannot move '{}': it has {} child(ren). Moving with children is not yet supported.",
-                display,
-                children.len()
-            );
-        }
-
         let old_parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
 
         // No-op if already at the desired position
@@ -1515,21 +1504,23 @@ mod tests {
 
     // Tests for move_yak_to
     #[test]
-    fn test_move_yak_to_fails_if_has_children() {
+    fn test_move_yak_with_children_moves_subtree() {
         let mut map = YakMap::new();
         let parent_id = map
             .add_yak("parent", None, None, None, None, vec![])
             .unwrap();
-        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+        let child_id = map
+            .add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
             .unwrap();
         let dest_id = map.add_yak("dest", None, None, None, None, vec![]).unwrap();
 
-        let result = map.move_yak_to(parent_id, Some(dest_id));
+        map.move_yak_to(parent_id.clone(), Some(dest_id.clone()))
+            .unwrap();
 
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("has"));
-        assert!(err_msg.contains("child"));
+        // parent is now under dest
+        assert_eq!(map.yaks.get(&parent_id).unwrap().parent_id, Some(dest_id));
+        // child is still under parent
+        assert_eq!(map.yaks.get(&child_id).unwrap().parent_id, Some(parent_id));
     }
 
     // Tests for prune
