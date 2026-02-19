@@ -1,11 +1,13 @@
 use anyhow::{bail, Result};
-use git2::{ObjectType, Repository};
+use git2::Repository;
 use std::path::Path;
 
-use crate::domain::slug::{generate_id, YakId};
+use super::migrate_v1_to_v2::MigrateV1ToV2;
+use super::migrate_v2_to_v3::MigrateV2ToV3;
+use super::migrate_v3_to_v4::MigrateV3ToV4;
 
 /// The schema version this build of yx expects.
-pub const CURRENT_SCHEMA_VERSION: u32 = 3;
+pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 /// A migration that transforms the event store from one schema version to the next.
 pub trait Migration {
@@ -32,7 +34,11 @@ impl Migrator {
     pub fn for_current_version() -> Self {
         Self::new(
             CURRENT_SCHEMA_VERSION,
-            vec![Box::new(MigrateV1ToV2), Box::new(MigrateV2ToV3)],
+            vec![
+                Box::new(MigrateV1ToV2),
+                Box::new(MigrateV2ToV3),
+                Box::new(MigrateV3ToV4),
+            ],
         )
     }
 
@@ -133,172 +139,12 @@ pub fn write_schema_version(repo: &Repository, version: u32) -> Result<()> {
     Ok(())
 }
 
-/// No-op migration from v1 to v2.
-/// Placeholder — will be fleshed out when yak names/IDs/paths lands.
-struct MigrateV1ToV2;
-
-impl Migration for MigrateV1ToV2 {
-    fn source_version(&self) -> u32 {
-        1
-    }
-    fn target_version(&self) -> u32 {
-        2
-    }
-    fn migrate(&self, _repo: &Repository) -> Result<()> {
-        // No-op for now. Future: transform events for slug-based IDs.
-        Ok(())
-    }
-}
-
-/// Migration that adds missing `name` and `id` blobs to yak subtrees.
-///
-/// Old-style yaks (pre-identity refactor) only have `state` and `context.md`.
-/// This migration adds:
-/// - `name` blob (from tree entry name) for old-style yaks
-/// - `id` blob (generated or from tree entry name) for all yaks missing it
-struct MigrateV2ToV3;
-
-impl MigrateV2ToV3 {
-    /// Check if a tree entry is a yak subtree (has `state` or `context.md`).
-    fn is_yak_subtree(_repo: &Repository, tree: &git2::Tree) -> bool {
-        tree.get_name("state").is_some() || tree.get_name("context.md").is_some()
-    }
-
-    /// Recursively migrate a yak subtree, adding missing `name` and `id` blobs.
-    /// Also recurses into child yak subtrees.
-    /// Returns the new tree OID if modifications were made, or None if unchanged.
-    fn migrate_subtree(
-        repo: &Repository,
-        tree: &git2::Tree,
-        entry_name: &str,
-        parent_yak_id: Option<&YakId>,
-    ) -> Result<Option<git2::Oid>> {
-        let mut modified = false;
-        let mut builder = repo.treebuilder(Some(tree))?;
-
-        // Determine if this subtree needs name/id
-        let has_name = tree.get_name("name").is_some();
-        let has_id = tree.get_name("id").is_some();
-
-        if !has_name {
-            // Old-style yak: tree entry name IS the display name
-            let name_blob = repo.blob(entry_name.as_bytes())?;
-            builder.insert("name", name_blob, 0o100644)?;
-            modified = true;
-        }
-
-        // Determine this yak's ID (needed for recursion into children)
-        let this_yak_id = if has_id {
-            // Read existing id blob
-            let id_entry = tree.get_name("id").unwrap();
-            let blob = repo.find_blob(id_entry.id())?;
-            YakId::from(std::str::from_utf8(blob.content())?.to_string())
-        } else if has_name {
-            // New-style yak: tree entry name is the ID
-            let id_value = entry_name.to_string();
-            let id_blob = repo.blob(id_value.as_bytes())?;
-            builder.insert("id", id_blob, 0o100644)?;
-            modified = true;
-            YakId::from(entry_name)
-        } else {
-            // Old-style yak: generate deterministic ID from name + parent
-            let generated = generate_id(entry_name, parent_yak_id);
-            let id_blob = repo.blob(generated.as_str().as_bytes())?;
-            builder.insert("id", id_blob, 0o100644)?;
-            modified = true;
-            generated
-        };
-
-        // Recurse into child yak subtrees
-        for i in 0..tree.len() {
-            let entry = tree.get(i).unwrap();
-            if entry.kind() != Some(ObjectType::Tree) {
-                continue;
-            }
-            let child_name = match entry.name() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-            let child_tree = repo.find_tree(entry.id())?;
-            if Self::is_yak_subtree(repo, &child_tree) {
-                if let Some(new_child_oid) =
-                    Self::migrate_subtree(repo, &child_tree, &child_name, Some(&this_yak_id))?
-                {
-                    builder.insert(&child_name, new_child_oid, 0o040000)?;
-                    modified = true;
-                }
-            }
-        }
-
-        if modified {
-            Ok(Some(builder.write()?))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-impl Migration for MigrateV2ToV3 {
-    fn source_version(&self) -> u32 {
-        2
-    }
-    fn target_version(&self) -> u32 {
-        3
-    }
-    fn migrate(&self, repo: &Repository) -> Result<()> {
-        let oid = repo.refname_to_id("refs/notes/yaks")?;
-        let parent = repo.find_commit(oid)?;
-        let root_tree = parent.tree()?;
-
-        let mut root_builder = repo.treebuilder(Some(&root_tree))?;
-        let mut modified = false;
-
-        // Walk root-level entries looking for yak subtrees
-        for i in 0..root_tree.len() {
-            let entry = root_tree.get(i).unwrap();
-            if entry.kind() != Some(ObjectType::Tree) {
-                continue;
-            }
-            let entry_name = match entry.name() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-            let subtree = repo.find_tree(entry.id())?;
-            if !Self::is_yak_subtree(repo, &subtree) {
-                continue;
-            }
-            if let Some(new_oid) = Self::migrate_subtree(repo, &subtree, &entry_name, None)? {
-                root_builder.insert(&entry_name, new_oid, 0o040000)?;
-                modified = true;
-            }
-        }
-
-        if modified {
-            let new_root_oid = root_builder.write()?;
-            let new_root_tree = repo.find_tree(new_root_oid)?;
-            let sig = repo
-                .signature()
-                .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
-            repo.commit(
-                Some("refs/notes/yaks"),
-                &sig,
-                &sig,
-                "Migration v2→v3: add name and id to yak subtrees",
-                &new_root_tree,
-                &[&parent],
-            )?;
-        }
-
-        Ok(())
-    }
-}
-
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn setup_test_repo() -> (TempDir, Repository) {
+    pub fn setup_test_repo() -> (TempDir, Repository) {
         let tmp = TempDir::new().unwrap();
         let repo = Repository::init(tmp.path()).unwrap();
         let mut config = repo.config().unwrap();
@@ -310,7 +156,7 @@ mod tests {
     /// Create a v1 event (Added) on refs/notes/yaks with no .schema-version.
     /// This duplicates the v1 format inline for the same reason as the
     /// Cucumber fixture — it's a frozen snapshot.
-    fn create_v1_event(repo: &Repository, yak_name: &str) {
+    pub fn create_v1_event(repo: &Repository, yak_name: &str) {
         let state_blob = repo.blob(b"todo").unwrap();
         let context_blob = repo.blob(b"").unwrap();
 
@@ -337,6 +183,37 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    /// Helper: read a blob from a yak subtree in refs/notes/yaks.
+    pub fn read_yak_blob(repo: &Repository, yak_entry: &str, file_name: &str) -> Option<String> {
+        let oid = repo.refname_to_id("refs/notes/yaks").ok()?;
+        let commit = repo.find_commit(oid).ok()?;
+        let tree = commit.tree().ok()?;
+        let yak_entry = tree.get_name(yak_entry)?;
+        let yak_tree = repo.find_tree(yak_entry.id()).ok()?;
+        let blob_entry = yak_tree.get_name(file_name)?;
+        let blob = repo.find_blob(blob_entry.id()).ok()?;
+        Some(std::str::from_utf8(blob.content()).ok()?.to_string())
+    }
+
+    /// Helper: read a blob from a nested child yak subtree.
+    pub fn read_child_yak_blob(
+        repo: &Repository,
+        parent_entry: &str,
+        child_entry: &str,
+        file_name: &str,
+    ) -> Option<String> {
+        let oid = repo.refname_to_id("refs/notes/yaks").ok()?;
+        let commit = repo.find_commit(oid).ok()?;
+        let tree = commit.tree().ok()?;
+        let parent = tree.get_name(parent_entry)?;
+        let parent_tree = repo.find_tree(parent.id()).ok()?;
+        let child = parent_tree.get_name(child_entry)?;
+        let child_tree = repo.find_tree(child.id()).ok()?;
+        let blob_entry = child_tree.get_name(file_name)?;
+        let blob = repo.find_blob(blob_entry.id()).ok()?;
+        Some(std::str::from_utf8(blob.content()).ok()?.to_string())
     }
 
     #[test]
@@ -474,45 +351,14 @@ mod tests {
 
     // -- v2→v3 migration tests --
 
-    /// Helper: read a blob from a yak subtree in refs/notes/yaks.
-    fn read_yak_blob(repo: &Repository, yak_entry: &str, file_name: &str) -> Option<String> {
-        let oid = repo.refname_to_id("refs/notes/yaks").ok()?;
-        let commit = repo.find_commit(oid).ok()?;
-        let tree = commit.tree().ok()?;
-        let yak_entry = tree.get_name(yak_entry)?;
-        let yak_tree = repo.find_tree(yak_entry.id()).ok()?;
-        let blob_entry = yak_tree.get_name(file_name)?;
-        let blob = repo.find_blob(blob_entry.id()).ok()?;
-        Some(std::str::from_utf8(blob.content()).ok()?.to_string())
-    }
-
-    /// Helper: read a blob from a nested child yak subtree.
-    fn read_child_yak_blob(
-        repo: &Repository,
-        parent_entry: &str,
-        child_entry: &str,
-        file_name: &str,
-    ) -> Option<String> {
-        let oid = repo.refname_to_id("refs/notes/yaks").ok()?;
-        let commit = repo.find_commit(oid).ok()?;
-        let tree = commit.tree().ok()?;
-        let parent = tree.get_name(parent_entry)?;
-        let parent_tree = repo.find_tree(parent.id()).ok()?;
-        let child = parent_tree.get_name(child_entry)?;
-        let child_tree = repo.find_tree(child.id()).ok()?;
-        let blob_entry = child_tree.get_name(file_name)?;
-        let blob = repo.find_blob(blob_entry.id()).ok()?;
-        Some(std::str::from_utf8(blob.content()).ok()?.to_string())
-    }
-
     /// Create a v2 tree with an old-style yak (no name, no id) and schema version 2.
-    fn create_v2_tree_with_old_yak(repo: &Repository, yak_name: &str) {
+    pub fn create_v2_tree_with_old_yak(repo: &Repository, yak_name: &str) {
         create_v1_event(repo, yak_name);
         write_schema_version(repo, 2).unwrap();
     }
 
     /// Create a v2 tree with a new-style yak (has name, no id) and schema version 2.
-    fn create_v2_tree_with_new_yak(repo: &Repository, entry_key: &str, display_name: &str) {
+    pub fn create_v2_tree_with_new_yak(repo: &Repository, entry_key: &str, display_name: &str) {
         let state_blob = repo.blob(b"todo").unwrap();
         let context_blob = repo.blob(b"").unwrap();
         let name_blob = repo.blob(display_name.as_bytes()).unwrap();

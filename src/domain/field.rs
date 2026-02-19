@@ -8,6 +8,7 @@ pub const CONTEXT_FIELD: &str = "context.md";
 pub const NAME_FIELD: &str = "name";
 pub const ID_FIELD: &str = "id";
 pub const METADATA_FIELD: &str = ".metadata.json";
+pub const PARENT_ID_FIELD: &str = "parent_id";
 
 /// All reserved field names
 pub const RESERVED_FIELDS: &[&str] = &[
@@ -16,6 +17,7 @@ pub const RESERVED_FIELDS: &[&str] = &[
     NAME_FIELD,
     ID_FIELD,
     METADATA_FIELD,
+    PARENT_ID_FIELD,
 ];
 
 /// Validate a field name format (for reading).
@@ -94,6 +96,13 @@ mod tests {
     #[test]
     fn test_validate_field_name_reserved_name() {
         let result = validate_field_name("name");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_validate_field_name_reserved_parent_id() {
+        let result = validate_field_name("parent_id");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("reserved"));
     }

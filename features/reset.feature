@@ -31,6 +31,19 @@ Feature: yx reset - Rebuild yaks from git tree
           - [todo] child
         """
 
+    Example: Reset preserves three-level hierarchy
+      Given I add the yak "grandparent"
+      And I add the yak "parent" under "grandparent"
+      And I add the yak "child" under "parent"
+      When I reset the yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] grandparent
+          - [todo] parent
+            - [todo] child
+        """
+
   Rule: Reset rebuilds slug-based directories with name and id
 
     Old-style yak directories used raw names or IDs as directory names.

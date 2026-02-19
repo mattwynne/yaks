@@ -54,151 +54,59 @@ impl GitEventStore {
         Ok(builder.write()?)
     }
 
-    /// Get a yak's subtree from the root tree
+    /// Get a yak's subtree from the root tree by its ID (direct root lookup).
     fn get_yak_subtree(
         &self,
         root: Option<&git2::Tree>,
-        yak_name: &str,
+        yak_id: &str,
     ) -> Result<Option<git2::Tree<'_>>> {
         let Some(root) = root else {
             return Ok(None);
         };
 
-        let parts: Vec<&str> = yak_name.split('/').collect();
-        let mut current_oid = root.id();
-
-        for part in &parts {
-            let tree = self.repo.find_tree(current_oid)?;
-            let entry_oid = match tree.get_name(part) {
-                Some(entry) => entry.id(),
-                None => return Ok(None),
-            };
-
-            // Verify it's a tree
-            let obj = self.repo.find_object(entry_oid, None)?;
-            if obj.kind() != Some(git2::ObjectType::Tree) {
-                anyhow::bail!("Expected tree entry for '{}'", part);
-            }
-
-            current_oid = entry_oid;
+        match root.get_name(yak_id) {
+            Some(entry) => Ok(Some(self.repo.find_tree(entry.id())?)),
+            None => Ok(None),
         }
-
-        Ok(Some(self.repo.find_tree(current_oid)?))
-    }
-
-    /// Recursively search the git tree for a directory entry matching
-    /// the given yak ID. Returns the full path (e.g., "parent-a1b2/child-c3d4").
-    /// This is needed because events only contain the yak's own ID, but
-    /// the git tree nests children under their parent's directory.
-    fn find_yak_path(&self, root: Option<&git2::Tree>, id: &str) -> Option<String> {
-        let root = root?;
-        self.find_yak_path_recursive(root, id, "")
-    }
-
-    fn find_yak_path_recursive(&self, tree: &git2::Tree, id: &str, prefix: &str) -> Option<String> {
-        for entry in tree.iter() {
-            if entry.kind() != Some(git2::ObjectType::Tree) {
-                continue;
-            }
-            let name = entry.name()?;
-            let full_path = if prefix.is_empty() {
-                name.to_string()
-            } else {
-                format!("{}/{}", prefix, name)
-            };
-
-            if name == id {
-                // Verify this is a yak directory (has a state or context.md blob)
-                if let Ok(subtree) = self.repo.find_tree(entry.id()) {
-                    if subtree.get_name("state").is_some()
-                        || subtree.get_name("context.md").is_some()
-                    {
-                        return Some(full_path);
-                    }
-                }
-            }
-
-            // Recurse into subtrees to find nested yaks
-            if let Ok(subtree) = self.repo.find_tree(entry.id()) {
-                if let Some(found) = self.find_yak_path_recursive(&subtree, id, &full_path) {
-                    return Some(found);
-                }
-            }
-        }
-        None
-    }
-
-    /// Resolve a yak ID to its full tree path.
-    /// If the ID already contains a slash (explicit path), use it directly.
-    /// Otherwise, search the tree recursively.
-    /// Falls back to the bare ID if not found (for new entries).
-    fn resolve_yak_path(&self, tree: Option<&git2::Tree>, id: &str) -> String {
-        if id.contains('/') {
-            return id.to_string();
-        }
-        self.find_yak_path(tree, id)
-            .unwrap_or_else(|| id.to_string())
     }
 
     /// Update a file in a yak's subtree, returning new root tree OID
     fn update_yak_file(
         &self,
         current_tree: Option<&git2::Tree>,
-        yak_name: &str,
+        yak_id: &str,
         file_name: &str,
         content: &str,
     ) -> Result<git2::Oid> {
         let blob_oid = self.repo.blob(content.as_bytes())?;
 
         // Build the yak's subtree
-        let yak_subtree = self.get_yak_subtree(current_tree, yak_name)?;
+        let yak_subtree = self.get_yak_subtree(current_tree, yak_id)?;
         let mut yak_builder = self.repo.treebuilder(yak_subtree.as_ref())?;
         yak_builder.insert(file_name, blob_oid, 0o100644)?;
         let yak_tree_oid = yak_builder.write()?;
 
         // Rebuild root tree with updated yak subtree
-        self.set_yak_in_root(current_tree, yak_name, Some(yak_tree_oid))
+        self.set_yak_in_root(current_tree, yak_id, Some(yak_tree_oid))
     }
 
-    /// Set (or remove) a yak subtree in the root tree, handling
-    /// hierarchical names by rebuilding intermediate trees.
+    /// Set (or remove) a yak subtree in the root tree.
     fn set_yak_in_root(
         &self,
         root: Option<&git2::Tree>,
-        yak_name: &str,
+        yak_id: &str,
         subtree_oid: Option<git2::Oid>,
     ) -> Result<git2::Oid> {
-        let parts: Vec<&str> = yak_name.split('/').collect();
-
-        if parts.len() == 1 {
-            // Simple case: direct child of root
-            let mut builder = self.repo.treebuilder(root)?;
-            match subtree_oid {
-                Some(oid) => {
-                    builder.insert(parts[0], oid, 0o040000)?;
-                }
-                None => {
-                    let _ = builder.remove(parts[0]);
-                }
+        let mut builder = self.repo.treebuilder(root)?;
+        match subtree_oid {
+            Some(oid) => {
+                builder.insert(yak_id, oid, 0o040000)?;
             }
-            return Ok(builder.write()?);
+            None => {
+                let _ = builder.remove(yak_id);
+            }
         }
-
-        // Hierarchical case: need to rebuild intermediate trees
-        let intermediate_name = parts[0];
-        let rest = parts[1..].join("/");
-
-        let intermediate_tree = root
-            .and_then(|r| r.get_name(intermediate_name))
-            .map(|entry| self.repo.find_tree(entry.id()))
-            .transpose()?;
-
-        let new_intermediate =
-            self.set_yak_in_root(intermediate_tree.as_ref(), &rest, subtree_oid)?;
-
-        let mut root_builder = self.repo.treebuilder(root)?;
-        root_builder.insert(intermediate_name, new_intermediate, 0o040000)?;
-        Ok(root_builder.write()?)
+        Ok(builder.write()?)
     }
 
     /// Build an updated tree by applying an event to the current tree.
@@ -223,40 +131,44 @@ impl GitEventStore {
                 let subtree = self.repo.find_tree(yak_tree_oid)?;
                 let mut builder = self.repo.treebuilder(Some(&subtree))?;
                 builder.insert(".metadata.json", metadata_blob, 0o100644)?;
+                // Add parent_id blob if this yak has a parent
+                if let Some(parent_id) = &e.parent_id {
+                    let parent_id_blob = self.repo.blob(parent_id.as_str().as_bytes())?;
+                    builder.insert("parent_id", parent_id_blob, 0o100644)?;
+                }
                 let updated_tree_oid = builder.write()?;
-                let path = match &e.parent_id {
-                    Some(parent) => format!("{}/{}", parent, e.id),
-                    None => e.id.to_string(),
-                };
-                self.set_yak_in_root(current_tree, &path, Some(updated_tree_oid))
+                // All yaks stored flat at root
+                self.set_yak_in_root(current_tree, e.id.as_str(), Some(updated_tree_oid))
             }
 
             YakEvent::Removed(e, _) => {
-                let path = self.resolve_yak_path(current_tree, e.id.as_str());
-                self.set_yak_in_root(current_tree, &path, None)
+                // Flat: yak is always at root by its ID
+                self.set_yak_in_root(current_tree, e.id.as_str(), None)
             }
 
             YakEvent::Moved(e, _) => {
-                // Move yak subtree to new parent
-                let old_path = self.resolve_yak_path(current_tree, e.id.as_str());
-                let old_subtree_oid = self
-                    .get_yak_subtree(current_tree, &old_path)?
-                    .map(|t| t.id());
+                // In flat structure, moving just updates the parent_id blob
+                let yak_id = e.id.as_str();
+                let subtree = self.get_yak_subtree(current_tree, yak_id)?;
+                let mut builder = self.repo.treebuilder(subtree.as_ref())?;
 
-                let intermediate = self.set_yak_in_root(current_tree, &old_path, None)?;
-                let intermediate_tree = self.repo.find_tree(intermediate)?;
+                match &e.new_parent {
+                    Some(parent_id) => {
+                        let blob = self.repo.blob(parent_id.as_str().as_bytes())?;
+                        builder.insert("parent_id", blob, 0o100644)?;
+                    }
+                    None => {
+                        let _ = builder.remove("parent_id");
+                    }
+                }
 
-                // Place under new parent if specified
-                let target = match &e.new_parent {
-                    Some(parent) => format!("{}/{}", parent, e.id),
-                    None => e.id.to_string(),
-                };
-                self.set_yak_in_root(Some(&intermediate_tree), &target, old_subtree_oid)
+                let new_subtree_oid = builder.write()?;
+                self.set_yak_in_root(current_tree, yak_id, Some(new_subtree_oid))
             }
 
             YakEvent::FieldUpdated(e, _) => {
-                let path = self.resolve_yak_path(current_tree, e.id.as_str());
-                self.update_yak_file(current_tree, &path, &e.field_name, &e.content)
+                // Flat: yak is always at root by its ID
+                self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
             }
         }
     }
@@ -270,18 +182,23 @@ impl GitEventStore {
         };
 
         let mut events = Vec::new();
-        self.collect_snapshot_events(&tree, None, &mut events)?;
+        self.collect_snapshot_events(&tree, &mut events)?;
         Ok(events)
     }
 
-    fn collect_snapshot_events(
-        &self,
-        tree: &git2::Tree,
-        parent_id: Option<&crate::domain::slug::YakId>,
-        events: &mut Vec<YakEvent>,
-    ) -> Result<()> {
+    fn collect_snapshot_events(&self, tree: &git2::Tree, events: &mut Vec<YakEvent>) -> Result<()> {
         use crate::domain::field::RESERVED_FIELDS;
-        use crate::domain::slug::{generate_id, Name};
+        use crate::domain::slug::{generate_id, Name, YakId};
+        use std::collections::{HashMap, HashSet};
+
+        // First pass: collect all yak data from root-level entries
+        struct YakData {
+            name_str: String,
+            subtree_id: git2::Oid,
+            parent_id_str: Option<String>,
+        }
+
+        let mut yak_data: Vec<(String, YakData)> = Vec::new();
 
         for entry in tree.iter() {
             if entry.kind() != Some(git2::ObjectType::Tree) {
@@ -308,38 +225,94 @@ impl GitEventStore {
             } else {
                 entry_name.clone()
             };
-            let name = Name::from(name_str.as_str());
-            let id = generate_id(&name_str, parent_id);
+
+            // Read parent_id from blob if present
+            let parent_id_str = if let Some(pid_entry) = subtree.get_name("parent_id") {
+                let pid_blob = self.repo.find_blob(pid_entry.id())?;
+                Some(std::str::from_utf8(pid_blob.content())?.trim().to_string())
+            } else {
+                None
+            };
+
+            yak_data.push((
+                entry_name,
+                YakData {
+                    name_str,
+                    subtree_id: entry.id(),
+                    parent_id_str,
+                },
+            ));
+        }
+
+        // Topological sort: emit parentless yaks first, then yaks whose
+        // parent has already been emitted.
+        // Build a map from old tree-entry ID to parent_id for ordering.
+        let mut emitted: HashSet<String> = HashSet::new();
+        let mut remaining = yak_data;
+        let mut ordered: Vec<(String, YakData)> = Vec::new();
+
+        loop {
+            let before = remaining.len();
+            let mut still_remaining = Vec::new();
+
+            for item in remaining {
+                let can_emit = match &item.1.parent_id_str {
+                    None => true,
+                    Some(pid) => emitted.contains(pid),
+                };
+                if can_emit {
+                    emitted.insert(item.0.clone());
+                    ordered.push(item);
+                } else {
+                    still_remaining.push(item);
+                }
+            }
+
+            remaining = still_remaining;
+            if remaining.is_empty() || remaining.len() == before {
+                // Append any remaining (orphans) at end
+                ordered.extend(remaining);
+                break;
+            }
+        }
+
+        // Second pass: generate IDs and emit events.
+        // We need to map old parent_id strings to regenerated YakIds.
+        let mut old_entry_to_new_id: HashMap<String, YakId> = HashMap::new();
+
+        for (entry_name, data) in &ordered {
+            let parent_yak_id: Option<YakId> = data
+                .parent_id_str
+                .as_ref()
+                .and_then(|pid| old_entry_to_new_id.get(pid))
+                .cloned();
+
+            let id = generate_id(&data.name_str, parent_yak_id.as_ref());
+            let name = Name::from(data.name_str.as_str());
+
+            old_entry_to_new_id.insert(entry_name.clone(), id.clone());
+
+            let subtree = self.repo.find_tree(data.subtree_id)?;
 
             // Read .metadata.json if present
-            let added_metadata =
-                if let Some(meta_entry) = subtree.get_name(".metadata.json") {
-                    if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
-                        if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                            if let Ok(json) =
-                                serde_json::from_str::<serde_json::Value>(content)
-                            {
-                                use crate::domain::event_metadata::{
-                                    Author, EventMetadata, Timestamp,
-                                };
-                                EventMetadata::new(
-                                    Author {
-                                        name: json["created_by"]["name"]
-                                            .as_str()
-                                            .unwrap_or("unknown")
-                                            .to_string(),
-                                        email: json["created_by"]["email"]
-                                            .as_str()
-                                            .unwrap_or("")
-                                            .to_string(),
-                                    },
-                                    Timestamp(
-                                        json["created_at"].as_i64().unwrap_or(0),
-                                    ),
-                                )
-                            } else {
-                                crate::domain::event_metadata::EventMetadata::default_legacy()
-                            }
+            let added_metadata = if let Some(meta_entry) = subtree.get_name(".metadata.json") {
+                if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
+                    if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
+                            use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+                            EventMetadata::new(
+                                Author {
+                                    name: json["created_by"]["name"]
+                                        .as_str()
+                                        .unwrap_or("unknown")
+                                        .to_string(),
+                                    email: json["created_by"]["email"]
+                                        .as_str()
+                                        .unwrap_or("")
+                                        .to_string(),
+                                },
+                                Timestamp(json["created_at"].as_i64().unwrap_or(0)),
+                            )
                         } else {
                             crate::domain::event_metadata::EventMetadata::default_legacy()
                         }
@@ -348,14 +321,17 @@ impl GitEventStore {
                     }
                 } else {
                     crate::domain::event_metadata::EventMetadata::default_legacy()
-                };
+                }
+            } else {
+                crate::domain::event_metadata::EventMetadata::default_legacy()
+            };
 
             // Added event
             events.push(YakEvent::Added(
                 crate::domain::events::AddedEvent {
                     name: name.clone(),
                     id: id.clone(),
-                    parent_id: parent_id.cloned(),
+                    parent_id: parent_yak_id.clone(),
                 },
                 added_metadata,
             ));
@@ -415,9 +391,6 @@ impl GitEventStore {
                     crate::domain::event_metadata::EventMetadata::default_legacy(),
                 ));
             }
-
-            // Recurse into children (subtrees within this yak's subtree)
-            self.collect_snapshot_events(&subtree, Some(&id), events)?;
         }
 
         Ok(())
@@ -513,46 +486,36 @@ impl EventStore for GitEventStore {
 
     fn reset_from_snapshot(&mut self, yaks: &[Yak]) -> Result<usize> {
         use super::migration::CURRENT_SCHEMA_VERSION;
-        use crate::domain::slug::YakId;
-        use std::collections::HashMap;
 
-        // Build a YakId→Yak index
-        let yak_map: HashMap<&YakId, &Yak> = yaks.iter().map(|y| (&y.id, y)).collect();
+        // Build root tree — all yaks flat at root
+        let mut root_builder = self.repo.treebuilder(None)?;
 
-        // Find root yaks (those whose ID doesn't appear in any children list)
-        let mut child_ids = std::collections::HashSet::new();
         for yak in yaks {
-            for child_id in &yak.children {
-                child_ids.insert(child_id);
-            }
-        }
-        let roots: Vec<&Yak> = yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
-
-        // Recursively build tree
-        fn build_yak_subtree(
-            repo: &Repository,
-            yak: &Yak,
-            yak_map: &HashMap<&YakId, &Yak>,
-        ) -> Result<git2::Oid> {
-            let mut builder = repo.treebuilder(None)?;
+            let mut builder = self.repo.treebuilder(None)?;
 
             // Add standard blobs
-            let state_blob = repo.blob(yak.state.as_bytes())?;
+            let state_blob = self.repo.blob(yak.state.as_bytes())?;
             builder.insert("state", state_blob, 0o100644)?;
 
             let context_content = yak.context.as_deref().unwrap_or("");
-            let context_blob = repo.blob(context_content.as_bytes())?;
+            let context_blob = self.repo.blob(context_content.as_bytes())?;
             builder.insert("context.md", context_blob, 0o100644)?;
 
-            let name_blob = repo.blob(yak.name.as_str().as_bytes())?;
+            let name_blob = self.repo.blob(yak.name.as_str().as_bytes())?;
             builder.insert("name", name_blob, 0o100644)?;
 
-            let id_blob = repo.blob(yak.id.as_str().as_bytes())?;
+            let id_blob = self.repo.blob(yak.id.as_str().as_bytes())?;
             builder.insert("id", id_blob, 0o100644)?;
+
+            // Add parent_id blob if this yak has a parent
+            if let Some(parent_id) = &yak.parent_id {
+                let parent_id_blob = self.repo.blob(parent_id.as_str().as_bytes())?;
+                builder.insert("parent_id", parent_id_blob, 0o100644)?;
+            }
 
             // Add custom fields
             for (field_name, content) in &yak.fields {
-                let field_blob = repo.blob(content.as_bytes())?;
+                let field_blob = self.repo.blob(content.as_bytes())?;
                 builder.insert(field_name, field_blob, 0o100644)?;
             }
 
@@ -564,31 +527,11 @@ impl EventStore for GitEventStore {
                 },
                 "created_at": yak.created_at.as_epoch_secs()
             });
-            let metadata_blob = repo.blob(metadata_json.to_string().as_bytes())?;
+            let metadata_blob = self.repo.blob(metadata_json.to_string().as_bytes())?;
             builder.insert(".metadata.json", metadata_blob, 0o100644)?;
 
-            // Add children subtrees
-            for child_id in &yak.children {
-                let child = yak_map.get(child_id).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "child yak '{}' referenced by '{}' not found in snapshot",
-                        child_id,
-                        yak.id
-                    )
-                })?;
-                let child_tree = build_yak_subtree(repo, child, yak_map)?;
-                builder.insert(child_id.as_str(), child_tree, 0o040000)?;
-            }
-
-            Ok(builder.write()?)
-        }
-
-        // Build root tree
-        let mut root_builder = self.repo.treebuilder(None)?;
-
-        for root in roots {
-            let yak_tree = build_yak_subtree(&self.repo, root, &yak_map)?;
-            root_builder.insert(root.id.as_str(), yak_tree, 0o040000)?;
+            let yak_tree = builder.write()?;
+            root_builder.insert(yak.id.as_str(), yak_tree, 0o040000)?;
         }
 
         // Add .schema-version
@@ -747,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn added_with_parent_id_nests_under_parent() {
+    fn added_with_parent_id_stores_flat_with_parent_id_blob() {
         let (_tmp, mut store) = setup_test_repo();
 
         // Add parent
@@ -776,21 +719,35 @@ mod tests {
 
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Root should have one entry: the parent
-        assert_eq!(tree.len(), 1);
+        // Root should have two entries: parent and child (flat)
+        assert_eq!(tree.len(), 2);
 
-        let parent_entry = tree.get_name("parent-a1b2").unwrap();
-        let parent_tree = parent_entry.to_object(&store.repo).unwrap();
-        let parent_tree = parent_tree.as_tree().unwrap();
-
-        // Parent tree should have its own files + child subtree
+        // Both at root level
         assert!(
-            parent_tree.get_name("child-c3d4").is_some(),
-            "Expected child subtree under parent"
+            tree.get_name("parent-a1b2").is_some(),
+            "Expected parent at root"
         );
         assert!(
-            parent_tree.get_name("state").is_some(),
-            "Expected parent's state file"
+            tree.get_name("child-c3d4").is_some(),
+            "Expected child at root"
+        );
+
+        // Child should have parent_id blob
+        let child_entry = tree.get_name("child-c3d4").unwrap();
+        let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
+        let parent_id_blob = child_tree.get_name("parent_id").unwrap();
+        let parent_id = store.repo.find_blob(parent_id_blob.id()).unwrap();
+        assert_eq!(
+            std::str::from_utf8(parent_id.content()).unwrap(),
+            "parent-a1b2"
+        );
+
+        // Parent should NOT have parent_id blob
+        let parent_entry = tree.get_name("parent-a1b2").unwrap();
+        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
+        assert!(
+            parent_tree.get_name("parent_id").is_none(),
+            "Root yak should not have parent_id blob"
         );
     }
 
@@ -938,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_events_handles_nested_yaks() {
+    fn snapshot_events_handles_flat_yaks_with_parent_id() {
         let (_tmp, mut store) = setup_test_repo();
 
         store
@@ -971,11 +928,20 @@ mod tests {
 
         assert_eq!(added_events.len(), 2, "Expected 2 Added events");
 
-        // Child should have a parent_id matching the regenerated parent ID
-        if let (YakEvent::Added(parent, _), YakEvent::Added(child, _)) =
-            (&added_events[0], &added_events[1])
+        // Find parent and child by name
+        let parent_event = added_events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == Name::from("parent")))
+            .expect("Expected parent Added event");
+        let child_event = added_events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == Name::from("child")))
+            .expect("Expected child Added event");
+
+        if let (YakEvent::Added(parent, _), YakEvent::Added(child, _)) = (parent_event, child_event)
         {
             assert!(parent.parent_id.is_none());
+            // Child reads parent_id from blob in flat tree
             assert_eq!(child.parent_id.as_ref(), Some(&parent.id));
         }
     }
@@ -1138,7 +1104,7 @@ mod tests {
         // Check .schema-version
         let schema_blob = tree.get_name(".schema-version").unwrap();
         let schema = store.repo.find_blob(schema_blob.id()).unwrap();
-        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
+        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "4");
     }
 
     #[test]
@@ -1150,7 +1116,7 @@ mod tests {
         let child = Yak {
             id: YakId::from("child-x1y2"),
             name: Name::from("Child Yak"),
-            parent_id: None,
+            parent_id: Some(YakId::from("parent-a1b2")),
             state: "todo".to_string(),
             context: None,
             fields: HashMap::new(),
@@ -1176,29 +1142,41 @@ mod tests {
         // Verify tree structure
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Root should only have parent (child is nested)
-        assert_eq!(tree.len(), 2); // parent + .schema-version
+        // Root should have parent + child + .schema-version (flat)
+        assert_eq!(tree.len(), 3);
 
-        // Get parent subtree
+        // Both at root level
+        assert!(tree.get_name("parent-a1b2").is_some());
+        assert!(tree.get_name("child-x1y2").is_some());
+
+        // Parent should have its own blobs, no child subtree
         let parent_entry = tree.get_name("parent-a1b2").unwrap();
         let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
-
-        // Parent should have its own blobs + child subtree
         assert!(parent_tree.get_name("state").is_some());
         assert!(parent_tree.get_name("context.md").is_some());
         assert!(parent_tree.get_name("name").is_some());
         assert!(parent_tree.get_name("id").is_some());
+        assert!(
+            parent_tree.get_name("parent_id").is_none(),
+            "Root yak should not have parent_id"
+        );
 
-        // Child should be nested under parent
-        let child_entry = parent_tree.get_name("child-x1y2").unwrap();
+        // Child at root with parent_id blob
+        let child_entry = tree.get_name("child-x1y2").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
 
-        // Verify child blobs
         let child_name_blob = child_tree.get_name("name").unwrap();
         let child_name = store.repo.find_blob(child_name_blob.id()).unwrap();
         assert_eq!(
             std::str::from_utf8(child_name.content()).unwrap(),
             "Child Yak"
+        );
+
+        let parent_id_blob = child_tree.get_name("parent_id").unwrap();
+        let parent_id = store.repo.find_blob(parent_id_blob.id()).unwrap();
+        assert_eq!(
+            std::str::from_utf8(parent_id.content()).unwrap(),
+            "parent-a1b2"
         );
     }
 
@@ -1303,7 +1281,7 @@ mod tests {
         assert_eq!(tree.len(), 1);
         let schema_blob = tree.get_name(".schema-version").unwrap();
         let schema = store.repo.find_blob(schema_blob.id()).unwrap();
-        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "3");
+        assert_eq!(std::str::from_utf8(schema.content()).unwrap(), "4");
     }
 
     #[test]
@@ -1348,22 +1326,20 @@ mod tests {
 
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Root should still have one entry: the parent (no orphan at root)
+        // Root should have two entries: parent + child (flat)
         let root_entries: Vec<_> = tree
             .iter()
             .filter(|e| e.kind() == Some(git2::ObjectType::Tree))
             .collect();
         assert_eq!(
             root_entries.len(),
-            1,
-            "Expected 1 root tree entry, got {} (orphan created?)",
+            2,
+            "Expected 2 root tree entries, got {}",
             root_entries.len()
         );
 
-        // Verify the child's name was updated in the nested position
-        let parent_entry = tree.get_name("parent-a1b2").unwrap();
-        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
-        let child_entry = parent_tree.get_name("child-c3d4").unwrap();
+        // Verify the child's name was updated at root level
+        let child_entry = tree.get_name("child-c3d4").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
 
         let name_blob = child_tree.get_name("name").unwrap();
@@ -1402,7 +1378,7 @@ mod tests {
             ))
             .unwrap();
 
-        // Update state of nested child
+        // Update state of child (now at root level)
         store
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
@@ -1416,17 +1392,15 @@ mod tests {
 
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Root should still have one entry: the parent (no orphan)
+        // Root should have two entries: parent + child (flat)
         let root_entries: Vec<_> = tree
             .iter()
             .filter(|e| e.kind() == Some(git2::ObjectType::Tree))
             .collect();
-        assert_eq!(root_entries.len(), 1);
+        assert_eq!(root_entries.len(), 2);
 
-        // Verify state was updated in the nested position
-        let parent_entry = tree.get_name("parent-a1b2").unwrap();
-        let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
-        let child_entry = parent_tree.get_name("child-c3d4").unwrap();
+        // Verify state was updated at root level
+        let child_entry = tree.get_name("child-c3d4").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
 
         let state_blob = child_tree.get_name("state").unwrap();
@@ -1496,30 +1470,5 @@ mod tests {
         assert_eq!(events[0].metadata().author.name, "Reader Test");
         assert_eq!(events[0].metadata().author.email, "reader@test.com");
         assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
-    }
-
-    #[test]
-    fn reset_from_snapshot_errors_on_missing_child() {
-        use std::collections::HashMap;
-
-        let (_tmp, mut store) = setup_test_repo();
-
-        let parent = Yak {
-            id: YakId::from("parent-a1b2"),
-            name: Name::from("Parent Yak"),
-            parent_id: None,
-            state: "wip".to_string(),
-            context: None,
-            fields: HashMap::new(),
-            children: vec![YakId::from("missing-child-x1y2")], // child doesn't exist
-            created_by: Author::unknown(),
-            created_at: Timestamp::zero(),
-        };
-
-        let result = store.reset_from_snapshot(&[parent]);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("missing-child-x1y2"));
-        assert!(err_msg.contains("parent-a1b2"));
     }
 }

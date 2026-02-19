@@ -1,6 +1,9 @@
 pub mod git;
 #[cfg(any(test, feature = "test-support"))]
 pub mod memory;
+pub mod migrate_v1_to_v2;
+pub mod migrate_v2_to_v3;
+pub mod migrate_v3_to_v4;
 pub mod migration;
 pub mod noop;
 
