@@ -211,4 +211,38 @@ mod tests {
         let result = complete_with_state(&["yx", "done", "--r"], &[]);
         assert!(result.contains(&"--recursive".to_string()));
     }
+
+    #[test]
+    fn offers_recursive_flag_for_state() {
+        let result = complete_with_state(&["yx", "state", "--"], &[]);
+        assert!(result.contains(&"--recursive".to_string()));
+    }
+
+    #[test]
+    fn offers_show_flag_for_field() {
+        let result = complete_with_state(&["yx", "field", "--"], &[]);
+        assert!(result.contains(&"--show".to_string()));
+    }
+
+    #[test]
+    fn offers_format_and_only_flags_for_list() {
+        let result = complete_with_state(&["yx", "list", "--"], &[]);
+        assert!(result.contains(&"--format".to_string()));
+        assert!(result.contains(&"--only".to_string()));
+    }
+
+    #[test]
+    fn offers_format_and_only_flags_for_ls() {
+        let result = complete_with_state(&["yx", "ls", "--"], &[]);
+        assert!(result.contains(&"--format".to_string()));
+        assert!(result.contains(&"--only".to_string()));
+    }
+
+    #[test]
+    fn finish_shows_only_incomplete_yaks() {
+        let yaks = &[("todo-yak", false), ("done-yak", true)];
+        let result = complete_with_state(&["yx", "finish", ""], yaks);
+        assert!(result.contains(&"todo-yak".to_string()));
+        assert!(!result.contains(&"done-yak".to_string()));
+    }
 }
