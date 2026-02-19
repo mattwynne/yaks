@@ -310,4 +310,58 @@ mod tests {
         let s: &str = id.as_ref();
         assert_eq!(s, "test");
     }
+
+    #[test]
+    fn slug_as_ref_str() {
+        let slug = Slug::from("make-the-tea");
+        let s: &str = slug.as_ref();
+        assert_eq!(s, "make-the-tea");
+
+        let empty_slug = Slug::from("");
+        assert_eq!(empty_slug.as_ref(), "");
+
+        let slug_with_suffix = Slug::from("xyzzy");
+        assert_eq!(slug_with_suffix.as_ref(), "xyzzy");
+    }
+
+    #[test]
+    fn name_as_ref_str() {
+        let name = Name::from("Make the tea");
+        let s: &str = name.as_ref();
+        assert_eq!(s, "Make the tea");
+
+        let empty_name = Name::from("");
+        assert_eq!(empty_name.as_ref(), "");
+
+        let name_with_suffix = Name::from("xyzzy");
+        assert_eq!(name_with_suffix.as_ref(), "xyzzy");
+    }
+
+    #[test]
+    fn name_partial_eq_str() {
+        let name = Name::from("hello");
+        assert_eq!(name, "hello");
+        assert_ne!(name, "world");
+
+        let empty_name = Name::from("");
+        assert_eq!(empty_name, "");
+        assert_ne!(empty_name, "something");
+    }
+
+    #[test]
+    fn name_partial_eq_string() {
+        let name = Name::from("hello");
+        let hello_string = "hello".to_string();
+        let world_string = "world".to_string();
+
+        assert_eq!(name, hello_string);
+        assert_ne!(name, world_string);
+
+        let empty_name = Name::from("");
+        let empty_string = "".to_string();
+        let non_empty_string = "something".to_string();
+
+        assert_eq!(empty_name, empty_string);
+        assert_ne!(empty_name, non_empty_string);
+    }
 }
