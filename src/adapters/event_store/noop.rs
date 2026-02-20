@@ -20,4 +20,13 @@ impl EventStore for NoOpEventStore {
     fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
         Ok(0)
     }
+
+    fn sync(
+        &mut self,
+        _peer: &mut dyn EventStore,
+        _bus: &mut crate::infrastructure::event_bus::EventBus,
+        _output: &dyn crate::domain::ports::DisplayPort,
+    ) -> Result<()> {
+        todo!("sync not yet implemented")
+    }
 }
