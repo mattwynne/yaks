@@ -921,11 +921,7 @@ async fn repo_has_set_context(
 }
 
 #[given(regex = r#"^([\w-]+) has removed the yak "(.+)"$"#)]
-async fn repo_has_removed_yak(
-    world: &mut FullStackWorld,
-    repo: String,
-    yak: String,
-) -> Result<()> {
+async fn repo_has_removed_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["rm", &yak])?;
     if world.get_exit_code() != 0 {
         anyhow::bail!(
@@ -951,27 +947,6 @@ async fn repo_has_moved_yak_under(
             "Failed to move yak '{}' under '{}' in repo '{}':\nstderr: {}",
             yak,
             parent,
-            repo,
-            world.get_error()
-        );
-    }
-    Ok(())
-}
-
-#[given(regex = r#"^([\w-]+) has set the "(.+)" field of "(.+)" to "(.+)"$"#)]
-async fn repo_has_set_field(
-    world: &mut FullStackWorld,
-    repo: String,
-    field: String,
-    yak: String,
-    value: String,
-) -> Result<()> {
-    world.run_yx_in_repo_with_stdin(&repo, &["field", &yak, &field], &value)?;
-    if world.get_exit_code() != 0 {
-        anyhow::bail!(
-            "Failed to set field '{}' of '{}' in repo '{}':\nstderr: {}",
-            field,
-            yak,
             repo,
             world.get_error()
         );
@@ -1143,6 +1118,61 @@ async fn repo_should_have_yak(world: &mut FullStackWorld, repo: String, yak: Str
     Ok(())
 }
 
+#[then(regex = r#"^([\w-]+) and ([\w-]+) both have the same yaks:$"#)]
+async fn repos_have_same_yaks(
+    world: &mut FullStackWorld,
+    repo_a: String,
+    repo_b: String,
+    step: &cucumber::gherkin::Step,
+) -> Result<()> {
+    let expected = step
+        .docstring
+        .as_ref()
+        .expect("step requires a docstring")
+        .trim()
+        .to_string();
+
+    for repo in [&repo_a, &repo_b] {
+        world.run_yx_in_repo(repo, &["ls", "--format", "pretty"])?;
+        let output = world.get_output().trim().to_string();
+        if output != expected {
+            anyhow::bail!(
+                "Expected repo '{}' to have yaks:\n{}\nbut got:\n{}",
+                repo,
+                expected,
+                output
+            );
+        }
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) should have these yaks:$"#)]
+async fn repo_should_have_yaks(
+    world: &mut FullStackWorld,
+    repo: String,
+    step: &cucumber::gherkin::Step,
+) -> Result<()> {
+    let expected = step
+        .docstring
+        .as_ref()
+        .expect("step requires a docstring")
+        .trim()
+        .to_string();
+
+    world.run_yx_in_repo(&repo, &["ls", "--format", "pretty"])?;
+    let output = world.get_output().trim().to_string();
+    if output != expected {
+        anyhow::bail!(
+            "Expected repo '{}' to have yaks:\n{}\nbut got:\n{}",
+            repo,
+            expected,
+            output
+        );
+    }
+    Ok(())
+}
+
 #[then(regex = r#"^([\w-]+) should not have a yak called "(.+)"$"#)]
 async fn repo_should_not_have_yak(
     world: &mut FullStackWorld,
@@ -1199,21 +1229,6 @@ async fn repo_yak_should_have_context(
             repo,
             expected,
             output
-        );
-    }
-    Ok(())
-}
-
-#[then(regex = r#"^([\w-]+) has nothing staged in the git index$"#)]
-async fn repo_has_clean_index(world: &mut FullStackWorld, repo: String) -> Result<()> {
-    world.run_git_in_repo(&repo, &["diff", "--cached", "--name-only"])?;
-    let output = world.get_output();
-    let trimmed = output.trim();
-    if !trimmed.is_empty() {
-        anyhow::bail!(
-            "Expected repo '{}' to have nothing staged, but found:\n{}",
-            repo,
-            trimmed
         );
     }
     Ok(())

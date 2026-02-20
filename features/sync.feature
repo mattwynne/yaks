@@ -1,5 +1,4 @@
 Feature: yx sync - Collaborate on Yaks via Git
-
   Synchronizes yaks between team members using a hidden git ref
   (`refs/notes/yaks`). Idempotent and safe to run anytime.
 
@@ -14,257 +13,215 @@ Feature: yx sync - Collaborate on Yaks via Git
     Given a bare git repository called origin
 
   @fullstack
-  Rule: Pushing yaks to origin
+  Rule: Syncing stores yaks on the remote
 
     Example: Syncing pushes the yaks ref to origin
       Given a git clone of origin called alice
-      And alice has a yak called "test yak"
+      And alice has a yak called "make the tea"
       When alice syncs yaks
       Then origin has a "refs/notes/yaks" ref
 
-  @fullstack
-  Rule: Pulling yaks from origin
+  Rule: After syncing, all users have the same yaks
 
-    Example: Syncing pulls yaks added by another user
+    Example: Bob gets alice's yak after sync
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "shared yak"
+      And alice has a yak called "make the tea"
       And alice has synced yaks
       When bob syncs yaks
-      Then bob should have a yak called "shared yak"
+      Then bob should have a yak called "make the tea"
 
-  @fullstack
-  Rule: Merging yaks from multiple users
-
-    Example: Both users' yaks are present after syncing
+    @wip
+    Example: Both users see the same yaks after syncing
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "alice yak"
+      And alice has a yak called "buy biscuits"
       And alice has synced yaks
-      And bob has a yak called "bob yak"
+      And bob has a yak called "make the tea"
       And bob has synced yaks
       When alice syncs yaks
-      Then alice should have a yak called "alice yak"
-      And alice should have a yak called "bob yak"
-
-    Example: Local yaks are preserved when syncing with new remote yaks
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "yak-a"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has a yak called "yak-b"
-      And alice has synced yaks
-      And bob has a yak called "yak-c"
-      When bob syncs yaks
-      Then bob should have a yak called "yak-a"
-      And bob should have a yak called "yak-b"
-      And bob should have a yak called "yak-c"
+      Then alice and bob both have the same yaks:
+        """
+          ○ buy biscuits
+          ○ make the tea
+        """
 
   @fullstack
-  Rule: Sync does not pollute working tree or index
+  Rule: Worktrees of the same repository can sync independently
 
-    Example: Git index remains clean after sync
+    Example: Yak created on a feature branch appears on main after sync
+      Given a git clone of origin called main
+      And a git worktree of main called feature
+      And a git worktree of main called bugfix
+      And feature has a yak called "make the tea"
+      And feature has synced yaks
+      When bugfix syncs yaks
+      Then bugfix should have a yak called "make the tea"
+
+  @wip
+  Rule: Removals propagate through sync
+
+    Example: Alice's removal appears on bob's side
       Given a git clone of origin called alice
-      And alice has a yak called "test yak"
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has removed the yak "make the tea"
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should not have a yak called "make the tea"
+
+    Example: Bob removes alice's yak
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And bob has removed the yak "make the tea"
+      And bob has synced yaks
       When alice syncs yaks
-      Then alice has nothing staged in the git index
-
-  @fullstack
-  Rule: Sync works across git worktrees
-
-    Example: Yaks sync between worktrees of the same repository
-      Given a git clone of origin called main-checkout
-      And a git worktree of main-checkout called worktree-a
-      And a git worktree of main-checkout called worktree-b
-      And worktree-a has a yak called "shared yak"
-      And worktree-a has synced yaks
-      When worktree-b syncs yaks
-      Then worktree-b should have a yak called "shared yak"
-
-  # ================================================================
-  # Scenarios below are from the example map for the EventStore-based
-  # sync redesign. Tagged @wip until the implementation is complete.
-  # See: yx field --show "root cause: migration creates duplicates on sync" examples
-  # ================================================================
+      Then alice should not have a yak called "make the tea"
 
   @wip
-  Rule: Non-conflicting changes on different yaks are merged
+  Rule: Moves propagate through sync
 
-    Example: Local modified context, peer added new yak
+    Example: Alice's move appears on bob's side
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "fix login bug"
+      And alice has a yak called "make the tea"
+      And alice has a yak called "buy biscuits"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has set the context of "fix login bug" to "root cause found in auth.rs"
+      And alice has moved the yak "buy biscuits" under "make the tea"
       And alice has synced yaks
-      And bob has a yak called "add dark mode"
       When bob syncs yaks
-      Then bob should have a yak called "fix login bug"
-      And bob should have a yak called "add dark mode"
-
-    Example: Local removed yak, peer added new yak
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "old migration"
-      And alice has a yak called "database index"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has removed the yak "old migration"
-      And alice has synced yaks
-      And bob has a yak called "add caching"
-      When bob syncs yaks
-      Then bob should not have a yak called "old migration"
-      And bob should have a yak called "database index"
-      And bob should have a yak called "add caching"
-
-    Example: Local moved yak under parent, peer added new yak
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "API redesign"
-      And alice has a yak called "rate limiting"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has moved the yak "rate limiting" under "API redesign"
-      And alice has synced yaks
-      And bob has a yak called "update docs"
-      When bob syncs yaks
-      Then bob should have a yak called "rate limiting"
-      And bob should have a yak called "update docs"
-
-    Example: Local changed state, peer changed different yak's context
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "fix flaky test"
-      And alice has a yak called "refactor parser"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has set the state of "fix flaky test" to "wip"
-      And alice has synced yaks
-      And bob has set the context of "refactor parser" to "split into tokenizer and evaluator"
-      When bob syncs yaks
-      Then bob yak "fix flaky test" should have state "wip"
+      Then bob should have these yaks:
+        """
+          ○ make the tea
+            ○ buy biscuits
+        """
 
   @wip
-  Rule: Same yak modified on different fields - sync merges per-field
+  Rule: Field changes propagate through sync
 
-    Example: Local changed state, peer changed context on same yak
+    Example: State change propagates
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "upgrade dependencies"
+      And alice has a yak called "make the tea"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has set the state of "upgrade dependencies" to "wip"
+      And alice has set the state of "make the tea" to "wip"
       And alice has synced yaks
-      And bob has set the context of "upgrade dependencies" to "blocked on serde 2.0 release"
       When bob syncs yaks
-      Then bob yak "upgrade dependencies" should have state "wip"
-      And bob yak "upgrade dependencies" should have context "blocked on serde 2.0 release"
+      Then bob yak "make the tea" should have state "wip"
 
-    Example: Local set custom field, peer changed state on same yak
+    Example: Context change propagates
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "rewrite sync"
+      And alice has a yak called "make the tea"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has set the "plan" field of "rewrite sync" to "step 1: add event_id"
+      And alice has set the context of "make the tea" to "use the good teapot"
       And alice has synced yaks
-      And bob has set the state of "rewrite sync" to "wip"
       When bob syncs yaks
-      Then bob yak "rewrite sync" should have state "wip"
+      Then bob yak "make the tea" should have context "use the good teapot"
 
   @wip
-  Rule: Same field on same yak - last-write-wins by timestamp
+  Rule: Changes to different fields on the same yak are merged
 
-    Example: Peer's more recent state change wins
+    Example: Alice changes state, bob changes context
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "deploy pipeline"
+      And alice has a yak called "make the tea"
+      And alice has set the state of "make the tea" to "wip"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has set the state of "deploy pipeline" to "wip"
-      And alice has synced yaks
-      And bob has set the state of "deploy pipeline" to "done"
+      And bob has set the context of "make the tea" to "use the good teapot"
       When bob syncs yaks
-      Then bob yak "deploy pipeline" should have state "done"
+      Then bob yak "make the tea" should have state "wip"
+      And bob yak "make the tea" should have context "use the good teapot"
+
+  @wip
+  Rule: When both users change the same field, the latest change wins
+
+    Example: Bob's later state change wins
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has set the state of "make the tea" to "wip"
+      And alice has synced yaks
+      And bob has synced yaks
+      And bob has set the state of "make the tea" to "done"
+      And bob has synced yaks
       When alice syncs yaks
-      Then alice yak "deploy pipeline" should have state "done"
-
-    Example: Local's more recent context change wins
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "security audit"
-      And alice has synced yaks
-      And bob has synced yaks
-      And bob has set the context of "security audit" to "initial scan results"
-      And bob has synced yaks
-      And alice has set the context of "security audit" to "CVE-2026-1234 found in parser"
-      When alice syncs yaks
-      Then alice yak "security audit" should have context "CVE-2026-1234 found in parser"
-      When bob syncs yaks
-      Then bob yak "security audit" should have context "CVE-2026-1234 found in parser"
+      Then alice yak "make the tea" should have state "done"
 
   @wip
-  Rule: Events that target removed yaks are discarded
+  Rule: Removal wins over other changes to the same yak
 
-    Example: Remote removes yak, local modifies it - modify discarded
+    Example: Bob's edit is lost when alice has removed the yak
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "legacy endpoint"
+      And alice has a yak called "make the tea"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has removed the yak "legacy endpoint"
+      And alice has removed the yak "make the tea"
       And alice has synced yaks
-      And bob has set the context of "legacy endpoint" to "too late"
+      And bob has set the context of "make the tea" to "too late"
       When bob syncs yaks
-      Then bob should not have a yak called "legacy endpoint"
-
-    Example: Remote removes yak, local moves another under it - move discarded
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "old framework"
-      And alice has a yak called "migration script"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has removed the yak "old framework"
-      And alice has synced yaks
-      And bob has moved the yak "migration script" under "old framework"
-      When bob syncs yaks
-      Then bob should not have a yak called "old framework"
-      And bob should have a yak called "migration script"
-
-    Example: Both sides remove the same yak
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "dead code"
-      And alice has synced yaks
-      And bob has synced yaks
-      And alice has removed the yak "dead code"
-      And alice has synced yaks
-      And bob has removed the yak "dead code"
-      When bob syncs yaks
-      Then bob should not have a yak called "dead code"
+      Then bob should not have a yak called "make the tea"
 
   @wip
-  Rule: Sync logs each event through the output port
+  Rule: A move to a previously-removed parent fails
 
-    Example: Pulled events are logged
+    Example: Bob's move is discarded but the child survives
       Given a git clone of origin called alice
       And a git clone of origin called bob
-      And alice has a yak called "fix memory leak"
-      And alice has synced yaks
-      When bob syncs yaks
-      Then the output should include "fix memory leak"
-
-    Example: Discarded events are logged with reason
-      Given a git clone of origin called alice
-      And a git clone of origin called bob
-      And alice has a yak called "sunset v1 API"
+      And alice has a yak called "make the tea"
+      And alice has a yak called "buy biscuits"
       And alice has synced yaks
       And bob has synced yaks
-      And alice has removed the yak "sunset v1 API"
+      And alice has removed the yak "make the tea"
       And alice has synced yaks
-      And bob has set the context of "sunset v1 API" to "too late"
+      And bob has moved the yak "buy biscuits" under "make the tea"
       When bob syncs yaks
-      Then the output should include "discarded"
+      Then bob should not have a yak called "make the tea"
+      And bob should have a yak called "buy biscuits"
+
+  @wip
+  Rule: Concurrent removals don't conflict
+
+    Example: Both users remove the same yak
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has removed the yak "make the tea"
+      And alice has synced yaks
+      And bob has removed the yak "make the tea"
+      When bob syncs yaks
+      Then bob should not have a yak called "make the tea"
+
+  @wip
+  Rule: Sync tells you what changed
+
+    Example: Bob sees what was pulled and what was discarded
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has removed the yak "make the tea"
+      And alice has a yak called "wash the cups"
+      And alice has synced yaks
+      And bob has set the context of "make the tea" to "too late"
+      When bob syncs yaks
+      Then bob's sync output should be:
+        """
+        Replaying 3 events since last sync:
+        ✓ Removed: make the tea (alice)
+        ✓ Added: wash the cups (alice)
+        ✗ SetField: make the tea (bob)
+        """
