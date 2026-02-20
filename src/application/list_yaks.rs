@@ -345,8 +345,10 @@ mod tests {
 
         // Parent with two children: sorted alphabetically, "aaa" first, "zzz" last
         app.handle(AddYak::new("parent")).unwrap();
-        app.handle(AddYak::new("aaa").with_parent(Some("parent"))).unwrap();
-        app.handle(AddYak::new("zzz").with_parent(Some("parent"))).unwrap();
+        app.handle(AddYak::new("aaa").with_parent(Some("parent")))
+            .unwrap();
+        app.handle(AddYak::new("zzz").with_parent(Some("parent")))
+            .unwrap();
         display.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
@@ -355,8 +357,16 @@ mod tests {
         let aaa_line = messages.iter().find(|m| m.contains("aaa"));
         let zzz_line = messages.iter().find(|m| m.contains("zzz"));
 
-        assert!(aaa_line.is_some(), "Expected 'aaa' in output: {:?}", messages);
-        assert!(zzz_line.is_some(), "Expected 'zzz' in output: {:?}", messages);
+        assert!(
+            aaa_line.is_some(),
+            "Expected 'aaa' in output: {:?}",
+            messages
+        );
+        assert!(
+            zzz_line.is_some(),
+            "Expected 'zzz' in output: {:?}",
+            messages
+        );
 
         // "aaa" is non-last child (alphabetically first), should use ├─
         assert!(
@@ -390,8 +400,10 @@ mod tests {
 
         // root → parent → grandchild (depth 2)
         app.handle(AddYak::new("root")).unwrap();
-        app.handle(AddYak::new("parent").with_parent(Some("root"))).unwrap();
-        app.handle(AddYak::new("grandchild").with_parent(Some("parent"))).unwrap();
+        app.handle(AddYak::new("parent").with_parent(Some("root")))
+            .unwrap();
+        app.handle(AddYak::new("grandchild").with_parent(Some("parent")))
+            .unwrap();
         display.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
@@ -416,7 +428,6 @@ mod tests {
             line
         );
     }
-
 }
 
 /// Recursively build a YakNode and its children from parent_id grouping

@@ -490,11 +490,7 @@ mod tests {
             .create_yak(&Name::from("other"), &other_id, None)
             .unwrap();
         storage
-            .create_yak(
-                &Name::from("child"),
-                &child_id,
-                Some(&parent_id),
-            )
+            .create_yak(&Name::from("child"), &child_id, Some(&parent_id))
             .unwrap();
         storage
             .create_yak(&Name::from("unrelated"), &unrelated_id, None)
@@ -571,7 +567,11 @@ mod tests {
         let yak_id = YakId::from("field-test-id");
 
         storage
-            .create_yak(&Name::from("field-test"), &yak_id, Some(&YakId::from("p-001")))
+            .create_yak(
+                &Name::from("field-test"),
+                &yak_id,
+                Some(&YakId::from("p-001")),
+            )
             .unwrap();
 
         // Write a custom field
@@ -581,7 +581,10 @@ mod tests {
         let yak = ReadYakStore::get_yak(&storage, &yak_id).unwrap();
 
         // Custom fields must be present
-        assert_eq!(yak.fields.get("notes").map(|s| s.as_str()), Some("some note"));
+        assert_eq!(
+            yak.fields.get("notes").map(|s| s.as_str()),
+            Some("some note")
+        );
         assert_eq!(yak.fields.get("priority").map(|s| s.as_str()), Some("high"));
 
         // Reserved fields must not appear in custom fields map

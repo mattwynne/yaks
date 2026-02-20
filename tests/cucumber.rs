@@ -31,8 +31,7 @@ async fn run_all_features() {
                 .filter_run("features/", move |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
                         || rule.map_or(false, |r| r.tags.iter().any(|t| t == "wip"));
-                    !wip
-                        && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
+                    !wip && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
                 })
                 .await;
         }

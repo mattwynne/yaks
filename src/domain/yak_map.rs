@@ -1743,7 +1743,14 @@ mod tests {
             .unwrap();
         // Add child with initial state "wip" so parent stays "todo"
         let child_id = map
-            .add_yak("child", Some(parent_id.clone()), None, Some("wip".to_string()), None, vec![])
+            .add_yak(
+                "child",
+                Some(parent_id.clone()),
+                None,
+                Some("wip".to_string()),
+                None,
+                vec![],
+            )
             .unwrap();
         map.take_events();
 
@@ -1775,13 +1782,27 @@ mod tests {
             .unwrap();
         // Add one child as "done" so we can mark parent as done
         let done_child_id = map
-            .add_yak("done-child", Some(parent_id.clone()), None, Some("done".to_string()), None, vec![])
+            .add_yak(
+                "done-child",
+                Some(parent_id.clone()),
+                None,
+                Some("done".to_string()),
+                None,
+                vec![],
+            )
             .unwrap();
         map.update_state(parent_id.clone(), "done".to_string())
             .unwrap();
         // Add a new child with default "todo" state after parent is done
         let todo_child_id = map
-            .add_yak("todo-child", Some(parent_id.clone()), None, None, None, vec![])
+            .add_yak(
+                "todo-child",
+                Some(parent_id.clone()),
+                None,
+                None,
+                None,
+                vec![],
+            )
             .unwrap();
         map.take_events();
 

@@ -183,11 +183,9 @@ mod tests {
 
         // The blank line should be at index 2 (after first event's 2 lines)
         assert_eq!(
-            blank_indices[0],
-            2,
+            blank_indices[0], 2,
             "Expected blank line at index 2 (between events), got index {}. Messages: {:?}",
-            blank_indices[0],
-            info_messages
+            blank_indices[0], info_messages
         );
     }
 }

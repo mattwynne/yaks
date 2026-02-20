@@ -153,8 +153,8 @@ impl Migration for MigrateV2ToV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::event_store::migration::Migration;
     use crate::adapters::event_store::migration::tests::setup_test_repo;
+    use crate::adapters::event_store::migration::Migration;
 
     #[test]
     fn version_constants() {
@@ -174,7 +174,9 @@ mod tests {
     fn make_tree_with_only_context(repo: &Repository) -> git2::Tree<'_> {
         let context_blob = repo.blob(b"some notes").unwrap();
         let mut builder = repo.treebuilder(None).unwrap();
-        builder.insert("context.md", context_blob, 0o100644).unwrap();
+        builder
+            .insert("context.md", context_blob, 0o100644)
+            .unwrap();
         let oid = builder.write().unwrap();
         repo.find_tree(oid).unwrap()
     }
