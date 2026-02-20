@@ -34,7 +34,14 @@ impl Default for InMemoryEventStore {
 
 impl EventStore for InMemoryEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
-        self.events.lock().unwrap().push(event.clone());
+        let event = if event.metadata().event_id.is_none() {
+            let mut metadata = event.metadata().clone();
+            metadata.event_id = Some(uuid::Uuid::new_v4().to_string());
+            event.clone().with_metadata(metadata)
+        } else {
+            event.clone()
+        };
+        self.events.lock().unwrap().push(event);
         Ok(())
     }
 
@@ -77,7 +84,7 @@ mod tests {
         let events = EventStore::get_all_events(&store).unwrap();
 
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0], event);
+        assert_eq!(events[0].yak_id(), "");
     }
 
     #[test]

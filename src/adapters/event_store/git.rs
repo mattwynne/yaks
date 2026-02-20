@@ -186,6 +186,7 @@ impl GitEventStore {
         Ok(events)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn collect_snapshot_events(&self, tree: &git2::Tree, events: &mut Vec<YakEvent>) -> Result<()> {
         use crate::domain::field::RESERVED_FIELDS;
         use crate::domain::slug::{generate_id, Name, YakId};
@@ -472,7 +473,8 @@ impl EventStore for GitEventStore {
                         email: commit.author().email().unwrap_or("").to_string(),
                     };
                     let timestamp = Timestamp(commit.author().when().seconds());
-                    let metadata = EventMetadata::new(author, timestamp);
+                    let mut metadata = EventMetadata::new(author, timestamp);
+                    metadata.event_id = Some(commit.id().to_string());
                     events.push(event.with_metadata(metadata));
                 }
                 Err(_) => continue, // Skip unparseable commits

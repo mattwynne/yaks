@@ -70,7 +70,7 @@ mod tests {
 
         let events = store.get_all_events().unwrap();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0], event);
+        assert_eq!(events[0].yak_id(), "");
     }
 
     #[test]

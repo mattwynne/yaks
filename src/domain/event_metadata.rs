@@ -39,17 +39,23 @@ impl Timestamp {
 pub struct EventMetadata {
     pub author: Author,
     pub timestamp: Timestamp,
+    pub event_id: Option<String>,
 }
 
 impl EventMetadata {
     pub fn new(author: Author, timestamp: Timestamp) -> Self {
-        Self { author, timestamp }
+        Self {
+            author,
+            timestamp,
+            event_id: None,
+        }
     }
 
     pub fn default_legacy() -> Self {
         Self {
             author: Author::unknown(),
             timestamp: Timestamp::zero(),
+            event_id: None,
         }
     }
 }

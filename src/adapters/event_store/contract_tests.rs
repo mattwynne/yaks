@@ -134,6 +134,59 @@ macro_rules! event_store_tests {
         }
 
         #[test]
+        fn appended_events_have_event_id() {
+            let (mut store, _guard) = $create_store;
+            let event = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            );
+            store.append(&event).unwrap();
+            let events = store.get_all_events().unwrap();
+            let event_id = events[0].metadata().event_id.as_ref();
+            assert!(
+                event_id.is_some(),
+                "event_id should be assigned by the store"
+            );
+            assert!(
+                !event_id.unwrap().is_empty(),
+                "event_id should not be empty"
+            );
+        }
+
+        #[test]
+        fn event_ids_are_unique() {
+            let (mut store, _guard) = $create_store;
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("first"),
+                        id: YakId::from("first-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("second"),
+                        id: YakId::from("second-c3d4"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+            let events = store.get_all_events().unwrap();
+            let id1 = events[0].metadata().event_id.as_ref().unwrap();
+            let id2 = events[1].metadata().event_id.as_ref().unwrap();
+            assert_ne!(id1, id2, "event_ids should be unique across events");
+        }
+
+        #[test]
         fn returns_empty_when_no_events() {
             let (store, _guard) = $create_store;
             let all = store.get_all_events().unwrap();
