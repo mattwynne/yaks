@@ -1,5 +1,6 @@
 use anyhow::Result;
 use git2::Repository;
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::domain::ports::{EventStore, EventStoreReader};
@@ -577,11 +578,51 @@ impl EventStore for GitEventStore {
 
     fn sync(
         &mut self,
-        _peer: &mut dyn EventStore,
-        _bus: &mut crate::infrastructure::event_bus::EventBus,
-        _output: &dyn crate::domain::ports::DisplayPort,
+        peer: &mut dyn EventStore,
+        bus: &mut crate::infrastructure::event_bus::EventBus,
+        output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
-        todo!("sync not yet implemented")
+        // Pull: get events from peer that local doesn't have
+        let local_events = EventStore::get_all_events(self)?;
+        let local_ids: HashSet<String> = local_events
+            .iter()
+            .filter_map(|e| e.metadata().event_id.clone())
+            .collect();
+
+        let peer_events = peer.get_all_events()?;
+        let mut pulled = 0usize;
+        for event in &peer_events {
+            if let Some(id) = &event.metadata().event_id {
+                if !local_ids.contains(id) {
+                    self.append(event)?;
+                    bus.notify(event)?;
+                    pulled += 1;
+                }
+            }
+        }
+
+        // Push: get events from local that peer doesn't have
+        let peer_ids: HashSet<String> = peer_events
+            .iter()
+            .filter_map(|e| e.metadata().event_id.clone())
+            .collect();
+
+        let mut pushed = 0usize;
+        for event in &local_events {
+            if let Some(id) = &event.metadata().event_id {
+                if !peer_ids.contains(id) {
+                    peer.append(event)?;
+                    pushed += 1;
+                }
+            }
+        }
+
+        output.info(&format!(
+            "Pulled {} events, pushed {} events",
+            pulled, pushed
+        ));
+
+        Ok(())
     }
 }
 
@@ -1490,5 +1531,76 @@ mod tests {
         assert_eq!(events[0].metadata().author.name, "Reader Test");
         assert_eq!(events[0].metadata().author.email, "reader@test.com");
         assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
+    }
+
+    mod sync {
+        use super::*;
+        use crate::adapters::InMemoryDisplay;
+        use crate::infrastructure::event_bus::EventBus;
+
+        fn make_event(name: &str, id: &str) -> YakEvent {
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from(name),
+                    id: YakId::from(id),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            )
+        }
+
+        fn all_events(store: &GitEventStore) -> Vec<YakEvent> {
+            EventStore::get_all_events(store).unwrap()
+        }
+
+        #[test]
+        fn syncs_events_between_two_git_stores() {
+            let (_tmp_a, mut store_a) = setup_test_repo();
+            let (_tmp_b, mut store_b) = setup_test_repo();
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            // Store A has event "alpha", store B has event "beta"
+            store_a.append(&make_event("alpha", "alpha-a1b2")).unwrap();
+            store_b.append(&make_event("beta", "beta-c3d4")).unwrap();
+
+            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
+
+            // Both stores should have both events
+            let a_events = all_events(&store_a);
+            let b_events = all_events(&store_b);
+            assert_eq!(a_events.len(), 2, "store_a should have 2 events");
+            assert_eq!(b_events.len(), 2, "store_b should have 2 events");
+        }
+
+        #[test]
+        fn pulls_events_from_peer() {
+            let (_tmp_a, mut store_a) = setup_test_repo();
+            let (_tmp_b, mut store_b) = setup_test_repo();
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            // Peer has an event, local is empty
+            store_b.append(&make_event("foo", "foo-a1b2")).unwrap();
+
+            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
+
+            assert_eq!(all_events(&store_a).len(), 1);
+        }
+
+        #[test]
+        fn pushes_events_to_peer() {
+            let (_tmp_a, mut store_a) = setup_test_repo();
+            let (_tmp_b, mut store_b) = setup_test_repo();
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            // Local has an event, peer is empty
+            store_a.append(&make_event("foo", "foo-a1b2")).unwrap();
+
+            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
+
+            assert_eq!(all_events(&store_b).len(), 1);
+        }
     }
 }
