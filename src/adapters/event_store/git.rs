@@ -410,6 +410,15 @@ impl GitEventStore {
 
 impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
+        // Idempotent: skip if event_id (commit SHA) already exists
+        if let Some(event_id) = &event.metadata().event_id {
+            if let Ok(oid) = git2::Oid::from_str(event_id) {
+                if self.repo.find_commit(oid).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+
         let current_tree = self.get_current_tree()?;
 
         let tree_oid = self.build_tree_from_event(event, current_tree.as_ref())?;

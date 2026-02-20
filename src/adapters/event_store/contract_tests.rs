@@ -187,6 +187,27 @@ macro_rules! event_store_tests {
         }
 
         #[test]
+        fn append_is_idempotent_for_known_event_id() {
+            let (mut store, _guard) = $create_store;
+            let event = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            );
+            store.append(&event).unwrap();
+            let events = store.get_all_events().unwrap();
+            let event_with_id = events[0].clone();
+
+            // Append same event again (has event_id from first append)
+            store.append(&event_with_id).unwrap();
+            let events = store.get_all_events().unwrap();
+            assert_eq!(events.len(), 1, "duplicate should be skipped");
+        }
+
+        #[test]
         fn returns_empty_when_no_events() {
             let (store, _guard) = $create_store;
             let all = store.get_all_events().unwrap();
