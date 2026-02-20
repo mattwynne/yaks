@@ -122,14 +122,37 @@ EOF
 
 **Done when:** The user approves the plan.
 
-## After Preparation
+## After Preparation: Create Sub-Yaks
+
+If the plan has multiple tasks with dependencies, create
+sub-yaks and arrange them hierarchically using the
+`/structuring-yak-dependencies` pattern:
+
+**Children are prerequisites — leaf nodes get done first.**
+
+```bash
+# Create sub-yaks from plan tasks
+yx add "task A" --under "yak name" --context "Task N in plan doc"
+yx add "task B" --under "yak name" --context "Task M in plan doc"
+
+# Then nest them so dependencies are expressed through hierarchy
+# If task B depends on task A, make A a child of B:
+yx mv "task A" --under "task B"
+```
+
+The tree enforces execution order: work leaves first, then
+their parents. Each sub-yak's context references its task
+in the plan document.
 
 The yak now has everything needed for implementation:
 - **context**: The spec (what and why)
 - **examples**: The behaviour (rules and edge cases)
 - **plan**: The how (ordered tasks)
+- **sub-yaks**: The work breakdown (dependency hierarchy)
 
-**Next step:** Use `/subagent-driven-development` to execute the plan.
+**Next step:** Use `/parallel-yak-implementation` for
+independent leaf yaks, or `/subagent-driven-development`
+to execute sequentially.
 
 ## Quick Reference
 
@@ -138,6 +161,7 @@ The yak now has everything needed for implementation:
 | Spec | `/brainstorming` | context | `yx context --show "name"` |
 | Behaviour | `/example-mapping` | examples field | `yx field --show "name" examples` |
 | Plan | `/writing-plans` | plan field | `yx field --show "name" plan` |
+| Sub-yaks | `/structuring-yak-dependencies` | yak hierarchy | `yx ls` |
 
 ## Common Mistakes
 
@@ -148,3 +172,4 @@ The yak now has everything needed for implementation:
 | Skipping example mapping for "simple" yaks | If it has multiple rules or edge cases, map it |
 | Storing outputs in files instead of on the yak | Always use `yx context` and `yx field` |
 | Starting implementation without user approval at each phase | Each phase ends with user confirmation |
+| Leaving plan tasks as flat siblings | Use `/structuring-yak-dependencies` to nest by dependency order |
