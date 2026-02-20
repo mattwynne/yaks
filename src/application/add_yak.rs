@@ -141,8 +141,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_creates_yak() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -151,6 +151,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -168,8 +169,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_stores_context_from_input() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -178,6 +179,7 @@ mod tests {
         let input = InMemoryInput::with_content("# My context".to_string());
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -196,8 +198,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_with_parent() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -206,6 +208,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -226,8 +229,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_allows_slash_in_name() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -236,6 +239,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -251,8 +255,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_with_state() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -261,6 +265,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -282,8 +287,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_with_context_skips_prompt() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -294,6 +299,7 @@ mod tests {
         let input = InMemoryInput::with_content("from input".to_string());
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -315,8 +321,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_with_explicit_id() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -325,6 +331,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -344,8 +351,8 @@ mod tests {
 
     #[test]
     fn test_add_yak_with_fields() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -354,6 +361,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -377,8 +385,8 @@ mod tests {
     fn test_add_yak_with_author_override() {
         use crate::domain::ports::EventStore;
 
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store.clone()));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -387,6 +395,7 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,

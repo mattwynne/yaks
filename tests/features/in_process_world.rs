@@ -16,7 +16,7 @@ use yx::infrastructure::EventBus;
 #[derive(CucumberWorld)]
 #[world(init = Self::new)]
 pub struct InProcessWorld {
-    _event_store: InMemoryEventStore,
+    event_store: InMemoryEventStore,
     event_bus: EventBus,
     storage: InMemoryStorage,
     display: InMemoryDisplay,
@@ -37,13 +37,13 @@ impl std::fmt::Debug for InProcessWorld {
 impl InProcessWorld {
     fn new() -> Result<Self> {
         let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store.clone()));
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
         Ok(Self {
-            _event_store: event_store,
+            event_store,
             event_bus,
             storage,
             display: InMemoryDisplay::new(),
@@ -62,6 +62,7 @@ impl InProcessWorld {
         self.error.clear();
 
         let mut app = Application::new(
+            &mut self.event_store,
             &mut self.event_bus,
             &self.storage,
             &self.display,
@@ -85,6 +86,7 @@ impl InProcessWorld {
         self.error.clear();
 
         let mut app = Application::new(
+            &mut self.event_store,
             &mut self.event_bus,
             &self.storage,
             &self.display,

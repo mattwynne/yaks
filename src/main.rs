@@ -200,18 +200,19 @@ fn main() -> Result<()> {
         PathBuf::from(".yaks")
     };
 
-    let mut event_bus = if let Some(ref root) = repo_root {
+    let mut event_store: Box<dyn EventStore> = if let Some(ref root) = repo_root {
         // Run schema migration before using the event store
         Migrator::for_current_version().run(root, "refs/notes/yaks")?;
-        let event_store = GitEventStore::new(root)?;
-        EventBus::new(Box::new(event_store))
+        Box::new(GitEventStore::new(root)?)
     } else if skip_git {
         // Outside a git repo but skipping git checks: use a no-op store
-        EventBus::new(Box::new(NoOpEventStore))
+        Box::new(NoOpEventStore)
     } else {
         // Outside a git repo and not skipping checks: error out
         anyhow::bail!("Error: not in a git repository");
     };
+
+    let mut event_bus = EventBus::new();
 
     // Initialize storage and register as projection
     let storage = if let Some(ref root) = repo_root {
@@ -248,6 +249,7 @@ fn main() -> Result<()> {
 
     // Create application with injected dependencies
     let mut app = Application::new(
+        event_store.as_mut(),
         &mut event_bus,
         &storage,
         &display,
@@ -368,14 +370,15 @@ fn main() -> Result<()> {
                 storage.clear()?;
 
                 // Create fresh event infrastructure for replay
-                let replay_store = GitEventStore::new(root)?;
-                let mut replay_bus = EventBus::new(Box::new(replay_store));
+                let mut replay_store = GitEventStore::new(root)?;
+                let mut replay_bus = EventBus::new();
                 replay_bus.register(Box::new(storage.clone()));
 
                 let replay_display = ConsoleDisplay;
                 let replay_input = ConsoleInput;
                 let replay_auth = GitAuthentication::new(root)?;
                 let mut replay_app = Application::new(
+                    &mut replay_store,
                     &mut replay_bus,
                     &storage,
                     &replay_display,

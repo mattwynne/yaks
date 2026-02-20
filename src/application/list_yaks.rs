@@ -241,27 +241,44 @@ mod tests {
     use crate::infrastructure::EventBus;
 
     fn make_app<'a>(
+        event_store: &'a mut InMemoryEventStore,
         event_bus: &'a mut EventBus,
         storage: &'a InMemoryStorage,
         display: &'a InMemoryDisplay,
         input: &'a InMemoryInput,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
-        Application::new(event_bus, storage, display, input, None, None, auth)
+        Application::new(
+            event_store,
+            event_bus,
+            storage,
+            display,
+            input,
+            None,
+            None,
+            auth,
+        )
     }
 
     // Mutant 1 (line 89): only markdown format shows "You have no yaks"
     // when a filter produces no results. Pretty format should stay silent.
     #[test]
     fn filtered_list_shows_no_yaks_message_only_in_markdown() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
 
         // Add a yak that is NOT done so the "done" filter produces no output
         app.handle(AddYak::new("pending-yak")).unwrap();
@@ -295,14 +312,21 @@ mod tests {
     // Mutant 2 (line 140): done items sort before non-done items in pretty output
     #[test]
     fn done_yaks_sort_before_not_done_yaks() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
 
         // Add two yaks; "beta" will be done, "alpha" will remain todo
         // Use names that would sort "alpha" before "beta" alphabetically
@@ -334,14 +358,21 @@ mod tests {
     // Mutants 3 & 4 (line 162): last child uses ╰─ connector, others use ├─
     #[test]
     fn tree_connectors_distinguish_last_from_non_last_child() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
 
         // Parent with two children: sorted alphabetically, "aaa" first, "zzz" last
         app.handle(AddYak::new("parent")).unwrap();
@@ -389,14 +420,21 @@ mod tests {
     // We need a grandchild to detect the difference.
     #[test]
     fn grandchild_has_continuation_indent_in_pretty_format() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut app = make_app(&mut event_bus, &storage, &display, &input, &auth);
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
 
         // root → parent → grandchild (depth 2)
         app.handle(AddYak::new("root")).unwrap();

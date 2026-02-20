@@ -94,11 +94,12 @@ mod tests {
     #[test]
     fn sets_state_with_exact_name() {
         let (storage, display, input) = setup();
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -119,11 +120,12 @@ mod tests {
     #[test]
     fn resolves_fuzzy_name() {
         let (storage, display, input) = setup();
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -144,11 +146,12 @@ mod tests {
     #[test]
     fn errors_on_ambiguous_fuzzy_name() {
         let (storage, display, input) = setup();
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -169,11 +172,12 @@ mod tests {
     #[test]
     fn sets_state_recursively() {
         let (storage, display, input) = setup();
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -226,11 +230,12 @@ mod tests {
     #[test]
     fn errors_on_not_found() {
         let (storage, display, input) = setup();
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,

@@ -1,42 +1,39 @@
 use anyhow::Result;
 
-use crate::domain::ports::{EventListener, EventStore};
+use crate::domain::ports::EventListener;
 use crate::domain::YakEvent;
 
 pub struct EventBus {
-    event_store: Box<dyn EventStore>,
     listeners: Vec<Box<dyn EventListener>>,
 }
 
 impl EventBus {
-    pub fn new(event_store: Box<dyn EventStore>) -> Self {
-        Self {
-            event_store,
-            listeners: vec![],
-        }
+    pub fn new() -> Self {
+        Self { listeners: vec![] }
     }
 
     pub fn register(&mut self, listener: Box<dyn EventListener>) {
         self.listeners.push(listener);
     }
 
-    pub fn publish(&mut self, event: YakEvent) -> Result<()> {
-        // First: persist to event store (source of truth)
-        self.event_store.append(&event)?;
-
-        // Then: notify projections
+    pub fn notify(&mut self, event: &YakEvent) -> Result<()> {
         for listener in &mut self.listeners {
-            listener.on_event(&event)?;
+            listener.on_event(event)?;
         }
 
         Ok(())
     }
 }
 
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::InMemoryEventStore;
     use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::AddedEvent;
     use crate::domain::slug::{Name, YakId};
@@ -53,30 +50,8 @@ mod tests {
     }
 
     #[test]
-    fn test_event_bus_publishes_to_store() {
-        let store = InMemoryEventStore::new();
-        let mut bus = EventBus::new(Box::new(store.clone()));
-
-        let event = YakEvent::Added(
-            AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from(""),
-                parent_id: None,
-            },
-            EventMetadata::default_legacy(),
-        );
-
-        bus.publish(event.clone()).unwrap();
-
-        let events = store.get_all_events().unwrap();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].yak_id(), "");
-    }
-
-    #[test]
     fn test_event_bus_notifies_listeners() {
-        let store = InMemoryEventStore::new();
-        let mut bus = EventBus::new(Box::new(store));
+        let mut bus = EventBus::new();
 
         let listener = TestListener { events: vec![] };
         bus.register(Box::new(listener));
@@ -90,9 +65,9 @@ mod tests {
             EventMetadata::default_legacy(),
         );
 
-        bus.publish(event.clone()).unwrap();
+        bus.notify(&event).unwrap();
 
-        // Note: Can't easily test listener state after publish
+        // Note: Can't easily test listener state after notify
         // due to ownership. Consider refactoring listener storage
         // or testing at integration level.
     }

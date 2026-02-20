@@ -63,8 +63,8 @@ mod tests {
 
     #[test]
     fn test_sync_calls_sync_port() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -75,6 +75,7 @@ mod tests {
         let auth = InMemoryAuthentication::new();
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -91,8 +92,8 @@ mod tests {
 
     #[test]
     fn test_sync_fails_when_not_configured() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -102,6 +103,7 @@ mod tests {
 
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,

@@ -55,9 +55,9 @@ mod tests {
 
     #[test]
     fn test_show_log_displays_events() {
-        let event_store = InMemoryEventStore::new();
+        let mut event_store = InMemoryEventStore::new();
         let reader = event_store.clone();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -67,6 +67,7 @@ mod tests {
 
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -94,8 +95,8 @@ mod tests {
 
     #[test]
     fn test_show_log_fails_when_not_configured() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -105,6 +106,7 @@ mod tests {
 
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -124,9 +126,9 @@ mod tests {
 
     #[test]
     fn test_show_log_separates_multiple_events_with_blank_line() {
-        let event_store = InMemoryEventStore::new();
+        let mut event_store = InMemoryEventStore::new();
         let reader = event_store.clone();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -136,6 +138,7 @@ mod tests {
 
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,

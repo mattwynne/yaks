@@ -1,7 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
 use crate::domain::ports::{
-    AuthenticationPort, DisplayPort, EventStoreReader, InputPort, ReadYakStore, SyncPort,
+    AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, ReadYakStore,
+    SyncPort,
 };
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
@@ -14,6 +15,7 @@ use super::UseCase;
 /// This struct represents the application layer's view of infrastructure.
 /// Use cases are constructed with domain data, then executed with an Application.
 pub struct Application<'a> {
+    event_store: &'a mut dyn EventStore,
     event_bus: &'a mut EventBus,
     pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
@@ -24,7 +26,9 @@ pub struct Application<'a> {
 }
 
 impl<'a> Application<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        event_store: &'a mut dyn EventStore,
         event_bus: &'a mut EventBus,
         store: &'a dyn ReadYakStore,
         display: &'a dyn DisplayPort,
@@ -34,6 +38,7 @@ impl<'a> Application<'a> {
         auth: &'a dyn AuthenticationPort,
     ) -> Self {
         Self {
+            event_store,
             event_bus,
             store,
             display,
@@ -83,7 +88,8 @@ impl<'a> Application<'a> {
 
     fn save_yak_map(&mut self, yak_map: &mut YakMap) -> Result<()> {
         for event in yak_map.take_events() {
-            self.event_bus.publish(event)?;
+            self.event_store.append(&event)?;
+            self.event_bus.notify(&event)?;
         }
         Ok(())
     }
@@ -136,8 +142,8 @@ mod tests {
     fn test_application_stamps_author_on_events() {
         use crate::domain::ports::EventStore;
 
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store.clone()));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -147,6 +153,7 @@ mod tests {
         let auth = TestAuth::new("Test Author", "test@example.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -178,8 +185,8 @@ mod tests {
 
     #[test]
     fn test_application_create_yak_via_yak_map() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -189,6 +196,7 @@ mod tests {
         let auth = TestAuth::new("test", "test@test.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -209,8 +217,8 @@ mod tests {
 
     #[test]
     fn test_application_mutate_yak_via_yak_map() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -220,6 +228,7 @@ mod tests {
         let auth = TestAuth::new("test", "test@test.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -243,8 +252,8 @@ mod tests {
 
     #[test]
     fn test_application_with_yak_map() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -254,6 +263,7 @@ mod tests {
         let auth = TestAuth::new("test", "test@test.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -287,8 +297,8 @@ mod tests {
 
     #[test]
     fn test_application_with_yak_map_hierarchy() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -298,6 +308,7 @@ mod tests {
         let auth = TestAuth::new("test", "test@test.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
@@ -330,8 +341,8 @@ mod tests {
 
     #[test]
     fn test_application_with_yak_map_state_propagation() {
-        let event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new(Box::new(event_store));
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
@@ -341,6 +352,7 @@ mod tests {
         let auth = TestAuth::new("test", "test@test.com");
 
         let mut app = Application::new(
+            &mut event_store,
             &mut event_bus,
             &storage,
             &display,
