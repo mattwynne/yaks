@@ -174,6 +174,7 @@ impl yx::domain::ports::AuthenticationPort for UnknownAuthentication {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
