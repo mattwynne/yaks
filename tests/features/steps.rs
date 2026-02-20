@@ -454,34 +454,6 @@ async fn start_yak_in_process(world: &mut InProcessWorld, name: String) -> Resul
     world.start_yak(&name)
 }
 
-#[when(regex = r#"^I move the yak "(.+)" to "(.+)"$"#)]
-async fn move_yak_full_stack(world: &mut FullStackWorld, from: String, to: String) -> Result<()> {
-    world.move_yak(&from, &to)
-}
-
-#[when(regex = r#"^I move the yak "(.+)" to "(.+)"$"#)]
-async fn move_yak_in_process(world: &mut InProcessWorld, from: String, to: String) -> Result<()> {
-    world.move_yak(&from, &to)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" to "(.+)"$"#)]
-async fn try_move_yak_full_stack(
-    world: &mut FullStackWorld,
-    from: String,
-    to: String,
-) -> Result<()> {
-    world.try_move_yak(&from, &to)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" to "(.+)"$"#)]
-async fn try_move_yak_in_process(
-    world: &mut InProcessWorld,
-    from: String,
-    to: String,
-) -> Result<()> {
-    world.try_move_yak(&from, &to)
-}
-
 #[when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)]
 async fn move_yak_under_full_stack(
     world: &mut FullStackWorld,

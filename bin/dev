@@ -126,7 +126,80 @@ lint() {
     exit_code=1
   fi
 
+  echo ""
+  if ! dead-steps; then
+    exit_code=1
+  fi
+
   return $exit_code
+}
+
+# @cmd Check for unused Cucumber step definitions
+# @alias ds
+dead-steps() {
+  local steps_file="tests/features/steps.rs"
+  local features_dir="features"
+
+  echo "Checking for unused step definitions..."
+
+  # Extract all step texts from feature files
+  # (Given/When/Then/And/But/* lines, stripped to just the step text)
+  local step_texts
+  step_texts=$(grep -rhE '^\s*(Given|When|Then|And|But|\*)\s+' "$features_dir"/ \
+    | sed -E 's/^\s*(Given|When|Then|And|But|\*)\s+//' \
+    | sed 's/[[:space:]]*$//')
+
+  # Extract unique step patterns from steps.rs and check each one.
+  # The perl script outputs: line_number<TAB>attribute<TAB>regex_to_match
+  # It deduplicates patterns (each appears twice for FullStack/InProcess).
+  local found_unused=false
+  local checked=0
+  local unused=0
+
+  while IFS=$'\t' read -r lineno display regex; do
+    [ -z "$regex" ] && continue
+    checked=$((checked + 1))
+
+    if ! echo "$step_texts" | PATTERN="$regex" perl -ne \
+      '$f=1 if /^$ENV{PATTERN}$/; END { exit($f ? 0 : 1) }'; then
+      echo "  UNUSED $steps_file:$lineno"
+      echo "    $display"
+      found_unused=true
+      unused=$((unused + 1))
+    fi
+  done < <(perl -ne '
+    if (/^\s*#\[(given|when|then)\((expr|regex)\s*=/) {
+      my $kind = $2;
+      my ($pattern, $regex);
+      if ($kind eq "expr") {
+        ($pattern) = /expr\s*=\s*"([^"]*)"/;
+        $regex = $pattern;
+        $regex =~ s/\{string\}/"[^"]*"/g;
+        $regex =~ s/\{int\}/[0-9]+/g;
+        $regex =~ s/\{float\}/[0-9]+\\.?[0-9]*/g;
+        $regex =~ s/\{word\}/\\S+/g;
+        $regex =~ s/\{\}/.*?/g;
+      } elsif ($kind eq "regex") {
+        ($pattern) = /regex\s*=\s*r#"(.*)"#\)/;
+        $regex = $pattern;
+        $regex =~ s/^\^//;
+        $regex =~ s/\$$//;
+      }
+      if (defined $pattern && !$seen{$pattern}++) {
+        my ($display) = /^\s*(#\[.*\])/;
+        print "$.\t$display\t$regex\n";
+      }
+    }
+  ' "$steps_file")
+
+  if [ "$found_unused" = true ]; then
+    echo ""
+    echo "Found $unused unused step definition(s) (of $checked checked)"
+    return 1
+  else
+    echo "All $checked step definitions are matched by feature files"
+    return 0
+  fi
 }
 
 # @cmd Run tests (shellspec)

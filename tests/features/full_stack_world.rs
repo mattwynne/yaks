@@ -851,14 +851,6 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["start", name])
     }
 
-    fn move_yak(&mut self, from: &str, to: &str) -> Result<()> {
-        self.run_yx(&["move", from, to])
-    }
-
-    fn try_move_yak(&mut self, from: &str, to: &str) -> Result<()> {
-        self.run_yx_unchecked(&["move", from, to])
-    }
-
     fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
         self.run_yx(&["move", name, "--under", parent])
     }
