@@ -602,6 +602,45 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Run yx command scoped to a named repository with stdin content
+    pub fn run_yx_in_repo_with_stdin(
+        &mut self,
+        repo_name: &str,
+        args: &[&str],
+        stdin_content: &str,
+    ) -> Result<()> {
+        let repo_path = self.repo_path(repo_name)?;
+        let yak_path = repo_path.join(".yaks");
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let mut child = Command::new(yx_path)
+            .args(args)
+            .env("YAK_PATH", &yak_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .current_dir(&repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn yx command in repo")?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(stdin_content.as_bytes())
+                .context("Failed to write to stdin")?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .context("Failed to wait for yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
     /// Run yx command scoped to a named repository
     pub fn run_yx_in_repo(&mut self, repo_name: &str, args: &[&str]) -> Result<()> {
         let repo_path = self.repo_path(repo_name)?;

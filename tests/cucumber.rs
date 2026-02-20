@@ -18,18 +18,23 @@ async fn run_all_features() {
     // Choose World implementation based on CUCUMBER_MODE env var
     match std::env::var("CUCUMBER_MODE").as_deref() {
         Ok("in-process") => {
-            InProcessWorld::run("features/").await;
+            InProcessWorld::cucumber()
+                .filter_run("features/", |_, rule, sc| {
+                    let wip = sc.tags.iter().any(|t| t == "wip")
+                        || rule.map_or(false, |r| r.tags.iter().any(|t| t == "wip"));
+                    !wip
+                })
+                .await;
         }
         _ => {
-            if has_compgen {
-                FullStackWorld::run("features/").await;
-            } else {
-                FullStackWorld::cucumber()
-                    .filter_run("features/", |_, _, sc| {
-                        !sc.tags.iter().any(|t| t == "bash_completion")
-                    })
-                    .await;
-            }
+            FullStackWorld::cucumber()
+                .filter_run("features/", move |_, rule, sc| {
+                    let wip = sc.tags.iter().any(|t| t == "wip")
+                        || rule.map_or(false, |r| r.tags.iter().any(|t| t == "wip"));
+                    !wip
+                        && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
+                })
+                .await;
         }
     }
 }
