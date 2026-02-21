@@ -8,24 +8,41 @@ use crate::domain::{Yak, YakEvent};
 
 pub struct GitEventStore {
     repo: Repository,
+    ref_name: String,
 }
 
 impl GitEventStore {
     pub fn new(repo_path: &Path) -> Result<Self> {
         let repo = Repository::open(repo_path)
             .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
-        Ok(Self { repo })
+        Ok(Self {
+            repo,
+            ref_name: "refs/notes/yaks".to_string(),
+        })
+    }
+
+    /// Create a GitEventStore that reads/writes a custom ref name.
+    pub fn with_ref_name(repo_path: &Path, ref_name: &str) -> Result<Self> {
+        let repo = Repository::open(repo_path)
+            .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
+        Ok(Self {
+            repo,
+            ref_name: ref_name.to_string(),
+        })
     }
 
     /// For tests: create from an already-opened Repository
     #[cfg(test)]
     pub fn from_repo(repo: Repository) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            ref_name: "refs/notes/yaks".to_string(),
+        }
     }
 
     /// Get the latest commit on refs/notes/yaks, if any
     fn get_latest_commit(&self) -> Result<Option<git2::Commit<'_>>> {
-        match self.repo.refname_to_id("refs/notes/yaks") {
+        match self.repo.refname_to_id(&self.ref_name) {
             Ok(oid) => Ok(Some(self.repo.find_commit(oid)?)),
             Err(_) => Ok(None),
         }
@@ -505,7 +522,7 @@ impl EventStore for GitEventStore {
         let sig = git2::Signature::new(author_name, author_email, &time)?;
 
         self.repo.commit(
-            Some("refs/notes/yaks"),
+            Some(&self.ref_name),
             &sig,
             &sig,
             &message,
@@ -653,7 +670,7 @@ impl EventStore for GitEventStore {
             .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
 
         self.repo.commit(
-            Some("refs/notes/yaks"),
+            Some(&self.ref_name),
             &sig,
             &sig,
             "Snapshot: rebuilt from disk",
