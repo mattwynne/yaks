@@ -27,6 +27,9 @@ pub trait WriteYakStore {
 
     /// Write a field for a yak
     fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()>;
+
+    /// Remove all yaks, preparing for a full replay of events.
+    fn clear_all(&self) -> Result<()>;
 }
 
 #[cfg(test)]

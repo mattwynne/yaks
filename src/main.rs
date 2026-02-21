@@ -3,8 +3,8 @@ use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::event_store::migration::Migrator;
+use yx::adapters::event_store::GitEventStore as PeerGitEventStore;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
-use yx::adapters::sync::GitRefSync;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
@@ -227,12 +227,28 @@ fn main() -> Result<()> {
     let display = ConsoleDisplay;
     let input = ConsoleInput;
 
-    // GitRefSync and a second event reader are only available when in a git repo
-    let sync = if let Some(ref root) = repo_root {
-        GitRefSync::new(root, &yaks_path).ok()
-    } else {
-        None
-    };
+    // Peer event store for sync: GitEventStore pointed at origin remote
+    let mut sync_peer: Option<Box<dyn yx::domain::ports::EventStore>> =
+        if let Some(ref root) = repo_root {
+            // Look up origin remote URL and open it as a peer event store
+            let remote_url = git2::Repository::open(root).ok().and_then(|repo| {
+                repo.find_remote("origin")
+                    .ok()
+                    .and_then(|remote| remote.url().map(|u| u.to_string()))
+            });
+            remote_url.and_then(|url| {
+                let path = PathBuf::from(&url);
+                if path.exists() {
+                    PeerGitEventStore::new(&path)
+                        .ok()
+                        .map(|s| Box::new(s) as Box<dyn yx::domain::ports::EventStore>)
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
     let git_event_reader = if let Some(ref root) = repo_root {
         GitEventStore::new(root).ok()
     } else {
@@ -254,7 +270,9 @@ fn main() -> Result<()> {
         &storage,
         &display,
         &input,
-        sync.as_ref().map(|s| s as &dyn yx::domain::ports::SyncPort),
+        sync_peer
+            .as_mut()
+            .map(|s| s.as_mut() as &mut dyn yx::domain::ports::EventStore),
         git_event_reader
             .as_ref()
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),

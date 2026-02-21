@@ -1,4 +1,4 @@
-// SyncYaks use case - synchronizes yaks via git refs
+// SyncYaks use case - synchronizes yaks via event store sync
 
 use anyhow::Result;
 
@@ -20,11 +20,7 @@ impl SyncYaks {
 
 impl UseCase for SyncYaks {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let sync = app
-            .sync
-            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?;
-        sync.sync()?;
-        Ok(())
+        app.sync_events()
     }
 }
 
@@ -34,35 +30,11 @@ mod tests {
     use crate::adapters::{
         InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
     };
-    use crate::domain::ports::SyncPort;
+    use crate::domain::ports::EventStore;
     use crate::infrastructure::EventBus;
-    use std::cell::RefCell;
-
-    struct MockSync {
-        sync_called: RefCell<bool>,
-    }
-
-    impl MockSync {
-        fn new() -> Self {
-            Self {
-                sync_called: RefCell::new(false),
-            }
-        }
-
-        fn was_sync_called(&self) -> bool {
-            *self.sync_called.borrow()
-        }
-    }
-
-    impl SyncPort for MockSync {
-        fn sync(&self) -> Result<()> {
-            *self.sync_called.borrow_mut() = true;
-            Ok(())
-        }
-    }
 
     #[test]
-    fn test_sync_calls_sync_port() {
+    fn test_sync_calls_event_store_sync() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
 
@@ -71,8 +43,8 @@ mod tests {
 
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
-        let sync = MockSync::new();
         let auth = InMemoryAuthentication::new();
+        let mut peer = InMemoryEventStore::new();
 
         let mut app = Application::new(
             &mut event_store,
@@ -80,14 +52,69 @@ mod tests {
             &storage,
             &display,
             &input,
-            Some(&sync),
+            Some(&mut peer),
+            None,
+            &auth,
+        );
+
+        app.handle(SyncYaks::new()).unwrap();
+    }
+
+    #[test]
+    fn test_sync_exchanges_events_with_peer() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+        use crate::domain::events::AddedEvent;
+        use crate::domain::slug::{Name, YakId};
+        use crate::domain::YakEvent;
+
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        // Add an event to the peer
+        let mut peer = InMemoryEventStore::new();
+        peer.append(&YakEvent::Added(
+            AddedEvent {
+                name: Name::from("peer yak"),
+                id: YakId::from("peer-yak-id"),
+                parent_id: None,
+            },
+            EventMetadata::new(
+                Author {
+                    name: "test".to_string(),
+                    email: "test@test.com".to_string(),
+                },
+                Timestamp::now(),
+            ),
+        ))
+        .unwrap();
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            Some(&mut peer),
             None,
             &auth,
         );
 
         app.handle(SyncYaks::new()).unwrap();
 
-        assert!(sync.was_sync_called());
+        // Local event store should now have the peer's event
+        let events = EventStore::get_all_events(&event_store).unwrap();
+        assert_eq!(
+            events.len(),
+            1,
+            "Local should have pulled 1 event from peer"
+        );
     }
 
     #[test]

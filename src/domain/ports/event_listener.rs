@@ -4,6 +4,13 @@ use crate::domain::YakEvent;
 
 pub trait EventListener {
     fn on_event(&mut self, event: &YakEvent) -> Result<()>;
+
+    /// Clear all state, preparing for a full replay of events.
+    /// Default implementation is a no-op for listeners that
+    /// don't need explicit clearing.
+    fn clear(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

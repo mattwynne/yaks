@@ -23,6 +23,23 @@ impl EventBus {
 
         Ok(())
     }
+
+    /// Clear all listeners and replay events from scratch.
+    ///
+    /// Used after sync to rebuild the disk projection,
+    /// especially for worktrees that share a git repo
+    /// but have independent .yaks directories.
+    pub fn rebuild(&mut self, events: &[YakEvent]) -> Result<()> {
+        for listener in &mut self.listeners {
+            listener.clear()?;
+        }
+        for event in events {
+            for listener in &mut self.listeners {
+                listener.on_event(event)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for EventBus {

@@ -6,6 +6,10 @@ use crate::domain::slug::{Name, YakId};
 use crate::domain::{YakEvent, METADATA_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
+    fn clear(&mut self) -> Result<()> {
+        self.clear_all()
+    }
+
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         match event {
             YakEvent::Added(

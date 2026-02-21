@@ -197,6 +197,12 @@ impl WriteYakStore for InMemoryStorage {
 
         Ok(())
     }
+
+    fn clear_all(&self) -> Result<()> {
+        let mut yaks = self.yaks.write().unwrap();
+        yaks.clear();
+        Ok(())
+    }
 }
 
 impl ReadYakStore for InMemoryStorage {

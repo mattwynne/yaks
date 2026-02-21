@@ -385,6 +385,10 @@ impl WriteYakStore for DirectoryStorage {
         fs::write(&field_path, content)
             .with_context(|| format!("Failed to write field '{field_name}' for '{id}'"))
     }
+
+    fn clear_all(&self) -> Result<()> {
+        self.clear()
+    }
 }
 
 impl ReadYakStore for DirectoryStorage {

@@ -2,7 +2,6 @@
 
 use crate::domain::ports::{
     AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, ReadYakStore,
-    SyncPort,
 };
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
@@ -20,7 +19,7 @@ pub struct Application<'a> {
     pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
-    pub sync: Option<&'a dyn SyncPort>,
+    pub sync_peer: Option<&'a mut dyn EventStore>,
     pub event_reader: Option<&'a dyn EventStoreReader>,
     auth: &'a dyn AuthenticationPort,
 }
@@ -33,7 +32,7 @@ impl<'a> Application<'a> {
         store: &'a dyn ReadYakStore,
         display: &'a dyn DisplayPort,
         input: &'a dyn InputPort,
-        sync: Option<&'a dyn SyncPort>,
+        sync_peer: Option<&'a mut dyn EventStore>,
         event_reader: Option<&'a dyn EventStoreReader>,
         auth: &'a dyn AuthenticationPort,
     ) -> Self {
@@ -43,7 +42,7 @@ impl<'a> Application<'a> {
             store,
             display,
             input,
-            sync,
+            sync_peer,
             event_reader,
             auth,
         }
@@ -84,6 +83,30 @@ impl<'a> Application<'a> {
     /// Returns the current author from the authentication port
     pub fn current_author(&self) -> crate::domain::event_metadata::Author {
         self.auth.current_author()
+    }
+
+    /// Sync events with a peer event store
+    ///
+    /// Takes the peer from the sync_peer field, syncs events
+    /// bidirectionally, then rebuilds the disk projection from
+    /// the full event history. The rebuild handles worktrees
+    /// (which share a git repo and therefore already have local
+    /// events that haven't been projected to their .yaks dir).
+    pub fn sync_events(&mut self) -> Result<()> {
+        let peer = self
+            .sync_peer
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?;
+        self.event_store.sync(peer, self.event_bus, self.display)?;
+
+        // Rebuild projection: clear storage and replay all events.
+        // This ensures the disk is consistent even when the
+        // local event store already had events (e.g. worktrees
+        // sharing a git repo).
+        let all_events = self.event_store.get_all_events()?;
+        self.event_bus.rebuild(&all_events)?;
+
+        Ok(())
     }
 
     fn save_yak_map(&mut self, yak_map: &mut YakMap) -> Result<()> {
