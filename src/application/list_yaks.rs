@@ -193,7 +193,7 @@ impl ListYaks {
         node: &YakNode,
         format: &str,
         prefix: &TreePrefix,
-        is_last: bool,
+        _is_last: bool,
     ) {
         let state = node
             .yak
@@ -204,16 +204,8 @@ impl ListYaks {
         match format {
             "plain" => app.display.info(&node.full_path),
             "pretty" => {
-                let node_prefix = if prefix.lines.is_empty() {
-                    "  ".to_string()
-                } else if prefix.lines.len() == 1 {
-                    let connector = if is_last { "╰─ " } else { "├─ " };
-                    format!("  {}", connector)
-                } else {
-                    let ancestor_continuations = &prefix.lines[1..];
-                    let connector = if is_last { "╰─ " } else { "├─ " };
-                    format!("  {}{}", ancestor_continuations.join(""), connector)
-                };
+                let depth = prefix.lines.len();
+                let node_prefix = "  ".repeat(depth);
                 app.display
                     .display_yak_pretty(&node_prefix, &node.name, state);
             }
@@ -355,9 +347,9 @@ mod tests {
         );
     }
 
-    // Mutants 3 & 4 (line 162): last child uses ╰─ connector, others use ├─
+    // Children at depth 1 are indented by 2 spaces relative to root
     #[test]
-    fn tree_connectors_distinguish_last_from_non_last_child() {
+    fn children_are_indented_in_pretty_format() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -374,7 +366,7 @@ mod tests {
             &auth,
         );
 
-        // Parent with two children: sorted alphabetically, "aaa" first, "zzz" last
+        // Parent with two children
         app.handle(AddYak::new("parent")).unwrap();
         app.handle(AddYak::new("aaa").with_parent(Some("parent")))
             .unwrap();
@@ -385,41 +377,35 @@ mod tests {
         app.handle(ListYaks::new("pretty", None)).unwrap();
         let messages = display.get_info_messages();
 
+        let parent_line = messages.iter().find(|m| m.contains("parent"));
         let aaa_line = messages.iter().find(|m| m.contains("aaa"));
         let zzz_line = messages.iter().find(|m| m.contains("zzz"));
 
+        assert!(parent_line.is_some() && aaa_line.is_some() && zzz_line.is_some());
+
+        // Root has no indent prefix
         assert!(
-            aaa_line.is_some(),
-            "Expected 'aaa' in output: {:?}",
-            messages
-        );
-        assert!(
-            zzz_line.is_some(),
-            "Expected 'zzz' in output: {:?}",
-            messages
+            parent_line.unwrap().starts_with("○"),
+            "Root should have no indent, got: {:?}",
+            parent_line
         );
 
-        // "aaa" is non-last child (alphabetically first), should use ├─
+        // Children at depth 1 should be indented by 2 spaces
         assert!(
-            aaa_line.unwrap().contains("├─"),
-            "Non-last child 'aaa' should use ├─ connector, got: {:?}",
+            aaa_line.unwrap().starts_with("  ○"),
+            "Child 'aaa' should be indented by 2 spaces, got: {:?}",
             aaa_line
         );
-
-        // "zzz" is last child (alphabetically last), should use ╰─
         assert!(
-            zzz_line.unwrap().contains("╰─"),
-            "Last child 'zzz' should use ╰─ connector, got: {:?}",
+            zzz_line.unwrap().starts_with("  ○"),
+            "Child 'zzz' should be indented by 2 spaces, got: {:?}",
             zzz_line
         );
     }
 
-    // Mutant 5 (line 209): prefix.lines.len() == 1 distinguishes depth-1 from depth-2+.
-    // At depth 1, both branches produce identical output (continuations is empty).
-    // At depth 2+, the mutant (== to !=) drops continuation indentation.
-    // We need a grandchild to detect the difference.
+    // Grandchild at depth 2 is indented by 4 spaces
     #[test]
-    fn grandchild_has_continuation_indent_in_pretty_format() {
+    fn grandchild_has_deeper_indent_in_pretty_format() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -436,7 +422,7 @@ mod tests {
             &auth,
         );
 
-        // root → parent → grandchild (depth 2)
+        // root -> parent -> grandchild (depth 2)
         app.handle(AddYak::new("root")).unwrap();
         app.handle(AddYak::new("parent").with_parent(Some("root")))
             .unwrap();
@@ -454,16 +440,11 @@ mod tests {
             messages
         );
 
-        let line = gc_line.unwrap();
-        // At depth 2, the correct prefix is "  {continuation}{connector}"
-        // where continuation is "   " (3 chars for last-child) or "│  ".
-        // The mutant would produce "  {connector}" (missing continuation).
-        // So grandchild line should be wider than "  ╰─" (5 chars before indicator).
+        // Grandchild at depth 2 should be indented by 4 spaces
         assert!(
-            !line.starts_with("  ╰─") && !line.starts_with("  ├─"),
-            "Grandchild (depth 2) should NOT start with '  ╰─' or '  ├─' (that's depth-1 format). \
-             It should have continuation indent before the connector. Got: {:?}",
-            line
+            gc_line.unwrap().starts_with("    ○"),
+            "Grandchild (depth 2) should be indented by 4 spaces, got: {:?}",
+            gc_line
         );
     }
 }

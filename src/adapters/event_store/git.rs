@@ -173,6 +173,58 @@ impl GitEventStore {
             }
         }
     }
+    /// Check if any existing commit has the given Event-Id trailer
+    fn has_event_id(&self, event_id: &str) -> Result<bool> {
+        let Some(latest) = self.get_latest_commit()? else {
+            return Ok(false);
+        };
+
+        let mut revwalk = self.repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.push(latest.id())?;
+
+        for oid in revwalk {
+            let oid = oid?;
+            let commit = self.repo.find_commit(oid)?;
+            let message = commit.message().unwrap_or("");
+            if Self::message_has_event_id(message, event_id) {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Check if a commit message contains a specific Event-Id trailer
+    fn message_has_event_id(message: &str, event_id: &str) -> bool {
+        let prefix = "Event-Id: ";
+        for line in message.lines() {
+            let trimmed = line.trim();
+            if let Some(id) = trimmed.strip_prefix(prefix) {
+                if id.trim() == event_id {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Extract the Event-Id from a commit message, falling back to a
+    /// provided default (typically the commit SHA for legacy commits).
+    fn extract_event_id(message: &str, fallback: &str) -> String {
+        let prefix = "Event-Id: ";
+        for line in message.lines() {
+            let trimmed = line.trim();
+            if let Some(id) = trimmed.strip_prefix(prefix) {
+                let id = id.trim();
+                if !id.is_empty() {
+                    return id.to_string();
+                }
+            }
+        }
+        fallback.to_string()
+    }
+
     /// Read the current git tree state and synthesize domain events.
     /// All yak IDs are regenerated using `generate_id(name, parent_id)`,
     /// making this suitable for repairing inconsistent data.
@@ -411,13 +463,18 @@ impl GitEventStore {
 
 impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
-        // Idempotent: skip if event_id (commit SHA) already exists
-        if let Some(event_id) = &event.metadata().event_id {
-            if let Ok(oid) = git2::Oid::from_str(event_id) {
-                if self.repo.find_commit(oid).is_ok() {
-                    return Ok(());
-                }
-            }
+        // Determine the stable event_id (UUID) for this event.
+        // If the event already has one (from a peer sync), reuse it.
+        // Otherwise generate a new one.
+        let event_id = event
+            .metadata()
+            .event_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        // Idempotent: skip if we already have a commit with this event_id
+        if self.has_event_id(&event_id)? {
+            return Ok(());
         }
 
         let current_tree = self.get_current_tree()?;
@@ -425,7 +482,10 @@ impl EventStore for GitEventStore {
         let tree_oid = self.build_tree_from_event(event, current_tree.as_ref())?;
         let tree = self.repo.find_tree(tree_oid)?;
 
-        let message = event.format_message();
+        // Commit message includes the event_id as a trailer for
+        // stable cross-repo identity during sync.
+        let event_line = event.format_message();
+        let message = format!("{}\n\nEvent-Id: {}", event_line, event_id);
 
         let parent = self.get_latest_commit()?;
         let parents: Vec<&git2::Commit> = parent.iter().collect();
@@ -469,14 +529,16 @@ impl EventStore for GitEventStore {
         for oid in revwalk {
             let oid = oid?;
             let commit = self.repo.find_commit(oid)?;
-            let message = commit.message().unwrap_or("").trim();
+            let full_message = commit.message().unwrap_or("");
 
-            if message.is_empty() {
+            // Parse event from the first line of the commit message
+            let first_line = full_message.lines().next().unwrap_or("").trim();
+            if first_line.is_empty() {
                 continue;
             }
 
-            match YakEvent::parse(message) {
-                Ok(event) => {
+            match YakEvent::parse(first_line) {
+                Ok(mut event) => {
                     use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
                     let author = Author {
                         name: commit.author().name().unwrap_or("unknown").to_string(),
@@ -484,7 +546,33 @@ impl EventStore for GitEventStore {
                     };
                     let timestamp = Timestamp(commit.author().when().seconds());
                     let mut metadata = EventMetadata::new(author, timestamp);
-                    metadata.event_id = Some(commit.id().to_string());
+
+                    // Extract Event-Id from commit message trailer,
+                    // falling back to the commit SHA for legacy commits
+                    metadata.event_id = Some(Self::extract_event_id(
+                        full_message,
+                        &commit.id().to_string(),
+                    ));
+
+                    // For FieldUpdated events, read the actual content
+                    // from the git tree (not stored in commit message).
+                    if let YakEvent::FieldUpdated(ref mut e, _) = event {
+                        if let Ok(tree) = commit.tree() {
+                            if let Some(yak_entry) = tree.get_name(e.id.as_str()) {
+                                if let Ok(yak_tree) = self.repo.find_tree(yak_entry.id()) {
+                                    if let Some(field_entry) = yak_tree.get_name(&e.field_name) {
+                                        if let Ok(blob) = self.repo.find_blob(field_entry.id()) {
+                                            if let Ok(content) = std::str::from_utf8(blob.content())
+                                            {
+                                                e.content = content.to_string();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     events.push(event.with_metadata(metadata));
                 }
                 Err(_) => continue, // Skip unparseable commits
@@ -672,7 +760,19 @@ mod tests {
         // Verify ref exists
         let oid = store.repo.refname_to_id("refs/notes/yaks").unwrap();
         let commit = store.repo.find_commit(oid).unwrap();
-        assert_eq!(commit.message().unwrap(), "Added: \"test\" \"test-a1b2\"");
+        let message = commit.message().unwrap();
+        // First line is the event description
+        assert!(
+            message.starts_with("Added: \"test\" \"test-a1b2\""),
+            "Commit message should start with event description, got: {}",
+            message
+        );
+        // Should contain an Event-Id trailer
+        assert!(
+            message.contains("Event-Id: "),
+            "Commit message should contain Event-Id trailer, got: {}",
+            message
+        );
     }
 
     #[test]

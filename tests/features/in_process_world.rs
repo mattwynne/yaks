@@ -12,7 +12,7 @@ use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
     SetState, ShowContext, ShowField, StartYak, WriteField,
 };
-use yx::domain::ports::EventStore as _;
+use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
 
 /// A named user instance for multi-repo sync scenarios.
@@ -214,6 +214,10 @@ impl InProcessWorld {
 
         user.event_store
             .sync(origin_ref, &mut user.event_bus, &user.display)?;
+
+        // Rebuild projection from full event history (same as Application.sync_events)
+        let all_events = EventStore::get_all_events(&user.event_store)?;
+        user.event_bus.rebuild(&all_events)?;
 
         self.exit_code = 0;
         Ok(())

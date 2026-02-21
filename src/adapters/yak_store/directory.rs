@@ -131,6 +131,27 @@ impl DirectoryStorage {
         None
     }
 
+    /// Move any immediate child yak directories to the base path (root).
+    /// Called before deleting a parent so nested children are not lost.
+    fn rescue_children(&self, parent_dir: &Path) -> Result<()> {
+        if let Ok(entries) = fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join(CONTEXT_FIELD).exists() {
+                    // This is a child yak directory - move to root
+                    let dir_name = path
+                        .file_name()
+                        .ok_or_else(|| anyhow::anyhow!("Cannot get dir name"))?;
+                    let target = self.base_path.join(dir_name);
+                    if !target.exists() {
+                        fs::rename(&path, &target).context("Failed to rescue child yak")?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Read the yak ID from a directory's id file, falling back to dir name.
     fn read_id_from_dir(&self, dir: &std::path::Path, fallback: &str) -> YakId {
         fs::read_to_string(dir.join(ID_FIELD))
@@ -307,6 +328,9 @@ impl WriteYakStore for DirectoryStorage {
     fn delete_yak(&self, id: &YakId) -> Result<()> {
         let dir = self.yak_dir(id.as_str());
         if dir.exists() {
+            // Before removing, move any child yak directories to root
+            // so they survive parent deletion (orphan rescue).
+            self.rescue_children(&dir)?;
             fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{id}'"))?;
         }
         Ok(())

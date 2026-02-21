@@ -31,7 +31,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob should have a yak called "make the tea"
 
-    @wip
     Example: Both users see the same yaks after syncing
       Given a git clone of origin called alice
       And a git clone of origin called bob
@@ -58,7 +57,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bugfix syncs yaks
       Then bugfix should have a yak called "make the tea"
 
-  @wip
   Rule: Removals propagate through sync
 
     Example: Alice's removal appears on bob's side
@@ -83,7 +81,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When alice syncs yaks
       Then alice should not have a yak called "make the tea"
 
-  @wip
   Rule: Moves propagate through sync
 
     Example: Alice's move appears on bob's side
@@ -102,7 +99,6 @@ Feature: yx sync - Collaborate on Yaks via Git
             ○ buy biscuits
         """
 
-  @wip
   Rule: Field changes propagate through sync
 
     Example: State change propagates
@@ -127,7 +123,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob yak "make the tea" should have context "use the good teapot"
 
-  @wip
   Rule: Changes to different fields on the same yak are merged
 
     Example: Alice changes state, bob changes context
@@ -142,7 +137,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob yak "make the tea" should have state "wip"
       And bob yak "make the tea" should have context "use the good teapot"
 
-  @wip
   Rule: When both users change the same field, the latest change wins
 
     Example: Bob's later state change wins
@@ -157,7 +151,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When alice syncs yaks
       Then alice yak "make the tea" should have state "done"
 
-  @wip
   Rule: Removal wins over other changes to the same yak
 
     Example: Bob's edit is lost when alice has removed the yak
@@ -172,7 +165,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob should not have a yak called "make the tea"
 
-  @wip
   Rule: A move to a previously-removed parent fails
 
     Example: Bob's move is discarded but the child survives
@@ -189,7 +181,6 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob should not have a yak called "make the tea"
       And bob should have a yak called "buy biscuits"
 
-  @wip
   Rule: Concurrent removals don't conflict
 
     Example: Both users remove the same yak
