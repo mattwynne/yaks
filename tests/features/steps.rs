@@ -848,6 +848,15 @@ async fn git_clone_in_process(
     world.create_clone(&origin, &clone)
 }
 
+#[given(regex = r#"^a git clone of ([\w-]+) via file URL called ([\w-]+)$"#)]
+async fn git_clone_via_file_url(
+    world: &mut FullStackWorld,
+    origin: String,
+    clone: String,
+) -> Result<()> {
+    world.create_clone_with_file_url(&origin, &clone)
+}
+
 #[given(regex = r#"^a git worktree of ([\w-]+) called ([\w-]+)$"#)]
 async fn git_worktree(world: &mut FullStackWorld, parent: String, worktree: String) -> Result<()> {
     world.create_worktree(&parent, &worktree)

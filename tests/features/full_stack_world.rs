@@ -569,6 +569,93 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Create a clone of an existing named repo using a file:// URL.
+    /// This exercises the same fetch/push code path as SSH/HTTPS URLs.
+    pub fn create_clone_with_file_url(
+        &mut self,
+        origin_name: &str,
+        clone_name: &str,
+    ) -> Result<()> {
+        let origin_path = self.repo_path(origin_name)?;
+        let file_url = format!("file://{}", origin_path.display());
+        let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+        let clone_path = temp_dir.path();
+
+        let hooks_env = ("GIT_CONFIG_PARAMETERS", "'core.hooksPath=/dev/null'");
+
+        // Check if origin has any commits
+        let origin_has_commits = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&origin_path)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let email = format!("{}@example.com", clone_name);
+        let user_name = clone_name.to_string();
+
+        if origin_has_commits {
+            let output = Command::new("git")
+                .args(["clone", "--quiet", &file_url, &clone_path.to_string_lossy()])
+                .env(hooks_env.0, hooks_env.1)
+                .output()
+                .context("Failed to git clone with file URL")?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "git clone failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        } else {
+            Command::new("git")
+                .args(["init", "--initial-branch=main", "--quiet"])
+                .env(hooks_env.0, hooks_env.1)
+                .current_dir(clone_path)
+                .status()
+                .context("Failed to git init")?;
+            Command::new("git")
+                .args(["remote", "add", "origin", &file_url])
+                .current_dir(clone_path)
+                .status()
+                .context("Failed to add remote")?;
+        }
+
+        // Configure git user and disable hooks
+        for args in [
+            vec!["config", "user.email", &email],
+            vec!["config", "user.name", &user_name],
+            vec!["config", "core.hooksPath", "/dev/null"],
+        ] {
+            Command::new("git")
+                .args(&args)
+                .current_dir(clone_path)
+                .status()?;
+        }
+
+        if !origin_has_commits {
+            std::fs::write(clone_path.join(".gitignore"), ".yaks\n")
+                .context("Failed to write .gitignore")?;
+            Command::new("git")
+                .args(["add", ".gitignore"])
+                .current_dir(clone_path)
+                .status()
+                .context("Failed to git add")?;
+            Command::new("git")
+                .args(["commit", "--quiet", "-m", "Initial commit"])
+                .current_dir(clone_path)
+                .status()
+                .context("Failed to git commit")?;
+            Command::new("git")
+                .args(["push", "-u", "origin", "main", "--quiet"])
+                .current_dir(clone_path)
+                .output()
+                .context("Failed to git push")?;
+        }
+
+        self.repos.insert(clone_name.to_string(), temp_dir);
+        Ok(())
+    }
+
     /// Create a git worktree from a named parent repo
     pub fn create_worktree(&mut self, parent_name: &str, worktree_name: &str) -> Result<()> {
         let parent_path = self.repo_path(parent_name)?;

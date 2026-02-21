@@ -3,7 +3,6 @@ use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::event_store::migration::Migrator;
-use yx::adapters::event_store::GitEventStore as PeerGitEventStore;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
@@ -227,28 +226,41 @@ fn main() -> Result<()> {
     let display = ConsoleDisplay;
     let input = ConsoleInput;
 
-    // Peer event store for sync: GitEventStore pointed at origin remote
-    let mut sync_peer: Option<Box<dyn yx::domain::ports::EventStore>> =
-        if let Some(ref root) = repo_root {
-            // Look up origin remote URL and open it as a peer event store
-            let remote_url = git2::Repository::open(root).ok().and_then(|repo| {
-                repo.find_remote("origin")
-                    .ok()
-                    .and_then(|remote| remote.url().map(|u| u.to_string()))
+    // Peer event store for sync: fetch origin's refs/notes/yaks into a
+    // local ref, create a GitEventStore reading that ref, then push back
+    // after sync completes.  Works for local paths, file://, SSH, HTTPS.
+    let mut sync_peer: Option<Box<dyn yx::domain::ports::EventStore>> = None;
+    let mut needs_push_after_sync = false;
+    if let Some(ref root) = repo_root {
+        let has_origin = {
+            let repo = git2::Repository::open(root)?;
+            let fetch_result = repo.find_remote("origin").and_then(|mut remote| {
+                let refspec = "+refs/notes/yaks:refs/notes/yaks-peer";
+                remote.fetch(&[refspec], None, None)
             });
-            remote_url.and_then(|url| {
-                let path = PathBuf::from(&url);
-                if path.exists() {
-                    PeerGitEventStore::new(&path)
-                        .ok()
-                        .map(|s| Box::new(s) as Box<dyn yx::domain::ports::EventStore>)
-                } else {
-                    None
+            match fetch_result {
+                Ok(()) => true,
+                Err(e) => {
+                    let msg = e.message();
+                    if msg.contains("couldn't find remote ref") {
+                        // Remote has no refs/notes/yaks yet (first sync)
+                        true
+                    } else if msg.contains("remote 'origin' does not exist") {
+                        false
+                    } else {
+                        return Err(e.into());
+                    }
                 }
-            })
-        } else {
-            None
-        };
+            }
+        }; // repo and remote dropped here
+        if has_origin {
+            sync_peer = Some(
+                Box::new(GitEventStore::with_ref_name(root, "refs/notes/yaks-peer")?)
+                    as Box<dyn yx::domain::ports::EventStore>,
+            );
+            needs_push_after_sync = true;
+        }
+    }
     let git_event_reader = if let Some(ref root) = repo_root {
         GitEventStore::new(root).ok()
     } else {
@@ -499,7 +511,22 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Commands::Sync => app.handle(SyncYaks::new()),
+        Commands::Sync => {
+            let result = app.handle(SyncYaks::new());
+            // After sync, push refs/notes/yaks to origin and clean up
+            if result.is_ok() && needs_push_after_sync {
+                if let Some(ref root) = repo_root {
+                    let repo = git2::Repository::open(root)?;
+                    repo.find_remote("origin")?
+                        .push(&["+refs/notes/yaks:refs/notes/yaks"], None)?;
+                    // Clean up the temporary peer ref
+                    let _ = repo
+                        .find_reference("refs/notes/yaks-peer")
+                        .and_then(|mut r| r.delete());
+                }
+            }
+            result
+        }
         Commands::Log => app.handle(ShowLog::new()),
         Commands::Completions { words } => {
             // Get yaks with state from storage

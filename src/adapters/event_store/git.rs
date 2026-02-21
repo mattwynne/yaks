@@ -521,14 +521,8 @@ impl EventStore for GitEventStore {
         let time = git2::Time::new(meta.timestamp.as_epoch_secs(), 0);
         let sig = git2::Signature::new(author_name, author_email, &time)?;
 
-        self.repo.commit(
-            Some(&self.ref_name),
-            &sig,
-            &sig,
-            &message,
-            &tree,
-            &parents,
-        )?;
+        self.repo
+            .commit(Some(&self.ref_name), &sig, &sig, &message, &tree, &parents)?;
 
         Ok(())
     }
