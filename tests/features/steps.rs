@@ -9,6 +9,7 @@ use cucumber::{given, then, when};
 use super::full_stack_world::FullStackWorld;
 use super::in_process_world::InProcessWorld;
 use super::test_world::{strip_ansi_codes, TestWorld};
+use yx::application::{AddYak, EditContext, ListYaks, MoveYak, RemoveYak, SetState, ShowContext};
 
 // ============================================================================
 // Given steps
@@ -828,8 +829,22 @@ async fn bare_git_repo(world: &mut FullStackWorld, name: String) -> Result<()> {
     world.create_bare_repo(&name)
 }
 
+#[given(regex = r#"^a bare git repository called ([\w-]+)$"#)]
+async fn bare_git_repo_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
+    world.create_bare_repo(&name)
+}
+
 #[given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)]
 async fn git_clone(world: &mut FullStackWorld, origin: String, clone: String) -> Result<()> {
+    world.create_clone(&origin, &clone)
+}
+
+#[given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)]
+async fn git_clone_in_process(
+    world: &mut InProcessWorld,
+    origin: String,
+    clone: String,
+) -> Result<()> {
     world.create_clone(&origin, &clone)
 }
 
@@ -853,6 +868,15 @@ async fn repo_has_yak(world: &mut FullStackWorld, repo: String, yak: String) -> 
     Ok(())
 }
 
+#[given(regex = r#"^([\w-]+) has a yak called "(.+)"$"#)]
+async fn repo_has_yak_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(AddYak::new(&yak)))
+}
+
 #[given(regex = r#"^([\w-]+) has set the state of "(.+)" to "(.+)"$"#)]
 async fn repo_has_set_state(
     world: &mut FullStackWorld,
@@ -871,6 +895,16 @@ async fn repo_has_set_state(
         );
     }
     Ok(())
+}
+
+#[given(regex = r#"^([\w-]+) has set the state of "(.+)" to "(.+)"$"#)]
+async fn repo_has_set_state_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+    state: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(SetState::new(&yak, &state)))
 }
 
 #[given(regex = r#"^([\w-]+) has set the context of "(.+)" to "(.+)"$"#)]
@@ -892,6 +926,17 @@ async fn repo_has_set_context(
     Ok(())
 }
 
+#[given(regex = r#"^([\w-]+) has set the context of "(.+)" to "(.+)"$"#)]
+async fn repo_has_set_context_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+    content: String,
+) -> Result<()> {
+    world.set_input_in_repo(&repo, &content)?;
+    world.execute_in_repo(&repo, |app| app.handle(EditContext::new(&yak)))
+}
+
 #[given(regex = r#"^([\w-]+) has removed the yak "(.+)"$"#)]
 async fn repo_has_removed_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["rm", &yak])?;
@@ -904,6 +949,15 @@ async fn repo_has_removed_yak(world: &mut FullStackWorld, repo: String, yak: Str
         );
     }
     Ok(())
+}
+
+#[given(regex = r#"^([\w-]+) has removed the yak "(.+)"$"#)]
+async fn repo_has_removed_yak_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(RemoveYak::new(&yak)))
 }
 
 #[given(regex = r#"^([\w-]+) has moved the yak "(.+)" under "(.+)"$"#)]
@@ -926,6 +980,16 @@ async fn repo_has_moved_yak_under(
     Ok(())
 }
 
+#[given(regex = r#"^([\w-]+) has moved the yak "(.+)" under "(.+)"$"#)]
+async fn repo_has_moved_yak_under_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+    parent: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(MoveYak::under(&yak, &parent)))
+}
+
 #[given(regex = r#"^([\w-]+) has synced yaks$"#)]
 async fn repo_has_synced(world: &mut FullStackWorld, repo: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["sync"])?;
@@ -940,6 +1004,11 @@ async fn repo_has_synced(world: &mut FullStackWorld, repo: String) -> Result<()>
     Ok(())
 }
 
+#[given(regex = r#"^([\w-]+) has synced yaks$"#)]
+async fn repo_has_synced_in_process(world: &mut InProcessWorld, repo: String) -> Result<()> {
+    world.sync_repo(&repo)
+}
+
 #[when(regex = r#"^([\w-]+) syncs yaks$"#)]
 async fn repo_syncs_yaks(world: &mut FullStackWorld, repo: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["sync"])?;
@@ -952,6 +1021,11 @@ async fn repo_syncs_yaks(world: &mut FullStackWorld, repo: String) -> Result<()>
         );
     }
     Ok(())
+}
+
+#[when(regex = r#"^([\w-]+) syncs yaks$"#)]
+async fn repo_syncs_yaks_in_process(world: &mut InProcessWorld, repo: String) -> Result<()> {
+    world.sync_repo(&repo)
 }
 
 #[then(regex = r#"^([\w-]+) has a "(.+)" ref$"#)]
@@ -1090,6 +1164,25 @@ async fn repo_should_have_yak(world: &mut FullStackWorld, repo: String, yak: Str
     Ok(())
 }
 
+#[then(regex = r#"^([\w-]+) should have a yak called "(.+)"$"#)]
+async fn repo_should_have_yak_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("markdown", None)))?;
+    let output = world.get_repo_output(&repo)?;
+    if !output.contains(&yak) {
+        anyhow::bail!(
+            "Expected repo '{}' to have yak '{}', but output was:\n{}",
+            repo,
+            yak,
+            output
+        );
+    }
+    Ok(())
+}
+
 #[then(regex = r#"^([\w-]+) and ([\w-]+) both have the same yaks:$"#)]
 async fn repos_have_same_yaks(
     world: &mut FullStackWorld,
@@ -1107,6 +1200,35 @@ async fn repos_have_same_yaks(
     for repo in [&repo_a, &repo_b] {
         world.run_yx_in_repo(repo, &["ls", "--format", "pretty"])?;
         let output = world.get_output().trim().to_string();
+        if output != expected {
+            anyhow::bail!(
+                "Expected repo '{}' to have yaks:\n{}\nbut got:\n{}",
+                repo,
+                expected,
+                output
+            );
+        }
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) and ([\w-]+) both have the same yaks:$"#)]
+async fn repos_have_same_yaks_in_process(
+    world: &mut InProcessWorld,
+    repo_a: String,
+    repo_b: String,
+    step: &cucumber::gherkin::Step,
+) -> Result<()> {
+    let expected = step
+        .docstring
+        .as_ref()
+        .expect("step requires a docstring")
+        .trim()
+        .to_string();
+
+    for repo in [&repo_a, &repo_b] {
+        world.execute_in_repo(repo, |app| app.handle(ListYaks::new("pretty", None)))?;
+        let output = world.get_repo_output(repo)?.trim().to_string();
         if output != expected {
             anyhow::bail!(
                 "Expected repo '{}' to have yaks:\n{}\nbut got:\n{}",
@@ -1145,6 +1267,32 @@ async fn repo_should_have_yaks(
     Ok(())
 }
 
+#[then(regex = r#"^([\w-]+) should have these yaks:$"#)]
+async fn repo_should_have_yaks_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    step: &cucumber::gherkin::Step,
+) -> Result<()> {
+    let expected = step
+        .docstring
+        .as_ref()
+        .expect("step requires a docstring")
+        .trim()
+        .to_string();
+
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("pretty", None)))?;
+    let output = world.get_repo_output(&repo)?.trim().to_string();
+    if output != expected {
+        anyhow::bail!(
+            "Expected repo '{}' to have yaks:\n{}\nbut got:\n{}",
+            repo,
+            expected,
+            output
+        );
+    }
+    Ok(())
+}
+
 #[then(regex = r#"^([\w-]+) should not have a yak called "(.+)"$"#)]
 async fn repo_should_not_have_yak(
     world: &mut FullStackWorld,
@@ -1153,6 +1301,25 @@ async fn repo_should_not_have_yak(
 ) -> Result<()> {
     world.run_yx_in_repo(&repo, &["ls", "--format", "markdown"])?;
     let output = world.get_output();
+    if output.contains(&yak) {
+        anyhow::bail!(
+            "Expected repo '{}' to NOT have yak '{}', but it was found in output:\n{}",
+            repo,
+            yak,
+            output
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) should not have a yak called "(.+)"$"#)]
+async fn repo_should_not_have_yak_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("markdown", None)))?;
+    let output = world.get_repo_output(&repo)?;
     if output.contains(&yak) {
         anyhow::bail!(
             "Expected repo '{}' to NOT have yak '{}', but it was found in output:\n{}",
@@ -1185,6 +1352,29 @@ async fn repo_yak_should_have_state(
     Ok(())
 }
 
+#[then(regex = r#"^([\w-]+) yak "(.+)" should have state "(.+)"$"#)]
+async fn repo_yak_should_have_state_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+    state: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| {
+        app.handle(ListYaks::new("plain", Some(&state)))
+    })?;
+    let output = world.get_repo_output(&repo)?;
+    if !output.contains(&yak) {
+        anyhow::bail!(
+            "Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}",
+            yak,
+            repo,
+            state,
+            output
+        );
+    }
+    Ok(())
+}
+
 #[then(regex = r#"^([\w-]+) yak "(.+)" should have context "(.+)"$"#)]
 async fn repo_yak_should_have_context(
     world: &mut FullStackWorld,
@@ -1194,6 +1384,27 @@ async fn repo_yak_should_have_context(
 ) -> Result<()> {
     world.run_yx_in_repo(&repo, &["context", "--show", &yak])?;
     let output = world.get_output();
+    if !output.contains(&expected) {
+        anyhow::bail!(
+            "Expected context of yak '{}' in repo '{}' to contain '{}', but got:\n{}",
+            yak,
+            repo,
+            expected,
+            output
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) yak "(.+)" should have context "(.+)"$"#)]
+async fn repo_yak_should_have_context_in_process(
+    world: &mut InProcessWorld,
+    repo: String,
+    yak: String,
+    expected: String,
+) -> Result<()> {
+    world.execute_in_repo(&repo, |app| app.handle(ShowContext::new(&yak)))?;
+    let output = world.get_repo_output(&repo)?;
     if !output.contains(&expected) {
         anyhow::bail!(
             "Expected context of yak '{}' in repo '{}' to contain '{}', but got:\n{}",
