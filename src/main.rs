@@ -226,39 +226,41 @@ fn main() -> Result<()> {
     let display = ConsoleDisplay;
     let input = ConsoleInput;
 
-    // Peer event store for sync: fetch origin's refs/notes/yaks into a
-    // local ref, create a GitEventStore reading that ref, then push back
-    // after sync completes.  Works for local paths, file://, SSH, HTTPS.
+    // Peer event store for sync: only fetch from origin when running
+    // the sync command, to avoid network latency on every yx invocation.
+    let is_sync = matches!(cli.command, Commands::Sync);
     let mut sync_peer: Option<Box<dyn yx::domain::ports::EventStore>> = None;
     let mut needs_push_after_sync = false;
-    if let Some(ref root) = repo_root {
-        let has_origin = {
-            let repo = git2::Repository::open(root)?;
-            let fetch_result = repo.find_remote("origin").and_then(|mut remote| {
-                let refspec = "+refs/notes/yaks:refs/notes/yaks-peer";
-                remote.fetch(&[refspec], None, None)
-            });
-            match fetch_result {
-                Ok(()) => true,
-                Err(e) => {
-                    let msg = e.message();
-                    if msg.contains("couldn't find remote ref") {
-                        // Remote has no refs/notes/yaks yet (first sync)
-                        true
-                    } else if msg.contains("remote 'origin' does not exist") {
-                        false
-                    } else {
-                        return Err(e.into());
+    if is_sync {
+        if let Some(ref root) = repo_root {
+            let has_origin = {
+                let repo = git2::Repository::open(root)?;
+                let fetch_result = repo.find_remote("origin").and_then(|mut remote| {
+                    let refspec = "+refs/notes/yaks:refs/notes/yaks-peer";
+                    remote.fetch(&[refspec], None, None)
+                });
+                match fetch_result {
+                    Ok(()) => true,
+                    Err(e) => {
+                        let msg = e.message();
+                        if msg.contains("couldn't find remote ref") {
+                            // Remote has no refs/notes/yaks yet (first sync)
+                            true
+                        } else if msg.contains("remote 'origin' does not exist") {
+                            false
+                        } else {
+                            return Err(e.into());
+                        }
                     }
                 }
+            }; // repo and remote dropped here
+            if has_origin {
+                sync_peer = Some(
+                    Box::new(GitEventStore::with_ref_name(root, "refs/notes/yaks-peer")?)
+                        as Box<dyn yx::domain::ports::EventStore>,
+                );
+                needs_push_after_sync = true;
             }
-        }; // repo and remote dropped here
-        if has_origin {
-            sync_peer = Some(
-                Box::new(GitEventStore::with_ref_name(root, "refs/notes/yaks-peer")?)
-                    as Box<dyn yx::domain::ports::EventStore>,
-            );
-            needs_push_after_sync = true;
         }
     }
     let git_event_reader = if let Some(ref root) = repo_root {
