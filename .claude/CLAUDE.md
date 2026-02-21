@@ -49,16 +49,17 @@ The codebase uses hexagonal architecture for testability and future extensibilit
 - Pure business logic, independent of infrastructure
 
 **Ports** (`src/ports/`):
-- `StoragePort`: Yak persistence abstraction
-- `SyncPort`: Synchronization abstraction
-- `LogPort`: Command logging abstraction
-- `OutputPort`: User output abstraction
+- `EventStore`: Event persistence and sync abstraction
+- `ReadYakStore` / `WriteYakStore`: Yak persistence abstraction
+- `DisplayPort`: User output abstraction
+- `InputPort`: User input abstraction
+- `AuthenticationPort`: Author identity abstraction
 
 **Adapters** (`src/adapters/`):
 - `DirectoryStorage`: File-based storage (`.yaks/` directories)
-- `GitRefSync`: Git ref-based sync (future backend)
-- `GitLog`: Command logging via git notes
-- `ConsoleOutput`: Terminal output with colors
+- `GitEventStore`: Git ref-based event store (`refs/notes/yaks`)
+- `ConsoleDisplay`: Terminal output with colors
+- `ConsoleInput`: Stdin/editor input
 
 **CLI Entry Point** (`src/main.rs`):
 - Command parsing via clap

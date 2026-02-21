@@ -2,7 +2,6 @@
 
 pub mod authentication;
 pub mod event_store;
-pub mod sync;
 pub mod user_display;
 pub mod user_input;
 pub mod yak_store;
