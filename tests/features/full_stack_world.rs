@@ -460,6 +460,19 @@ printf '%s\n' "${{COMPREPLY[@]}}"
             .context(format!("No repo named '{}'", name))
     }
 
+    /// Make a repo's origin remote unreachable by pointing it at a
+    /// non-existent path. This tests that non-sync commands don't
+    /// contact the remote.
+    pub fn make_origin_unreachable(&self, repo_name: &str) -> Result<()> {
+        let repo_path = self.repo_path(repo_name)?;
+        Command::new("git")
+            .args(["remote", "set-url", "origin", "file:///nonexistent/repo"])
+            .current_dir(&repo_path)
+            .status()
+            .context("Failed to set remote URL")?;
+        Ok(())
+    }
+
     /// Create a bare git repository with the given name
     pub fn create_bare_repo(&mut self, name: &str) -> Result<()> {
         let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;

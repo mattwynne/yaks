@@ -206,6 +206,15 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob should have a yak called "make the tea"
 
+  @fullstack
+  Rule: Non-sync commands don't contact the remote
+
+    Example: Adding a yak works when origin is unreachable
+      Given a git clone of origin via file URL called alice
+      And alice's origin remote is unreachable
+      When alice adds a yak called "make the tea"
+      Then alice should have a yak called "make the tea"
+
   @wip
   Rule: Sync tells you what changed
 

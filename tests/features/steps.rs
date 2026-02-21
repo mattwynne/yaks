@@ -857,12 +857,18 @@ async fn git_clone_via_file_url(
     world.create_clone_with_file_url(&origin, &clone)
 }
 
+#[given(regex = r#"^([\w-]+)'s origin remote is unreachable$"#)]
+async fn origin_unreachable(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.make_origin_unreachable(&repo)
+}
+
 #[given(regex = r#"^a git worktree of ([\w-]+) called ([\w-]+)$"#)]
 async fn git_worktree(world: &mut FullStackWorld, parent: String, worktree: String) -> Result<()> {
     world.create_worktree(&parent, &worktree)
 }
 
-#[given(regex = r#"^([\w-]+) has a yak called "(.+)"$"#)]
+#[given(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
+#[when(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
 async fn repo_has_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["add", &yak])?;
     if world.get_exit_code() != 0 {
