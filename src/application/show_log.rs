@@ -72,7 +72,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             Some(&reader),
             &auth,
         );
@@ -112,7 +111,6 @@ mod tests {
             &display,
             &input,
             None,
-            None,
             &auth,
         );
 
@@ -143,7 +141,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             Some(&reader),
             &auth,
         );

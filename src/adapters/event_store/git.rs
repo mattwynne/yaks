@@ -677,18 +677,53 @@ impl EventStore for GitEventStore {
 
     fn sync(
         &mut self,
-        peer: &mut dyn EventStore,
         bus: &mut crate::infrastructure::event_bus::EventBus,
         output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
-        // Pull: get events from peer that local doesn't have
+        let repo_path = self
+            .repo
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot sync: bare repository"))?
+            .to_path_buf();
+
+        // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
+        let fetch_output = std::process::Command::new("git")
+            .args(["fetch", "origin", "+refs/notes/yaks:refs/notes/yaks-peer"])
+            .current_dir(&repo_path)
+            .output();
+
+        let has_origin = match fetch_output {
+            Ok(out) => {
+                if out.status.success() {
+                    true
+                } else {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    if stderr.contains("couldn't find remote ref") {
+                        // Remote has no refs/notes/yaks yet (first sync)
+                        true
+                    } else {
+                        // No usable origin remote
+                        false
+                    }
+                }
+            }
+            Err(_) => false,
+        };
+
+        if !has_origin {
+            anyhow::bail!("Sync not configured");
+        }
+
+        // 2. Exchange events with the peer ref
+        let mut peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
+
         let local_events = EventStore::get_all_events(self)?;
         let local_ids: HashSet<String> = local_events
             .iter()
             .filter_map(|e| e.metadata().event_id.clone())
             .collect();
 
-        let peer_events = peer.get_all_events()?;
+        let peer_events = EventStore::get_all_events(&peer)?;
         let mut pulled = 0usize;
         for event in &peer_events {
             if let Some(id) = &event.metadata().event_id {
@@ -700,7 +735,6 @@ impl EventStore for GitEventStore {
             }
         }
 
-        // Push: get events from local that peer doesn't have
         let peer_ids: HashSet<String> = peer_events
             .iter()
             .filter_map(|e| e.metadata().event_id.clone())
@@ -720,6 +754,25 @@ impl EventStore for GitEventStore {
             "Pulled {} events, pushed {} events",
             pulled, pushed
         ));
+
+        // 3. Push refs/notes/yaks back to origin (only if ref exists)
+        if self.repo.refname_to_id(&self.ref_name).is_ok() {
+            let push_output = std::process::Command::new("git")
+                .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
+                .current_dir(&repo_path)
+                .output()?;
+
+            if !push_output.status.success() {
+                let stderr = String::from_utf8_lossy(&push_output.stderr);
+                anyhow::bail!("Failed to push to origin: {}", stderr.trim());
+            }
+        }
+
+        // 4. Clean up the temporary peer ref
+        let _ = self
+            .repo
+            .find_reference("refs/notes/yaks-peer")
+            .and_then(|mut r| r.delete());
 
         Ok(())
     }
@@ -1103,11 +1156,11 @@ mod tests {
         // Find parent and child by name
         let parent_event = added_events
             .iter()
-            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == Name::from("parent")))
+            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == "parent"))
             .expect("Expected parent Added event");
         let child_event = added_events
             .iter()
-            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == Name::from("child")))
+            .find(|e| matches!(e, YakEvent::Added(a, _) if a.name == "child"))
             .expect("Expected child Added event");
 
         if let (YakEvent::Added(parent, _), YakEvent::Added(child, _)) = (parent_event, child_event)
@@ -1664,54 +1717,124 @@ mod tests {
             EventStore::get_all_events(store).unwrap()
         }
 
-        #[test]
-        fn syncs_events_between_two_git_stores() {
-            let (_tmp_a, mut store_a) = setup_test_repo();
-            let (_tmp_b, mut store_b) = setup_test_repo();
-            let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+        /// Set up a bare "origin" repo and a "local" repo with origin as remote
+        fn setup_origin_and_local() -> (TempDir, TempDir, GitEventStore) {
+            // Create bare origin
+            let origin_dir = TempDir::new().unwrap();
+            Repository::init_bare(origin_dir.path()).unwrap();
 
-            // Store A has event "alpha", store B has event "beta"
-            store_a.append(&make_event("alpha", "alpha-a1b2")).unwrap();
-            store_b.append(&make_event("beta", "beta-c3d4")).unwrap();
+            // Create local repo
+            let local_dir = TempDir::new().unwrap();
+            let local_repo = Repository::init(local_dir.path()).unwrap();
 
-            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
+            // Configure git user
+            let mut config = local_repo.config().unwrap();
+            config.set_str("user.name", "test").unwrap();
+            config.set_str("user.email", "test@test.com").unwrap();
 
-            // Both stores should have both events
-            let a_events = all_events(&store_a);
-            let b_events = all_events(&store_b);
-            assert_eq!(a_events.len(), 2, "store_a should have 2 events");
-            assert_eq!(b_events.len(), 2, "store_b should have 2 events");
+            // Add origin remote
+            local_repo
+                .remote("origin", origin_dir.path().to_str().unwrap())
+                .unwrap();
+
+            let store = GitEventStore::from_repo(local_repo);
+            (origin_dir, local_dir, store)
         }
 
         #[test]
-        fn pulls_events_from_peer() {
-            let (_tmp_a, mut store_a) = setup_test_repo();
-            let (_tmp_b, mut store_b) = setup_test_repo();
+        fn sync_pulls_events_from_origin() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Add events directly to origin's refs/notes/yaks
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("from-origin", "from-origin-a1b2"))
+                .unwrap();
+
             let mut bus = EventBus::new();
             let output = InMemoryDisplay::new();
 
-            // Peer has an event, local is empty
-            store_b.append(&make_event("foo", "foo-a1b2")).unwrap();
+            local_store.sync(&mut bus, &output).unwrap();
 
-            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
-
-            assert_eq!(all_events(&store_a).len(), 1);
+            let events = all_events(&local_store);
+            assert_eq!(
+                events.len(),
+                1,
+                "local should have pulled 1 event from origin"
+            );
         }
 
         #[test]
-        fn pushes_events_to_peer() {
-            let (_tmp_a, mut store_a) = setup_test_repo();
-            let (_tmp_b, mut store_b) = setup_test_repo();
+        fn sync_pushes_events_to_origin() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Add event to local
+            local_store
+                .append(&make_event("from-local", "from-local-a1b2"))
+                .unwrap();
+
             let mut bus = EventBus::new();
             let output = InMemoryDisplay::new();
 
-            // Local has an event, peer is empty
-            store_a.append(&make_event("foo", "foo-a1b2")).unwrap();
+            local_store.sync(&mut bus, &output).unwrap();
 
-            store_a.sync(&mut store_b, &mut bus, &output).unwrap();
+            // Check origin has the event
+            let origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            let events = all_events(&origin_store);
+            assert_eq!(
+                events.len(),
+                1,
+                "origin should have 1 event pushed from local"
+            );
+        }
 
-            assert_eq!(all_events(&store_b).len(), 1);
+        #[test]
+        fn sync_exchanges_events_bidirectionally() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Add event to origin
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("from-origin", "from-origin-a1b2"))
+                .unwrap();
+
+            // Add event to local
+            local_store
+                .append(&make_event("from-local", "from-local-c3d4"))
+                .unwrap();
+
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // Local should have both events
+            let local_events = all_events(&local_store);
+            assert_eq!(local_events.len(), 2, "local should have 2 events");
+
+            // Origin should have both events (pushed back)
+            let origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            let origin_events = all_events(&origin_store);
+            assert_eq!(origin_events.len(), 2, "origin should have 2 events");
+        }
+
+        #[test]
+        fn sync_cleans_up_peer_ref() {
+            let (_origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // The temporary peer ref should be cleaned up
+            assert!(
+                local_store
+                    .repo
+                    .find_reference("refs/notes/yaks-peer")
+                    .is_err(),
+                "refs/notes/yaks-peer should be cleaned up after sync"
+            );
         }
     }
 }

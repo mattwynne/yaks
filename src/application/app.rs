@@ -19,20 +19,17 @@ pub struct Application<'a> {
     pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
-    pub sync_peer: Option<&'a mut dyn EventStore>,
     pub event_reader: Option<&'a dyn EventStoreReader>,
     auth: &'a dyn AuthenticationPort,
 }
 
 impl<'a> Application<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         event_store: &'a mut dyn EventStore,
         event_bus: &'a mut EventBus,
         store: &'a dyn ReadYakStore,
         display: &'a dyn DisplayPort,
         input: &'a dyn InputPort,
-        sync_peer: Option<&'a mut dyn EventStore>,
         event_reader: Option<&'a dyn EventStoreReader>,
         auth: &'a dyn AuthenticationPort,
     ) -> Self {
@@ -42,7 +39,6 @@ impl<'a> Application<'a> {
             store,
             display,
             input,
-            sync_peer,
             event_reader,
             auth,
         }
@@ -85,19 +81,15 @@ impl<'a> Application<'a> {
         self.auth.current_author()
     }
 
-    /// Sync events with a peer event store
+    /// Sync events with a remote peer
     ///
-    /// Takes the peer from the sync_peer field, syncs events
-    /// bidirectionally, then rebuilds the disk projection from
-    /// the full event history. The rebuild handles worktrees
-    /// (which share a git repo and therefore already have local
-    /// events that haven't been projected to their .yaks dir).
+    /// Delegates to the event store's sync method, then rebuilds
+    /// the disk projection from the full event history. The
+    /// rebuild handles worktrees (which share a git repo and
+    /// therefore already have local events that haven't been
+    /// projected to their .yaks dir).
     pub fn sync_events(&mut self) -> Result<()> {
-        let peer = self
-            .sync_peer
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?;
-        self.event_store.sync(peer, self.event_bus, self.display)?;
+        self.event_store.sync(self.event_bus, self.display)?;
 
         // Rebuild projection: clear storage and replay all events.
         // This ensures the disk is consistent even when the
@@ -121,7 +113,7 @@ impl<'a> Application<'a> {
     ///
     /// # Example
     /// ```ignore
-    /// let app = Application::new(&mut event_bus, &store, &display, &input, None, None, &auth);
+    /// let app = Application::new(&mut event_store, &mut event_bus, &store, &display, &input, None, &auth);
     /// app.handle(AddYak::new("my yak"))?;
     /// ```
     pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {
@@ -182,7 +174,6 @@ mod tests {
             &display,
             &input,
             None,
-            None,
             &auth,
         );
 
@@ -225,7 +216,6 @@ mod tests {
             &display,
             &input,
             None,
-            None,
             &auth,
         );
 
@@ -256,7 +246,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             None,
             &auth,
         );
@@ -291,7 +280,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             None,
             &auth,
         );
@@ -337,7 +325,6 @@ mod tests {
             &display,
             &input,
             None,
-            None,
             &auth,
         );
 
@@ -380,7 +367,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             None,
             &auth,
         );

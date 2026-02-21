@@ -32,7 +32,7 @@ async fn run_all_features() {
             FullStackWorld::cucumber()
                 .filter_run("features/", move |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
-                        || rule.map_or(false, |r| r.tags.iter().any(|t| t == "wip"));
+                        || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
                     !wip && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
                 })
                 .await;

@@ -226,43 +226,6 @@ fn main() -> Result<()> {
     let display = ConsoleDisplay;
     let input = ConsoleInput;
 
-    // Peer event store for sync: only fetch from origin when running
-    // the sync command, to avoid network latency on every yx invocation.
-    let is_sync = matches!(cli.command, Commands::Sync);
-    let mut sync_peer: Option<Box<dyn yx::domain::ports::EventStore>> = None;
-    let mut needs_push_after_sync = false;
-    if is_sync {
-        if let Some(ref root) = repo_root {
-            let has_origin = {
-                let repo = git2::Repository::open(root)?;
-                let fetch_result = repo.find_remote("origin").and_then(|mut remote| {
-                    let refspec = "+refs/notes/yaks:refs/notes/yaks-peer";
-                    remote.fetch(&[refspec], None, None)
-                });
-                match fetch_result {
-                    Ok(()) => true,
-                    Err(e) => {
-                        let msg = e.message();
-                        if msg.contains("couldn't find remote ref") {
-                            // Remote has no refs/notes/yaks yet (first sync)
-                            true
-                        } else if msg.contains("remote 'origin' does not exist") {
-                            false
-                        } else {
-                            return Err(e.into());
-                        }
-                    }
-                }
-            }; // repo and remote dropped here
-            if has_origin {
-                sync_peer = Some(
-                    Box::new(GitEventStore::with_ref_name(root, "refs/notes/yaks-peer")?)
-                        as Box<dyn yx::domain::ports::EventStore>,
-                );
-                needs_push_after_sync = true;
-            }
-        }
-    }
     let git_event_reader = if let Some(ref root) = repo_root {
         GitEventStore::new(root).ok()
     } else {
@@ -284,9 +247,6 @@ fn main() -> Result<()> {
         &storage,
         &display,
         &input,
-        sync_peer
-            .as_mut()
-            .map(|s| s.as_mut() as &mut dyn yx::domain::ports::EventStore),
         git_event_reader
             .as_ref()
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
@@ -416,7 +376,6 @@ fn main() -> Result<()> {
                     &replay_display,
                     &replay_input,
                     None,
-                    None,
                     &replay_auth,
                 );
 
@@ -513,22 +472,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Commands::Sync => {
-            let result = app.handle(SyncYaks::new());
-            // After sync, push refs/notes/yaks to origin and clean up
-            if result.is_ok() && needs_push_after_sync {
-                if let Some(ref root) = repo_root {
-                    let repo = git2::Repository::open(root)?;
-                    repo.find_remote("origin")?
-                        .push(&["+refs/notes/yaks:refs/notes/yaks"], None)?;
-                    // Clean up the temporary peer ref
-                    let _ = repo
-                        .find_reference("refs/notes/yaks-peer")
-                        .and_then(|mut r| r.delete());
-                }
-            }
-            result
-        }
+        Commands::Sync => app.handle(SyncYaks::new()),
         Commands::Log => app.handle(ShowLog::new()),
         Commands::Completions { words } => {
             // Get yaks with state from storage

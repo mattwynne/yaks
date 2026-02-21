@@ -35,7 +35,8 @@ mod tests {
 
     #[test]
     fn test_sync_calls_event_store_sync() {
-        let mut event_store = InMemoryEventStore::new();
+        let origin = InMemoryEventStore::new();
+        let mut event_store = InMemoryEventStore::with_peer(&origin);
         let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
@@ -44,7 +45,6 @@ mod tests {
         let display = InMemoryDisplay::new();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
-        let mut peer = InMemoryEventStore::new();
 
         let mut app = Application::new(
             &mut event_store,
@@ -52,7 +52,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            Some(&mut peer),
             None,
             &auth,
         );
@@ -67,7 +66,26 @@ mod tests {
         use crate::domain::slug::{Name, YakId};
         use crate::domain::YakEvent;
 
-        let mut event_store = InMemoryEventStore::new();
+        // Add an event to the origin
+        let mut origin = InMemoryEventStore::new();
+        origin
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("peer yak"),
+                    id: YakId::from("peer-yak-id"),
+                    parent_id: None,
+                },
+                EventMetadata::new(
+                    Author {
+                        name: "test".to_string(),
+                        email: "test@test.com".to_string(),
+                    },
+                    Timestamp::now(),
+                ),
+            ))
+            .unwrap();
+
+        let mut event_store = InMemoryEventStore::with_peer(&origin);
         let mut event_bus = EventBus::new();
 
         let storage = InMemoryStorage::new();
@@ -77,31 +95,12 @@ mod tests {
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
 
-        // Add an event to the peer
-        let mut peer = InMemoryEventStore::new();
-        peer.append(&YakEvent::Added(
-            AddedEvent {
-                name: Name::from("peer yak"),
-                id: YakId::from("peer-yak-id"),
-                parent_id: None,
-            },
-            EventMetadata::new(
-                Author {
-                    name: "test".to_string(),
-                    email: "test@test.com".to_string(),
-                },
-                Timestamp::now(),
-            ),
-        ))
-        .unwrap();
-
         let mut app = Application::new(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
-            Some(&mut peer),
             None,
             &auth,
         );
@@ -135,7 +134,6 @@ mod tests {
             &storage,
             &display,
             &input,
-            None,
             None,
             &auth,
         );

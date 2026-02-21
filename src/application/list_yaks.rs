@@ -223,6 +223,34 @@ impl UseCase for ListYaks {
     }
 }
 
+/// Recursively build a YakNode and its children from parent_id grouping
+fn build_node(
+    yak: &Yak,
+    children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
+    parent_path: &str,
+) -> YakNode {
+    let leaf_name = yak.name.as_str();
+    let full_path = if parent_path.is_empty() {
+        leaf_name.to_string()
+    } else {
+        format!("{}/{}", parent_path, leaf_name)
+    };
+
+    let empty = Vec::new();
+    let child_yaks = children_by_parent.get(&Some(&yak.id)).unwrap_or(&empty);
+    let children: Vec<YakNode> = child_yaks
+        .iter()
+        .map(|child| build_node(child, children_by_parent, &full_path))
+        .collect();
+
+    YakNode {
+        name: Name::from(leaf_name),
+        full_path,
+        yak: Some(yak.clone()),
+        children,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,16 +268,7 @@ mod tests {
         input: &'a InMemoryInput,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
-        Application::new(
-            event_store,
-            event_bus,
-            storage,
-            display,
-            input,
-            None,
-            None,
-            auth,
-        )
+        Application::new(event_store, event_bus, storage, display, input, None, auth)
     }
 
     // Mutant 1 (line 89): only markdown format shows "You have no yaks"
@@ -446,33 +465,5 @@ mod tests {
             "Grandchild (depth 2) should be indented by 4 spaces, got: {:?}",
             gc_line
         );
-    }
-}
-
-/// Recursively build a YakNode and its children from parent_id grouping
-fn build_node(
-    yak: &Yak,
-    children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
-    parent_path: &str,
-) -> YakNode {
-    let leaf_name = yak.name.as_str();
-    let full_path = if parent_path.is_empty() {
-        leaf_name.to_string()
-    } else {
-        format!("{}/{}", parent_path, leaf_name)
-    };
-
-    let empty = Vec::new();
-    let child_yaks = children_by_parent.get(&Some(&yak.id)).unwrap_or(&empty);
-    let children: Vec<YakNode> = child_yaks
-        .iter()
-        .map(|child| build_node(child, children_by_parent, &full_path))
-        .collect();
-
-    YakNode {
-        name: Name::from(leaf_name),
-        full_path,
-        yak: Some(yak.clone()),
-        children,
     }
 }

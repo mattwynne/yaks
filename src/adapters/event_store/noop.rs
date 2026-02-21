@@ -23,10 +23,9 @@ impl EventStore for NoOpEventStore {
 
     fn sync(
         &mut self,
-        _peer: &mut dyn EventStore,
         _bus: &mut crate::infrastructure::event_bus::EventBus,
         _output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
-        todo!("sync not yet implemented")
+        anyhow::bail!("Sync not configured")
     }
 }

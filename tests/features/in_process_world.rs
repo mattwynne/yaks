@@ -10,7 +10,7 @@ use yx::adapters::{
 };
 use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
-    SetState, ShowContext, ShowField, StartYak, WriteField,
+    SetState, ShowContext, ShowField, StartYak, SyncYaks, WriteField,
 };
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
@@ -105,7 +105,6 @@ impl InProcessWorld {
             &self.display,
             &self.input,
             None,
-            None,
             &self.auth,
         );
         let result = f(&mut app);
@@ -128,7 +127,6 @@ impl InProcessWorld {
             &self.storage,
             &self.display,
             &self.input,
-            None,
             None,
             &self.auth,
         );
@@ -181,7 +179,6 @@ impl InProcessWorld {
             &user.display,
             &user.input,
             None,
-            None,
             &user.auth,
         );
         let result = f(&mut app);
@@ -197,27 +194,41 @@ impl InProcessWorld {
 
     /// Sync a named user's event store with origin
     pub fn sync_repo(&mut self, repo_name: &str) -> Result<()> {
-        let origin =
-            self.origin.as_mut().context("No origin configured")? as *mut InMemoryEventStore;
+        let origin = self.origin.as_ref().context("No origin configured")?;
 
         let user = self
             .repos
             .get_mut(repo_name)
             .context(format!("No repo named '{}'", repo_name))?;
 
-        // SAFETY: origin and user.event_store are disjoint allocations.
-        // We need both mutable references simultaneously because sync()
-        // reads from peer and writes to local (and vice versa).
-        // The raw pointer is safe because origin lives in self.origin
-        // and user.event_store lives in self.repos -- they cannot alias.
-        let origin_ref = unsafe { &mut *origin };
+        // Temporarily swap in a peer-configured event store for sync
+        let mut syncing_store = InMemoryEventStore::with_peer(origin);
+        // Copy existing events into the syncing store
+        for event in yx::domain::ports::EventStore::get_all_events(&user.event_store)? {
+            syncing_store.append(&event)?;
+        }
 
-        user.event_store
-            .sync(origin_ref, &mut user.event_bus, &user.display)?;
+        let display = InMemoryDisplay::new();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let storage = user.storage.clone();
 
-        // Rebuild projection from full event history (same as Application.sync_events)
-        let all_events = EventStore::get_all_events(&user.event_store)?;
-        user.event_bus.rebuild(&all_events)?;
+        {
+            let mut app = Application::new(
+                &mut syncing_store,
+                &mut user.event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(SyncYaks::new())?;
+        }
+
+        // Replace user's event store with the synced one
+        user.event_store = syncing_store;
 
         self.exit_code = 0;
         Ok(())
