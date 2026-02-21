@@ -21,8 +21,10 @@ async fn run_all_features() {
             InProcessWorld::cucumber()
                 .filter_run("features/", |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
-                        || rule.map_or(false, |r| r.tags.iter().any(|t| t == "wip"));
-                    !wip
+                        || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
+                    let fullstack = sc.tags.iter().any(|t| t == "fullstack")
+                        || rule.is_some_and(|r| r.tags.iter().any(|t| t == "fullstack"));
+                    !wip && !fullstack
                 })
                 .await;
         }

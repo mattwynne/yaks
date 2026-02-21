@@ -1,7 +1,8 @@
 // InProcessWorld - calls Application directly with in-memory adapters
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cucumber::World as CucumberWorld;
+use std::collections::HashMap;
 
 use super::test_world::TestWorld;
 use yx::adapters::{
@@ -11,7 +12,37 @@ use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
     SetState, ShowContext, ShowField, StartYak, WriteField,
 };
+use yx::domain::ports::EventStore as _;
 use yx::infrastructure::EventBus;
+
+/// A named user instance for multi-repo sync scenarios.
+/// Each user (alice, bob) gets their own set of in-memory adapters.
+struct UserInstance {
+    event_store: InMemoryEventStore,
+    event_bus: EventBus,
+    storage: InMemoryStorage,
+    display: InMemoryDisplay,
+    input: InMemoryInput,
+    auth: InMemoryAuthentication,
+}
+
+impl UserInstance {
+    fn new() -> Self {
+        let event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        Self {
+            event_store,
+            event_bus,
+            storage,
+            display: InMemoryDisplay::new(),
+            input: InMemoryInput::new(),
+            auth: InMemoryAuthentication::new(),
+        }
+    }
+}
 
 #[derive(CucumberWorld)]
 #[world(init = Self::new)]
@@ -24,6 +55,10 @@ pub struct InProcessWorld {
     auth: InMemoryAuthentication,
     error: String,
     exit_code: i32,
+    /// Named user instances for multi-repo sync scenarios
+    repos: HashMap<String, UserInstance>,
+    /// Shared "origin" event store for sync scenarios
+    origin: Option<InMemoryEventStore>,
 }
 
 impl std::fmt::Debug for InProcessWorld {
@@ -51,6 +86,8 @@ impl InProcessWorld {
             auth: InMemoryAuthentication::new(),
             error: String::new(),
             exit_code: 0,
+            repos: HashMap::new(),
+            origin: None,
         })
     }
 
@@ -105,6 +142,99 @@ impl InProcessWorld {
             }
         }
 
+        Ok(())
+    }
+
+    /// Create a bare "origin" event store (in-memory equivalent of a bare git repo)
+    pub fn create_bare_repo(&mut self, name: &str) -> Result<()> {
+        if name == "origin" {
+            self.origin = Some(InMemoryEventStore::new());
+        }
+        // For non-origin bare repos, store as a regular repo
+        // (not needed for current scenarios but keeps API consistent)
+        Ok(())
+    }
+
+    /// Create a "clone" of origin -- a new user instance that can sync with origin
+    pub fn create_clone(&mut self, _origin_name: &str, clone_name: &str) -> Result<()> {
+        self.repos
+            .insert(clone_name.to_string(), UserInstance::new());
+        Ok(())
+    }
+
+    /// Execute a command in a named user's context
+    pub fn execute_in_repo<F>(&mut self, repo_name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Application) -> Result<()>,
+    {
+        let user = self
+            .repos
+            .get_mut(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+
+        user.display.clear();
+
+        let mut app = Application::new(
+            &mut user.event_store,
+            &mut user.event_bus,
+            &user.storage,
+            &user.display,
+            &user.input,
+            None,
+            None,
+            &user.auth,
+        );
+        let result = f(&mut app);
+
+        self.exit_code = if result.is_ok() { 0 } else { 1 };
+        self.error = match &result {
+            Ok(()) => String::new(),
+            Err(e) => e.to_string(),
+        };
+
+        result
+    }
+
+    /// Sync a named user's event store with origin
+    pub fn sync_repo(&mut self, repo_name: &str) -> Result<()> {
+        let origin =
+            self.origin.as_mut().context("No origin configured")? as *mut InMemoryEventStore;
+
+        let user = self
+            .repos
+            .get_mut(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+
+        // SAFETY: origin and user.event_store are disjoint allocations.
+        // We need both mutable references simultaneously because sync()
+        // reads from peer and writes to local (and vice versa).
+        // The raw pointer is safe because origin lives in self.origin
+        // and user.event_store lives in self.repos -- they cannot alias.
+        let origin_ref = unsafe { &mut *origin };
+
+        user.event_store
+            .sync(origin_ref, &mut user.event_bus, &user.display)?;
+
+        self.exit_code = 0;
+        Ok(())
+    }
+
+    /// Get output from a named user's display
+    pub fn get_repo_output(&self, repo_name: &str) -> Result<String> {
+        let user = self
+            .repos
+            .get(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+        Ok(user.display.get_all_messages().join("\n"))
+    }
+
+    /// Set input content for a named user (for context/field commands)
+    pub fn set_input_in_repo(&mut self, repo_name: &str, content: &str) -> Result<()> {
+        let user = self
+            .repos
+            .get_mut(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+        user.input.set_content(Some(content.to_string()));
         Ok(())
     }
 }
