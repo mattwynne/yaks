@@ -721,7 +721,7 @@ impl EventStore for GitEventStore {
 
     fn sync(
         &mut self,
-        bus: &mut crate::infrastructure::event_bus::EventBus,
+        _bus: &mut crate::infrastructure::event_bus::EventBus,
         output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
         let repo_path = self
@@ -743,10 +743,8 @@ impl EventStore for GitEventStore {
                 } else {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     if stderr.contains("couldn't find remote ref") {
-                        // Remote has no refs/notes/yaks yet (first sync)
-                        true
+                        true // Remote has no ref yet (first sync)
                     } else {
-                        // No usable origin remote
                         false
                     }
                 }
@@ -758,39 +756,54 @@ impl EventStore for GitEventStore {
             anyhow::bail!("Sync not configured");
         }
 
-        // 2. Exchange events with the peer ref
-        let mut peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
-
+        // 2. Get local and peer events
         let local_events = EventStore::get_all_events(self)?;
+        let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
+        let peer_events = EventStore::get_all_events(&peer)?;
+
         let local_ids: HashSet<String> = local_events
             .iter()
             .filter_map(|e| e.metadata().event_id.clone())
             .collect();
-
-        let peer_events = EventStore::get_all_events(&peer)?;
-        let mut pulled = 0usize;
-        for event in &peer_events {
-            if let Some(id) = &event.metadata().event_id {
-                if !local_ids.contains(id) {
-                    self.append(event)?;
-                    bus.notify(event)?;
-                    pulled += 1;
-                }
-            }
-        }
-
         let peer_ids: HashSet<String> = peer_events
             .iter()
             .filter_map(|e| e.metadata().event_id.clone())
             .collect();
 
-        let mut pushed = 0usize;
-        for event in &local_events {
-            if let Some(id) = &event.metadata().event_id {
-                if !peer_ids.contains(id) {
-                    peer.append(event)?;
-                    pushed += 1;
+        let pulled = peer_ids.difference(&local_ids).count();
+        let pushed = local_ids.difference(&peer_ids).count();
+
+        if pulled > 0 {
+            // Merge all unique events, sort, and replay (rebase)
+            let mut all_events: Vec<YakEvent> = Vec::new();
+            let mut seen_ids: HashSet<String> = HashSet::new();
+            for event in local_events.iter().chain(peer_events.iter()) {
+                if let Some(id) = &event.metadata().event_id {
+                    if seen_ids.insert(id.clone()) {
+                        all_events.push(event.clone());
+                    }
                 }
+            }
+
+            all_events.sort_by(|a, b| {
+                a.metadata()
+                    .timestamp
+                    .as_epoch_secs()
+                    .cmp(&b.metadata().timestamp.as_epoch_secs())
+                    .then_with(|| {
+                        let id_a = a.metadata().event_id.as_deref().unwrap_or("");
+                        let id_b = b.metadata().event_id.as_deref().unwrap_or("");
+                        id_a.cmp(id_b)
+                    })
+            });
+
+            // Delete the local ref and replay all events in sorted order
+            if let Ok(mut r) = self.repo.find_reference(&self.ref_name) {
+                r.delete()?;
+            }
+
+            for event in &all_events {
+                self.append(event)?;
             }
         }
 
@@ -799,7 +812,7 @@ impl EventStore for GitEventStore {
             pulled, pushed
         ));
 
-        // 3. Push refs/notes/yaks back to origin (only if ref exists)
+        // 3. Push refs/notes/yaks back to origin
         if self.repo.refname_to_id(&self.ref_name).is_ok() {
             let push_output = std::process::Command::new("git")
                 .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
@@ -1860,6 +1873,77 @@ mod tests {
             let origin_store = GitEventStore::new(origin_dir.path()).unwrap();
             let origin_events = all_events(&origin_store);
             assert_eq!(origin_events.len(), 2, "origin should have 2 events");
+        }
+
+        #[test]
+        fn sync_rebases_divergent_histories_into_linear_chain() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            // Push shared yak to origin
+            local_store
+                .append(&make_event("shared", "shared-a1b2"))
+                .unwrap();
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // Add event directly to origin (simulates another user)
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("from-origin", "from-origin-c3d4"))
+                .unwrap();
+
+            // Add event to local (now diverged from origin)
+            local_store
+                .append(&make_event("from-local", "from-local-e5f6"))
+                .unwrap();
+
+            // Sync should rebase into linear history
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // All three yaks in final tree
+            let tree = local_store.get_current_tree().unwrap().unwrap();
+            assert!(tree.get_name("shared-a1b2").is_some());
+            assert!(tree.get_name("from-origin-c3d4").is_some());
+            assert!(tree.get_name("from-local-e5f6").is_some());
+
+            // Every commit has at most 1 parent (linear, no merge commits)
+            let events = all_events(&local_store);
+            assert_eq!(events.len(), 3);
+
+            let tip = local_store.get_latest_commit().unwrap().unwrap();
+            assert_eq!(
+                tip.parent_count(),
+                1,
+                "tip should have 1 parent (linear history, not merge)"
+            );
+        }
+
+        #[test]
+        fn sync_fast_forwards_when_local_is_behind() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            local_store
+                .append(&make_event("shared", "shared-a1b2"))
+                .unwrap();
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // Add event to origin (local is now behind)
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("new", "new-c3d4"))
+                .unwrap();
+
+            local_store.sync(&mut bus, &output).unwrap();
+
+            let events = all_events(&local_store);
+            assert_eq!(events.len(), 2);
+
+            // Linear history (1 parent, no merge)
+            let tip = local_store.get_latest_commit().unwrap().unwrap();
+            assert_eq!(tip.parent_count(), 1);
         }
 
         #[test]
