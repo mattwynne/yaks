@@ -56,6 +56,20 @@ Feature: yx reset - Rebuild yaks from git tree
       Then the yak "my-old-yak" should have a "name" file containing "my old yak"
       And the yak "my-old-yak" should have an "id" file
 
+  Rule: Reset handles duplicate entries in corrupted git trees
+
+    When a corrupted git tree contains two entries that resolve
+    to the same yak name, reset should deduplicate and succeed.
+
+    Example: Reset deduplicates entries with the same yak name
+      Given a corrupted git tree with duplicate entries for "config"
+      When I reset the yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] config
+        """
+
   Rule: Reset only affects yak entries
 
     Example: Non-yak files in the yak directory are preserved

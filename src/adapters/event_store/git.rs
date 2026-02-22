@@ -349,6 +349,7 @@ impl GitEventStore {
         // Second pass: generate IDs and emit events.
         // We need to map old parent_id strings to regenerated YakIds.
         let mut old_entry_to_new_id: HashMap<String, YakId> = HashMap::new();
+        let mut emitted_ids: HashSet<YakId> = HashSet::new();
 
         for (entry_name, data) in &ordered {
             let parent_yak_id: Option<YakId> = data
@@ -361,6 +362,13 @@ impl GitEventStore {
             let name = Name::from(data.name_str.as_str());
 
             old_entry_to_new_id.insert(entry_name.clone(), id.clone());
+
+            // Skip duplicate entries that resolve to the same yak ID.
+            // This handles corrupted trees where multiple directory entries
+            // (e.g. "config" and "config-7bvf") contain the same yak name.
+            if !emitted_ids.insert(id.clone()) {
+                continue;
+            }
 
             let subtree = self.repo.find_tree(data.subtree_id)?;
 

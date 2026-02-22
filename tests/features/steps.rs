@@ -165,6 +165,44 @@ async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// Corrupted git tree fixture
+// ============================================================================
+
+/// Create a corrupted git tree with two entries that resolve to the same yak
+/// name. Simulates the corruption caused by running the old sync binary which
+/// flattened slug-based directory names back to plain names, creating duplicates.
+#[given(regex = r#"^a corrupted git tree with duplicate entries for "(.+)"$"#)]
+async fn corrupted_duplicate_tree(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.init_git()?;
+    let repo_path = world.default_repo_path();
+
+    let state_oid = git_hash_object(repo_path, "todo")?;
+    let context_oid = git_hash_object(repo_path, "")?;
+    let name_oid = git_hash_object(repo_path, &yak_name)?;
+
+    // Create yak subtree with name blob (modern format)
+    let yak_tree_input = format!(
+        "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n100644 blob {}\tname\n",
+        state_oid, context_oid, name_oid
+    );
+    let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
+
+    // Create root tree with TWO entries pointing to the same yak name:
+    // one with the plain name, one with a slug-id suffix (e.g. "config-7bvf")
+    let root_tree_input = format!(
+        "040000 tree {}\t{}\n040000 tree {}\t{}-7bvf\n",
+        yak_tree_oid, yak_name, yak_tree_oid, yak_name
+    );
+    let root_tree_oid = git_mktree(repo_path, &root_tree_input)?;
+
+    let message = format!("Added: \"{}\"", yak_name);
+    let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
+    git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
+
+    Ok(())
+}
+
 // -- Git plumbing helpers for v1 fixture --
 
 fn git_hash_object(repo_path: &std::path::Path, content: &str) -> Result<String> {
