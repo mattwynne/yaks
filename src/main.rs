@@ -367,7 +367,7 @@ fn main() -> Result<()> {
                 replay_bus.register(Box::new(storage.clone()));
 
                 let replay_display = ConsoleDisplay;
-                let replay_input = ConsoleInput;
+                let replay_input = yx::adapters::user_input::NullInput;
                 let replay_auth = GitAuthentication::new(root)?;
                 let mut replay_app = Application::new(
                     &mut replay_store,
