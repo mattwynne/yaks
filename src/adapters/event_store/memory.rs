@@ -75,7 +75,7 @@ impl EventStore for InMemoryEventStore {
 
     fn sync(
         &mut self,
-        bus: &mut crate::infrastructure::event_bus::EventBus,
+        _bus: &mut crate::infrastructure::event_bus::EventBus,
         output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
         let peer_events_arc = self
@@ -84,51 +84,66 @@ impl EventStore for InMemoryEventStore {
             .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?
             .clone();
 
-        // Pull: get events from peer that local doesn't have
-        let local_ids: HashSet<String> = self
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
-
+        let local_events = self.events.lock().unwrap().clone();
         let peer_events = peer_events_arc.lock().unwrap().clone();
-        let mut pulled = 0usize;
-        for event in &peer_events {
+
+        // Merge all unique events from both sides
+        let mut all_events: Vec<YakEvent> = Vec::new();
+        let mut seen_ids: HashSet<String> = HashSet::new();
+        for event in local_events.iter().chain(peer_events.iter()) {
             if let Some(id) = &event.metadata().event_id {
-                if !local_ids.contains(id) {
-                    self.append(event)?;
-                    bus.notify(event)?;
-                    pulled += 1;
+                if seen_ids.insert(id.clone()) {
+                    all_events.push(event.clone());
                 }
             }
         }
 
-        // Push: get events from local that peer doesn't have
+        // Sort deterministically: (timestamp, event_id) for convergence
+        all_events.sort_by(|a, b| {
+            a.metadata()
+                .timestamp
+                .as_epoch_secs()
+                .cmp(&b.metadata().timestamp.as_epoch_secs())
+                .then_with(|| {
+                    let id_a = a.metadata().event_id.as_deref().unwrap_or("");
+                    let id_b = b.metadata().event_id.as_deref().unwrap_or("");
+                    id_a.cmp(id_b)
+                })
+        });
+
+        // Count for reporting
+        let local_ids: HashSet<String> = local_events
+            .iter()
+            .filter_map(|e| e.metadata().event_id.clone())
+            .collect();
         let peer_ids: HashSet<String> = peer_events
             .iter()
             .filter_map(|e| e.metadata().event_id.clone())
             .collect();
+        let pulled = all_events
+            .iter()
+            .filter(|e| {
+                e.metadata()
+                    .event_id
+                    .as_ref()
+                    .map(|id| !local_ids.contains(id))
+                    .unwrap_or(false)
+            })
+            .count();
+        let pushed = all_events
+            .iter()
+            .filter(|e| {
+                e.metadata()
+                    .event_id
+                    .as_ref()
+                    .map(|id| !peer_ids.contains(id))
+                    .unwrap_or(false)
+            })
+            .count();
 
-        let local_events = self.events.lock().unwrap().clone();
-        let mut pushed = 0usize;
-        for event in &local_events {
-            if let Some(id) = &event.metadata().event_id {
-                if !peer_ids.contains(id) {
-                    // Append directly to peer's events via Arc<Mutex>
-                    let mut peer_vec = peer_events_arc.lock().unwrap();
-                    // Check idempotency
-                    if !peer_vec
-                        .iter()
-                        .any(|e| e.metadata().event_id.as_deref() == Some(id))
-                    {
-                        peer_vec.push(event.clone());
-                        pushed += 1;
-                    }
-                }
-            }
-        }
+        // Replace both sides with sorted merged list
+        *self.events.lock().unwrap() = all_events.clone();
+        *peer_events_arc.lock().unwrap() = all_events;
 
         output.info(&format!(
             "Pulled {} events, pushed {} events",
@@ -260,7 +275,7 @@ mod tests {
         }
 
         #[test]
-        fn notifies_bus_for_pulled_events() {
+        fn sync_does_not_notify_bus_directly() {
             use crate::domain::ports::EventListener;
             use std::sync::{Arc, Mutex};
 
@@ -290,7 +305,11 @@ mod tests {
             local.sync(&mut bus, &output).unwrap();
 
             let notified = captured.lock().unwrap();
-            assert_eq!(notified.len(), 1, "bus should be notified of pulled event");
+            assert_eq!(
+                notified.len(),
+                0,
+                "sync itself should not notify bus (Application::sync_events handles rebuild)"
+            );
         }
 
         #[test]
@@ -348,6 +367,139 @@ mod tests {
 
             assert_eq!(all_events(&local).len(), 1);
             assert_eq!(peer_event_count(&origin), 1);
+        }
+
+        #[test]
+        fn both_sides_have_identical_event_order_after_sync() {
+            use crate::domain::event_metadata::{Author, Timestamp};
+
+            let origin = InMemoryEventStore::new();
+            let mut alice = InMemoryEventStore::with_peer(&origin);
+            let mut bob = InMemoryEventStore::with_peer(&origin);
+
+            let alice_event = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("alice-yak"),
+                    id: YakId::from("alice-yak-a1b2"),
+                    parent_id: None,
+                },
+                {
+                    let mut m = EventMetadata::new(
+                        Author {
+                            name: "alice".into(),
+                            email: "".into(),
+                        },
+                        Timestamp(100),
+                    );
+                    m.event_id = Some("event-alice".to_string());
+                    m
+                },
+            );
+            alice.append(&alice_event).unwrap();
+
+            let bob_event = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("bob-yak"),
+                    id: YakId::from("bob-yak-c3d4"),
+                    parent_id: None,
+                },
+                {
+                    let mut m = EventMetadata::new(
+                        Author {
+                            name: "bob".into(),
+                            email: "".into(),
+                        },
+                        Timestamp(200),
+                    );
+                    m.event_id = Some("event-bob".to_string());
+                    m
+                },
+            );
+            bob.append(&bob_event).unwrap();
+
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+
+            alice.sync(&mut bus, &output).unwrap();
+            bob.sync(&mut bus, &output).unwrap();
+            alice.sync(&mut bus, &output).unwrap(); // pick up bob's event via origin
+
+            let alice_ids: Vec<_> = all_events(&alice)
+                .iter()
+                .map(|e| e.metadata().event_id.clone().unwrap())
+                .collect();
+            let bob_ids: Vec<_> = all_events(&bob)
+                .iter()
+                .map(|e| e.metadata().event_id.clone().unwrap())
+                .collect();
+
+            assert_eq!(
+                alice_ids, bob_ids,
+                "Both sides should have identical event order"
+            );
+            assert_eq!(
+                alice_ids,
+                vec!["event-alice", "event-bob"],
+                "Should be sorted by timestamp"
+            );
+        }
+
+        #[test]
+        fn same_timestamp_uses_event_id_as_tiebreaker() {
+            use crate::domain::event_metadata::{Author, Timestamp};
+
+            let mut origin = InMemoryEventStore::new();
+            let mut local = InMemoryEventStore::with_peer(&origin);
+
+            let event_z = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("aaa"),
+                    id: YakId::from("aaa-a1b2"),
+                    parent_id: None,
+                },
+                {
+                    let mut m = EventMetadata::new(
+                        Author {
+                            name: "x".into(),
+                            email: "".into(),
+                        },
+                        Timestamp(100),
+                    );
+                    m.event_id = Some("zzz-event".to_string());
+                    m
+                },
+            );
+            let event_a = YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("bbb"),
+                    id: YakId::from("bbb-c3d4"),
+                    parent_id: None,
+                },
+                {
+                    let mut m = EventMetadata::new(
+                        Author {
+                            name: "x".into(),
+                            email: "".into(),
+                        },
+                        Timestamp(100),
+                    );
+                    m.event_id = Some("aaa-event".to_string());
+                    m
+                },
+            );
+
+            local.append(&event_z).unwrap();
+            origin.append(&event_a).unwrap();
+
+            let mut bus = EventBus::new();
+            let output = InMemoryDisplay::new();
+            local.sync(&mut bus, &output).unwrap();
+
+            let ids: Vec<_> = all_events(&local)
+                .iter()
+                .map(|e| e.metadata().event_id.clone().unwrap())
+                .collect();
+            assert_eq!(ids, vec!["aaa-event", "zzz-event"]);
         }
 
         #[test]
