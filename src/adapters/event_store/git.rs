@@ -2,8 +2,113 @@ use anyhow::Result;
 use git2::Repository;
 use std::path::Path;
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::{Yak, YakEvent};
+
+/// Builds a git tree object representing a single yak's subtree.
+///
+/// A yak subtree contains blobs for each field (state, context.md, name,
+/// etc.) plus optional metadata. This builder provides a single place to
+/// construct these subtrees, used by both `build_tree_from_event` (for
+/// the `Added` event) and `reset_from_snapshot`.
+///
+/// # Example
+///
+/// ```ignore
+/// let oid = YakSubtreeBuilder::new(&repo)
+///     .name("fix the tests")
+///     .state("todo")
+///     .context("")
+///     .metadata(&author, timestamp)
+///     .parent_id(Some("parent-a1b2"))
+///     .build()?;
+/// ```
+struct YakSubtreeBuilder<'r> {
+    repo: &'r Repository,
+    entries: Vec<(&'static str, String)>,
+    custom_fields: Vec<(String, String)>,
+}
+
+impl<'r> YakSubtreeBuilder<'r> {
+    fn new(repo: &'r Repository) -> Self {
+        Self {
+            repo,
+            entries: Vec::new(),
+            custom_fields: Vec::new(),
+        }
+    }
+
+    /// Set the yak's display name.
+    fn name(mut self, name: &str) -> Self {
+        self.entries.push(("name", name.to_string()));
+        self
+    }
+
+    /// Set the yak's state (todo, wip, done).
+    fn state(mut self, state: &str) -> Self {
+        self.entries.push(("state", state.to_string()));
+        self
+    }
+
+    /// Set the yak's context markdown content.
+    fn context(mut self, content: &str) -> Self {
+        self.entries.push(("context.md", content.to_string()));
+        self
+    }
+
+    /// Set the yak's ID blob (used by `reset_from_snapshot`).
+    fn id(mut self, id: &str) -> Self {
+        self.entries.push(("id", id.to_string()));
+        self
+    }
+
+    /// Set the parent yak's ID, if this yak is nested.
+    fn parent_id(mut self, parent_id: Option<&str>) -> Self {
+        if let Some(pid) = parent_id {
+            self.entries.push(("parent_id", pid.to_string()));
+        }
+        self
+    }
+
+    /// Write the `.metadata.json` blob with author and timestamp.
+    fn metadata(mut self, author: &Author, timestamp: Timestamp) -> Self {
+        let json = serde_json::json!({
+            "created_by": {
+                "name": author.name,
+                "email": author.email
+            },
+            "created_at": timestamp.as_epoch_secs()
+        });
+        self.entries.push((".metadata.json", json.to_string()));
+        self
+    }
+
+    /// Add custom (non-reserved) fields to the subtree.
+    fn custom_fields(mut self, fields: &std::collections::HashMap<String, String>) -> Self {
+        for (name, content) in fields {
+            self.custom_fields.push((name.clone(), content.clone()));
+        }
+        self
+    }
+
+    /// Write all collected entries to a new git tree object.
+    fn build(self) -> Result<git2::Oid> {
+        let mut builder = self.repo.treebuilder(None)?;
+
+        for (name, content) in &self.entries {
+            let blob = self.repo.blob(content.as_bytes())?;
+            builder.insert(name, blob, 0o100644)?;
+        }
+
+        for (name, content) in &self.custom_fields {
+            let blob = self.repo.blob(content.as_bytes())?;
+            builder.insert(name, blob, 0o100644)?;
+        }
+
+        Ok(builder.write()?)
+    }
+}
 
 pub struct GitEventStore {
     repo: Repository,
@@ -53,22 +158,6 @@ impl GitEventStore {
             Some(commit) => Ok(Some(commit.tree()?)),
             None => Ok(None),
         }
-    }
-
-    /// Create a tree for a single yak with initial files
-    fn create_yak_tree(&self, name: &str, state: &str, context: &str) -> Result<git2::Oid> {
-        let mut builder = self.repo.treebuilder(None)?;
-
-        let state_blob = self.repo.blob(state.as_bytes())?;
-        builder.insert("state", state_blob, 0o100644)?;
-
-        let context_blob = self.repo.blob(context.as_bytes())?;
-        builder.insert("context.md", context_blob, 0o100644)?;
-
-        let name_blob = self.repo.blob(name.as_bytes())?;
-        builder.insert("name", name_blob, 0o100644)?;
-
-        Ok(builder.write()?)
     }
 
     /// Get a yak's subtree from the root tree by its ID (direct root lookup).
@@ -135,27 +224,14 @@ impl GitEventStore {
     ) -> Result<git2::Oid> {
         match event {
             YakEvent::Added(e, metadata) => {
-                let yak_tree_oid = self.create_yak_tree(e.name.as_str(), "todo", "")?;
-                // Add .metadata.json to the yak subtree
-                let metadata_json = serde_json::json!({
-                    "created_by": {
-                        "name": metadata.author.name,
-                        "email": metadata.author.email
-                    },
-                    "created_at": metadata.timestamp.as_epoch_secs()
-                });
-                let metadata_blob = self.repo.blob(metadata_json.to_string().as_bytes())?;
-                let subtree = self.repo.find_tree(yak_tree_oid)?;
-                let mut builder = self.repo.treebuilder(Some(&subtree))?;
-                builder.insert(".metadata.json", metadata_blob, 0o100644)?;
-                // Add parent_id blob if this yak has a parent
-                if let Some(parent_id) = &e.parent_id {
-                    let parent_id_blob = self.repo.blob(parent_id.as_str().as_bytes())?;
-                    builder.insert("parent_id", parent_id_blob, 0o100644)?;
-                }
-                let updated_tree_oid = builder.write()?;
-                // All yaks stored flat at root
-                self.set_yak_in_root(current_tree, e.id.as_str(), Some(updated_tree_oid))
+                let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
+                    .name(e.name.as_str())
+                    .state("todo")
+                    .context("")
+                    .metadata(&metadata.author, metadata.timestamp)
+                    .parent_id(e.parent_id.as_ref().map(|p| p.as_str()))
+                    .build()?;
+                self.set_yak_in_root(current_tree, e.id.as_str(), Some(yak_tree_oid))
             }
 
             YakEvent::Removed(e, _) => {
@@ -648,47 +724,16 @@ impl EventStore for GitEventStore {
         let mut root_builder = self.repo.treebuilder(None)?;
 
         for yak in yaks {
-            let mut builder = self.repo.treebuilder(None)?;
-
-            // Add standard blobs
-            let state_blob = self.repo.blob(yak.state.as_bytes())?;
-            builder.insert("state", state_blob, 0o100644)?;
-
-            let context_content = yak.context.as_deref().unwrap_or("");
-            let context_blob = self.repo.blob(context_content.as_bytes())?;
-            builder.insert("context.md", context_blob, 0o100644)?;
-
-            let name_blob = self.repo.blob(yak.name.as_str().as_bytes())?;
-            builder.insert("name", name_blob, 0o100644)?;
-
-            let id_blob = self.repo.blob(yak.id.as_str().as_bytes())?;
-            builder.insert("id", id_blob, 0o100644)?;
-
-            // Add parent_id blob if this yak has a parent
-            if let Some(parent_id) = &yak.parent_id {
-                let parent_id_blob = self.repo.blob(parent_id.as_str().as_bytes())?;
-                builder.insert("parent_id", parent_id_blob, 0o100644)?;
-            }
-
-            // Add custom fields
-            for (field_name, content) in &yak.fields {
-                let field_blob = self.repo.blob(content.as_bytes())?;
-                builder.insert(field_name, field_blob, 0o100644)?;
-            }
-
-            // Write .metadata.json
-            let metadata_json = serde_json::json!({
-                "created_by": {
-                    "name": yak.created_by.name,
-                    "email": yak.created_by.email
-                },
-                "created_at": yak.created_at.as_epoch_secs()
-            });
-            let metadata_blob = self.repo.blob(metadata_json.to_string().as_bytes())?;
-            builder.insert(".metadata.json", metadata_blob, 0o100644)?;
-
-            let yak_tree = builder.write()?;
-            root_builder.insert(yak.id.as_str(), yak_tree, 0o040000)?;
+            let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
+                .name(yak.name.as_str())
+                .state(&yak.state)
+                .context(yak.context.as_deref().unwrap_or(""))
+                .id(yak.id.as_str())
+                .parent_id(yak.parent_id.as_ref().map(|p| p.as_str()))
+                .metadata(&yak.created_by, yak.created_at)
+                .custom_fields(&yak.fields)
+                .build()?;
+            root_builder.insert(yak.id.as_str(), yak_tree_oid, 0o040000)?;
         }
 
         // Add .schema-version
