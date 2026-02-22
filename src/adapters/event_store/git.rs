@@ -576,54 +576,49 @@ impl EventStore for GitEventStore {
                                 err
                             )
                         })?;
-                        let yak_entry =
-                            tree.get_name(e.id.as_str()).ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "Missing yak entry '{}' in tree for \
+                        let yak_entry = tree.get_name(e.id.as_str()).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Missing yak entry '{}' in tree for \
                                      FieldUpdated event (field '{}')",
-                                    e.id,
-                                    e.field_name
-                                )
-                            })?;
-                        let yak_tree =
-                            self.repo.find_tree(yak_entry.id()).map_err(|err| {
-                                anyhow::anyhow!(
-                                    "Failed to read yak subtree '{}' for \
+                                e.id,
+                                e.field_name
+                            )
+                        })?;
+                        let yak_tree = self.repo.find_tree(yak_entry.id()).map_err(|err| {
+                            anyhow::anyhow!(
+                                "Failed to read yak subtree '{}' for \
                                      FieldUpdated event (field '{}'): {}",
-                                    e.id,
-                                    e.field_name,
-                                    err
-                                )
-                            })?;
-                        let field_entry =
-                            yak_tree.get_name(&e.field_name).ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "Missing field '{}' in yak '{}' subtree \
+                                e.id,
+                                e.field_name,
+                                err
+                            )
+                        })?;
+                        let field_entry = yak_tree.get_name(&e.field_name).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Missing field '{}' in yak '{}' subtree \
                                      for FieldUpdated event",
-                                    e.field_name,
-                                    e.id
-                                )
-                            })?;
-                        let blob =
-                            self.repo.find_blob(field_entry.id()).map_err(|err| {
-                                anyhow::anyhow!(
-                                    "Failed to read blob for field '{}' in \
+                                e.field_name,
+                                e.id
+                            )
+                        })?;
+                        let blob = self.repo.find_blob(field_entry.id()).map_err(|err| {
+                            anyhow::anyhow!(
+                                "Failed to read blob for field '{}' in \
                                      yak '{}': {}",
-                                    e.field_name,
-                                    e.id,
-                                    err
-                                )
-                            })?;
-                        let content =
-                            std::str::from_utf8(blob.content()).map_err(|err| {
-                                anyhow::anyhow!(
-                                    "Invalid UTF-8 in field '{}' of yak \
+                                e.field_name,
+                                e.id,
+                                err
+                            )
+                        })?;
+                        let content = std::str::from_utf8(blob.content()).map_err(|err| {
+                            anyhow::anyhow!(
+                                "Invalid UTF-8 in field '{}' of yak \
                                      '{}': {}",
-                                    e.field_name,
-                                    e.id,
-                                    err
-                                )
-                            })?;
+                                e.field_name,
+                                e.id,
+                                err
+                            )
+                        })?;
                         e.content = content.to_string();
                     }
 
@@ -1898,9 +1893,7 @@ mod tests {
 
             // Add event to origin (local is now behind)
             let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
-            origin_store
-                .append(&make_event("new", "new-c3d4"))
-                .unwrap();
+            origin_store.append(&make_event("new", "new-c3d4")).unwrap();
 
             local_store.sync(&mut bus, &output).unwrap();
 
