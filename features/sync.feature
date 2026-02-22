@@ -248,6 +248,38 @@ Feature: yx sync - Collaborate on Yaks via Git
       When alice adds a yak called "make the tea"
       Then alice should have a yak called "make the tea"
 
+  Rule: Concurrent changes by different users converge to the same state
+
+    Example: Alice and bob both make changes and converge after syncing
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has set the state of "make the tea" to "wip"
+      And bob has set the context of "make the tea" to "use the good teapot"
+      And bob has synced yaks
+      And alice has synced yaks
+      When bob syncs yaks
+      Then alice yak "make the tea" should have state "wip"
+      And alice yak "make the tea" should have context "use the good teapot"
+      And bob yak "make the tea" should have state "wip"
+      And bob yak "make the tea" should have context "use the good teapot"
+
+    Example: Both users add different yaks concurrently
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And bob has a yak called "buy biscuits"
+      And alice has synced yaks
+      And bob has synced yaks
+      When alice syncs yaks
+      Then alice and bob both have the same yaks:
+        """
+          ○ buy biscuits
+          ○ make the tea
+        """
+
   @wip
   Rule: Sync tells you what changed
 
