@@ -568,20 +568,64 @@ impl EventStore for GitEventStore {
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).
                     if let YakEvent::FieldUpdated(ref mut e, _) = event {
-                        if let Ok(tree) = commit.tree() {
-                            if let Some(yak_entry) = tree.get_name(e.id.as_str()) {
-                                if let Ok(yak_tree) = self.repo.find_tree(yak_entry.id()) {
-                                    if let Some(field_entry) = yak_tree.get_name(&e.field_name) {
-                                        if let Ok(blob) = self.repo.find_blob(field_entry.id()) {
-                                            if let Ok(content) = std::str::from_utf8(blob.content())
-                                            {
-                                                e.content = content.to_string();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        let tree = commit.tree().map_err(|err| {
+                            anyhow::anyhow!(
+                                "Failed to read tree for FieldUpdated event \
+                                 (yak '{}', field '{}'): {}",
+                                e.id,
+                                e.field_name,
+                                err
+                            )
+                        })?;
+                        let yak_entry =
+                            tree.get_name(e.id.as_str()).ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing yak entry '{}' in tree for \
+                                     FieldUpdated event (field '{}')",
+                                    e.id,
+                                    e.field_name
+                                )
+                            })?;
+                        let yak_tree =
+                            self.repo.find_tree(yak_entry.id()).map_err(|err| {
+                                anyhow::anyhow!(
+                                    "Failed to read yak subtree '{}' for \
+                                     FieldUpdated event (field '{}'): {}",
+                                    e.id,
+                                    e.field_name,
+                                    err
+                                )
+                            })?;
+                        let field_entry =
+                            yak_tree.get_name(&e.field_name).ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing field '{}' in yak '{}' subtree \
+                                     for FieldUpdated event",
+                                    e.field_name,
+                                    e.id
+                                )
+                            })?;
+                        let blob =
+                            self.repo.find_blob(field_entry.id()).map_err(|err| {
+                                anyhow::anyhow!(
+                                    "Failed to read blob for field '{}' in \
+                                     yak '{}': {}",
+                                    e.field_name,
+                                    e.id,
+                                    err
+                                )
+                            })?;
+                        let content =
+                            std::str::from_utf8(blob.content()).map_err(|err| {
+                                anyhow::anyhow!(
+                                    "Invalid UTF-8 in field '{}' of yak \
+                                     '{}': {}",
+                                    e.field_name,
+                                    e.id,
+                                    err
+                                )
+                            })?;
+                        e.content = content.to_string();
                     }
 
                     events.push(event.with_metadata(metadata));
@@ -1836,5 +1880,49 @@ mod tests {
                 "refs/notes/yaks-peer should be cleaned up after sync"
             );
         }
+    }
+
+    #[test]
+    fn get_all_events_errors_when_field_content_unreadable() {
+        let (_tmp, store) = setup_test_repo();
+
+        // Manually create a commit with a FieldUpdated message
+        // but an empty tree (no yak subtree), simulating corruption.
+        let empty_tree_oid = store.repo.treebuilder(None).unwrap().write().unwrap();
+        let empty_tree = store.repo.find_tree(empty_tree_oid).unwrap();
+
+        let sig = git2::Signature::now("test", "test@test.com").unwrap();
+        store
+            .repo
+            .commit(
+                Some("refs/notes/yaks"),
+                &sig,
+                &sig,
+                "FieldUpdated: \"missing-yak-a1b2\" \"state\"\n\nEvent-Id: test-event-1",
+                &empty_tree,
+                &[],
+            )
+            .unwrap();
+
+        // get_all_events should return an error, not silently
+        // return FieldUpdated with empty content.
+        let result = EventStore::get_all_events(&store);
+        assert!(
+            result.is_err(),
+            "Expected error when FieldUpdated tree blob is unreadable, \
+             but got Ok with {} events",
+            result.unwrap().len()
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("missing-yak-a1b2"),
+            "Error should mention the yak id, got: {}",
+            err_msg
+        );
+        assert!(
+            err_msg.contains("state"),
+            "Error should mention the field name, got: {}",
+            err_msg
+        );
     }
 }
