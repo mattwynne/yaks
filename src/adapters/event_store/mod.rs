@@ -12,6 +12,64 @@ pub use git::GitEventStore;
 pub use memory::InMemoryEventStore;
 pub use noop::NoOpEventStore;
 
+use crate::domain::YakEvent;
+use std::collections::HashSet;
+
+/// Result of merging two event streams using CRDT-style set union.
+pub(crate) struct MergeResult {
+    /// All unique events, sorted by (timestamp, event_id) for convergence.
+    pub events: Vec<YakEvent>,
+    /// Number of events that exist in the peer but not locally (to pull).
+    pub pulled: usize,
+    /// Number of events that exist locally but not in the peer (to push).
+    pub pushed: usize,
+}
+
+/// Merge two event streams by deduplicating on event_id, then sorting
+/// deterministically by (timestamp, event_id). This ensures all peers
+/// converge to the same ordered event list regardless of merge order.
+pub(crate) fn merge_event_streams(
+    local_events: &[YakEvent],
+    peer_events: &[YakEvent],
+) -> MergeResult {
+    let mut all_events: Vec<YakEvent> = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    for event in local_events.iter().chain(peer_events.iter()) {
+        if let Some(id) = &event.metadata().event_id {
+            if seen_ids.insert(id.clone()) {
+                all_events.push(event.clone());
+            }
+        }
+    }
+
+    all_events.sort_by(|a, b| {
+        a.metadata()
+            .timestamp
+            .as_epoch_secs()
+            .cmp(&b.metadata().timestamp.as_epoch_secs())
+            .then_with(|| {
+                let id_a = a.metadata().event_id.as_deref().unwrap_or("");
+                let id_b = b.metadata().event_id.as_deref().unwrap_or("");
+                id_a.cmp(id_b)
+            })
+    });
+
+    let local_ids: HashSet<String> = local_events
+        .iter()
+        .filter_map(|e| e.metadata().event_id.clone())
+        .collect();
+    let peer_ids: HashSet<String> = peer_events
+        .iter()
+        .filter_map(|e| e.metadata().event_id.clone())
+        .collect();
+
+    MergeResult {
+        events: all_events,
+        pulled: peer_ids.difference(&local_ids).count(),
+        pushed: local_ids.difference(&peer_ids).count(),
+    }
+}
+
 #[cfg(test)]
 mod contract_tests;
 

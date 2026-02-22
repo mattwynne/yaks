@@ -1,6 +1,5 @@
 use anyhow::Result;
 use git2::Repository;
-use std::collections::HashSet;
 use std::path::Path;
 
 use crate::domain::ports::{EventStore, EventStoreReader};
@@ -761,55 +760,22 @@ impl EventStore for GitEventStore {
         let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
         let peer_events = EventStore::get_all_events(&peer)?;
 
-        let local_ids: HashSet<String> = local_events
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
-        let peer_ids: HashSet<String> = peer_events
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
+        let merge = super::merge_event_streams(&local_events, &peer_events);
 
-        let pulled = peer_ids.difference(&local_ids).count();
-        let pushed = local_ids.difference(&peer_ids).count();
-
-        if pulled > 0 {
-            // Merge all unique events, sort, and replay (rebase)
-            let mut all_events: Vec<YakEvent> = Vec::new();
-            let mut seen_ids: HashSet<String> = HashSet::new();
-            for event in local_events.iter().chain(peer_events.iter()) {
-                if let Some(id) = &event.metadata().event_id {
-                    if seen_ids.insert(id.clone()) {
-                        all_events.push(event.clone());
-                    }
-                }
-            }
-
-            all_events.sort_by(|a, b| {
-                a.metadata()
-                    .timestamp
-                    .as_epoch_secs()
-                    .cmp(&b.metadata().timestamp.as_epoch_secs())
-                    .then_with(|| {
-                        let id_a = a.metadata().event_id.as_deref().unwrap_or("");
-                        let id_b = b.metadata().event_id.as_deref().unwrap_or("");
-                        id_a.cmp(id_b)
-                    })
-            });
-
+        if merge.pulled > 0 {
             // Delete the local ref and replay all events in sorted order
             if let Ok(mut r) = self.repo.find_reference(&self.ref_name) {
                 r.delete()?;
             }
 
-            for event in &all_events {
+            for event in &merge.events {
                 self.append(event)?;
             }
         }
 
         output.info(&format!(
             "Pulled {} events, pushed {} events",
-            pulled, pushed
+            merge.pulled, merge.pushed
         ));
 
         // 3. Push refs/notes/yaks back to origin

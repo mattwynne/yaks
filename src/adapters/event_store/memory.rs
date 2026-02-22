@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::domain::ports::{EventStore, EventStoreReader};
@@ -87,67 +86,15 @@ impl EventStore for InMemoryEventStore {
         let local_events = self.events.lock().unwrap().clone();
         let peer_events = peer_events_arc.lock().unwrap().clone();
 
-        // Merge all unique events from both sides
-        let mut all_events: Vec<YakEvent> = Vec::new();
-        let mut seen_ids: HashSet<String> = HashSet::new();
-        for event in local_events.iter().chain(peer_events.iter()) {
-            if let Some(id) = &event.metadata().event_id {
-                if seen_ids.insert(id.clone()) {
-                    all_events.push(event.clone());
-                }
-            }
-        }
-
-        // Sort deterministically: (timestamp, event_id) for convergence
-        all_events.sort_by(|a, b| {
-            a.metadata()
-                .timestamp
-                .as_epoch_secs()
-                .cmp(&b.metadata().timestamp.as_epoch_secs())
-                .then_with(|| {
-                    let id_a = a.metadata().event_id.as_deref().unwrap_or("");
-                    let id_b = b.metadata().event_id.as_deref().unwrap_or("");
-                    id_a.cmp(id_b)
-                })
-        });
-
-        // Count for reporting
-        let local_ids: HashSet<String> = local_events
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
-        let peer_ids: HashSet<String> = peer_events
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
-        let pulled = all_events
-            .iter()
-            .filter(|e| {
-                e.metadata()
-                    .event_id
-                    .as_ref()
-                    .map(|id| !local_ids.contains(id))
-                    .unwrap_or(false)
-            })
-            .count();
-        let pushed = all_events
-            .iter()
-            .filter(|e| {
-                e.metadata()
-                    .event_id
-                    .as_ref()
-                    .map(|id| !peer_ids.contains(id))
-                    .unwrap_or(false)
-            })
-            .count();
+        let merge = super::merge_event_streams(&local_events, &peer_events);
 
         // Replace both sides with sorted merged list
-        *self.events.lock().unwrap() = all_events.clone();
-        *peer_events_arc.lock().unwrap() = all_events;
+        *self.events.lock().unwrap() = merge.events.clone();
+        *peer_events_arc.lock().unwrap() = merge.events;
 
         output.info(&format!(
             "Pulled {} events, pushed {} events",
-            pulled, pushed
+            merge.pulled, merge.pushed
         ));
 
         Ok(())
