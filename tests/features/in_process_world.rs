@@ -243,6 +243,15 @@ impl InProcessWorld {
         Ok(user.display.get_all_messages().join("\n"))
     }
 
+    /// List yaks in a named user's store
+    pub fn list_yaks_in_repo(&self, repo_name: &str) -> Result<Vec<yx::domain::Yak>> {
+        let user = self
+            .repos
+            .get(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+        yx::domain::ports::ReadYakStore::list_yaks(&user.storage)
+    }
+
     /// Set input content for a named user (for context/field commands)
     pub fn set_input_in_repo(&mut self, repo_name: &str, content: &str) -> Result<()> {
         let user = self

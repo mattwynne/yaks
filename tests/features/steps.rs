@@ -1204,9 +1204,9 @@ async fn hard_reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()>
 
 #[then(regex = r#"^([\w-]+) should have a yak called "(.+)"$"#)]
 async fn repo_should_have_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
-    world.run_yx_in_repo(&repo, &["ls", "--format", "markdown"])?;
+    world.run_yx_in_repo(&repo, &["ls", "--format", "plain"])?;
     let output = world.get_output();
-    if !output.contains(&yak) {
+    if !output.lines().any(|line| line == yak) {
         anyhow::bail!(
             "Expected repo '{}' to have yak '{}', but output was:\n{}",
             repo,
@@ -1223,14 +1223,14 @@ async fn repo_should_have_yak_in_process(
     repo: String,
     yak: String,
 ) -> Result<()> {
-    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("markdown", None)))?;
-    let output = world.get_repo_output(&repo)?;
-    if !output.contains(&yak) {
+    let yaks = world.list_yaks_in_repo(&repo)?;
+    if !yaks.iter().any(|y| y.name.as_str() == yak) {
+        let names: Vec<&str> = yaks.iter().map(|y| y.name.as_str()).collect();
         anyhow::bail!(
-            "Expected repo '{}' to have yak '{}', but output was:\n{}",
+            "Expected repo '{}' to have yak '{}', but found: {:?}",
             repo,
             yak,
-            output
+            names
         );
     }
     Ok(())
