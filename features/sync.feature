@@ -96,7 +96,7 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob should have these yaks:
         """
           ○ make the tea
-            ○ buy biscuits
+          ╰─ ○ buy biscuits
         """
 
   Rule: Field changes propagate through sync

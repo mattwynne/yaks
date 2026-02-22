@@ -193,7 +193,7 @@ impl ListYaks {
         node: &YakNode,
         format: &str,
         prefix: &TreePrefix,
-        _is_last: bool,
+        is_last: bool,
     ) {
         let state = node
             .yak
@@ -204,8 +204,13 @@ impl ListYaks {
         match format {
             "plain" => app.display.info(&node.full_path),
             "pretty" => {
-                let depth = prefix.lines.len();
-                let node_prefix = "  ".repeat(depth);
+                let node_prefix = if prefix.lines.is_empty() {
+                    String::new()
+                } else {
+                    let ancestor_continuations = &prefix.lines[1..];
+                    let connector = if is_last { "╰─ " } else { "├─ " };
+                    format!("{}{}", ancestor_continuations.join(""), connector)
+                };
                 app.display
                     .display_yak_pretty(&node_prefix, &node.name, state);
             }
@@ -366,9 +371,9 @@ mod tests {
         );
     }
 
-    // Children at depth 1 are indented by 2 spaces relative to root
+    // Children show tree connectors: ├─ for non-last, ╰─ for last
     #[test]
-    fn children_are_indented_in_pretty_format() {
+    fn tree_connectors_distinguish_last_from_non_last_child() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -402,29 +407,30 @@ mod tests {
 
         assert!(parent_line.is_some() && aaa_line.is_some() && zzz_line.is_some());
 
-        // Root has no indent prefix
+        // Root has no prefix
         assert!(
             parent_line.unwrap().starts_with("○"),
-            "Root should have no indent, got: {:?}",
+            "Root should have no prefix, got: {:?}",
             parent_line
         );
 
-        // Children at depth 1 should be indented by 2 spaces
+        // Non-last child gets ├─ connector
         assert!(
-            aaa_line.unwrap().starts_with("  ○"),
-            "Child 'aaa' should be indented by 2 spaces, got: {:?}",
+            aaa_line.unwrap().starts_with("├─ ○"),
+            "Non-last child 'aaa' should have ├─ connector, got: {:?}",
             aaa_line
         );
+        // Last child gets ╰─ connector
         assert!(
-            zzz_line.unwrap().starts_with("  ○"),
-            "Child 'zzz' should be indented by 2 spaces, got: {:?}",
+            zzz_line.unwrap().starts_with("╰─ ○"),
+            "Last child 'zzz' should have ╰─ connector, got: {:?}",
             zzz_line
         );
     }
 
-    // Grandchild at depth 2 is indented by 4 spaces
+    // Grandchild shows ancestor continuation lines
     #[test]
-    fn grandchild_has_deeper_indent_in_pretty_format() {
+    fn grandchild_shows_ancestor_continuation_lines() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -441,29 +447,31 @@ mod tests {
             &auth,
         );
 
-        // root -> parent -> grandchild (depth 2)
+        // root -> branch (not last) -> leaf, plus sibling (last)
         app.handle(AddYak::new("root")).unwrap();
-        app.handle(AddYak::new("parent").with_parent(Some("root")))
+        app.handle(AddYak::new("branch").with_parent(Some("root")))
             .unwrap();
-        app.handle(AddYak::new("grandchild").with_parent(Some("parent")))
+        app.handle(AddYak::new("leaf").with_parent(Some("branch")))
+            .unwrap();
+        app.handle(AddYak::new("sibling").with_parent(Some("root")))
             .unwrap();
         display.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
         let messages = display.get_info_messages();
 
-        let gc_line = messages.iter().find(|m| m.contains("grandchild"));
+        let leaf_line = messages.iter().find(|m| m.contains("leaf"));
         assert!(
-            gc_line.is_some(),
-            "Expected 'grandchild' in output: {:?}",
+            leaf_line.is_some(),
+            "Expected 'leaf' in output: {:?}",
             messages
         );
 
-        // Grandchild at depth 2 should be indented by 4 spaces
+        // Leaf under non-last branch should show │ continuation + ╰─ connector
         assert!(
-            gc_line.unwrap().starts_with("    ○"),
-            "Grandchild (depth 2) should be indented by 4 spaces, got: {:?}",
-            gc_line
+            leaf_line.unwrap().starts_with("│  ╰─ ○"),
+            "Grandchild under non-last parent should have │ continuation, got: {:?}",
+            leaf_line
         );
     }
 }

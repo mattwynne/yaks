@@ -70,6 +70,34 @@ Feature: List yaks
 
   Rule: Nested yaks are displayed as a hierarchy
 
+    Example: Pretty format shows tree connectors for nested yaks
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child a" under "parent"
+      And I add the yak "child b" under "parent"
+      When I list the yaks
+      Then the output should be:
+        """
+          ○ parent
+          ├─ ○ child a
+          ╰─ ○ child b
+        """
+
+    Example: Pretty format shows tree connectors for deep nesting
+      Given I have a clean git repository
+      And I add the yak "root"
+      And I add the yak "branch" under "root"
+      And I add the yak "leaf" under "branch"
+      And I add the yak "sibling" under "root"
+      When I list the yaks
+      Then the output should be:
+        """
+          ○ root
+          ├─ ○ branch
+          │  ╰─ ○ leaf
+          ╰─ ○ sibling
+        """
+
     Example: Nested yaks are indented under their parent
       Given I have a clean git repository
       And I add the yak "first task"
