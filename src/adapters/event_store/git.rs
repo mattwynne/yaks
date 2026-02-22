@@ -197,7 +197,7 @@ impl GitEventStore {
         };
 
         let mut revwalk = self.repo.revwalk()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
         revwalk.push(latest.id())?;
 
         for oid in revwalk {
@@ -534,7 +534,7 @@ impl EventStore for GitEventStore {
 
         let mut events = Vec::new();
         let mut revwalk = self.repo.revwalk()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
         revwalk.push(latest.id())?;
 
         for oid in revwalk {
