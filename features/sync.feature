@@ -165,6 +165,39 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob should not have a yak called "make the tea"
 
+  Rule: Removing a yak doesn't affect unrelated yaks during sync
+
+    Example: Bob's changes to "wash the cups" survive syncing a removed "make the tea"
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has a yak called "wash the cups"
+      And alice has synced yaks
+      And bob has synced yaks
+      And bob has removed the yak "make the tea"
+      And bob has set the state of "wash the cups" to "done"
+      And alice has set the state of "make the tea" to "wip"
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should not have a yak called "make the tea"
+      And bob yak "wash the cups" should have state "done"
+
+    Example: Bob's changes to "wash the cups" survive syncing a move under removed "make the tea"
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has a yak called "buy biscuits"
+      And alice has a yak called "wash the cups"
+      And alice has synced yaks
+      And bob has synced yaks
+      And bob has removed the yak "make the tea"
+      And bob has set the state of "wash the cups" to "done"
+      And alice has moved the yak "buy biscuits" under "make the tea"
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should not have a yak called "make the tea"
+      And bob yak "wash the cups" should have state "done"
+
   Rule: A move to a previously-removed parent fails
 
     Example: Bob's move is discarded but the child survives
