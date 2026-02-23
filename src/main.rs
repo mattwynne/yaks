@@ -223,7 +223,7 @@ fn main() -> Result<()> {
     event_bus.register(Box::new(storage.clone()));
 
     // Initialize other adapters
-    let display = ConsoleDisplay;
+    let display = ConsoleDisplay::stdout();
     let input = ConsoleInput;
 
     let git_event_reader = if let Some(ref root) = repo_root {
@@ -366,7 +366,7 @@ fn main() -> Result<()> {
                 let mut replay_bus = EventBus::new();
                 replay_bus.register(Box::new(storage.clone()));
 
-                let replay_display = ConsoleDisplay;
+                let replay_display = ConsoleDisplay::stdout();
                 let replay_input = yx::adapters::user_input::NullInput;
                 let replay_auth = GitAuthentication::new(root)?;
                 let mut replay_app = Application::new(
