@@ -68,7 +68,7 @@ Ask specific questions:
 Create a worktree in `.worktrees/` with a descriptive branch name:
 
 ```bash
-mkdir -p .claude/worktrees
+mkdir -p .worktrees
 git worktree add .worktrees/descriptive-name -b descriptive-name
 ```
 
@@ -97,7 +97,7 @@ All your work happens here. You're now on an isolated branch.
 ### 7. Do the Work
 
 Follow your normal development process:
-- Write tests (use incremental-tdd skill if applicable)
+- Write tests (TDD - see superpowers-dev:test-driven-development)
 - Implement the feature
 - Run tests to verify
 - Commit your changes
@@ -229,7 +229,7 @@ The worktree keeps your changes isolated, so iteration is safe.
 
 ## Integration with Other Skills
 
-- **incremental-tdd**: Use TDD workflow within your worktree
+- **superpowers-dev:test-driven-development**: Use TDD workflow within your worktree
 - **yak-mapping**: Discover sub-yaks while working, add them to the main repo
 
 ## Example Session

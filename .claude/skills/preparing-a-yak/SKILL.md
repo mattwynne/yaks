@@ -126,18 +126,18 @@ EOF
 
 If the plan has multiple tasks with dependencies, create
 sub-yaks and arrange them hierarchically using the
-`/structuring-yak-dependencies` pattern:
+`/yak-mapping` nesting pattern:
 
 **Children are prerequisites — leaf nodes get done first.**
 
 ```bash
 # Create sub-yaks from plan tasks
-yx add "task A" --under "yak name" --context "Task N in plan doc"
-yx add "task B" --under "yak name" --context "Task M in plan doc"
+yx add task A --under "yak name" --context "Task N in plan doc"
+yx add task B --under "yak name" --context "Task M in plan doc"
 
 # Then nest them so dependencies are expressed through hierarchy
 # If task B depends on task A, make A a child of B:
-yx mv "task A" --under "task B"
+yx move "task A" --under "task B"
 ```
 
 The tree enforces execution order: work leaves first, then
@@ -161,7 +161,7 @@ to execute sequentially.
 | Spec | `/brainstorming` | context | `yx context --show "name"` |
 | Behaviour | `/example-mapping` | examples field | `yx field --show "name" examples` |
 | Plan | `/writing-plans` | plan field | `yx field --show "name" plan` |
-| Sub-yaks | `/structuring-yak-dependencies` | yak hierarchy | `yx ls` |
+| Sub-yaks | `/yak-mapping` | yak hierarchy | `yx ls` |
 
 ## Common Mistakes
 
@@ -172,4 +172,4 @@ to execute sequentially.
 | Skipping example mapping for "simple" yaks | If it has multiple rules or edge cases, map it |
 | Storing outputs in files instead of on the yak | Always use `yx context` and `yx field` |
 | Starting implementation without user approval at each phase | Each phase ends with user confirmation |
-| Leaving plan tasks as flat siblings | Use `/structuring-yak-dependencies` to nest by dependency order |
+| Leaving plan tasks as flat siblings | Use `/yak-mapping` nesting to order by dependency |

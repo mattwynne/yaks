@@ -35,15 +35,15 @@ Don't use when:
 - Single straightforward task
 - User provides detailed step-by-step plan
 
-## ⚠️ CRITICAL: Use yx CLI Only ⚠️
+## CRITICAL: Use yx CLI Only
 
 **NEVER touch .yaks directory directly!**
-- ✅ Use: `yx add`, `yx move`, `yx rm`, `yx context`
-- ❌ Never: `rm -rf .yaks`, `mkdir .yaks/...`, `cat > .yaks/...`
+- Use: `yx add`, `yx move`, `yx rm`, `yx context`
+- Never: `rm -rf .yaks`, `mkdir .yaks/...`, `cat > .yaks/...`
 
 This is dogfooding - we use yaks to build yaks.
 
-## ⚠️ THE IRON LAW ⚠️
+## THE IRON LAW
 
 **After EVERY `yx add`, immediately run `yx ls` to show what changed.**
 
@@ -52,7 +52,7 @@ No exceptions:
 - Not "just adding a quick one"
 - Not "the structure is obvious"
 
-`yx add` → `yx ls` is non-negotiable. This keeps the human in sync with your thinking.
+`yx add` then `yx ls` is non-negotiable. This keeps the human in sync with your thinking.
 
 ## The Approach Pattern
 
@@ -70,7 +70,7 @@ No exceptions:
 
 **1. Start with the Goal**
 ```bash
-yx add "sync"
+yx add sync
 yx ls              # Always show after adding
 ```
 
@@ -82,9 +82,9 @@ Don't ask: "What are all the components?"
 
 **3. Discover ONE Blocker**
 
-When approaching reveals "we need X first", add X:
+When approaching reveals "we need X first", add X as a child:
 ```bash
-yx add "sync/write events to git ref"
+yx add write events to git ref --under sync
 yx ls              # Show the updated map
 ```
 
@@ -92,7 +92,7 @@ yx ls              # Show the updated map
 
 **4. Add Context Before Going Deeper**
 ```bash
-yx context "sync/write events to git ref"
+yx context write events to git ref
 # Add goal + done + known knowns/unknowns
 ```
 
@@ -101,7 +101,7 @@ yx context "sync/write events to git ref"
 Now explore this one level deeper:
 ```bash
 # Approaching "write events" reveals we need log
-yx add "sync/write events to git ref/implement log command"
+yx add implement log command --under "write events to git ref"
 yx ls              # Always show after adding
 ```
 
@@ -118,6 +118,80 @@ Stop when:
 
 Then explore other branches or let someone start implementing leaves.
 
+## Why Nesting Works
+
+Yaks enforces: **parent cannot be marked done if it has incomplete children**.
+
+The nesting is an **artifact of discovery**, not a planning decision. You literally CAN'T complete the parent until you clear the blocker.
+
+**Growth is bidirectional:**
+- **Downward**: Approach a goal, discover blockers -> add them as children
+- **Upward**: Working on a goal, realize it's part of something bigger -> create parent with `yx move`
+
+**Multiple blockers** all become children:
+```bash
+yx add deploy to production
+yx add deployment script --under "deploy to production"
+yx add configure secrets --under "deploy to production"
+yx add update documentation --under "deploy to production"
+```
+
+You must complete all three before the parent goal is achievable.
+
+**Work deepest-first** (leaves before parents):
+```
+deploy to production
+├─ ○ deployment script    <- Start here
+├─ ○ configure secrets    <- Or here
+╰─ ○ update documentation <- Or here
+```
+
+The structure naturally guides you to unblocked work (leaf nodes).
+
+## Reorganizing Flat Yaks into a Dependency Hierarchy
+
+Sometimes you have a flat set of sibling yaks and realize they have
+phased dependencies. To restructure them:
+
+**The rule: later phases are parents, earlier phases are children.**
+Phase 1 items nest under the Phase 2 item they block, not the other
+way around.
+
+**Example:** You're planning a tea party. You start with flat yaks:
+
+```
+tea party
+├─ ○ buy teapot
+├─ ○ buy tea leaves
+├─ ○ brew tea
+├─ ○ invite friends
+╰─ ○ serve tea
+```
+
+Then you realize: you can't serve tea until it's brewed and friends
+are invited. You can't brew until you have a teapot and leaves.
+Restructure so prerequisites nest under what they block:
+
+```bash
+yx move "brew tea" --under "serve tea"
+yx move "invite friends" --under "serve tea"
+yx move "buy teapot" --under "brew tea"
+yx move "buy tea leaves" --under "brew tea"
+```
+
+Result:
+```
+tea party
+╰─ ○ serve tea
+   ├─ ○ brew tea
+   │  ├─ ○ buy teapot
+   │  ╰─ ○ buy tea leaves
+   ╰─ ○ invite friends
+```
+
+Now the tree enforces the order: work leaves first (buy teapot, buy
+tea leaves, invite friends), then brew, then serve.
+
 ## Yak Granularity
 
 **Leaf yaks should be implementable in one TDD cycle (20-40 minutes):**
@@ -127,10 +201,10 @@ Then explore other branches or let someone start implementing leaves.
 - Commit (1 min)
 
 **Right-sized yaks:**
-- ✅ Approaching reveals 2-4 blockers → probably good size
-- ✅ Approaching reveals 0 blockers and feels ready to implement → perfect leaf
-- ❌ Approaching reveals 0 blockers and feels tiny → too granular
-- ❌ Approaching reveals 6+ blockers → too large, needs intermediate level
+- Approaching reveals 2-4 blockers -> probably good size
+- Approaching reveals 0 blockers and feels ready to implement -> perfect leaf
+- Approaching reveals 0 blockers and feels tiny -> too granular
+- Approaching reveals 6+ blockers -> too large, needs intermediate level
 
 ## Context Pattern
 
@@ -144,28 +218,16 @@ Add context showing:
 
 ### Definition of Done - Be SPECIFIC
 
-- ✅ "InMemoryStorage implements StoragePort (save/load/list/delete/exists)"
-- ✅ "File created: src/adapters/memory_storage.rs"
-- ✅ "Unit tests pass: cargo test memory_storage"
-- ❌ "storage works" (too vague)
-- ❌ "add tests" (what tests? where?)
-
-### Known Knowns - Include specifics
-
-- File paths: "Will live in src/adapters/memory_storage.rs"
-- Patterns: "Use Arc<RwLock<HashMap<String, Yak>>> for thread-safety"
-- Dependencies: "Implements StoragePort from src/ports/mod.rs"
-- Similar work: "Follow pattern from DirectoryStorage"
-
-### Known Unknowns - Specific questions
-
-- ✅ "Does OutputPort trait exist in src/ports/mod.rs?"
-- ❌ "how to do output?" (too vague)
+- "InMemoryStorage implements StoragePort (save/load/list/delete/exists)"
+- "File created: src/adapters/memory_storage.rs"
+- "Unit tests pass: cargo test memory_storage"
+- NOT: "storage works" (too vague)
+- NOT: "add tests" (what tests? where?)
 
 ### Example Context
 
 ```bash
-cat <<'EOF' | yx context "sync/write events to git ref"
+cat <<'EOF' | yx context write events to git ref
 # Goal
 Commands are logged as events in git for replay.
 
@@ -212,27 +274,37 @@ Which would you like?
 **If user chooses to implement:**
 - Use **superpowers:using-git-worktrees** to create isolated workspace
 - Use **superpowers:test-driven-development** for implementation
-- Follow the TDD cycle: test → fail → implement → pass → commit
+- Follow the TDD cycle: test -> fail -> implement -> pass -> commit
 
 ## Common Mistakes
 
-### ❌ Top-Down Decomposition
+### Top-Down Decomposition
 ```bash
 # WRONG: Planning all components upfront
-yx add "sync/event logging"
-yx add "sync/git storage"
-yx add "sync/replay algorithm"
+yx add event logging --under sync
+yx add git storage --under sync
+yx add replay algorithm --under sync
 # You haven't approached anything yet!
 ```
 
-### ✅ Discovery Through Approach
+### Discovery Through Approach
 ```bash
 # RIGHT: What would we try first?
-yx add "sync"
+yx add sync
 # "If we approached sync, we'd need to write events"
-yx add "sync/write events to git ref"
+yx add write events to git ref --under sync
 # "If we approached that, we'd need log command"
-yx add "sync/write events to git ref/implement log"
+yx add implement log --under "write events to git ref"
+```
+
+### Inverted Nesting
+```bash
+# WRONG: Makes CI look like it's part of local setup
+yx add setup local dev lint --under "add ci workflow"
+
+# RIGHT: CI is blocked BY local setup
+yx add add ci workflow
+yx add setup local dev lint --under "add ci workflow"
 ```
 
 ### Other Red Flags
@@ -251,15 +323,16 @@ yx add "sync/write events to git ref/implement log"
 ## Integration
 
 Use with:
-- **structuring-yak-dependencies**: Why parent/child nesting works
 - **yak-worktree-workflow**: How to work on individual leaf yaks
 
 ## Quick Reference
 
 | Action | Command |
 |--------|---------|
-| Add goal | `yx add "goal"` |
-| Add blocker | `yx add "goal/blocker"` |
+| Add goal | `yx add goal name` |
+| Add blocker | `yx add blocker --under "goal name"` |
 | Show map | `yx ls` |
-| Add context | `yx context "name"` (uses stdin) |
-| Read context | `yx context --show "name"` |
+| Add context | `yx context yak name` (uses stdin) |
+| Read context | `yx context --show yak name` |
+| Move yak under parent | `yx move yak name --under "parent name"` |
+| Move to root | `yx move yak name --to-root` |
