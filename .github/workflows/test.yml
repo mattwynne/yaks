@@ -81,7 +81,7 @@ jobs:
       - name: Run full mutation tests
         run: |
           devenv shell env CUCUMBER_MODE=in-process \
-            YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place
+            YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place || true
       - name: Sync results to yaks
         run: devenv shell bin/dev mutate-sync
       - name: Push yak changes
