@@ -78,6 +78,11 @@ jobs:
         run: devenv shell cargo install cargo-mutants
       - name: Build yx
         run: devenv shell cargo build --release
+      - name: Pull existing yaks
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          devenv shell bin/yx sync
       - name: Run full mutation tests
         run: |
           devenv shell env CUCUMBER_MODE=in-process \
@@ -85,7 +90,4 @@ jobs:
       - name: Sync results to yaks
         run: devenv shell bin/dev mutate-sync
       - name: Push yak changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          devenv shell bin/yx sync
+        run: devenv shell bin/yx sync
