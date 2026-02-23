@@ -1,4 +1,0 @@
-  ○ parent
-  ├─ ○ first-child
-  │  ╰─ ○ grandchild
-  ╰─ ○ last-child
