@@ -4,39 +4,222 @@
 pub mod memory_display;
 
 use crate::domain::slug::Name;
+use std::io::Write;
+use std::sync::Mutex;
 
-pub struct ConsoleDisplay;
+pub struct ConsoleDisplayOptions {
+    pub color: bool,
+}
+
+pub struct ConsoleDisplay {
+    output: Mutex<Box<dyn Write + Send>>,
+    options: ConsoleDisplayOptions,
+}
+
+impl ConsoleDisplay {
+    pub fn new(output: Box<dyn Write + Send>, options: ConsoleDisplayOptions) -> Self {
+        Self {
+            output: Mutex::new(output),
+            options,
+        }
+    }
+
+    pub fn stdout() -> Self {
+        Self::new(
+            Box::new(std::io::stdout()),
+            ConsoleDisplayOptions { color: true },
+        )
+    }
+}
 
 impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     fn success(&self, message: &str) {
-        println!("{message}");
+        let mut out = self.output.lock().unwrap();
+        writeln!(out, "{message}").unwrap();
     }
 
     fn info(&self, message: &str) {
-        println!("{message}");
+        let mut out = self.output.lock().unwrap();
+        writeln!(out, "{message}").unwrap();
     }
 
     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
-        match state {
-            "wip" => println!("{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
-            "done" => println!("{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
-            _ => println!("{prefix}○ {name}"),
+        let mut out = self.output.lock().unwrap();
+        if self.options.color {
+            match state {
+                "wip" => writeln!(out, "{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
+                "done" => writeln!(out, "{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
+                _ => writeln!(out, "{prefix}○ {name}"),
+            }
+        } else {
+            let indicator = match state {
+                "wip" | "done" => "●",
+                _ => "○",
+            };
+            writeln!(out, "{prefix}{indicator} {name}")
         }
+        .unwrap();
     }
 
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str) {
+        let mut out = self.output.lock().unwrap();
         let indent = "  ".repeat(depth);
         let line = format!("{indent}- [{state}] {name}");
-        if state == "done" {
-            println!("\x1b[90m{line}\x1b[0m");
+        if self.options.color && state == "done" {
+            writeln!(out, "\x1b[90m{line}\x1b[0m")
         } else {
-            println!("{line}");
+            writeln!(out, "{line}")
         }
+        .unwrap();
     }
 
     fn log_entry(&self, author_name: &str, author_email: &str, timestamp: &str, message: &str) {
-        println!("{} <{}>  {}", author_name, author_email, timestamp);
-        println!("{}", message);
+        let mut out = self.output.lock().unwrap();
+        writeln!(out, "{} <{}>  {}", author_name, author_email, timestamp).unwrap();
+        writeln!(out, "{}", message).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::ports::DisplayPort;
+    use std::sync::Arc;
+
+    #[derive(Clone)]
+    struct SharedBuffer(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.0.lock().unwrap().flush()
+        }
+    }
+
+    fn make_display(color: bool) -> (ConsoleDisplay, Arc<Mutex<Vec<u8>>>) {
+        let buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let writer = SharedBuffer(buffer.clone());
+        let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color });
+        (display, buffer)
+    }
+
+    fn get_output(buffer: &Arc<Mutex<Vec<u8>>>) -> String {
+        let data = buffer.lock().unwrap();
+        String::from_utf8(data.clone()).unwrap()
+    }
+
+    #[test]
+    fn success_writes_message() {
+        let (display, buffer) = make_display(false);
+        display.success("hello world");
+        assert_eq!(get_output(&buffer), "hello world\n");
+    }
+
+    #[test]
+    fn info_writes_message() {
+        let (display, buffer) = make_display(false);
+        display.info("some info");
+        assert_eq!(get_output(&buffer), "some info\n");
+    }
+
+    #[test]
+    fn pretty_wip_with_color_has_ansi() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("my yak");
+        display.display_yak_pretty("", &name, "wip");
+        let output = get_output(&buffer);
+        assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
+        assert!(output.contains("my yak"));
+    }
+
+    #[test]
+    fn pretty_done_with_color_has_ansi() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("finished yak");
+        display.display_yak_pretty("", &name, "done");
+        let output = get_output(&buffer);
+        assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
+    }
+
+    #[test]
+    fn pretty_wip_without_color_has_no_ansi() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("my yak");
+        display.display_yak_pretty("", &name, "wip");
+        let output = get_output(&buffer);
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+        assert!(output.contains("●"));
+        assert!(output.contains("my yak"));
+    }
+
+    #[test]
+    fn pretty_done_without_color_has_no_ansi() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("done yak");
+        display.display_yak_pretty("", &name, "done");
+        let output = get_output(&buffer);
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+        assert!(output.contains("●"));
+    }
+
+    #[test]
+    fn pretty_todo_without_color_uses_open_circle() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("todo yak");
+        display.display_yak_pretty("", &name, "todo");
+        let output = get_output(&buffer);
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+        assert!(output.contains("○"));
+    }
+
+    #[test]
+    fn markdown_done_with_color_has_ansi() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("done yak");
+        display.display_yak_markdown(0, &name, "done");
+        let output = get_output(&buffer);
+        assert!(
+            output.contains("\x1b[90m"),
+            "expected ANSI codes in: {output}"
+        );
+        assert!(output.contains("[done] done yak"));
+    }
+
+    #[test]
+    fn markdown_done_without_color_has_no_ansi() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("done yak");
+        display.display_yak_markdown(0, &name, "done");
+        let output = get_output(&buffer);
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+        assert!(output.contains("- [done] done yak"));
+    }
+
+    #[test]
+    fn markdown_todo_without_color_has_no_ansi() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("todo yak");
+        display.display_yak_markdown(1, &name, "todo");
+        let output = get_output(&buffer);
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+        assert!(output.contains("  - [todo] todo yak"));
     }
 }
 
