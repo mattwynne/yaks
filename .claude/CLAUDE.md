@@ -108,9 +108,9 @@ redundant manual verification.
 
 ## Plans
 
-When working on a yak, store implementation plans on the yak's
-`plan` field using `yx field <yak-name> plan` (pipe content via stdin).
-Read existing plans with `yx field --show <yak-name> plan`.
+Do NOT use `EnterPlanMode` for yak work. Instead, store plans on the
+yak's `plan` field using `yx field <yak-name> plan` (pipe content via
+stdin). Read existing plans with `yx field --show <yak-name> plan`.
 Do NOT store plans in `docs/superpowers/plans/`.
 
 ## CRITICAL: Dogfooding Rule
@@ -140,7 +140,8 @@ worked on.
 skill first.
 
 **When ready to implement**, use the `yak-worktree-workflow` skill.
-Follow it exactly.
+Follow it exactly. Do NOT implement directly on `main` — always
+use a worktree, even if the change seems small.
 
 ## Commit Message Policy
 
