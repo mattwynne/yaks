@@ -1,0 +1,65 @@
+name: Mutation Testing
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mutation-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v24
+      - uses: cachix/cachix-action@v15
+        with:
+          name: devenv
+      - name: Install devenv
+        run: nix profile install --accept-flake-config github:cachix/devenv/latest
+      - name: Install cargo-mutants
+        run: devenv shell cargo install cargo-mutants
+      - name: Diff-only mutation check
+        run: |
+          git diff origin/main...HEAD > /tmp/pr.diff
+          if [ ! -s /tmp/pr.diff ]; then
+            echo "No changes vs main — skipping."
+            exit 0
+          fi
+          devenv shell env CUCUMBER_MODE=in-process \
+            YX_SKIP_GIT_CHECKS=1 cargo mutants \
+            --in-diff /tmp/pr.diff
+
+  mutation-sync:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v24
+      - uses: cachix/cachix-action@v15
+        with:
+          name: devenv
+      - name: Install devenv
+        run: nix profile install --accept-flake-config github:cachix/devenv/latest
+      - name: Install cargo-mutants
+        run: devenv shell cargo install cargo-mutants
+      - name: Build yx
+        run: devenv shell cargo build --release
+      - name: Pull existing yaks
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          devenv shell bin/yx sync
+      - name: Run full mutation tests
+        run: |
+          devenv shell env CUCUMBER_MODE=in-process \
+            YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place || true
+      - name: Sync results to yaks
+        run: devenv shell bin/dev mutate-sync
+      - name: Push yak changes
+        run: devenv shell bin/yx sync
