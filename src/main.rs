@@ -92,10 +92,15 @@ enum Commands {
         /// The yak to move (space-separated words)
         name: Vec<String>,
         /// Move under this parent yak
-        #[arg(long, alias = "below")]
+        #[arg(
+            long,
+            alias = "below",
+            conflicts_with = "to_root",
+            required_unless_present = "to_root"
+        )]
         under: Option<Vec<String>>,
         /// Move to root level (un-nest)
-        #[arg(long)]
+        #[arg(long, conflicts_with = "under", required_unless_present = "under")]
         to_root: bool,
     },
     /// Rename a yak (change name without moving)
@@ -293,12 +298,6 @@ fn main() -> Result<()> {
             to_root,
         } => {
             let name_str = name.join(" ");
-            if under.is_some() && to_root {
-                anyhow::bail!("Cannot use both --under and --to-root. Use one or the other.");
-            }
-            if under.is_none() && !to_root {
-                anyhow::bail!("Must specify either --under <parent> or --to-root.");
-            }
             if to_root {
                 app.handle(MoveYak::to_root(&name_str))
             } else {

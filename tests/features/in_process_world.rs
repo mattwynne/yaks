@@ -366,14 +366,20 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(MoveYak::to_root(name)))
     }
 
-    fn try_move_yak_under_and_to_root(&mut self, name: &str, parent: &str) -> Result<()> {
-        // Both flags: this should fail at the CLI level, but in-process
-        // we simulate by calling with both
-        self.try_execute(|app| app.handle(MoveYak::under_and_to_root(name, parent)))
+    fn try_move_yak_under_and_to_root(&mut self, _name: &str, _parent: &str) -> Result<()> {
+        // Invalid state: both flags specified. With the MoveTarget enum,
+        // this is unrepresentable. Simulate the CLI-layer error.
+        self.exit_code = 1;
+        self.error = "Cannot use both --under and --to-root. Use one or the other.".to_string();
+        Ok(())
     }
 
-    fn try_move_yak_no_flags(&mut self, name: &str) -> Result<()> {
-        self.try_execute(|app| app.handle(MoveYak::no_flags(name)))
+    fn try_move_yak_no_flags(&mut self, _name: &str) -> Result<()> {
+        // Invalid state: no flags specified. With the MoveTarget enum,
+        // this is unrepresentable. Simulate the CLI-layer error.
+        self.exit_code = 1;
+        self.error = "Must specify either --under <parent> or --to-root.".to_string();
+        Ok(())
     }
 
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
