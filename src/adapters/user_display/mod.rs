@@ -80,48 +80,99 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::ports::DisplayPort;
-    use std::sync::Arc;
+#[cfg(any(test, feature = "test-support"))]
+mod test_buffer {
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
 
+    /// Thread-safe, cloneable buffer for capturing display output in tests.
     #[derive(Clone)]
-    struct SharedBuffer(Arc<Mutex<Vec<u8>>>);
+    pub struct TestBuffer(Arc<Mutex<Vec<u8>>>);
 
-    impl Write for SharedBuffer {
+    impl TestBuffer {
+        pub fn new() -> Self {
+            Self(Arc::new(Mutex::new(Vec::new())))
+        }
+
+        /// Returns the buffer contents as a UTF-8 string.
+        pub fn contents(&self) -> String {
+            let data = self.0.lock().unwrap();
+            String::from_utf8(data.clone()).unwrap()
+        }
+
+        /// Clears the buffer.
+        pub fn clear(&self) {
+            self.0.lock().unwrap().clear();
+        }
+    }
+
+    impl Default for TestBuffer {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Write for TestBuffer {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             self.0.lock().unwrap().write(buf)
         }
+
         fn flush(&mut self) -> std::io::Result<()> {
             self.0.lock().unwrap().flush()
         }
     }
+}
 
-    fn make_display(color: bool) -> (ConsoleDisplay, Arc<Mutex<Vec<u8>>>) {
-        let buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
-        let writer = SharedBuffer(buffer.clone());
+#[cfg(any(test, feature = "test-support"))]
+pub use test_buffer::TestBuffer;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::ports::DisplayPort;
+
+    fn make_display(color: bool) -> (ConsoleDisplay, TestBuffer) {
+        let buffer = TestBuffer::new();
+        let writer = buffer.clone();
         let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color });
         (display, buffer)
     }
 
-    fn get_output(buffer: &Arc<Mutex<Vec<u8>>>) -> String {
-        let data = buffer.lock().unwrap();
-        String::from_utf8(data.clone()).unwrap()
+    #[test]
+    fn test_buffer_captures_writes() {
+        let mut buffer = TestBuffer::new();
+        buffer.write_all(b"hello").unwrap();
+        assert_eq!(buffer.contents(), "hello");
+    }
+
+    #[test]
+    fn test_buffer_clear() {
+        let mut buffer = TestBuffer::new();
+        buffer.write_all(b"hello").unwrap();
+        buffer.clear();
+        assert_eq!(buffer.contents(), "");
+    }
+
+    #[test]
+    fn test_buffer_clone_shares_data() {
+        let mut buffer = TestBuffer::new();
+        let clone = buffer.clone();
+        buffer.write_all(b"shared").unwrap();
+        assert_eq!(clone.contents(), "shared");
     }
 
     #[test]
     fn success_writes_message() {
         let (display, buffer) = make_display(false);
         display.success("hello world");
-        assert_eq!(get_output(&buffer), "hello world\n");
+        assert_eq!(buffer.contents(), "hello world\n");
     }
 
     #[test]
     fn info_writes_message() {
         let (display, buffer) = make_display(false);
         display.info("some info");
-        assert_eq!(get_output(&buffer), "some info\n");
+        assert_eq!(buffer.contents(), "some info\n");
     }
 
     #[test]
@@ -129,7 +180,7 @@ mod tests {
         let (display, buffer) = make_display(true);
         let name = Name::from("my yak");
         display.display_yak_pretty("", &name, "wip");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
         assert!(output.contains("my yak"));
     }
@@ -139,7 +190,7 @@ mod tests {
         let (display, buffer) = make_display(true);
         let name = Name::from("finished yak");
         display.display_yak_pretty("", &name, "done");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
     }
 
@@ -148,7 +199,7 @@ mod tests {
         let (display, buffer) = make_display(false);
         let name = Name::from("my yak");
         display.display_yak_pretty("", &name, "wip");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
@@ -162,7 +213,7 @@ mod tests {
         let (display, buffer) = make_display(false);
         let name = Name::from("done yak");
         display.display_yak_pretty("", &name, "done");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
@@ -175,7 +226,7 @@ mod tests {
         let (display, buffer) = make_display(false);
         let name = Name::from("todo yak");
         display.display_yak_pretty("", &name, "todo");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
@@ -188,7 +239,7 @@ mod tests {
         let (display, buffer) = make_display(true);
         let name = Name::from("done yak");
         display.display_yak_markdown(0, &name, "done");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             output.contains("\x1b[90m"),
             "expected ANSI codes in: {output}"
@@ -201,7 +252,7 @@ mod tests {
         let (display, buffer) = make_display(false);
         let name = Name::from("done yak");
         display.display_yak_markdown(0, &name, "done");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
@@ -214,7 +265,7 @@ mod tests {
         let (display, buffer) = make_display(false);
         let name = Name::from("todo yak");
         display.display_yak_markdown(1, &name, "todo");
-        let output = get_output(&buffer);
+        let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
