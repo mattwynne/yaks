@@ -50,39 +50,9 @@ curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | ba
 
 The installer downloads the latest release, validates the checksum and installs the binary in `/usr/local/bin`. It also installs shell completions so you can tab-complete yak names.
 
-### Manual Install
-
-1. Clone the repository
-2. Add `bin/` to your PATH
-3. Source the completion script in your shell config:
-   ```bash
-   source completions/yx.bash
-   ```
-
-### Automated/Non-Interactive Installation
-
-For automated installations (CI, testing, scripts), use
-environment variables to skip interactive prompts:
-
-- `YX_SOURCE` - Path or URL to yx.zip (default: latest
-  GitHub release)
-- `YX_SHELL_CHOICE` - Shell for completions: `1` (zsh)
-  or `2` (bash)
-- `YX_AUTO_COMPLETE` - Auto-add to shell config: `y` or
-  `n`
-
-Example:
-
-```bash
-YX_SOURCE=./result/yx.zip \
-  YX_SHELL_CHOICE=2 \
-  YX_AUTO_COMPLETE=n \
-  ./install.sh
-```
-
 ### Development Setup
 
-Uses direnv to automatically configure PATH and completions:
+Uses direnv and devenv to set up the development environment.
 
 ```bash
 git clone https://github.com/mattwynne/yaks.git
@@ -99,22 +69,7 @@ dev check  # Runs tests and linting
 
 Git hooks will prevent commits, merges, and pushes without recent verification.
 
-## Usage
-
-![demo](demo.gif)
-
-```bash
-yx add Fix the bug          # Add a new yak
-yx context Fix the bug      # Add context/notes
-yx ls                       # Show all yaks
-yx done Fix the bug         # Mark as complete
-yx rm Fix the bug           # Remove a yak
-yx prune                    # Remove all done yaks
-```
-
-Tab completion works for yak names after sourcing the completion script.
-
-## Testing
+### Testing
 
 ```bash
 dev check               # Run all checks (tests + lint + audit)
