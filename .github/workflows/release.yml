@@ -78,7 +78,18 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+
+      - name: Embed checksums in install.sh
+        run: |
+          LINUX_SUM=$(sha256sum yx-linux-x86_64.zip/yx-linux-x86_64.zip | cut -d' ' -f1)
+          MACOS_SUM=$(sha256sum yx-macos-aarch64.zip/yx-macos-aarch64.zip | cut -d' ' -f1)
+          echo "Linux checksum: $LINUX_SUM"
+          echo "macOS checksum: $MACOS_SUM"
+          sed -i "s/^CHECKSUM_LINUX_X86_64=\"\"/CHECKSUM_LINUX_X86_64=\"$LINUX_SUM\"/" install.sh
+          sed -i "s/^CHECKSUM_MACOS_AARCH64=\"\"/CHECKSUM_MACOS_AARCH64=\"$MACOS_SUM\"/" install.sh
+
       - name: Publish to latest
         uses: softprops/action-gh-release@v1
         with:
@@ -86,5 +97,6 @@ jobs:
           files: |
             yx-linux-x86_64.zip/yx-linux-x86_64.zip
             yx-macos-aarch64.zip/yx-macos-aarch64.zip
+            install.sh
           prerelease: true
           body: "Unstable build from main branch"

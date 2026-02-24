@@ -23,7 +23,10 @@ release() {
   echo ""
   echo "Building release zip..."
   nix build
+  local checksum
+  checksum=$(shasum -a 256 result/yx.zip | cut -d' ' -f1)
   echo "✅ Release ready: result/yx.zip"
+  echo "   SHA256: $checksum"
 }
 
 # @cmd Build a Linux release in Docker (for testing installer on macOS)

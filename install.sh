@@ -14,6 +14,10 @@ else
   NC='\033[0m'
 fi
 
+# Checksums (updated by release workflow)
+CHECKSUM_LINUX_X86_64=""
+CHECKSUM_MACOS_AARCH64=""
+
 echo "Installing yx (yaks CLI)..."
 
 # Determine install location
@@ -130,6 +134,24 @@ else
         exit 1
     fi
     cp "$SOURCE" "$TEMP_DIR/yx.zip"
+fi
+
+# Verify checksum
+ACTUAL_SUM=$(shasum -a 256 "$TEMP_DIR/yx.zip" | cut -d' ' -f1)
+case "$PLATFORM" in
+  linux-x86_64)  EXPECTED="$CHECKSUM_LINUX_X86_64" ;;
+  macos-aarch64) EXPECTED="$CHECKSUM_MACOS_AARCH64" ;;
+  *)             EXPECTED="" ;;
+esac
+
+if [ -n "$EXPECTED" ]; then
+  if [ "$ACTUAL_SUM" != "$EXPECTED" ]; then
+    echo -e "${RED}Error: Checksum mismatch${NC}"
+    echo "  Expected: $EXPECTED"
+    echo "  Actual:   $ACTUAL_SUM"
+    exit 1
+  fi
+  echo "Checksum verified."
 fi
 
 # Extract zip to a subdirectory
