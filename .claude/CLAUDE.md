@@ -9,90 +9,63 @@ A CLI tool for managing TODO lists as a directed acyclic graph (DAG), designed f
 ## Core Commands
 
 ```bash
+# Quality checks - ALWAYS run before committing
+dev check                    # Run all checks (tests + lint + audit)
+
 # Testing
-cargo test --test cucumber --features test-support  # Run Cucumber acceptance tests
-shellspec                    # Run ShellSpec tests (tmux smoke, git checks, installer)
+cargo test --test cucumber --features test-support  # Cucumber acceptance tests
+shellspec                    # ShellSpec tests (tmux, git checks, installer)
 
 # Linting
-dev lint                     # Run linting (Rust clippy + rustfmt)
-
-# Quality Checks
-dev check                    # Run all checks (tests + lint + audit) - ALWAYS run before committing
-
-# Development
-yx add <name>                # Add a yak
-yx ls                        # List yaks
-yx context <name>            # Edit context (uses $EDITOR or stdin)
-yx state <name> <state>      # Set yak state (todo, wip, done)
-yx done <name>               # Mark complete
-yx rm <name>                 # Remove a yak
-yx prune                     # Remove all done yaks
+dev lint                     # Rust clippy + rustfmt
 ```
 
 Commands like `yx` and `dev` are installed in PATH via direnv.
 
+For the full list of yx commands: `yx --help`. Key examples:
+
+```bash
+yx add make the tea          # Multi-word names without quotes
+yx add buy biscuits --under "make the tea"  # Nest under parent
+yx ls                        # Show the tree
+yx context make the tea      # Edit context (stdin or $EDITOR)
+yx state make the tea wip    # Set state (todo, wip, done)
+yx done make the tea         # Mark complete
+yx sync                      # Sync with git remote
+```
+
 ## Architecture
 
-### Implementation Language
-Core implementation is in **Rust** (migrated from bash in Feb 2026 - see ADR 0001).
-The compiled binary is at `target/release/yx`, with a symlink at `bin/yx`.
+Hexagonal architecture with CQRS and Event Sourcing. Commands flow
+through use cases to the `YakMap` aggregate, which emits domain events.
+Events are persisted to git refs and projected to the `.yaks/`
+directory-based read model.
 
-### Hexagonal Architecture (Ports & Adapters)
-The codebase uses hexagonal architecture for testability and future extensibility:
+**See [`src/README.md`](src/README.md)** for the full architecture
+guide: layers, key types, ports, adapters, and how commands flow.
 
-**Domain Layer** (`src/domain/`):
-- Core entity: `Yak` (name, done status, state, context)
+**See [`docs/adr/`](docs/adr/README.md)** for Architecture Decision
+Records explaining why the design is the way it is.
 
-**Application Layer** (`src/application/`):
-- Use cases: `AddYak`, `ListYaks`, `DoneYak`, `RemoveYak`, `PruneYaks`,
-  `EditContext`, `ShowContext`, `SetState`, `MoveYak`, `SyncYaks`
-- Pure business logic, independent of infrastructure
+When making architectural decisions, invoke the `cqrs-event-sourcing`
+skill for guidance on aggregate boundaries, event design, read models,
+policies, and sagas.
 
-**Ports** (`src/ports/`):
-- `EventStore`: Event persistence and sync abstraction
-- `ReadYakStore` / `WriteYakStore`: Yak persistence abstraction
-- `DisplayPort`: User output abstraction
-- `InputPort`: User input abstraction
-- `AuthenticationPort`: Author identity abstraction
+## Testing
 
-**Adapters** (`src/adapters/`):
-- `DirectoryStorage`: File-based storage (`.yaks/` directories)
-- `GitEventStore`: Git ref-based event store (`refs/notes/yaks`)
-- `ConsoleDisplay`: Terminal output with colors
-- `ConsoleInput`: Stdin/editor input
-
-**CLI Entry Point** (`src/main.rs`):
-- Command parsing via clap
-- Wires together ports and adapters
-- Routes commands to use cases
-
-### Target Architecture: CQRS/Event Sourcing
-The codebase is evolving toward **CQRS (Command Query Responsibility Segregation)** with **Event Sourcing**. Commands mutate state through aggregates; queries read from projections. Events are the source of truth.
-
-**When making architectural decisions, invoke the `cqrs-event-sourcing` skill** for guidance on aggregate boundaries, event design, read models, policies, and sagas.
-
-### Storage Format
-- Uses `YAK_PATH` environment variable (defaults to `.yaks`)
-- Each yak is a directory: `$YAK_PATH/<yak-name>/`
-- `context.md` holds notes (created empty by default)
-- `state` file holds state (todo/wip/done, defaults to "todo")
-- The `done` boolean field is derived from state (done = state == "done")
-- Directory-based storage allows future backends (git refs) via adapter pattern
-
-### Testing
-- **Cucumber acceptance tests** (`features/*.feature`): Primary test framework.
-  Runs in two modes via `cargo test --test cucumber --features test-support`:
+- **Cucumber acceptance tests** (`features/*.feature`): Primary test
+  framework. Dual-mode execution via
+  `cargo test --test cucumber --features test-support`:
   - FullStackWorld: spawns yx binary (real integration test)
   - InProcessWorld: calls Rust directly with in-memory adapters (fast)
-- **ShellSpec tests** (`tests/shellspec/`): For tests that don't fit Cucumber
-  (tmux completion smoke test, git availability check, installer test).
-  Run with `shellspec`.
+- **ShellSpec tests** (`tests/shellspec/`): For tests that don't fit
+  Cucumber (tmux smoke, git checks, installer). Run with `shellspec`.
 - **Rust unit tests**: Internal logic (`cargo test`)
-- **Integration tests**: Exercise use cases with mock adapters
 
 ### Mutation Testing
-Mutation testing validates test quality by injecting small code
-changes (mutants) and checking that tests catch them.
+
+Validates test quality by injecting code changes and checking tests
+catch them.
 
 ```bash
 dev mutate-diff         # Fast: only mutants in your changes (~seconds)
@@ -101,91 +74,22 @@ dev mutate -F 'slug'    # Full run filtered to specific files
 dev mutate-sync         # Sync missed mutants to yaks
 ```
 
-**Daily workflow:** Use `dev mutate-diff` (alias `dev md`)
-while coding. It runs `cargo mutants --in-diff` against only
-your changes since main — seconds instead of minutes.
+**Daily workflow:** Use `dev mutate-diff` (alias `dev md`) while coding.
 
-**After a full run:** Run `dev mutate-sync` (alias `dev ms`)
-to parse `mutants.out/missed.txt` and create/update yaks
-under "fix missed mutants". Each source file with missed
-mutants gets its own yak. Then `yx sync` to share results.
+**After a full run:** `dev mutate-sync` (alias `dev ms`) creates yaks
+for missed mutants. Then `yx sync` to share results.
 
-**CI:** PRs get a fast diff-only mutation check (blocking).
-Post-merge to main, a full run syncs results to yaks via
-`yx sync`.
+**Config:** `.cargo/mutants.toml` excludes infrastructure-only files.
 
-**Config:** `.cargo/mutants.toml` — excludes infrastructure-only
-files (console I/O, git sync, main.rs) that need full-stack
-integration tests.
-
-**Triage:** Leave real test gaps as `todo` yaks. For
-acceptable misses, add to `exclude_globs` in
-`.cargo/mutants.toml` — the next sync auto-resolves the yak.
+**Triage:** Leave real test gaps as `todo` yaks. For acceptable misses,
+add to `exclude_globs` in `.cargo/mutants.toml`.
 
 ## CLI Design Philosophy
 
-**When making changes to the command-line interface, refer to `docs/cli-design-philosophy.md`.**
+**See `docs/cli-design-philosophy.md`** when making changes to the CLI.
 
-This guide documents yx's design principles for the CLI, informed by modern best practices (clig.dev, 12 Factor CLI Apps, The Art of Command Line). Key principles:
-
-- **Ergonomics First** - Multi-word names without quotes, short aliases, sensible defaults
-- **Human & Machine Output** - Pretty by default, plain format for scripting
-- **Clear Feedback** - Actionable error messages that explain what went wrong and how to fix it
-- **Composability** - Works well with pipes, stdin, and other Unix tools
-- **Speed** - Operations should feel instant (< 100ms)
-
-The guide includes concrete examples, anti-patterns to avoid, and a decision framework for evaluating new features.
-
-## Architecture Decision Records (ADRs)
-
-**ADRs document significant architectural and design decisions.**
-
-### When to Write an ADR
-
-Write an ADR when making decisions that:
-- Change the architecture or core design patterns
-- Introduce new dependencies or technologies
-- Affect multiple components or the public API
-- Have long-term maintenance implications
-- Involve significant trade-offs between alternatives
-- Future maintainers will ask "why did we do it this way?"
-
-**Do NOT write ADRs for:**
-- Minor implementation details
-- Bug fixes (unless they reveal a design issue)
-- Refactoring that preserves behavior
-- Configuration changes
-
-### How to Write an ADR
-
-```bash
-# Create a new ADR (use quotes for titles with spaces)
-adrgen create "Title of the Decision"
-
-# This creates docs/adr/NNNN-title-of-the-decision.md
-```
-
-**ADR Workflow:**
-1. Identify a significant decision that needs documentation
-2. Create the ADR using `adrgen create "<title>"`
-3. Edit the generated file in `docs/adr/`:
-   - **Context**: Explain the problem and why a decision is needed
-   - **Decision**: State what you decided to do
-   - **Consequences**: Document trade-offs, what becomes easier/harder
-4. Commit the ADR with the related code changes
-5. Update status later if needed: `adrgen status <number> <new-status>`
-
-**ADR Location:** `docs/adr/`
-
-**Timing:** Write ADRs during the design/planning phase, before
-significant implementation work. If you discover the need for an
-ADR during implementation, pause and write it before continuing.
-
-### Linking ADRs to Decisions
-
-ADRs can reference each other:
-- `--supersedes <number>`: This ADR replaces an older one
-- `--amends <number>`: This ADR modifies an earlier decision
+Key principles: ergonomics first, human & machine output, clear
+feedback, composability, speed (< 100ms).
 
 ## Development Workflow
 
@@ -199,9 +103,8 @@ ADRs can reference each other:
 7. Commit
 8. Repeat
 
-**TRUST THE TESTS**: When tests pass, the feature works. Do NOT run redundant manual verification.
-
-**Incremental approach**: Use the `incremental-tdd` skill for guidance on writing one test at a time.
+**TRUST THE TESTS**: When tests pass, the feature works. Do NOT run
+redundant manual verification.
 
 ## Plans
 
@@ -214,7 +117,8 @@ Do NOT store plans in `docs/superpowers/plans/`.
 
 **NEVER touch the `.yaks` folder in this project!**
 
-We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the actual work tracker for this project.
+We're using yaks to build yaks (dogfooding). The `.yaks` folder
+contains the actual work tracker for this project.
 
 - **For testing**: Use `YAK_PATH` (tests set this to temp directories)
 - **For demos**: Use `YAK_PATH=/tmp/demo-yaks yx <command>`
@@ -228,24 +132,19 @@ We're using yaks to build yaks (dogfooding). The `.yaks` folder contains the act
 yx state "<yak-name>" wip
 ```
 
-Do this BEFORE reading context, creating worktrees, or starting any work.
-This signals to other agents and to the human what's being worked on.
+Do this BEFORE reading context, creating worktrees, or starting any
+work. This signals to other agents and to the human what's being
+worked on.
 
-**If a yak needs requirements fleshed out**, use the `preparing-a-yak` skill first.
+**If a yak needs requirements fleshed out**, use the `preparing-a-yak`
+skill first.
 
-**When ready to implement**, use the `yak-worktree-workflow` skill. Follow it exactly.
+**When ready to implement**, use the `yak-worktree-workflow` skill.
+Follow it exactly.
 
 ## Commit Message Policy
 
-**Do NOT include Claude's name or "Co-Authored-By: Claude" in commit messages.**
+**Do NOT include Claude's name or "Co-Authored-By: Claude" in commit
+messages.**
 
 Commits should be clean and professional without AI attribution.
-
-## Future Vision
-
-The current implementation is Phase 1 (directory-based storage). Future plans include:
-- Git ref backend for cross-branch collaboration
-- Hierarchy/containment model (yaks contain sub-yaks)
-- Team swarming capability (visibility into who's working on what)
-
-Currently out of scope: time tracking, priority levels, rich text, external integrations, auth, cloud sync.
