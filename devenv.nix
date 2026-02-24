@@ -12,6 +12,7 @@
     openssl
     zlib
     tmux
+    vhs
     bashInteractive  # needed for completion smoke test (nix bash lacks readline)
   ] ++ lib.optionals pkgs.stdenv.isDarwin [
     libiconv

@@ -499,6 +499,40 @@ EOF
   done
 }
 
+# @cmd Record README demo GIF using VHS
+# @alias d
+demo() {
+  local tape="demo.tape"
+  if [ ! -f "$tape" ]; then
+    echo "Error: $tape not found"
+    return 1
+  fi
+
+  local demo_dir
+  demo_dir=$(mktemp -d)
+  trap 'rm -rf "$demo_dir"' EXIT
+
+  # Set up a shared bare origin with two clones (alice and bob)
+  git init --bare "$demo_dir/origin.git" --quiet
+  git clone --quiet "$demo_dir/origin.git" "$demo_dir/alice"
+  git -C "$demo_dir/alice" -c user.name="Alice" -c user.email="alice@example.com" \
+    commit --allow-empty -m "init" --quiet --no-verify
+  git -C "$demo_dir/alice" push --quiet
+  git clone --quiet "$demo_dir/origin.git" "$demo_dir/bob"
+  git -C "$demo_dir/alice" config user.name "Alice"
+  git -C "$demo_dir/alice" config user.email "alice@example.com"
+  git -C "$demo_dir/bob" config user.name "Bob"
+  git -C "$demo_dir/bob" config user.email "bob@example.com"
+
+  local yx_path="$PWD/target/release"
+  local tape_path="$PWD/$tape"
+
+  echo "Recording demo..."
+  (cd "$demo_dir" && PATH="$yx_path:$PATH" vhs "$tape_path")
+  cp "$demo_dir/demo.gif" demo.gif
+  echo "✅ Demo recorded: demo.gif"
+}
+
 # @cmd Fix the next missed mutant yak
 # @alias fm
 fix-mutant() {
