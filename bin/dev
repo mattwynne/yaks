@@ -576,7 +576,23 @@ fix-mutant() {
     | sed 's|-|/|g').rs"
 
   echo "Source file: $source_file"
-  echo "Launching Claude in a worktree..."
+
+  # Create worktree
+  local branch_name="fix-mutant/${yak_name// /-}"
+  local worktree_path=".worktrees/${yak_name// /-}"
+
+  # Clean up stale branch/worktree from previous attempts
+  if git worktree list | grep -q "$worktree_path"; then
+    echo "Removing stale worktree: $worktree_path"
+    git worktree remove --force "$worktree_path"
+  fi
+  if git branch --list "$branch_name" | grep -q .; then
+    echo "Removing stale branch: $branch_name"
+    git branch -D "$branch_name"
+  fi
+
+  echo "Creating worktree: $worktree_path"
+  git worktree add "$worktree_path" -b "$branch_name"
 
   local prompt
   prompt=$(cat <<EOF
@@ -602,15 +618,144 @@ $context
 EOF
   )
 
-  claude -p --worktree "$prompt"
+  echo "Launching Claude..."
+  (cd "$worktree_path" && claude -p --output-format stream-json --verbose --dangerously-skip-permissions "$prompt") \
+    | jq -r --unbuffered '
+      if .type == "assistant" then
+        .message.content[]? |
+        if .type == "text" then
+          "\n\(.text)"
+        elif .type == "tool_use" then
+          "\n→ \(.name): \(.input.description // .input.command // .input.pattern // .input.file_path // "")"
+        else empty end
+      elif .type == "user" then
+        .message.content[]? |
+        if .type == "tool_result" then
+          if .is_error then "✗ \(.content | split("\n")[0])"
+          else "✓ \(.content | split("\n")[0])"
+          end
+        else empty end
+      else empty end
+    '
 
   local exit_code=$?
   if [ $exit_code -ne 0 ]; then
     echo "Claude exited with code $exit_code"
+    echo "Worktree left at: $worktree_path"
     return $exit_code
   fi
 
-  echo "Done! Yak '$yak_name' should be fixed."
+  # Merge to main and clean up
+  echo "Merging $branch_name to main..."
+  if git merge "$branch_name" --no-edit; then
+    git worktree remove "$worktree_path"
+    git branch -d "$branch_name"
+    echo "Done! Yak '$yak_name' merged and cleaned up."
+  else
+    echo "Merge failed — resolve conflicts in $worktree_path"
+    return 1
+  fi
+}
+
+# @cmd Triage missed mutant yaks (decide: write test vs restructure code)
+# @alias tm
+triage-mutants() {
+  local parent="dx/mutation-tests/fix missed mutants"
+
+  # Collect all todo mutation yaks
+  local yaks=()
+  while IFS= read -r name; do
+    [ -z "$name" ] && continue
+    # Skip sub-children (only process direct children)
+    echo "$name" | grep -q '/' && continue
+    local state
+    state=$(yx field --show "$name" state 2>/dev/null | tail -1)
+    if [ "$state" = "todo" ]; then
+      yaks+=("$name")
+    fi
+  done < <(
+    yx ls --format plain \
+      | grep "^${parent}/" \
+      | sed "s|^${parent}/||"
+  )
+
+  if [ ${#yaks[@]} -eq 0 ]; then
+    echo "No todo mutation yaks found."
+    return 0
+  fi
+
+  echo "Found ${#yaks[@]} todo mutation yak(s) to triage:"
+
+  # Build the yaks section of the prompt
+  local yaks_section=""
+  for yak_name in "${yaks[@]}"; do
+    echo "  - $yak_name"
+
+    local context
+    context=$(yx context --show "$yak_name")
+
+    local source_file
+    source_file="src/$(echo "$yak_name" \
+      | sed 's| mutants$||' \
+      | sed 's|-|/|g').rs"
+
+    yaks_section+="
+### $yak_name
+Source file: $source_file
+Current context:
+$context
+
+"
+  done
+
+  local prompt
+  prompt=$(cat <<EOF
+You are triaging missed mutants for this project.
+
+For each yak below, read the source file and review the missed mutants.
+For each mutant, decide:
+
+1. Is this behaviour we WANT from the system?
+   → If YES: update the yak context with analysis explaining what the
+     behaviour is, why it matters, and a suggested test approach.
+   → If NO: update the yak context with restructuring instructions
+     explaining what's wrong with the current code and how to change it
+     so the unwanted behaviour is eliminated.
+
+Use \`yx context "<yak-name>"\` (pipe content via stdin) to update each
+yak's context.
+
+## Yaks to triage:
+$yaks_section
+EOF
+  )
+
+  echo ""
+  echo "Launching Claude for triage..."
+  claude -p --output-format stream-json --dangerously-skip-permissions "$prompt" \
+    | jq -r --unbuffered '
+      if .type == "assistant" then
+        .message.content[]? |
+        if .type == "text" then
+          "\n\(.text)"
+        elif .type == "tool_use" then
+          "\n→ \(.name): \(.input.description // .input.command // .input.pattern // .input.file_path // "")"
+        else empty end
+      elif .type == "user" then
+        .message.content[]? |
+        if .type == "tool_result" then
+          if .is_error then "✗ \(.content | split("\n")[0])"
+          else "✓ \(.content | split("\n")[0])"
+          end
+        else empty end
+      else empty end
+    '
+
+  echo ""
+  echo "Triage complete. Review results with:"
+  for yak_name in "${yaks[@]}"; do
+    echo "  yx context --show \"$yak_name\""
+  done
 }
 
 eval "$(argc --argc-eval "$0" "$@")"
