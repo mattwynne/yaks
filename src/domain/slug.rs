@@ -350,6 +350,23 @@ mod tests {
     }
 
     #[test]
+    fn generate_id_snapshot_root() {
+        assert_eq!(
+            generate_id("make the tea", None).as_str(),
+            "make-the-tea-t3ru"
+        );
+    }
+
+    #[test]
+    fn generate_id_snapshot_child() {
+        let parent = generate_id("make the tea", None);
+        assert_eq!(
+            generate_id("buy biscuits", Some(&parent)).as_str(),
+            "buy-biscuits-506d"
+        );
+    }
+
+    #[test]
     fn name_partial_eq_string() {
         let name = Name::from("hello");
         let hello_string = "hello".to_string();
