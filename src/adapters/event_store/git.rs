@@ -551,26 +551,10 @@ impl GitEventStore {
     }
 }
 
-#[cfg(test)]
-impl GitEventStore {
-    pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
-        Ok(EventStore::get_all_events(self)?
-            .into_iter()
-            .filter(|e| e.yak_id() == name)
-            .collect())
-    }
-}
-
 impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
-        // Determine the stable event_id (UUID) for this event.
-        // If the event already has one (from a peer sync), reuse it.
-        // Otherwise generate a new one.
-        let event_id = event
-            .metadata()
-            .event_id
-            .clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let event = super::ensure_event_id(event.clone());
+        let event_id = event.metadata().event_id.clone().unwrap();
 
         // Idempotent: skip if we already have a commit with this event_id
         if self.has_event_id(&event_id)? {
@@ -579,7 +563,7 @@ impl EventStore for GitEventStore {
 
         let current_tree = self.get_current_tree()?;
 
-        let tree_oid = self.build_tree_from_event(event, current_tree.as_ref())?;
+        let tree_oid = self.build_tree_from_event(&event, current_tree.as_ref())?;
         let tree = self.repo.find_tree(tree_oid)?;
 
         // Commit message includes the event_id as a trailer for

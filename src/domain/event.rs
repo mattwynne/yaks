@@ -101,7 +101,6 @@ impl YakEvent {
     }
 
     /// Get the yak ID this event affects (for filtering)
-    #[cfg(any(test, feature = "test-support"))]
     pub fn yak_id(&self) -> &str {
         match self {
             Self::Added(e, _) => e.id.as_str(),

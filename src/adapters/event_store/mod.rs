@@ -15,6 +15,22 @@ pub use noop::NoOpEventStore;
 use crate::domain::YakEvent;
 use std::collections::HashSet;
 
+/// Ensure an event has an event_id assigned. If the event already has one,
+/// return it unchanged. Otherwise, generate a new UUID and return the
+/// event with the ID set.
+pub(crate) fn ensure_event_id(event: YakEvent) -> YakEvent {
+    if event.metadata().event_id.is_some() {
+        return event;
+    }
+    let mut metadata = event.metadata().clone();
+    metadata.event_id = Some(generate_event_id());
+    event.with_metadata(metadata)
+}
+
+pub(crate) fn generate_event_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
 /// Result of merging two event streams using CRDT-style set union.
 pub(crate) struct MergeResult {
     /// All unique events, sorted by (timestamp, event_id) for convergence.
@@ -67,6 +83,71 @@ pub(crate) fn merge_event_streams(
         events: all_events,
         pulled: peer_ids.difference(&local_ids).count(),
         pushed: local_ids.difference(&peer_ids).count(),
+    }
+}
+
+#[cfg(test)]
+mod ensure_event_id_tests {
+    use super::ensure_event_id;
+    use crate::domain::event_metadata::EventMetadata;
+    use crate::domain::events::AddedEvent;
+    use crate::domain::slug::{Name, YakId};
+    use crate::domain::YakEvent;
+
+    #[test]
+    fn assigns_event_id_when_missing() {
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        );
+        assert!(event.metadata().event_id.is_none());
+
+        let event = ensure_event_id(event);
+        assert!(event.metadata().event_id.is_some());
+        assert!(!event.metadata().event_id.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn preserves_existing_event_id() {
+        let mut metadata = EventMetadata::default_legacy();
+        metadata.event_id = Some("existing-id".to_string());
+        let event = YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
+                parent_id: None,
+            },
+            metadata,
+        );
+
+        let event = ensure_event_id(event);
+        assert_eq!(event.metadata().event_id.as_deref(), Some("existing-id"));
+    }
+
+    #[test]
+    fn generates_unique_ids() {
+        let make_event = || {
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            )
+        };
+
+        let e1 = ensure_event_id(make_event());
+        let e2 = ensure_event_id(make_event());
+        assert_ne!(
+            e1.metadata().event_id,
+            e2.metadata().event_id,
+            "Each call should generate a unique ID"
+        );
     }
 }
 

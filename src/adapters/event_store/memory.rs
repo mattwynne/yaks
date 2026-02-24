@@ -25,15 +25,6 @@ impl InMemoryEventStore {
             peer: Some(Arc::clone(&peer.events)),
         }
     }
-
-    pub fn get_events(&self, name: &str) -> Result<Vec<YakEvent>> {
-        let events = self.events.lock().unwrap();
-        Ok(events
-            .iter()
-            .filter(|e| e.yak_id() == name)
-            .cloned()
-            .collect())
-    }
 }
 
 impl Default for InMemoryEventStore {
@@ -44,22 +35,16 @@ impl Default for InMemoryEventStore {
 
 impl EventStore for InMemoryEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
+        let event = super::ensure_event_id(event.clone());
+        let event_id = event.metadata().event_id.as_ref().unwrap();
+
         let mut events = self.events.lock().unwrap();
-        if let Some(id) = &event.metadata().event_id {
-            if events
-                .iter()
-                .any(|e| e.metadata().event_id.as_deref() == Some(id))
-            {
-                return Ok(());
-            }
+        if events
+            .iter()
+            .any(|e| e.metadata().event_id.as_deref() == Some(event_id))
+        {
+            return Ok(());
         }
-        let event = if event.metadata().event_id.is_none() {
-            let mut metadata = event.metadata().clone();
-            metadata.event_id = Some(uuid::Uuid::new_v4().to_string());
-            event.clone().with_metadata(metadata)
-        } else {
-            event.clone()
-        };
         events.push(event);
         Ok(())
     }
