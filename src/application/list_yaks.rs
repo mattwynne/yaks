@@ -432,6 +432,115 @@ mod tests {
         );
     }
 
+    use crate::domain::event_metadata::{Author, Timestamp};
+
+    fn make_yak_node(name: &str, state: &str) -> YakNode {
+        YakNode {
+            name: Name::from(name),
+            full_path: name.to_string(),
+            yak: Some(Yak {
+                id: YakId::from(format!("{}-xxxx", name)),
+                name: Name::from(name),
+                parent_id: None,
+                state: state.to_string(),
+                context: None,
+                fields: HashMap::new(),
+                children: vec![],
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
+            }),
+            children: vec![],
+        }
+    }
+
+    // Line 140: sort_children must put not-done items after done items,
+    // even when the not-done item sorts alphabetically before the done one.
+    // Input order is [done, not-done] to force the sort comparator to
+    // exercise the (false, true) match arm.
+    #[test]
+    fn sort_children_not_done_sorts_after_done() {
+        let mut nodes = vec![
+            make_yak_node("bbb", "done"), // done, alphabetically second
+            make_yak_node("aaa", "todo"), // not-done, alphabetically first
+        ];
+        ListYaks::sort_children(&mut nodes);
+        assert_eq!(
+            nodes[0].name.as_str(),
+            "bbb",
+            "Done item should sort before not-done item"
+        );
+        assert_eq!(
+            nodes[1].name.as_str(),
+            "aaa",
+            "Not-done item should sort after done item"
+        );
+    }
+
+    // Line 182: not-done filter must exclude done yaks (not fall through to _ => true)
+    #[test]
+    fn not_done_filter_excludes_done_yaks() {
+        let list = ListYaks::new("plain", Some("not-done"));
+        let node = make_yak_node("finished", "done");
+        assert!(
+            !list.should_display_node(&node, Some("not-done")),
+            "Done yak should be excluded by not-done filter"
+        );
+    }
+
+    // Lines 183: not-done filter must include not-done yaks
+    // Catches both the `!` deletion and `||` to `&&` mutants
+    #[test]
+    fn not_done_filter_includes_not_done_yaks() {
+        let list = ListYaks::new("plain", Some("not-done"));
+        let node = make_yak_node("pending", "todo");
+        assert!(
+            list.should_display_node(&node, Some("not-done")),
+            "Not-done yak should be included by not-done filter"
+        );
+    }
+
+    // Line 67: empty yak list shows message only in markdown format
+    #[test]
+    fn empty_list_shows_message_only_in_markdown() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        // No yaks added - list is empty
+
+        // Markdown should show the message
+        app.handle(ListYaks::new("markdown", None)).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("You have no yaks"),
+            "Markdown format should show empty message, got: {:?}",
+            output
+        );
+
+        buffer.clear();
+
+        // Plain should NOT show the message
+        app.handle(ListYaks::new("plain", None)).unwrap();
+        let output = buffer.contents();
+        assert!(
+            !output.contains("You have no yaks"),
+            "Plain format should not show empty message, got: {:?}",
+            output
+        );
+    }
+
     // Grandchild shows ancestor continuation lines
     #[test]
     fn grandchild_shows_ancestor_continuation_lines() {
