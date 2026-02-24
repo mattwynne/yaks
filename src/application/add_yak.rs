@@ -132,7 +132,8 @@ impl UseCase for AddYak {
 mod tests {
     use super::*;
     use crate::adapters::{
-        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
     };
     use crate::domain::event_metadata::{Author, Timestamp};
     use crate::domain::ports::ReadYakStore;
@@ -147,7 +148,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -174,7 +175,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::with_content("# My context".to_string());
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -202,7 +203,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -232,7 +233,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -257,7 +258,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -288,7 +289,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         // Set input to return different content - if the prompt is
         // skipped, the yak will have "my notes", not "from input"
         let input = InMemoryInput::with_content("from input".to_string());
@@ -321,7 +322,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -350,7 +351,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
@@ -383,7 +384,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(

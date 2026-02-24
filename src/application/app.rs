@@ -124,7 +124,7 @@ impl<'a> Application<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::adapters::{make_test_display, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::domain::event_metadata::Author;
     use crate::domain::ports::{AuthenticationPort, ReadYakStore};
     use crate::domain::slug::YakId;
@@ -163,7 +163,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("Test Author", "test@example.com");
 
@@ -205,7 +205,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
@@ -236,7 +236,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
@@ -270,7 +270,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
@@ -314,7 +314,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 
@@ -357,7 +357,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
 

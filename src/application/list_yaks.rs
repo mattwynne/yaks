@@ -259,8 +259,10 @@ fn build_node(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::user_display::ConsoleDisplay;
     use crate::adapters::{
-        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
     };
     use crate::application::{AddYak, Application, SetState};
     use crate::infrastructure::EventBus;
@@ -269,7 +271,7 @@ mod tests {
         event_store: &'a mut InMemoryEventStore,
         event_bus: &'a mut EventBus,
         storage: &'a InMemoryStorage,
-        display: &'a InMemoryDisplay,
+        display: &'a ConsoleDisplay,
         input: &'a InMemoryInput,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
@@ -284,7 +286,7 @@ mod tests {
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = make_app(
@@ -298,30 +300,30 @@ mod tests {
 
         // Add a yak that is NOT done so the "done" filter produces no output
         app.handle(AddYak::new("pending-yak")).unwrap();
-        display.clear();
+        buffer.clear();
 
         // Markdown format: should emit the "no yaks" message
         app.handle(ListYaks::new("markdown", Some("done"))).unwrap();
-        let markdown_messages = display.get_info_messages();
+        let output = buffer.contents();
+        let markdown_lines: Vec<&str> = output.lines().collect();
         assert!(
-            markdown_messages
+            markdown_lines
                 .iter()
                 .any(|m| m.contains("You have no yaks")),
             "Markdown format should show 'You have no yaks' when filter has no results, got: {:?}",
-            markdown_messages
+            markdown_lines
         );
 
-        display.clear();
+        buffer.clear();
 
         // Pretty format: should NOT emit the "no yaks" message
         app.handle(ListYaks::new("pretty", Some("done"))).unwrap();
-        let pretty_messages = display.get_info_messages();
+        let output = buffer.contents();
+        let pretty_lines: Vec<&str> = output.lines().collect();
         assert!(
-            !pretty_messages
-                .iter()
-                .any(|m| m.contains("You have no yaks")),
+            !pretty_lines.iter().any(|m| m.contains("You have no yaks")),
             "Pretty format should NOT show 'You have no yaks', got: {:?}",
-            pretty_messages
+            pretty_lines
         );
     }
 
@@ -332,7 +334,7 @@ mod tests {
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = make_app(
@@ -350,10 +352,11 @@ mod tests {
         app.handle(AddYak::new("alpha")).unwrap();
         app.handle(AddYak::new("beta")).unwrap();
         app.handle(SetState::new("beta", "done")).unwrap();
-        display.clear();
+        buffer.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
-        let messages = display.get_info_messages();
+        let output = buffer.contents();
+        let messages: Vec<&str> = output.lines().collect();
 
         // Find positions of alpha and beta in the output
         let beta_pos = messages.iter().position(|m| m.contains("beta"));
@@ -378,7 +381,7 @@ mod tests {
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = make_app(
@@ -396,10 +399,11 @@ mod tests {
             .unwrap();
         app.handle(AddYak::new("zzz").with_parent(Some("parent")))
             .unwrap();
-        display.clear();
+        buffer.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
-        let messages = display.get_info_messages();
+        let output = buffer.contents();
+        let messages: Vec<&str> = output.lines().collect();
 
         let parent_line = messages.iter().find(|m| m.contains("parent"));
         let aaa_line = messages.iter().find(|m| m.contains("aaa"));
@@ -435,7 +439,7 @@ mod tests {
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = make_app(
@@ -455,10 +459,11 @@ mod tests {
             .unwrap();
         app.handle(AddYak::new("sibling").with_parent(Some("root")))
             .unwrap();
-        display.clear();
+        buffer.clear();
 
         app.handle(ListYaks::new("pretty", None)).unwrap();
-        let messages = display.get_info_messages();
+        let output = buffer.contents();
+        let messages: Vec<&str> = output.lines().collect();
 
         let leaf_line = messages.iter().find(|m| m.contains("leaf"));
         assert!(

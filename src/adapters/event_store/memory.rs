@@ -153,7 +153,7 @@ mod tests {
 
     mod sync {
         use super::*;
-        use crate::adapters::InMemoryDisplay;
+        use crate::adapters::make_test_display;
         use crate::infrastructure::event_bus::EventBus;
 
         fn make_event(name: &str, id: &str) -> YakEvent {
@@ -183,7 +183,7 @@ mod tests {
 
             let mut local = InMemoryEventStore::with_peer(&origin);
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local.sync(&mut bus, &output).unwrap();
 
@@ -197,7 +197,7 @@ mod tests {
             local.append(&make_event("foo", "foo-a1b2")).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local.sync(&mut bus, &output).unwrap();
 
@@ -213,7 +213,7 @@ mod tests {
             local.append(&make_event("aaa", "aaa-a1b2")).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local.sync(&mut bus, &output).unwrap();
 
@@ -242,7 +242,7 @@ mod tests {
 
             let mut local = InMemoryEventStore::with_peer(&origin);
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             let captured = Arc::new(Mutex::new(Vec::new()));
             bus.register(Box::new(TestListener {
@@ -280,7 +280,7 @@ mod tests {
             local.append(&make_event("foo", "foo-a1b2")).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             let captured = Arc::new(Mutex::new(Vec::new()));
             bus.register(Box::new(TestListener {
@@ -308,7 +308,7 @@ mod tests {
             local.append(&event_with_id).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local.sync(&mut bus, &output).unwrap();
 
@@ -365,7 +365,7 @@ mod tests {
             bob.append(&bob_event).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             alice.sync(&mut bus, &output).unwrap();
             bob.sync(&mut bus, &output).unwrap();
@@ -439,7 +439,7 @@ mod tests {
             origin.append(&event_a).unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
             local.sync(&mut bus, &output).unwrap();
 
             let ids: Vec<_> = all_events(&local)
@@ -453,7 +453,7 @@ mod tests {
         fn fails_when_no_peer_configured() {
             let mut local = InMemoryEventStore::new();
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             let result = local.sync(&mut bus, &output);
             assert!(result.is_err());

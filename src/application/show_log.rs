@@ -48,7 +48,8 @@ impl UseCase for ShowLog {
 mod tests {
     use super::*;
     use crate::adapters::{
-        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
     };
     use crate::application::AddYak;
     use crate::infrastructure::EventBus;
@@ -62,7 +63,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
@@ -79,7 +80,8 @@ mod tests {
         app.handle(AddYak::new("test yak")).unwrap();
         app.handle(ShowLog::new()).unwrap();
 
-        let messages = display.get_all_messages();
+        let output = buffer.contents();
+        let messages: Vec<&str> = output.lines().collect();
         assert!(
             messages.iter().any(|m| m.contains("test@test.com")),
             "Expected log to contain author email 'test@test.com', got: {:?}",
@@ -100,7 +102,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
@@ -131,7 +133,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
@@ -149,15 +151,16 @@ mod tests {
         app.handle(AddYak::new("first yak")).unwrap();
         app.handle(AddYak::new("second yak")).unwrap();
 
-        // Clear display to isolate ShowLog messages from AddYak messages
-        display.clear();
+        // Clear buffer to isolate ShowLog messages from AddYak messages
+        buffer.clear();
 
         app.handle(ShowLog::new()).unwrap();
 
-        let info_messages = display.get_info_messages();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
         // With 2 events, there should be exactly 1 blank separator between them
         // The separator is an empty string added via display.info("")
-        // log_entry adds 2 messages per event (author line + message line)
+        // log_entry adds 2 lines per event (author line + message line)
         // Expected order for 2 events:
         // - Event 1 author line
         // - Event 1 message line
@@ -167,7 +170,7 @@ mod tests {
         // So we expect a blank line at index 2 (0-indexed)
 
         // Find the index of the blank line
-        let blank_indices: Vec<usize> = info_messages
+        let blank_indices: Vec<usize> = lines
             .iter()
             .enumerate()
             .filter_map(|(idx, m)| if m.is_empty() { Some(idx) } else { None })
@@ -176,16 +179,16 @@ mod tests {
         assert_eq!(
             blank_indices.len(),
             1,
-            "Expected exactly 1 blank separator, got {}. Full messages: {:?}",
+            "Expected exactly 1 blank separator, got {}. Full lines: {:?}",
             blank_indices.len(),
-            info_messages
+            lines
         );
 
         // The blank line should be at index 2 (after first event's 2 lines)
         assert_eq!(
             blank_indices[0], 2,
-            "Expected blank line at index 2 (between events), got index {}. Messages: {:?}",
-            blank_indices[0], info_messages
+            "Expected blank line at index 2 (between events), got index {}. Lines: {:?}",
+            blank_indices[0], lines
         );
     }
 }

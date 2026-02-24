@@ -5,8 +5,10 @@ use cucumber::World as CucumberWorld;
 use std::collections::HashMap;
 
 use super::test_world::TestWorld;
+use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::{
-    InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    TestBuffer,
 };
 use yx::application::{
     AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
@@ -21,7 +23,8 @@ struct UserInstance {
     event_store: InMemoryEventStore,
     event_bus: EventBus,
     storage: InMemoryStorage,
-    display: InMemoryDisplay,
+    display: ConsoleDisplay,
+    buffer: TestBuffer,
     input: InMemoryInput,
     auth: InMemoryAuthentication,
 }
@@ -32,12 +35,14 @@ impl UserInstance {
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
 
         Self {
             event_store,
             event_bus,
             storage,
-            display: InMemoryDisplay::new(),
+            display,
+            buffer,
             input: InMemoryInput::new(),
             auth: InMemoryAuthentication::new(),
         }
@@ -50,7 +55,8 @@ pub struct InProcessWorld {
     event_store: InMemoryEventStore,
     event_bus: EventBus,
     storage: InMemoryStorage,
-    display: InMemoryDisplay,
+    display: ConsoleDisplay,
+    buffer: TestBuffer,
     input: InMemoryInput,
     auth: InMemoryAuthentication,
     error: String,
@@ -77,11 +83,14 @@ impl InProcessWorld {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
+        let (display, buffer) = make_test_display();
+
         Ok(Self {
             event_store,
             event_bus,
             storage,
-            display: InMemoryDisplay::new(),
+            display,
+            buffer,
             input: InMemoryInput::new(),
             auth: InMemoryAuthentication::new(),
             error: String::new(),
@@ -95,7 +104,7 @@ impl InProcessWorld {
     where
         F: FnOnce(&mut Application) -> Result<()>,
     {
-        self.display.clear();
+        self.buffer.clear();
         self.error.clear();
 
         let mut app = Application::new(
@@ -118,7 +127,7 @@ impl InProcessWorld {
     where
         F: FnOnce(&mut Application) -> Result<()>,
     {
-        self.display.clear();
+        self.buffer.clear();
         self.error.clear();
 
         let mut app = Application::new(
@@ -170,7 +179,7 @@ impl InProcessWorld {
             .get_mut(repo_name)
             .context(format!("No repo named '{}'", repo_name))?;
 
-        user.display.clear();
+        user.buffer.clear();
 
         let mut app = Application::new(
             &mut user.event_store,
@@ -208,7 +217,7 @@ impl InProcessWorld {
             syncing_store.append(&event)?;
         }
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let storage = user.storage.clone();
@@ -240,7 +249,7 @@ impl InProcessWorld {
             .repos
             .get(repo_name)
             .context(format!("No repo named '{}'", repo_name))?;
-        Ok(user.display.get_all_messages().join("\n"))
+        Ok(user.buffer.contents().trim_end().to_string())
     }
 
     /// List yaks in a named user's store
@@ -330,7 +339,7 @@ impl TestWorld for InProcessWorld {
     }
 
     fn get_output(&self) -> String {
-        self.display.get_all_messages().join("\n")
+        self.buffer.contents().trim_end().to_string()
     }
 
     fn prune_yaks(&mut self) -> Result<()> {

@@ -1770,7 +1770,7 @@ mod tests {
 
     mod sync {
         use super::*;
-        use crate::adapters::InMemoryDisplay;
+        use crate::adapters::make_test_display;
         use crate::infrastructure::event_bus::EventBus;
 
         fn make_event(name: &str, id: &str) -> YakEvent {
@@ -1823,7 +1823,7 @@ mod tests {
                 .unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local_store.sync(&mut bus, &output).unwrap();
 
@@ -1845,7 +1845,7 @@ mod tests {
                 .unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local_store.sync(&mut bus, &output).unwrap();
 
@@ -1875,7 +1875,7 @@ mod tests {
                 .unwrap();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local_store.sync(&mut bus, &output).unwrap();
 
@@ -1893,7 +1893,7 @@ mod tests {
         fn sync_rebases_divergent_histories_into_linear_chain() {
             let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             // Push shared yak to origin
             local_store
@@ -1937,7 +1937,7 @@ mod tests {
         fn sync_fast_forwards_when_local_is_behind() {
             let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local_store
                 .append(&make_event("shared", "shared-a1b2"))
@@ -1963,7 +1963,7 @@ mod tests {
             let (_origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
 
             let mut bus = EventBus::new();
-            let output = InMemoryDisplay::new();
+            let (output, _) = make_test_display();
 
             local_store.sync(&mut bus, &output).unwrap();
 

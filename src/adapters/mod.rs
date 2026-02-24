@@ -12,7 +12,7 @@ pub use authentication::InMemoryAuthentication;
 #[cfg(any(test, feature = "test-support"))]
 pub use event_store::InMemoryEventStore;
 #[cfg(any(test, feature = "test-support"))]
-pub use user_display::InMemoryDisplay;
+pub use user_display::{make_test_display, TestBuffer};
 #[cfg(any(test, feature = "test-support"))]
 pub use user_input::InMemoryInput;
 #[cfg(any(test, feature = "test-support"))]

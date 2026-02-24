@@ -76,19 +76,18 @@ impl UseCase for SetState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::user_display::ConsoleDisplay;
     use crate::adapters::{
-        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
     };
     use crate::application::AddYak;
     use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
 
-    fn setup() -> (InMemoryStorage, InMemoryDisplay, InMemoryInput) {
-        (
-            InMemoryStorage::new(),
-            InMemoryDisplay::new(),
-            InMemoryInput::new(),
-        )
+    fn setup() -> (InMemoryStorage, ConsoleDisplay, InMemoryInput) {
+        let (display, _) = make_test_display();
+        (InMemoryStorage::new(), display, InMemoryInput::new())
     }
 
     #[test]

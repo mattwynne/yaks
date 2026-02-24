@@ -28,7 +28,8 @@ impl UseCase for SyncYaks {
 mod tests {
     use super::*;
     use crate::adapters::{
-        InMemoryAuthentication, InMemoryDisplay, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
     };
     use crate::domain::ports::EventStore;
     use crate::infrastructure::EventBus;
@@ -42,7 +43,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
 
@@ -91,7 +92,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
 
@@ -124,7 +125,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         event_bus.register(Box::new(storage.clone()));
 
-        let display = InMemoryDisplay::new();
+        let (display, _) = make_test_display();
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();

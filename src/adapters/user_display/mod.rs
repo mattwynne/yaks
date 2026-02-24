@@ -1,8 +1,5 @@
 // CLI adapter - implementation using clap
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod memory_display;
-
 use crate::domain::slug::Name;
 use std::io::Write;
 use std::sync::Mutex;
@@ -274,5 +271,12 @@ mod tests {
     }
 }
 
+/// Create a `ConsoleDisplay` + `TestBuffer` pair for use in tests.
+/// Output is plain text (no ANSI color codes).
 #[cfg(any(test, feature = "test-support"))]
-pub use memory_display::InMemoryDisplay;
+pub fn make_test_display() -> (ConsoleDisplay, TestBuffer) {
+    let buffer = TestBuffer::new();
+    let writer = buffer.clone();
+    let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color: false });
+    (display, buffer)
+}
