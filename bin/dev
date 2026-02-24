@@ -499,4 +499,81 @@ EOF
   done
 }
 
+# @cmd Fix the next missed mutant yak
+# @alias fm
+fix-mutant() {
+  local parent="dx/mutation-tests/fix missed mutants"
+
+  # Find the first todo mutation yak
+  local yak_name
+  yak_name=$(
+    yx ls --format plain \
+      | grep "^${parent}/" \
+      | sed "s|^${parent}/||" \
+      | while read -r name; do
+          state=$(yx field --show "$name" state 2>/dev/null \
+            | tail -1)
+          if [ "$state" = "todo" ]; then
+            echo "$name"
+            break
+          fi
+        done
+  )
+
+  if [ -z "$yak_name" ]; then
+    echo "No todo mutation yaks found."
+    return 0
+  fi
+
+  echo "Picking up: $yak_name"
+  yx state "$yak_name" wip
+
+  # Read context (missed mutant descriptions)
+  local context
+  context=$(yx context --show "$yak_name")
+
+  # Reconstruct source file path from yak name
+  local source_file
+  source_file="src/$(echo "$yak_name" \
+    | sed 's| mutants$||' \
+    | sed 's|-|/|g').rs"
+
+  echo "Source file: $source_file"
+  echo "Launching Claude in a worktree..."
+
+  local prompt
+  prompt=$(cat <<EOF
+You are fixing missed mutants in this project.
+
+## Yak: $yak_name
+
+## Source file: $source_file
+
+## Missed mutants:
+$context
+
+## Instructions
+
+1. Read the source file and understand the code
+2. Use TDD to write tests that catch each missed mutant:
+   - Write a failing test that would pass if the mutant were applied
+   - Verify it passes against the real code
+3. Run \`dev mutate-diff\` to verify mutants are now caught
+4. Run \`dev check\` to verify nothing is broken
+5. Commit with a descriptive message
+6. Mark the yak done: \`yx done "$yak_name"\`
+EOF
+  )
+
+  claude -p --worktree "$prompt"
+
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo "Claude exited with code $exit_code"
+    return $exit_code
+  fi
+
+  echo "Done! Yak '$yak_name' should be fixed."
+}
+
 eval "$(argc --argc-eval "$0" "$@")"
