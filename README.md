@@ -114,10 +114,6 @@ yx prune                    # Remove all done yaks
 
 Tab completion works for yak names after sourcing the completion script.
 
-## Project Status
-
-**Active development** - This tool is being used to build itself (dogfooding). See `.yaks/` for the actual work tracker.
-
 ## Testing
 
 ```bash
@@ -142,4 +138,4 @@ run to update them.
 
 ## License
 
-[Add license here]
+[MIT](LICENSE)
