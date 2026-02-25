@@ -104,33 +104,19 @@ Follow your normal development process:
 
 The commits stay on your feature branch, isolated from main.
 
-### 8. Demo Your Work
+### 8. Merge Back to Main
 
-**CRITICAL**: Before merging, demonstrate your work to the user.
+**Merge as soon as tests pass.** Do not wait for permission. This
+is trunk-based development — branch age is the enemy.
 
-Show:
-- What you implemented
-- Test results (prove all tests pass)
-- Example usage or output
-- Any design decisions you made
-
-This lets the user:
-- Verify the work meets requirements
-- Provide feedback before merging
-- Understand what changed
-
-**Wait for user approval before proceeding to merge.**
-
-### 9. Merge Back to Main
-
-After the user approves the demo, return to the main repo and merge:
+Return to the main repo and merge:
 
 ```bash
 cd /path/to/main/repo  # Back to main repo
 git merge descriptive-name
 ```
 
-### 10. Mark the Yak Done
+### 9. Mark the Yak Done
 
 ```bash
 yx done "yak name here"
@@ -138,7 +124,7 @@ yx done "yak name here"
 
 Use the exact yak name (with spaces if needed). This automatically clears the "wip" state.
 
-### 11. Clean Up
+### 10. Clean Up
 
 Remove the worktree and delete the branch:
 
@@ -155,11 +141,11 @@ The yak context is the source of truth. Don't guess requirements from the yak na
 
 **If context is insufficient, ask the user for clarification BEFORE creating the worktree.** Don't make assumptions or guess at requirements. It's better to ask than to build the wrong thing.
 
-### Demo Before Merging
+### Merge Early and Often
 
-Always demonstrate your work before merging to main. Show test results, example usage, and explain your approach. Wait for user approval before proceeding with the merge.
-
-This prevents unwanted changes from reaching main and gives the user a chance to provide feedback.
+When tests pass, merge to main. Don't wait for permission. This is
+trunk-based development — branch age is the enemy. Summarise what
+you did when you merge so the user knows what changed.
 
 ### Use .worktrees/
 
@@ -209,16 +195,10 @@ Ask the user for clarification before proceeding. Examples:
 - "The context says 'add claim command' but doesn't specify behavior. Should users be able to claim multiple yaks?"
 - "Should the 'edit' command open an editor or accept text from stdin?"
 
-### User wants changes after demo
+### User wants changes after merge
 
-If the user requests changes during the demo:
-1. Go back to the worktree: `cd .worktrees/descriptive-name`
-2. Make the requested changes
-3. Commit them
-4. Demo again
-5. Only merge after approval
-
-The worktree keeps your changes isolated, so iteration is safe.
+If the user requests changes after merging, start a new cycle:
+pick up the yak again, create a new worktree, make changes, merge.
 
 ## Why This Works
 
@@ -259,18 +239,14 @@ cd .worktrees/sort-ls-results
 # 7. Do the work (write tests, implement, commit)
 # ... work happens here ...
 
-# 8. Demo the work
-# Show test results, example usage, explain changes
-# Wait for user approval
-
-# 9. Return to main and merge (after approval)
+# 8. Tests pass — merge immediately
 cd ../../..
 git merge sort-ls-results
 
-# 10. Mark done
+# 9. Mark done
 yx done "sort ls results somehow"
 
-# 11. Cleanup
+# 10. Cleanup
 git worktree remove .worktrees/sort-ls-results
 git branch -d sort-ls-results
 ```

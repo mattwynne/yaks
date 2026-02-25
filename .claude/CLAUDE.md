@@ -143,6 +143,16 @@ skill first.
 Follow it exactly. Do NOT implement directly on `main` — always
 use a worktree, even if the change seems small.
 
+## Completing a Yak
+
+**Merge early and often.** When work is done and tests pass, merge
+to main immediately. Do not wait for permission. This is trunk-based
+development — branch age is the enemy.
+
+After merging:
+1. `yx done "<yak-name>"` — mark the yak complete
+2. Clean up the worktree and branch
+
 ## Commit Message Policy
 
 **Do NOT include Claude's name or "Co-Authored-By: Claude" in commit
