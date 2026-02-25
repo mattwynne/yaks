@@ -134,6 +134,17 @@ Feature: Add yaks
       When I run yx add "my yak" --id "custom-id-1234"
       Then the output should include "custom-id-1234"
 
+  Rule: bare add creates yak with no context
+
+    Example: add without --context or --edit sets no context
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I show the context of "my yak"
+      Then the output should be:
+        """
+        my yak
+        """
+
   Rule: --field sets custom fields at creation time
 
     Example: Add yak with custom field

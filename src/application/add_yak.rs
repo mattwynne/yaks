@@ -46,7 +46,7 @@ impl AddYak {
         self
     }
 
-    /// Set context directly, skipping the editor/stdin prompt
+    /// Set context directly
     pub fn with_context(mut self, context: Option<&str>) -> Self {
         self.context = context.map(|s| s.to_string());
         self
@@ -90,15 +90,7 @@ impl AddYak {
             None
         };
 
-        // Get context: use explicit value or prompt via input port
-        let context = if let Some(ref ctx) = self.context {
-            Some(ctx.clone())
-        } else {
-            let template = format!("# {}\n\n", self.name);
-            app.input
-                .request_content(None, Some(&template))?
-                .filter(|content| !content.trim().is_empty())
-        };
+        let context = self.context.clone();
 
         let metadata = EventMetadata::new(
             self.author_override
@@ -168,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_yak_stores_context_from_input() {
+    fn test_add_yak_without_context_sets_no_context() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
 
@@ -176,7 +168,7 @@ mod tests {
         event_bus.register(Box::new(storage.clone()));
 
         let (display, _) = make_test_display();
-        let input = InMemoryInput::with_content("# My context".to_string());
+        let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
         let mut app = Application::new(
             &mut event_store,
@@ -192,7 +184,7 @@ mod tests {
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my-yak").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.context, Some("# My context".to_string()));
+        assert_eq!(yak.context, None);
     }
 
     #[test]
