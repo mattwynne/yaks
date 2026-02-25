@@ -10,9 +10,8 @@ use std::process::Command;
 /// Console-based input adapter
 ///
 /// Handles different input modes:
-/// - Test mode: Returns None (via YX_IGNORE_STDIN)
-/// - Piped stdin: Reads from stdin
-/// - Interactive TTY: Launches $EDITOR
+/// - Piped stdin: Reads from stdin via `read_stdin_content`
+/// - Interactive TTY: Launches $EDITOR via `edit_content`
 pub struct ConsoleInput;
 
 impl InputPort for ConsoleInput {
@@ -21,17 +20,9 @@ impl InputPort for ConsoleInput {
         initial_content: Option<&str>,
         template: Option<&str>,
     ) -> Result<Option<String>> {
-        // Always read piped stdin, even in YX_IGNORE_STDIN mode.
-        // A pipe means the user explicitly provided content.
+        // Try reading from stdin first (non-TTY)
         if !atty::is(atty::Stream::Stdin) {
-            if Self::stdin_is_pipe_or_file() {
-                let content = Self::read_stdin()?;
-                if !content.is_empty() {
-                    return Ok(Some(content));
-                }
-                return Err(anyhow::anyhow!("no content received on stdin"));
-            }
-            return Ok(None);
+            return self.read_stdin_content();
         }
 
         // YX_IGNORE_STDIN suppresses editor launch (for tests, CI,
@@ -41,7 +32,48 @@ impl InputPort for ConsoleInput {
         }
 
         // Interactive mode (TTY): open editor
-        let editor_content = initial_content.or(template).unwrap_or("");
+        self.edit_content(initial_content, template)
+    }
+}
+
+impl ConsoleInput {
+    /// Read content from stdin when it is piped or redirected.
+    ///
+    /// - If stdin is a pipe/file with content, returns
+    ///   `Ok(Some(content))`
+    /// - If stdin is a pipe/file with zero bytes, returns `Ok(None)`
+    /// - If stdin is /dev/null or a TTY, returns `Ok(None)`
+    pub fn read_stdin_content(&self) -> Result<Option<String>> {
+        if Self::stdin_has_readable_data() {
+            let content = Self::read_stdin()?;
+            if !content.is_empty() {
+                return Ok(Some(content));
+            }
+        }
+        // Only error when stdin is an explicit pipe or file (user
+        // intended to provide content). When stdin is something else
+        // like /dev/null (e.g., in Docker containers), treat it as
+        // "no input available".
+        if Self::stdin_is_pipe_or_file() {
+            return Err(anyhow::anyhow!("no content received on stdin"));
+        }
+        Ok(None)
+    }
+
+    /// Open $EDITOR to let the user compose or edit content.
+    ///
+    /// - Pre-populates the editor with `initial` if provided,
+    ///   otherwise `template`
+    /// - Returns `Ok(Some(content))` if the user wrote non-empty
+    ///   content that differs from the template
+    /// - Returns `Ok(None)` if the content is empty or unchanged
+    ///   from the template
+    pub fn edit_content(
+        &self,
+        initial: Option<&str>,
+        template: Option<&str>,
+    ) -> Result<Option<String>> {
+        let editor_content = initial.or(template).unwrap_or("");
         let edited = Self::edit_with_editor(editor_content)?;
 
         // Only return content if it differs from template
@@ -53,9 +85,7 @@ impl InputPort for ConsoleInput {
             Ok(None)
         }
     }
-}
 
-impl ConsoleInput {
     fn stdin_is_pipe_or_file() -> bool {
         use std::os::unix::io::AsRawFd;
 
@@ -68,6 +98,37 @@ impl ConsoleInput {
         }
         let file_type = stat.st_mode & libc::S_IFMT;
         file_type == libc::S_IFIFO || file_type == libc::S_IFREG
+    }
+
+    fn stdin_has_readable_data() -> bool {
+        use std::os::unix::io::AsRawFd;
+
+        let stdin_fd = io::stdin().as_raw_fd();
+
+        // First check: Is it a pipe (FIFO) or a regular file
+        // (redirect)?
+        let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+        let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
+        if stat_result != 0 {
+            return false;
+        }
+        let file_type = stat.st_mode & libc::S_IFMT;
+        if file_type != libc::S_IFIFO && file_type != libc::S_IFREG {
+            return false; // Not a pipe or file, don't try to read
+        }
+
+        // Second check: Is there data available to read?
+        let mut pollfd = libc::pollfd {
+            fd: stdin_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+
+        // Poll with 0 timeout (non-blocking check)
+        let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
+
+        // Return true only if poll succeeded and POLLIN is set
+        result > 0 && (pollfd.revents & libc::POLLIN) != 0
     }
 
     fn read_stdin() -> Result<String> {
