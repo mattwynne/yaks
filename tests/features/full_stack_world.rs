@@ -145,6 +145,51 @@ impl FullStackWorld {
         self.run_yx_with_stdin(&["add", name], stdin_content)
     }
 
+    /// Add a yak with --edit, using a fake $EDITOR that writes the given content
+    pub fn add_yak_with_editor(&mut self, name: &str, content: &str) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        // Create a temp script that acts as EDITOR: overwrites the file
+        let editor_script = self.repo_path.join(".fake-editor.sh");
+        std::fs::write(
+            &editor_script,
+            "#!/bin/sh\nprintf '%s' \"$WRITE_TEXT\" > \"$1\"\n",
+        )
+        .context("Failed to write fake editor script")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&editor_script, std::fs::Permissions::from_mode(0o755))
+                .context("Failed to set editor script permissions")?;
+        }
+
+        let output = Command::new(yx_path)
+            .args(["add", name, "--edit"])
+            .env("YAK_PATH", &self.repo_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_IGNORE_STDIN", "1")
+            .env("EDITOR", &editor_script)
+            .env("WRITE_TEXT", content)
+            .current_dir(&self.repo_path)
+            .output()
+            .context("Failed to run yx add --edit")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if self.exit_code != 0 {
+            anyhow::bail!(
+                "yx add --edit failed:\nstdout: {}\nstderr: {}",
+                self.output,
+                self.error
+            );
+        }
+
+        Ok(())
+    }
+
     /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
     /// Used for testing git environment checks (not-in-repo, no gitignore).
     /// If explicit_yak_path is set, passes YAK_PATH to the command.

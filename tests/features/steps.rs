@@ -816,6 +816,15 @@ async fn add_yak_with_stdin_full_stack(
     world.add_yak_with_stdin(&yak_name, &context)
 }
 
+#[when(regex = r#"^I add the yak "(.+)" with editor that writes "(.+)"$"#)]
+async fn add_yak_with_editor_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    content: String,
+) -> Result<()> {
+    world.add_yak_with_editor(&yak_name, &content)
+}
+
 #[when(regex = r#"^I set the context of "(.+)" from a file containing "(.+)"$"#)]
 async fn set_context_from_file(
     world: &mut FullStackWorld,

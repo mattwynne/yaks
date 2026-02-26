@@ -153,6 +153,13 @@ Feature: Add yaks
       When I try to run yx add "my yak" --edit --context "notes"
       Then the command should fail
 
+    @fullstack
+    Example: --edit opens $EDITOR, saved content becomes context
+      Given I have a clean git repository
+      When I add the yak "my yak" with editor that writes "edited context"
+      And I show the context of "my yak"
+      Then the output should include "edited context"
+
   Rule: --field sets custom fields at creation time
 
     Example: Add yak with custom field

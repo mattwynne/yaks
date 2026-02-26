@@ -275,20 +275,26 @@ fn main() -> Result<()> {
             under,
             state,
             context,
-            edit: _edit,
+            edit,
             id,
             fields,
         } => {
             let name_str = name.join(" ");
-            // If no --context flag, check for piped stdin
-            let context = context.or_else(|| {
+            // Resolve context: --context, --edit (editor), piped stdin
+            let context = if context.is_some() {
+                context
+            } else if edit {
                 let input = ConsoleInput;
-                if !atty::is(atty::Stream::Stdin) {
-                    input.read_stdin_content().ok().flatten()
-                } else {
-                    None
-                }
-            });
+                let template = format!("# {}\n\n", name_str);
+                input
+                    .edit_content(None, Some(&template))?
+                    .filter(|c| !c.trim().is_empty())
+            } else if !atty::is(atty::Stream::Stdin) {
+                let input = ConsoleInput;
+                input.read_stdin_content().ok().flatten()
+            } else {
+                None
+            };
             let mut use_case = AddYak::new(&name_str)
                 .with_parent(under.as_deref())
                 .with_state(state.as_deref())
