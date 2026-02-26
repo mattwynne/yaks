@@ -76,9 +76,9 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             }
         }
 
-        YakEvent::Compacted(_) => {
-            // Snapshot is handled at the event store level, not the projection.
-        }
+        // Compacted events are expanded by get_all_events() and should
+        // never reach the projection. Ignore if encountered.
+        YakEvent::Compacted(_) => {}
     }
     Ok(())
 }

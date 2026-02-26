@@ -215,6 +215,207 @@ macro_rules! event_store_tests {
         }
 
         #[test]
+        fn compaction_replays_as_snapshot_events() {
+            let (mut store, _guard) = $create_store;
+            // Add two yaks
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("foo"),
+                        id: YakId::from("foo-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+            store
+                .append(&YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: YakId::from("foo-a1b2"),
+                        field_name: "state".to_string(),
+                        content: "wip".to_string(),
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("bar"),
+                        id: YakId::from("bar-c3d4"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            // Compact
+            store
+                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .unwrap();
+
+            let events = store.get_all_events().unwrap();
+
+            // Should never contain a Compacted event
+            assert!(
+                !events.iter().any(|e| matches!(e, YakEvent::Compacted(_))),
+                "get_all_events should not return Compacted events"
+            );
+
+            // Should contain Added events for both yaks
+            let added_ids: Vec<&str> = events
+                .iter()
+                .filter_map(|e| match e {
+                    YakEvent::Added(a, _) => Some(a.id.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                added_ids.contains(&"foo-a1b2"),
+                "Should have Added for foo, got: {:?}",
+                added_ids
+            );
+            assert!(
+                added_ids.contains(&"bar-c3d4"),
+                "Should have Added for bar, got: {:?}",
+                added_ids
+            );
+
+            // Should have a FieldUpdated for foo's state=wip
+            let state_updates: Vec<&str> = events
+                .iter()
+                .filter_map(|e| match e {
+                    YakEvent::FieldUpdated(f, _)
+                        if f.id.as_str() == "foo-a1b2" && f.field_name == "state" =>
+                    {
+                        Some(f.content.as_str())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                state_updates.contains(&"wip"),
+                "Should have state=wip for foo, got: {:?}",
+                state_updates
+            );
+        }
+
+        #[test]
+        fn events_after_compaction_are_preserved() {
+            let (mut store, _guard) = $create_store;
+            // Add a yak
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("foo"),
+                        id: YakId::from("foo-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            // Compact
+            store
+                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .unwrap();
+
+            // Add another yak after compaction
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("bar"),
+                        id: YakId::from("bar-c3d4"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            let events = store.get_all_events().unwrap();
+
+            // Should have snapshot events + the post-compaction event
+            let added_ids: Vec<&str> = events
+                .iter()
+                .filter_map(|e| match e {
+                    YakEvent::Added(a, _) => Some(a.id.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                added_ids.contains(&"foo-a1b2"),
+                "Should have snapshot Added for foo"
+            );
+            assert!(
+                added_ids.contains(&"bar-c3d4"),
+                "Should have post-compaction Added for bar"
+            );
+        }
+
+        #[test]
+        fn latest_compaction_wins() {
+            let (mut store, _guard) = $create_store;
+            // Add foo
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("foo"),
+                        id: YakId::from("foo-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            // First compaction
+            store
+                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .unwrap();
+
+            // Add bar after first compaction
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("bar"),
+                        id: YakId::from("bar-c3d4"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            // Second compaction (should include foo + bar)
+            store
+                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .unwrap();
+
+            let events = store.get_all_events().unwrap();
+
+            // No Compacted events visible
+            assert!(
+                !events.iter().any(|e| matches!(e, YakEvent::Compacted(_))),
+                "get_all_events should not return Compacted events"
+            );
+
+            // Both yaks should be present (from latest snapshot)
+            let added_ids: Vec<&str> = events
+                .iter()
+                .filter_map(|e| match e {
+                    YakEvent::Added(a, _) => Some(a.id.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                added_ids.contains(&"foo-a1b2"),
+                "Should have Added for foo from latest snapshot"
+            );
+            assert!(
+                added_ids.contains(&"bar-c3d4"),
+                "Should have Added for bar from latest snapshot"
+            );
+        }
+
+        #[test]
         fn roundtrips_all_event_types() {
             let (mut store, _guard) = $create_store;
             store
