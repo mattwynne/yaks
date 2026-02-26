@@ -47,14 +47,14 @@ Feature: Manage yak context
         new
         """
 
-  Rule: Empty piped stdin is an error
+  Rule: Zero-byte stdin is a no-op
 
-    Example: Piping empty content to context fails
+    @fullstack
+    Example: Piping empty content to context does nothing
       Given I have a clean git repository
       And I add the yak "my yak"
       When I try to set the context of "my yak" with empty stdin
-      Then the command should fail
-      And the error should contain "no content received on stdin"
+      Then the command should succeed
 
   Rule: Show mode displays yak name and context
 

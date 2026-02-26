@@ -16,14 +16,14 @@ Feature: Yak fields
         field content
         """
 
-  Rule: Empty piped stdin is an error
+  Rule: Zero-byte stdin is a no-op
 
-    Example: Piping empty content to field fails
+    @fullstack
+    Example: Piping empty content to field does nothing
       Given I have a clean git repository
       And I add the yak "my yak"
       When I try to set the "notes" field of "my yak" with empty stdin
-      Then the command should fail
-      And the error should contain "no content received on stdin"
+      Then the command should succeed
 
   Rule: The name field is set automatically on add
     When a yak is added, a "name" field is created containing
