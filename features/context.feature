@@ -56,6 +56,21 @@ Feature: Manage yak context
       When I try to set the context of "my yak" with empty stdin
       Then the command should succeed
 
+  Rule: Bare context defaults to showing context
+
+    The routing logic lives in main.rs, so this only
+    applies to the fullstack (binary) test path.
+
+    @fullstack
+    Example: bare context shows the yak name
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I run yx context "my yak"
+      Then the output should be:
+        """
+        my yak
+        """
+
   Rule: Show mode displays yak name and context
 
     Example: Showing a yak with no context shows only the name

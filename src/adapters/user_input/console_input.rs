@@ -81,7 +81,7 @@ impl ConsoleInput {
         }
     }
 
-    fn stdin_has_readable_data() -> bool {
+    pub fn stdin_has_readable_data() -> bool {
         use std::os::unix::io::AsRawFd;
 
         let stdin_fd = io::stdin().as_raw_fd();

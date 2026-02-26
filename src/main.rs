@@ -113,12 +113,16 @@ enum Commands {
         /// New name
         to: String,
     },
-    /// Edit or show yak context
+    /// Show or edit yak context
     Context {
         /// The yak name (space-separated words)
         name: Vec<String>,
+        /// Show context (default when no stdin is piped)
         #[arg(long)]
         show: bool,
+        /// Edit context interactively ($EDITOR)
+        #[arg(long)]
+        edit: bool,
     },
     /// Set the state of a yak
     State {
@@ -319,12 +323,14 @@ fn main() -> Result<()> {
             }
         }
         Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
-        Commands::Context { name, show } => {
+        Commands::Context { name, show: _, edit } => {
             let name_str = name.join(" ");
-            if show {
-                app.handle(ShowContext::new(&name_str))
-            } else {
+            if ConsoleInput::stdin_has_readable_data() || edit {
                 app.handle(EditContext::new(&name_str))
+            } else {
+                // Default (no piped data, no --edit): show
+                // --show kept for backward compat
+                app.handle(ShowContext::new(&name_str))
             }
         }
         Commands::State {
