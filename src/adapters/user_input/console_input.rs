@@ -25,12 +25,6 @@ impl InputPort for ConsoleInput {
             return self.read_stdin_content();
         }
 
-        // YX_IGNORE_STDIN suppresses editor launch (for tests, CI,
-        // non-interactive tools like Claude Code)
-        if env::var("YX_IGNORE_STDIN").is_ok() {
-            return Ok(None);
-        }
-
         // Interactive mode (TTY): open editor
         self.edit_content(initial_content, template)
     }

@@ -10,8 +10,6 @@ Set Height 500
 Set Padding 20
 Set TypingSpeed 50ms
 
-Env YX_IGNORE_STDIN "1"
-
 # Alice creates some yaks
 Type "cd alice"
 Enter

@@ -9,11 +9,6 @@
 # This prevents pre-commit hooks (like git-mit) from interfering with test setup
 export GIT_CONFIG_PARAMETERS="'core.hooksPath=/dev/null'"
 
-# Disable automatic stdin reading and editor launch in tests
-# This prevents interference with shellspec protocol and hanging on editor launch
-# Tests must explicitly unset YX_IGNORE_STDIN to test piped stdin behavior
-export YX_IGNORE_STDIN=1
-
 # Prevent tests from polluting the main repository's git refs
 # Set GIT_CEILING_DIRECTORIES to stop git from finding the main repo
 # when tests use temp directories
