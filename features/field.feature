@@ -25,6 +25,21 @@ Feature: Yak fields
       When I try to set the "notes" field of "my yak" with empty stdin
       Then the command should succeed
 
+  Rule: Bare field defaults to showing field
+
+    @fullstack
+    Example: bare field shows field content
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the "notes" field of "my yak" to "my notes"
+      And I run yx field "my yak" notes
+      Then the output should be:
+        """
+        my yak
+
+        my notes
+        """
+
   Rule: The name field is set automatically on add
     When a yak is added, a "name" field is created containing
     the yak's display name.

@@ -135,15 +135,19 @@ enum Commands {
         #[arg(long)]
         recursive: bool,
     },
-    /// Write or show custom field for a yak
+    /// Show or edit custom field for a yak
     Field {
         /// The yak name (space-separated words)
         #[arg(required = true)]
         name: Vec<String>,
         /// The field name (e.g., "notes", "priority", "notes.txt")
         field: String,
+        /// Show field (default when no stdin is piped)
         #[arg(long)]
         show: bool,
+        /// Edit field interactively ($EDITOR)
+        #[arg(long)]
+        edit: bool,
     },
     /// Rebuild yaks from the git event store tree
     Reset {
@@ -341,12 +345,18 @@ fn main() -> Result<()> {
             let name_str = name.join(" ");
             app.handle(SetState::new(&name_str, &state).with_recursive(recursive))
         }
-        Commands::Field { name, field, show } => {
+        Commands::Field {
+            name,
+            field,
+            show: _,
+            edit,
+        } => {
             let name_str = name.join(" ");
-            if show {
-                app.handle(ShowField::new(&name_str, &field))
-            } else {
+            if ConsoleInput::stdin_has_readable_data() || edit {
                 app.handle(WriteField::new(&name_str, &field))
+            } else {
+                // Default (no piped data, no --edit): show
+                app.handle(ShowField::new(&name_str, &field))
             }
         }
         Commands::Reset {
