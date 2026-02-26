@@ -263,6 +263,18 @@ impl GitEventStore {
                 // Flat: yak is always at root by its ID
                 self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
             }
+
+            YakEvent::Compacted(_) => {
+                // The git tree IS the snapshot — no tree modifications needed.
+                // The current tree already represents the compacted state.
+                match current_tree {
+                    Some(tree) => Ok(tree.id()),
+                    None => {
+                        let builder = self.repo.treebuilder(None)?;
+                        Ok(builder.write()?)
+                    }
+                }
+            }
         }
     }
     /// Check if any existing commit has the given Event-Id trailer

@@ -75,6 +75,10 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 store.write_field(id, field_name, content)?;
             }
         }
+
+        YakEvent::Compacted(_) => {
+            // Snapshot is handled at the event store level, not the projection.
+        }
     }
     Ok(())
 }
@@ -100,8 +104,7 @@ mod tests {
     #[test]
     fn duplicate_added_event_is_tolerated() {
         let storage = InMemoryStorage::new();
-        let mut listener: Box<dyn EventListener> =
-            Box::new(storage.clone());
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
 
         let event = added_event("make the tea", "tea-id");
 
@@ -116,8 +119,7 @@ mod tests {
     #[test]
     fn removed_event_for_missing_yak_is_tolerated() {
         let storage = InMemoryStorage::new();
-        let mut listener: Box<dyn EventListener> =
-            Box::new(storage.clone());
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
 
         let event = YakEvent::Removed(
             RemovedEvent {

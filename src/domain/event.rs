@@ -13,6 +13,7 @@ pub enum YakEvent {
     Removed(RemovedEvent, EventMetadata),
     Moved(MovedEvent, EventMetadata),
     FieldUpdated(FieldUpdatedEvent, EventMetadata),
+    Compacted(EventMetadata),
 }
 
 impl YakEvent {
@@ -22,6 +23,7 @@ impl YakEvent {
             Self::Removed(_, m) => m,
             Self::Moved(_, m) => m,
             Self::FieldUpdated(_, m) => m,
+            Self::Compacted(m) => m,
         }
     }
 
@@ -31,6 +33,7 @@ impl YakEvent {
             Self::Removed(e, _) => Self::Removed(e, metadata),
             Self::Moved(e, _) => Self::Moved(e, metadata),
             Self::FieldUpdated(e, _) => Self::FieldUpdated(e, metadata),
+            Self::Compacted(_) => Self::Compacted(metadata),
         }
     }
 
@@ -40,14 +43,19 @@ impl YakEvent {
             Self::Removed(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Moved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::FieldUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::Compacted(_) => "Compacted".to_string(),
         }
     }
 
     pub fn parse(message: &str) -> Result<Self> {
+        let meta = EventMetadata::default_legacy();
+        // Handle dataless events (no ": " separator)
+        if message == "Compacted" {
+            return Ok(Self::Compacted(meta));
+        }
         let (tag, data) = message
             .split_once(": ")
             .ok_or_else(|| anyhow::anyhow!("Invalid event format: {}", message))?;
-        let meta = EventMetadata::default_legacy();
         match tag {
             "Added" => Ok(Self::Added(AddedEvent::parse_data(data)?, meta)),
             "Removed" => Ok(Self::Removed(RemovedEvent::parse_data(data)?, meta)),
@@ -107,6 +115,7 @@ impl YakEvent {
             Self::Removed(e, _) => e.id.as_str(),
             Self::Moved(e, _) => e.id.as_str(),
             Self::FieldUpdated(e, _) => e.id.as_str(),
+            Self::Compacted(_) => "",
         }
     }
 }
@@ -223,6 +232,26 @@ mod tests {
             }
             _ => panic!("Expected FieldUpdated"),
         }
+    }
+
+    #[test]
+    fn format_message_compacted() {
+        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        assert_eq!(event.format_message(), "Compacted");
+    }
+
+    #[test]
+    fn parse_compacted_roundtrip() {
+        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        let msg = event.format_message();
+        let parsed = YakEvent::parse(&msg).unwrap();
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn compacted_yak_id_is_empty() {
+        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        assert_eq!(event.yak_id(), "");
     }
 
     #[test]
