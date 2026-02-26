@@ -78,3 +78,54 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::InMemoryStorage;
+    use crate::domain::event_metadata::EventMetadata;
+    use crate::domain::ports::{EventListener, ReadYakStore};
+
+    fn added_event(name: &str, id: &str) -> YakEvent {
+        YakEvent::Added(
+            AddedEvent {
+                name: Name::from(name),
+                id: YakId::from(id),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        )
+    }
+
+    #[test]
+    fn duplicate_added_event_is_tolerated() {
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> =
+            Box::new(storage.clone());
+
+        let event = added_event("make the tea", "tea-id");
+
+        listener.on_event(&event).unwrap();
+        listener.on_event(&event).unwrap(); // duplicate
+
+        let yaks = storage.list_yaks().unwrap();
+        assert_eq!(yaks.len(), 1);
+        assert_eq!(yaks[0].name, Name::from("make the tea"));
+    }
+
+    #[test]
+    fn removed_event_for_missing_yak_is_tolerated() {
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> =
+            Box::new(storage.clone());
+
+        let event = YakEvent::Removed(
+            RemovedEvent {
+                id: YakId::from("nonexistent"),
+            },
+            EventMetadata::default_legacy(),
+        );
+
+        listener.on_event(&event).unwrap(); // no yak to remove
+    }
+}
