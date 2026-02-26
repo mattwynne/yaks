@@ -522,6 +522,12 @@ fn main() -> Result<()> {
                 }
 
                 println!("Hard reset: {} yaks", yaks.len());
+                println!();
+                println!("To update the remote, run:");
+                println!("  git push origin refs/notes/yaks --force");
+                println!();
+                println!("Collaborators must then run:");
+                println!("  git fetch origin refs/notes/yaks:refs/notes/yaks --force");
             } else if git_from_disk {
                 // Rebuild git tree from .yaks directory
                 let yaks = storage.list_yaks()?;
