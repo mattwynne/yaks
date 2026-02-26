@@ -324,7 +324,6 @@ impl FullStackWorld {
         cmd.args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
-
             .env_remove("YX_SKIP_GIT_CHECKS")
             .current_dir(dir.path());
 
@@ -361,7 +360,6 @@ impl FullStackWorld {
         cmd.args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
-
             .env("YX_SKIP_GIT_CHECKS", "1")
             .current_dir(dir.path());
 
@@ -429,7 +427,6 @@ impl FullStackWorld {
         let output = Command::new(yx_path)
             .args(["add", yak_name])
             .env("YAK_PATH", &yak_path)
-
             .env("YX_SKIP_GIT_CHECKS", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -467,7 +464,6 @@ impl FullStackWorld {
         let output = Command::new(yx_path)
             .args(["add", yak_name])
             .env("YAK_PATH", &yak_path)
-
             .env("YX_SKIP_GIT_CHECKS", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -514,7 +510,6 @@ impl FullStackWorld {
             .args(["ls"])
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
-
             .env_remove("YX_SKIP_GIT_CHECKS")
             .env_remove("YAK_PATH")
             .current_dir(&run_dir)
@@ -549,7 +544,6 @@ impl FullStackWorld {
             .env("YAK_PATH", &yak_path)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
-
             .env_remove("YX_SKIP_GIT_CHECKS")
             .current_dir(&run_dir)
             .output()
@@ -911,7 +905,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let output = Command::new(yx_path)
             .args(args)
             .env("YAK_PATH", &yak_path)
-
             .env("YX_SKIP_GIT_CHECKS", "1")
             .current_dir(&repo_path)
             .output()
@@ -1017,7 +1010,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let output = Command::new(yx_path)
             .args(args)
             .env("YAK_PATH", &self.repo_path)
-
             .env("YX_SKIP_GIT_CHECKS", "1")
             .current_dir(&self.repo_path)
             .output()

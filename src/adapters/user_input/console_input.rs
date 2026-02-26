@@ -4,7 +4,7 @@ use crate::domain::ports::InputPort;
 use anyhow::{Context as AnyhowContext, Result};
 use std::env;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, IsTerminal, Read};
 use std::process::Command;
 
 /// Console-based input adapter
@@ -21,7 +21,7 @@ impl InputPort for ConsoleInput {
         template: Option<&str>,
     ) -> Result<Option<String>> {
         // Try reading from stdin first (non-TTY)
-        if !atty::is(atty::Stream::Stdin) {
+        if !io::stdin().is_terminal() {
             return self.read_stdin_content();
         }
 

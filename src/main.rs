@@ -289,11 +289,9 @@ fn main() -> Result<()> {
                 input
                     .edit_content(None, Some(&template))?
                     .filter(|c| !c.trim().is_empty())
-            } else if !atty::is(atty::Stream::Stdin) {
+            } else {
                 let input = ConsoleInput;
                 input.read_stdin_content().ok().flatten()
-            } else {
-                None
             };
             let mut use_case = AddYak::new(&name_str)
                 .with_parent(under.as_deref())
