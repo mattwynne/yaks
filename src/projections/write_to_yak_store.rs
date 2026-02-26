@@ -13,7 +13,11 @@ impl<T: WriteYakStore> EventListener for T {
     fn on_event(&mut self, event: &YakEvent) -> Result<()> {
         let result = apply_event(self, event);
         if let Err(e) = &result {
-            if e.to_string().contains("not found") {
+            let msg = e.to_string();
+            // Tolerate stale references and duplicate events during
+            // rebuild/sync — events are immutable facts, so the
+            // projection must be idempotent.
+            if msg.contains("not found") || msg.contains("already exists") {
                 return Ok(());
             }
         }
