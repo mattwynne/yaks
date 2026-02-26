@@ -268,6 +268,15 @@ fn main() -> Result<()> {
             fields,
         } => {
             let name_str = name.join(" ");
+            // If no --context flag, check for piped stdin
+            let context = context.or_else(|| {
+                let input = ConsoleInput;
+                if !atty::is(atty::Stream::Stdin) {
+                    input.read_stdin_content().ok().flatten()
+                } else {
+                    None
+                }
+            });
             let mut use_case = AddYak::new(&name_str)
                 .with_parent(under.as_deref())
                 .with_state(state.as_deref())
