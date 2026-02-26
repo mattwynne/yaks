@@ -333,9 +333,22 @@ fn main() -> Result<()> {
             }
         }
         Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
-        Commands::Context { name, show: _, edit } => {
+        Commands::Context {
+            name,
+            show: _,
+            edit,
+        } => {
             let name_str = name.join(" ");
-            if ConsoleInput::stdin_has_readable_data() || edit {
+            if edit {
+                let input = ConsoleInput;
+                let id = app.store.fuzzy_find_yak_id(&name_str)?;
+                let yak = app.store.get_yak(&id)?;
+                let current = yak.context.unwrap_or_default();
+                if let Some(content) = input.edit_content(Some(&current), None)? {
+                    app.with_yak_map(|yak_map| yak_map.update_context(id.clone(), content))?;
+                }
+                Ok(())
+            } else if ConsoleInput::stdin_has_readable_data() {
                 app.handle(EditContext::new(&name_str))
             } else {
                 // Default (no piped data, no --edit): show
@@ -358,7 +371,17 @@ fn main() -> Result<()> {
             edit,
         } => {
             let name_str = name.join(" ");
-            if ConsoleInput::stdin_has_readable_data() || edit {
+            if edit {
+                let input = ConsoleInput;
+                let id = app.store.fuzzy_find_yak_id(&name_str)?;
+                let yak = app.store.get_yak(&id)?;
+                let current = yak.fields.get(&field).cloned().unwrap_or_default();
+                if let Some(content) = input.edit_content(Some(&current), None)? {
+                    app.handle(WriteField::new(&name_str, &field).with_content(&content))
+                } else {
+                    Ok(())
+                }
+            } else if ConsoleInput::stdin_has_readable_data() {
                 app.handle(WriteField::new(&name_str, &field))
             } else {
                 // Default (no piped data, no --edit): show

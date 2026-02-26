@@ -848,6 +848,33 @@ async fn try_set_field_empty_stdin(
     world.run_yx_with_empty_stdin(&["field", &name, &field])
 }
 
+#[when(regex = r#"^I edit the "(.+)" field of "(.+)" with editor that appends "(.+)"$"#)]
+async fn edit_field_with_editor_append(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+    append_text: String,
+) -> Result<()> {
+    world.run_yx_with_editor(
+        &["field", &name, &field, "--edit"],
+        r#"printf '%s' "$APPEND_TEXT" >> "$1""#,
+        &[("APPEND_TEXT", &append_text)],
+    )
+}
+
+#[when(regex = r#"^I edit the context of "(.+)" with editor that appends "(.+)"$"#)]
+async fn edit_context_with_editor_append(
+    world: &mut FullStackWorld,
+    name: String,
+    append_text: String,
+) -> Result<()> {
+    world.run_yx_with_editor(
+        &["context", &name, "--edit"],
+        r#"printf '%s' "$APPEND_TEXT" >> "$1""#,
+        &[("APPEND_TEXT", &append_text)],
+    )
+}
+
 #[when(regex = r#"^I invoke bash completion for words: (.+)$"#)]
 async fn invoke_bash_completion(world: &mut FullStackWorld, words_str: String) -> Result<()> {
     world.run_bash_completion(&words_str)

@@ -71,6 +71,17 @@ Feature: Manage yak context
         my yak
         """
 
+  Rule: --edit launches editor for context
+
+    @fullstack
+    Example: --edit opens editor with current context
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the context of "my yak" to "original"
+      And I edit the context of "my yak" with editor that appends " - edited"
+      And I show the context of "my yak"
+      Then the output should include "original - edited"
+
   Rule: Show mode displays yak name and context
 
     Example: Showing a yak with no context shows only the name

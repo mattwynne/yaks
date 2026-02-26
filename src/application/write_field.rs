@@ -8,6 +8,7 @@ use super::{Application, UseCase};
 pub struct WriteField {
     name: String,
     field: String,
+    content: Option<String>,
 }
 
 impl WriteField {
@@ -15,15 +16,26 @@ impl WriteField {
         Self {
             name: name.to_string(),
             field: field.to_string(),
+            content: None,
         }
+    }
+
+    /// Pre-set content (bypasses stdin/editor input)
+    pub fn with_content(mut self, content: &str) -> Self {
+        self.content = Some(content.to_string());
+        self
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate field name
         validate_field_name(&self.field)?;
 
-        // Request content via input port (before closure)
-        let content = app.input.request_content(None, None)?;
+        // Use pre-set content, or request via input port
+        let content = if let Some(ref content) = self.content {
+            Some(content.clone())
+        } else {
+            app.input.request_content(None, None)?
+        };
 
         // No content means no-op (e.g., empty piped stdin)
         if let Some(content) = content {

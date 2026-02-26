@@ -40,6 +40,17 @@ Feature: Yak fields
         my notes
         """
 
+  Rule: --edit launches editor for field
+
+    @fullstack
+    Example: --edit opens editor with current field value
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the "notes" field of "my yak" to "original"
+      And I edit the "notes" field of "my yak" with editor that appends " - edited"
+      And I show the "notes" field of "my yak"
+      Then the output should include "original - edited"
+
   Rule: The name field is set automatically on add
     When a yak is added, a "name" field is created containing
     the yak's display name.
