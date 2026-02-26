@@ -233,6 +233,11 @@ impl EventStore for InMemoryEventStore {
         expand_compacted_events(&events)
     }
 
+    fn compact(&mut self, metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
+        let event = YakEvent::Compacted(metadata);
+        self.append(&event)
+    }
+
     fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
         Ok(0)
     }

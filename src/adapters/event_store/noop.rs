@@ -21,6 +21,10 @@ impl EventStore for NoOpEventStore {
         Ok(0)
     }
 
+    fn compact(&mut self, _metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
+        Ok(())
+    }
+
     fn sync(
         &mut self,
         _bus: &mut crate::infrastructure::event_bus::EventBus,

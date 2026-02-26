@@ -805,6 +805,11 @@ impl EventStore for GitEventStore {
         Ok(())
     }
 
+    fn compact(&mut self, metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
+        let event = YakEvent::Compacted(metadata);
+        self.append(&event)
+    }
+
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {
         let Some(latest) = self.get_latest_commit()? else {
             return Ok(Vec::new());

@@ -416,6 +416,68 @@ macro_rules! event_store_tests {
         }
 
         #[test]
+        fn compact_creates_compacted_event() {
+            let (mut store, _guard) = $create_store;
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("foo"),
+                        id: YakId::from("foo-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            store.compact(EventMetadata::default_legacy()).unwrap();
+
+            let all = store.get_all_events().unwrap();
+            // After compaction, get_all_events expands the snapshot
+            // so we should see Added events (not Compacted)
+            assert!(!all.is_empty());
+            let added_ids: Vec<&str> = all
+                .iter()
+                .filter_map(|e| match e {
+                    YakEvent::Added(a, _) => Some(a.id.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                added_ids.contains(&"foo-a1b2"),
+                "Compacted snapshot should contain foo"
+            );
+        }
+
+        #[test]
+        fn compact_is_idempotent_for_known_event_id() {
+            let (mut store, _guard) = $create_store;
+            store
+                .append(&YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("foo"),
+                        id: YakId::from("foo-a1b2"),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ))
+                .unwrap();
+
+            store.compact(EventMetadata::default_legacy()).unwrap();
+
+            let all_before = store.get_all_events().unwrap();
+
+            // Compact again — should be idempotent via event_id dedup
+            store.compact(EventMetadata::default_legacy()).unwrap();
+
+            let all_after = store.get_all_events().unwrap();
+            assert_eq!(
+                all_before.len(),
+                all_after.len(),
+                "Duplicate compact should be idempotent"
+            );
+        }
+
+        #[test]
         fn roundtrips_all_event_types() {
             let (mut store, _guard) = $create_store;
             store

@@ -1,3 +1,4 @@
+use crate::domain::event_metadata::EventMetadata;
 use crate::domain::{Yak, YakEvent};
 use crate::infrastructure::event_bus::EventBus;
 use anyhow::Result;
@@ -9,6 +10,10 @@ pub trait EventStore {
     fn get_all_events(&self) -> Result<Vec<YakEvent>>;
     fn reset_from_snapshot(&mut self, yaks: &[Yak]) -> Result<usize>;
     fn sync(&mut self, bus: &mut EventBus, output: &dyn DisplayPort) -> Result<()>;
+
+    /// Create and append a Compacted event, which represents a
+    /// snapshot of the full state at this point in the event stream.
+    fn compact(&mut self, metadata: EventMetadata) -> Result<()>;
 
     fn get_events(&self, yak_id: &str) -> Result<Vec<YakEvent>> {
         Ok(self
