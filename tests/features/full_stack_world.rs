@@ -242,6 +242,71 @@ impl FullStackWorld {
         Ok(())
     }
 
+    /// Run yx with piped stdin AND a fake $EDITOR.
+    /// Combines stdin content with editor script for testing stdin+--edit.
+    pub fn run_yx_with_stdin_and_editor(
+        &mut self,
+        args: &[&str],
+        stdin_content: &str,
+        editor_script: &str,
+        editor_env: &[(&str, &str)],
+    ) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let script_path = self.repo_path.join(".fake-editor.sh");
+        std::fs::write(&script_path, format!("#!/bin/sh\n{}\n", editor_script))
+            .context("Failed to write fake editor script")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+                .context("Failed to set editor script permissions")?;
+        }
+
+        let mut cmd = Command::new(yx_path);
+        cmd.args(args)
+            .env("YAK_PATH", &self.repo_path)
+            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("EDITOR", &script_path)
+            .current_dir(&self.repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        for (key, value) in editor_env {
+            cmd.env(key, value);
+        }
+
+        let mut child = cmd
+            .spawn()
+            .context("Failed to spawn yx with stdin+editor")?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(stdin_content.as_bytes())
+                .context("Failed to write to stdin")?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .context("Failed to wait for yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if self.exit_code != 0 {
+            anyhow::bail!(
+                "yx command with stdin+editor failed:\nstdout: {}\nstderr: {}",
+                self.output,
+                self.error
+            );
+        }
+
+        Ok(())
+    }
+
     /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
     /// Used for testing git environment checks (not-in-repo, no gitignore).
     /// If explicit_yak_path is set, passes YAK_PATH to the command.

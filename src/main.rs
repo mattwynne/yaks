@@ -341,10 +341,17 @@ fn main() -> Result<()> {
             let name_str = name.join(" ");
             if edit {
                 let input = ConsoleInput;
+                // If stdin has data, use it as initial content; otherwise use existing context
+                let initial = if ConsoleInput::stdin_has_readable_data() {
+                    input.read_stdin_content()?.unwrap_or_default()
+                } else {
+                    let yak = app
+                        .store
+                        .get_yak(&app.store.fuzzy_find_yak_id(&name_str)?)?;
+                    yak.context.unwrap_or_default()
+                };
                 let id = app.store.fuzzy_find_yak_id(&name_str)?;
-                let yak = app.store.get_yak(&id)?;
-                let current = yak.context.unwrap_or_default();
-                if let Some(content) = input.edit_content(Some(&current), None)? {
+                if let Some(content) = input.edit_content(Some(&initial), None)? {
                     app.with_yak_map(|yak_map| yak_map.update_context(id.clone(), content))?;
                 }
                 Ok(())
@@ -373,10 +380,16 @@ fn main() -> Result<()> {
             let name_str = name.join(" ");
             if edit {
                 let input = ConsoleInput;
-                let id = app.store.fuzzy_find_yak_id(&name_str)?;
-                let yak = app.store.get_yak(&id)?;
-                let current = yak.fields.get(&field).cloned().unwrap_or_default();
-                if let Some(content) = input.edit_content(Some(&current), None)? {
+                // If stdin has data, use it as initial content; otherwise use existing field
+                let initial = if ConsoleInput::stdin_has_readable_data() {
+                    input.read_stdin_content()?.unwrap_or_default()
+                } else {
+                    let yak = app
+                        .store
+                        .get_yak(&app.store.fuzzy_find_yak_id(&name_str)?)?;
+                    yak.fields.get(&field).cloned().unwrap_or_default()
+                };
+                if let Some(content) = input.edit_content(Some(&initial), None)? {
                     app.handle(WriteField::new(&name_str, &field).with_content(&content))
                 } else {
                     Ok(())

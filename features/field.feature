@@ -51,6 +51,16 @@ Feature: Yak fields
       And I show the "notes" field of "my yak"
       Then the output should include "original - edited"
 
+  Rule: piped stdin + --edit opens editor pre-populated
+
+    @fullstack
+    Example: piped stdin becomes initial editor content for field
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I pipe "seed notes" and edit the "notes" field of "my yak" with editor that appends " - edited"
+      And I show the "notes" field of "my yak"
+      Then the output should include "seed notes - edited"
+
   Rule: The name field is set automatically on add
     When a yak is added, a "name" field is created containing
     the yak's display name.

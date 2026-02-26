@@ -82,6 +82,16 @@ Feature: Manage yak context
       And I show the context of "my yak"
       Then the output should include "original - edited"
 
+  Rule: piped stdin + --edit opens editor pre-populated
+
+    @fullstack
+    Example: piped stdin becomes initial editor content
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I pipe "seed content" and edit the context of "my yak" with editor that appends " - edited"
+      And I show the context of "my yak"
+      Then the output should include "seed content - edited"
+
   Rule: Show mode displays yak name and context
 
     Example: Showing a yak with no context shows only the name

@@ -875,6 +875,39 @@ async fn edit_context_with_editor_append(
     )
 }
 
+#[when(regex = r#"^I pipe "(.+)" and edit the context of "(.+)" with editor that appends "(.+)"$"#)]
+async fn pipe_and_edit_context(
+    world: &mut FullStackWorld,
+    stdin_content: String,
+    name: String,
+    append_text: String,
+) -> Result<()> {
+    world.run_yx_with_stdin_and_editor(
+        &["context", &name, "--edit"],
+        &stdin_content,
+        r#"printf '%s' "$APPEND_TEXT" >> "$1""#,
+        &[("APPEND_TEXT", &append_text)],
+    )
+}
+
+#[when(
+    regex = r#"^I pipe "(.+)" and edit the "(.+)" field of "(.+)" with editor that appends "(.+)"$"#
+)]
+async fn pipe_and_edit_field(
+    world: &mut FullStackWorld,
+    stdin_content: String,
+    field: String,
+    name: String,
+    append_text: String,
+) -> Result<()> {
+    world.run_yx_with_stdin_and_editor(
+        &["field", &name, &field, "--edit"],
+        &stdin_content,
+        r#"printf '%s' "$APPEND_TEXT" >> "$1""#,
+        &[("APPEND_TEXT", &append_text)],
+    )
+}
+
 #[when(regex = r#"^I invoke bash completion for words: (.+)$"#)]
 async fn invoke_bash_completion(world: &mut FullStackWorld, words_str: String) -> Result<()> {
     world.run_bash_completion(&words_str)
