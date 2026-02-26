@@ -721,6 +721,13 @@ async fn run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Resu
     world.run_raw(&arg_vec)
 }
 
+#[when(regex = r#"^I try to run yx (.+)$"#)]
+async fn try_run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> Result<()> {
+    let parsed = shell_split(&args);
+    let arg_vec: Vec<&str> = parsed.iter().map(|s| s.as_str()).collect();
+    world.run_raw(&arg_vec)
+}
+
 #[when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)]
 async fn when_add_yak_with_state_full_stack(
     world: &mut FullStackWorld,

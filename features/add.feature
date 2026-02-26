@@ -145,6 +145,14 @@ Feature: Add yaks
         my yak
         """
 
+  Rule: --edit launches editor for initial context
+
+    @fullstack
+    Example: --edit and --context together is an error
+      Given I have a clean git repository
+      When I try to run yx add "my yak" --edit --context "notes"
+      Then the command should fail
+
   Rule: --field sets custom fields at creation time
 
     Example: Add yak with custom field

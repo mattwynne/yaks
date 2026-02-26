@@ -36,9 +36,12 @@ enum Commands {
         /// Initial state (todo, wip, done)
         #[arg(long)]
         state: Option<String>,
-        /// Set context directly (skips editor)
-        #[arg(long)]
+        /// Set context directly
+        #[arg(long, conflicts_with = "edit")]
         context: Option<String>,
+        /// Launch $EDITOR for initial context
+        #[arg(long, conflicts_with = "context")]
+        edit: bool,
         /// Use a specific ID instead of auto-generating
         #[arg(long)]
         id: Option<String>,
@@ -264,6 +267,7 @@ fn main() -> Result<()> {
             under,
             state,
             context,
+            edit: _edit,
             id,
             fields,
         } => {
