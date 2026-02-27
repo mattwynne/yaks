@@ -89,8 +89,12 @@ impl ShowYak {
         if !long_fields.is_empty() {
             for (_i, (name, value)) in long_fields.iter().enumerate() {
                 app.display.info("");
-                app.display.display_section_rule(name);
-                app.display.info(value);
+                app.display.display_section_rule(&title_case(name));
+                let indented: String = value.lines()
+                    .map(|l| format!("  {l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                app.display.info(&indented);
             }
         }
 
@@ -497,12 +501,12 @@ mod tests {
         let output = buffer.contents();
         // Should have a ruled header with field name
         assert!(
-            output.contains("── notes ─"),
-            "Expected ruled header for 'notes', got:\n{output}"
+            output.contains("── Notes ─"),
+            "Expected ruled header for 'Notes', got:\n{output}"
         );
         assert!(
-            output.contains("Line one\nLine two\nLine three"),
-            "Expected long field content, got:\n{output}"
+            output.contains("  Line one\n  Line two\n  Line three"),
+            "Expected indented long field content, got:\n{output}"
         );
         // Last field gets a closing rule
         assert!(
