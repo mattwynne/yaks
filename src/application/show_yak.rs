@@ -70,12 +70,8 @@ impl ShowYak {
 
         // Child subtree
         if !yak.children.is_empty() {
-            let rule_width = app.display.width();
             app.display.info("");
-            let header = "── children ";
-            let padding = rule_width.saturating_sub(header.len());
-            app.display
-                .info(&format!("{header}{}", "─".repeat(padding)));
+            app.display.display_section_rule("children");
             app.display.info("");
             app.display.info("  ⋮");
             Self::display_subtree(app, &yak.children, "  ")?;
@@ -83,18 +79,13 @@ impl ShowYak {
 
         // Long fields in ruled sections
         if !long_fields.is_empty() {
-            let rule_width = app.display.width();
             for (i, (name, value)) in long_fields.iter().enumerate() {
                 app.display.info("");
-                // Header rule: ── name ────...
-                let header = format!("── {name} ");
-                let padding = rule_width.saturating_sub(header.len());
-                let header_rule = format!("{header}{}", "─".repeat(padding));
-                app.display.info(&header_rule);
+                app.display.display_section_rule(name);
                 app.display.info(value);
                 // Closing rule only after the last long field
                 if i == long_fields.len() - 1 {
-                    app.display.info(&"─".repeat(rule_width));
+                    app.display.display_closing_rule();
                 }
             }
         }

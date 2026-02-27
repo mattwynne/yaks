@@ -26,6 +26,12 @@ pub trait DisplayPort {
     /// No output when ancestors is empty.
     fn display_breadcrumb(&self, ancestors: &[Name]);
 
+    /// Display a section rule with a label: ── label ────────
+    fn display_section_rule(&self, label: &str);
+
+    /// Display a closing rule: ────────────────────────
+    fn display_closing_rule(&self);
+
     /// Display context body rendered as terminal markdown
     fn display_context(&self, context: &str);
 
