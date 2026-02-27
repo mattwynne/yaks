@@ -27,20 +27,8 @@ impl UseCase for ShowLog {
             .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
         let events = reader.get_all_events()?;
 
-        // Find the Compacted event index (if any)
-        let compacted_idx = events
-            .iter()
-            .position(|e| matches!(e, YakEvent::Compacted(_, _)));
-
         let mut entry_count = 0;
-        for (i, event) in events.iter().enumerate() {
-            // Skip snapshot events — they'll be shown under the Compacted entry
-            if let Some(cidx) = compacted_idx {
-                if i < cidx {
-                    continue;
-                }
-            }
-
+        for event in events.iter() {
             if entry_count > 0 {
                 app.display.info("");
             }
@@ -52,28 +40,27 @@ impl UseCase for ShowLog {
                 DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
             let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
 
-            if matches!(event, YakEvent::Compacted(_, _)) {
-                // Show snapshot events nested under the Compacted header
-                let snapshot_events = &events[..compacted_idx.unwrap()];
-                app.display.log_entry(
-                    event_id,
-                    &meta.author.name,
-                    &meta.author.email,
-                    &formatted_time,
-                    &event.format_message(),
-                );
-                for snapshot in snapshot_events {
-                    app.display
-                        .info(&format!("        {}", snapshot.format_message()));
+            app.display.log_entry(
+                event_id,
+                &meta.author.name,
+                &meta.author.email,
+                &formatted_time,
+                &event.format_message(),
+            );
+
+            if let YakEvent::Compacted(snapshots, _) = event {
+                for snap in snapshots {
+                    app.display.info(&format!(
+                        "        Added: \"{}\" \"{}\"",
+                        snap.name, snap.id
+                    ));
+                    if snap.state != "todo" {
+                        app.display.info(&format!(
+                            "        FieldUpdated: \"{}\" \"state\"",
+                            snap.id
+                        ));
+                    }
                 }
-            } else {
-                app.display.log_entry(
-                    event_id,
-                    &meta.author.name,
-                    &meta.author.email,
-                    &formatted_time,
-                    &event.format_message(),
-                );
             }
         }
         Ok(())
