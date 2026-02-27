@@ -25,24 +25,18 @@ Feature: yx compact - Compact the event stream
           - [wip] buy biscuits
         """
 
-  Rule: Log shows snapshot events after compaction
+  Rule: Log shows snapshot events nested under Compacted marker
 
-    Example: Log shows synthesized events after compacting
-      Given I add the yak "make the tea"
-      When I run yx compact --yes
-      Then it should succeed
-      When I run yx log
-      Then the output should include "Added"
-
-    Example: Log shows proper metadata on snapshot events
+    Example: Snapshot events appear indented under the Compacted event
       Given I add the yak "make the tea"
       When I set the state of "make the tea" to "wip"
       And I run yx compact --yes
       Then it should succeed
       When I run yx log
-      Then the output should not include "unknown"
-      And the output should not include "1970-01-01"
-      And the output should include "Compacted"
+      Then the output should include "Compacted"
+      And the output should include "        Added:"
+      And the output should include "        FieldUpdated:"
+      And the output should not include "event -"
 
   Rule: New events work after compaction
 

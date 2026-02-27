@@ -4,6 +4,7 @@ use anyhow::Result;
 use chrono::DateTime;
 
 use super::{Application, UseCase};
+use crate::domain::YakEvent;
 
 pub struct ShowLog;
 
@@ -25,22 +26,55 @@ impl UseCase for ShowLog {
             .event_reader
             .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
         let events = reader.get_all_events()?;
+
+        // Find the Compacted event index (if any)
+        let compacted_idx = events
+            .iter()
+            .position(|e| matches!(e, YakEvent::Compacted(_)));
+
+        let mut entry_count = 0;
         for (i, event) in events.iter().enumerate() {
-            if i > 0 {
+            // Skip snapshot events — they'll be shown under the Compacted entry
+            if let Some(cidx) = compacted_idx {
+                if i < cidx {
+                    continue;
+                }
+            }
+
+            if entry_count > 0 {
                 app.display.info("");
             }
+            entry_count += 1;
+
             let meta = event.metadata();
             let event_id = meta.event_id.as_deref().unwrap_or("-");
             let datetime =
                 DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
             let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
-            app.display.log_entry(
-                event_id,
-                &meta.author.name,
-                &meta.author.email,
-                &formatted_time,
-                &event.format_message(),
-            );
+
+            if matches!(event, YakEvent::Compacted(_)) {
+                // Show snapshot events nested under the Compacted header
+                let snapshot_events = &events[..compacted_idx.unwrap()];
+                app.display.log_entry(
+                    event_id,
+                    &meta.author.name,
+                    &meta.author.email,
+                    &formatted_time,
+                    &event.format_message(),
+                );
+                for snapshot in snapshot_events {
+                    app.display
+                        .info(&format!("        {}", snapshot.format_message()));
+                }
+            } else {
+                app.display.log_entry(
+                    event_id,
+                    &meta.author.name,
+                    &meta.author.email,
+                    &formatted_time,
+                    &event.format_message(),
+                );
+            }
         }
         Ok(())
     }
