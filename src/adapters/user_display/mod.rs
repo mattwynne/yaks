@@ -79,7 +79,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
-    fn display_header_box(&self, ancestors: &[Name], name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)]) {
+    fn display_header_box(&self, ancestors: &[Name], name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)], fields: &[(String, String)]) {
         let mut out = self.output.lock().unwrap();
 
         fn indicator_for(state: &str) -> &'static str {
@@ -105,67 +105,110 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         let header_content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
         let header_width = header_content.chars().count();
 
-        // Build child lines to measure widths
+        // Build child lines
         let child_lines: Vec<String> = children.iter().enumerate().map(|(i, (cname, cstate))| {
             let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
             let ci = indicator_for(cstate);
             format!("  {connector} {ci} {cname}  ")
         }).collect();
 
+        // Build field lines with right-aligned labels
+        let max_label_width = fields.iter().map(|(k, _)| k.chars().count()).max().unwrap_or(0);
+        let field_lines: Vec<String> = fields.iter().map(|(k, v)| {
+            let pad = max_label_width - k.chars().count();
+            format!("  {}{}: {}  ", " ".repeat(pad), k, v)
+        }).collect();
+
         // Inner width = max of all lines and terminal width - 2
         let max_content_width = std::iter::once(header_width)
             .chain(breadcrumb.iter().map(|b| b.chars().count()))
             .chain(child_lines.iter().map(|l| l.chars().count()))
+            .chain(field_lines.iter().map(|l| l.chars().count()))
             .max()
             .unwrap();
         let inner_width = (self.options.width.saturating_sub(2)).max(max_content_width);
 
         let top = format!("┌{}┐", "─".repeat(inner_width));
+        let divider = format!("├{}┤", "─".repeat(inner_width));
         let bottom = format!("└{}┘", "─".repeat(inner_width));
 
-        if self.options.color {
-            writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
-
-            // Breadcrumb line (dimmed)
-            if let Some(ref bc) = breadcrumb {
-                let bc_pad = inner_width - bc.chars().count();
-                writeln!(out, "\x1b[2m│{bc}{}│\x1b[0m", " ".repeat(bc_pad)).unwrap();
+        // Helper to write a padded line inside the box
+        let write_box_line = |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
+            let pad = inner_width - visible_width;
+            if color {
+                writeln!(out, "\x1b[2m│\x1b[0m{content}{}\x1b[2m│\x1b[0m", " ".repeat(pad)).unwrap();
+            } else {
+                writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
             }
+        };
 
-            // Name line
+        let write_dim_line = |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
+            let pad = inner_width - visible_width;
+            if color {
+                writeln!(out, "\x1b[2m│{content}{}│\x1b[0m", " ".repeat(pad)).unwrap();
+            } else {
+                writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
+            }
+        };
+
+        let color = self.options.color;
+
+        // Top border
+        if color {
+            writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
+        } else {
+            writeln!(out, "{top}").unwrap();
+        }
+
+        // Breadcrumb (dimmed)
+        if let Some(ref bc) = breadcrumb {
+            write_dim_line(&mut out, bc, bc.chars().count(), color);
+        }
+
+        // Name line
+        if color {
             let meta = format!("\x1b[90m · {state} · {date} · {}  \x1b[0m", created_by.name);
             let styled_header = match state {
                 "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{meta}"),
                 "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{meta}"),
                 _ => format!("  ○ \x1b[1m{name}\x1b[0m{meta}"),
             };
-            let header_pad = inner_width - header_width;
-            writeln!(out, "\x1b[2m│\x1b[0m{styled_header}{}\x1b[2m│\x1b[0m", " ".repeat(header_pad)).unwrap();
+            write_box_line(&mut out, &styled_header, header_width, true);
+        } else {
+            write_box_line(&mut out, &header_content, header_width, false);
+        }
 
-            // Children
-            for (i, (cname, cstate)) in children.iter().enumerate() {
-                let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
+        // Children
+        for (i, (cname, cstate)) in children.iter().enumerate() {
+            let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
+            if color {
                 let styled_child = match cstate.as_str() {
                     "wip" => format!("  {connector} \x1b[32m●\x1b[0m \x1b[1m{cname}\x1b[0m  "),
                     "done" => format!("  {connector} \x1b[90m●\x1b[0m \x1b[90;9m{cname}\x1b[0m  "),
                     _ => format!("  {connector} ○ {cname}  "),
                 };
-                let child_pad = inner_width - child_lines[i].chars().count();
-                writeln!(out, "\x1b[2m│\x1b[0m{styled_child}{}\x1b[2m│\x1b[0m", " ".repeat(child_pad)).unwrap();
+                write_box_line(&mut out, &styled_child, child_lines[i].chars().count(), true);
+            } else {
+                write_box_line(&mut out, &child_lines[i], child_lines[i].chars().count(), false);
             }
+        }
+
+        // Divider + fields
+        if !fields.is_empty() {
+            if color {
+                writeln!(out, "\x1b[2m{divider}\x1b[0m").unwrap();
+            } else {
+                writeln!(out, "{divider}").unwrap();
+            }
+            for line in &field_lines {
+                write_box_line(&mut out, line, line.chars().count(), color);
+            }
+        }
+
+        // Bottom border
+        if color {
             writeln!(out, "\x1b[2m{bottom}\x1b[0m").unwrap();
         } else {
-            writeln!(out, "{top}").unwrap();
-            if let Some(ref bc) = breadcrumb {
-                let bc_pad = inner_width - bc.chars().count();
-                writeln!(out, "│{bc}{}│", " ".repeat(bc_pad)).unwrap();
-            }
-            let header_pad = inner_width - header_width;
-            writeln!(out, "│{header_content}{}│", " ".repeat(header_pad)).unwrap();
-            for (_i, line) in child_lines.iter().enumerate() {
-                let child_pad = inner_width - line.chars().count();
-                writeln!(out, "│{line}{}│", " ".repeat(child_pad)).unwrap();
-            }
             writeln!(out, "{bottom}").unwrap();
         }
     }
@@ -462,7 +505,7 @@ mod tests {
             name: "Matt Wynne".to_string(),
             email: "matt@example.com".to_string(),
         };
-        display.display_header_box(&[], &name, "wip", &timestamp, &author, &[]);
+        display.display_header_box(&[], &name, "wip", &timestamp, &author, &[], &[]);
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
         assert!(lines[0].starts_with('┌'), "Expected top border, got: {:?}", lines[0]);

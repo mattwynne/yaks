@@ -4,6 +4,20 @@ use anyhow::Result;
 
 use super::{Application, UseCase};
 
+/// Convert a snake_case field name to Title Case (e.g. "relates_to" → "Relates To")
+fn title_case(s: &str) -> String {
+    s.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub struct ShowYak {
     name: String,
 }
@@ -45,33 +59,23 @@ impl ShowYak {
             kids
         };
 
-        // Header box with breadcrumb, name, state, date, author, and children
-        app.display
-            .display_header_box(&ancestors, &yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children);
-
-        // Classify custom fields into short and long
-        let mut short_fields: Vec<(&str, &str)> = Vec::new();
+        // Classify custom fields: no newlines = short (in box), newlines = long (ruled section)
+        let mut short_fields: Vec<(String, String)> = Vec::new();
         let mut long_fields: Vec<(&str, &str)> = Vec::new();
         let mut field_names: Vec<&str> = yak.fields.keys().map(|k| k.as_str()).collect();
         field_names.sort();
         for name in &field_names {
-            let value = yak.fields[*name].as_str();
-            if value.contains('\n') || value.len() >= 60 {
+            let value = yak.fields[*name].as_str().trim();
+            if value.contains('\n') {
                 long_fields.push((name, value));
             } else {
-                short_fields.push((name, value));
+                short_fields.push((title_case(name), value.to_string()));
             }
         }
 
-        // Short fields inline after metadata
-        if !short_fields.is_empty() {
-            let line = short_fields
-                .iter()
-                .map(|(k, v)| format!("{k}: {v}"))
-                .collect::<Vec<_>>()
-                .join(" · ");
-            app.display.info(&line);
-        }
+        // Header box with breadcrumb, name, state, date, author, children, and short fields
+        app.display
+            .display_header_box(&ancestors, &yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children, &short_fields);
 
         // Context body (if present and non-empty)
         if let Some(ref context) = yak.context {
@@ -403,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn short_fields_appear_after_metadata() {
+    fn single_line_fields_appear_inside_box() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -423,30 +427,45 @@ mod tests {
         app.handle(AddYak::new("my yak")).unwrap();
         app.handle(WriteField::new("my yak", "priority").with_content("high"))
             .unwrap();
-        app.handle(WriteField::new("my yak", "team").with_content("platform"))
+        app.handle(WriteField::new("my yak", "relates_to").with_content("foo-bar"))
             .unwrap();
         buffer.clear();
 
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // Short fields appear after the box bottom border
-        let box_bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
-        let fields_line = &lines[box_bottom + 1];
+
+        // Fields should be inside the box (between ┌ and └)
+        let top = lines.iter().position(|l| l.starts_with('┌')).unwrap();
+        let bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
+
+        // Divider bar between header and fields
+        let divider = lines.iter().position(|l| l.starts_with('├'));
+        assert!(divider.is_some(), "Expected divider bar, got:\n{output}");
+        let divider = divider.unwrap();
+        assert!(divider > top && divider < bottom, "Divider should be inside box");
+
+        // Title Case field names
+        let priority_line = lines.iter().find(|l| l.contains("Priority:"));
         assert!(
-            fields_line.contains("priority: high"),
-            "Expected 'priority: high' in short fields line, got: {:?}",
-            fields_line
+            priority_line.is_some(),
+            "Expected 'Priority:' (Title Case), got:\n{output}"
         );
         assert!(
-            fields_line.contains("team: platform"),
-            "Expected 'team: platform' in short fields line, got: {:?}",
-            fields_line
+            priority_line.unwrap().contains("high"),
+            "Expected 'high' value, got: {:?}",
+            priority_line
+        );
+
+        let relates_line = lines.iter().find(|l| l.contains("Relates To:"));
+        assert!(
+            relates_line.is_some(),
+            "Expected 'Relates To:' (Title Case), got:\n{output}"
         );
         assert!(
-            fields_line.contains(" · "),
-            "Expected fields joined with ' · ', got: {:?}",
-            fields_line
+            relates_line.unwrap().contains("foo-bar"),
+            "Expected 'foo-bar' value, got: {:?}",
+            relates_line
         );
     }
 
@@ -522,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn long_value_on_single_line_goes_to_ruled_section() {
+    fn long_single_line_value_goes_in_box() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -540,16 +559,21 @@ mod tests {
         );
 
         app.handle(AddYak::new("my yak")).unwrap();
-        let long_value = "a".repeat(60); // exactly 60 chars = long
+        let long_value = "a".repeat(60);
         app.handle(WriteField::new("my yak", "description").with_content(&long_value))
             .unwrap();
         buffer.clear();
 
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
+        // Single-line field goes in box, not in ruled section
         assert!(
-            output.contains("── description ─"),
-            "Expected ruled header for long single-line field, got:\n{output}"
+            output.contains("Description:"),
+            "Expected field in box, got:\n{output}"
+        );
+        assert!(
+            !output.contains("── description"),
+            "Should not have ruled section for single-line field, got:\n{output}"
         );
     }
 
