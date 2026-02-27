@@ -189,6 +189,82 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
     Ok(result)
 }
 
+fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
+    use crate::domain::yak_snapshot::YakSnapshot;
+    use std::collections::HashSet;
+
+    let mut yaks: HashMap<String, YakSnapshot> = HashMap::new();
+
+    for event in events {
+        match event {
+            YakEvent::Added(e, m) => {
+                yaks.insert(e.id.as_str().to_string(), YakSnapshot {
+                    id: e.id.clone(),
+                    name: e.name.clone(),
+                    parent_id: e.parent_id.clone(),
+                    state: "todo".to_string(),
+                    context: None,
+                    fields: HashMap::new(),
+                    created_by: m.author.clone(),
+                    created_at: m.timestamp,
+                });
+            }
+            YakEvent::Removed(e, _) => { yaks.remove(e.id.as_str()); }
+            YakEvent::Moved(e, _) => {
+                if let Some(yak) = yaks.get_mut(e.id.as_str()) {
+                    yak.parent_id = e.new_parent.clone();
+                }
+            }
+            YakEvent::FieldUpdated(e, _) => {
+                if let Some(yak) = yaks.get_mut(e.id.as_str()) {
+                    match e.field_name.as_str() {
+                        "state" => yak.state = e.content.clone(),
+                        "context.md" => yak.context = Some(e.content.clone()),
+                        "name" => yak.name = Name::from(e.content.as_str()),
+                        _ => { yak.fields.insert(e.field_name.clone(), e.content.clone()); }
+                    }
+                }
+            }
+            YakEvent::Compacted(snapshots, _) => {
+                yaks.clear();
+                for snap in snapshots {
+                    yaks.insert(snap.id.as_str().to_string(), snap.clone());
+                }
+            }
+        }
+    }
+
+    // Topological sort: parents before children
+    let mut result = Vec::new();
+    let mut emitted: HashSet<String> = HashSet::new();
+    let mut remaining: Vec<YakSnapshot> = yaks.into_values().collect();
+    remaining.sort_by_key(|y| y.id.as_str().to_string());
+
+    loop {
+        let before = remaining.len();
+        let mut still_remaining = Vec::new();
+        for yak in remaining {
+            let can_emit = match &yak.parent_id {
+                None => true,
+                Some(pid) => emitted.contains(pid.as_str()),
+            };
+            if can_emit {
+                emitted.insert(yak.id.as_str().to_string());
+                result.push(yak);
+            } else {
+                still_remaining.push(yak);
+            }
+        }
+        remaining = still_remaining;
+        if remaining.is_empty() || remaining.len() == before {
+            result.extend(remaining);
+            break;
+        }
+    }
+
+    Ok(result)
+}
+
 #[derive(Clone)]
 pub struct InMemoryEventStore {
     events: Arc<Mutex<Vec<YakEvent>>>,
@@ -244,8 +320,9 @@ impl EventStore for InMemoryEventStore {
         if events.is_empty() {
             anyhow::bail!("Cannot compact an empty event store");
         }
+        let snapshots = build_snapshots_from_events(&events)?;
         drop(events);
-        let event = YakEvent::Compacted(vec![], metadata);
+        let event = YakEvent::Compacted(snapshots, metadata);
         self.append(&event)
     }
 
@@ -294,6 +371,40 @@ mod tests {
     use crate::domain::event_metadata::EventMetadata;
     use crate::domain::events::AddedEvent;
     use crate::domain::slug::{Name, YakId};
+
+    #[test]
+    fn compact_stores_snapshot_in_event() {
+        let mut store = InMemoryEventStore::new();
+        store.append(&YakEvent::Added(
+            AddedEvent {
+                name: Name::from("test"),
+                id: YakId::from("test-a1b2"),
+                parent_id: None,
+            },
+            EventMetadata::default_legacy(),
+        )).unwrap();
+        store.append(&YakEvent::FieldUpdated(
+            crate::domain::events::FieldUpdatedEvent {
+                id: YakId::from("test-a1b2"),
+                field_name: "state".to_string(),
+                content: "wip".to_string(),
+            },
+            EventMetadata::default_legacy(),
+        )).unwrap();
+
+        store.compact(EventMetadata::default_legacy()).unwrap();
+
+        // Check the raw stored events (not get_all_events which may transform)
+        let raw = store.events.lock().unwrap();
+        let compacted = raw.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+        assert!(compacted.is_some(), "Should have a Compacted event");
+
+        if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+            assert_eq!(snapshots.len(), 1);
+            assert_eq!(snapshots[0].id, YakId::from("test-a1b2"));
+            assert_eq!(snapshots[0].state, "wip");
+        }
+    }
 
     #[test]
     fn test_in_memory_event_store() {
