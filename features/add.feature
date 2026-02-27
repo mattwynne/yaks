@@ -1,7 +1,7 @@
 Feature: Add yaks
   Create new work items to track. Names are free-form: letters, numbers,
   spaces, slashes, and special characters are all allowed. Use --under
-  (or --below) to nest under a parent.
+  (or --below, --in, --into, --blocks) to nest under a parent.
 
   Rule: Yaks can be created by name
 
@@ -51,8 +51,8 @@ Feature: Add yaks
 
   Rule: --under creates a child under a parent
     The --under flag nests the new yak under the specified parent.
-    --below is a synonym. The parent must already exist and be
-    unambiguous.
+    --below, --in, --into, and --blocks are synonyms. The parent must
+    already exist and be unambiguous.
 
     Example: Adding a child under a parent
       Given I have a clean git repository
@@ -66,16 +66,24 @@ Feature: Add yaks
         """
 
     @fullstack
-    Example: --below is a synonym for --under
+    Scenario Outline: Synonyms for --under
       Given I have a clean git repository
       And I add the yak "parent"
-      When I run yx add child --below parent
+      When I run yx add child <flag> parent
       And I list the yaks in "markdown" format
       Then the output should be:
         """
         - [todo] parent
           - [todo] child
         """
+
+      Examples:
+        | flag     |
+        | --under  |
+        | --below  |
+        | --in     |
+        | --into   |
+        | --blocks |
 
     Example: Adding a child to a done parent sets the parent back to todo
       Given I have a clean git repository
