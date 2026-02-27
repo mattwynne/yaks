@@ -369,6 +369,16 @@ async fn remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> 
     world.remove_yak(&yak_name)
 }
 
+#[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
+async fn remove_yak_recursive_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.remove_yak_recursive(&yak_name)
+}
+
+#[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
+async fn remove_yak_recursive_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+    world.remove_yak_recursive(&yak_name)
+}
+
 #[when(regex = r#"^I try to remove the yak "(.+)"$"#)]
 async fn try_remove_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     world.try_remove_yak(&yak_name)

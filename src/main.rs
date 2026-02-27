@@ -86,6 +86,9 @@ enum Commands {
     Remove {
         /// The yak name (space-separated words)
         name: Vec<String>,
+        /// Remove yak and all its children recursively
+        #[arg(long)]
+        recursive: bool,
     },
     /// Remove all done yaks
     Prune,
@@ -318,9 +321,9 @@ fn main() -> Result<()> {
             let name_str = name.join(" ");
             app.handle(StartYak::new(&name_str, recursive))
         }
-        Commands::Remove { name } => {
+        Commands::Remove { name, recursive } => {
             let name_str = name.join(" ");
-            app.handle(RemoveYak::new(&name_str))
+            app.handle(RemoveYak::new(&name_str).with_recursive(recursive))
         }
         Commands::Prune => app.handle(PruneYaks::new()),
         Commands::Move {

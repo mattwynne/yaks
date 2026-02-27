@@ -1044,6 +1044,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["rm", name])
     }
 
+    fn remove_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["rm", name, "--recursive"])
+    }
+
     fn try_remove_yak(&mut self, name: &str) -> Result<()> {
         self.run_yx_unchecked(&["rm", name])
     }

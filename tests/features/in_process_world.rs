@@ -297,6 +297,10 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(RemoveYak::new(name)))
     }
 
+    fn remove_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(RemoveYak::new(name).with_recursive(true)))
+    }
+
     fn try_remove_yak(&mut self, name: &str) -> Result<()> {
         self.try_execute(|app| app.handle(RemoveYak::new(name)))
     }

@@ -39,6 +39,9 @@ pub trait TestWorld {
     /// Remove a yak by name
     fn remove_yak(&mut self, name: &str) -> Result<()>;
 
+    /// Remove a yak and all its children recursively
+    fn remove_yak_recursive(&mut self, name: &str) -> Result<()>;
+
     /// Try to remove a yak - captures result without bailing on failure
     fn try_remove_yak(&mut self, name: &str) -> Result<()>;
 

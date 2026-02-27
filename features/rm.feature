@@ -24,6 +24,40 @@ Feature: Remove yaks
       When I remove the yak "Fix the bug"
       Then the output should be empty
 
+  Rule: Removing a parent yak without --recursive fails
+
+    Example: Cannot remove a yak with children
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      And I add the yak "Write tests" under "Fix the bug"
+      When I try to remove the yak "Fix the bug"
+      Then the command should fail
+      And the error should contain "child"
+
+  Rule: Recursive removal deletes the yak and all its descendants
+
+    Example: Remove a parent yak and its children
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      And I add the yak "Write tests" under "Fix the bug"
+      And I add the yak "Write docs" under "Fix the bug"
+      When I remove the yak "Fix the bug" recursively
+      And I list the yaks in "plain" format
+      Then the output should be empty
+
+    Example: Remove a deeply nested subtree
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      And I add the yak "Write tests" under "Fix the bug"
+      And I add the yak "Unit tests" under "Write tests"
+      And I add the yak "Keep this"
+      When I remove the yak "Fix the bug" recursively
+      And I list the yaks in "plain" format
+      Then the output should be:
+        """
+        Keep this
+        """
+
   Rule: Removing a non-existent yak returns an error
 
     Example: Yak not found
