@@ -34,6 +34,16 @@ Feature: yx compact - Compact the event stream
       When I run yx log
       Then the output should include "Added"
 
+    Example: Log shows proper metadata on snapshot events
+      Given I add the yak "make the tea"
+      When I set the state of "make the tea" to "wip"
+      And I run yx compact --yes
+      Then it should succeed
+      When I run yx log
+      Then the output should not include "unknown"
+      And the output should not include "1970-01-01"
+      And the output should include "Compacted"
+
   Rule: New events work after compaction
 
     Example: Adding a yak after compacting

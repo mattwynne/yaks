@@ -256,10 +256,14 @@ macro_rules! event_store_tests {
 
             let events = store.get_all_events().unwrap();
 
-            // Should never contain a Compacted event
-            assert!(
-                !events.iter().any(|e| matches!(e, YakEvent::Compacted(_))),
-                "get_all_events should not return Compacted events"
+            // Should contain exactly one Compacted marker event
+            let compacted_count = events
+                .iter()
+                .filter(|e| matches!(e, YakEvent::Compacted(_)))
+                .count();
+            assert_eq!(
+                compacted_count, 1,
+                "get_all_events should return exactly one Compacted marker"
             );
 
             // Should contain Added events for both yaks
@@ -391,10 +395,14 @@ macro_rules! event_store_tests {
 
             let events = store.get_all_events().unwrap();
 
-            // No Compacted events visible
-            assert!(
-                !events.iter().any(|e| matches!(e, YakEvent::Compacted(_))),
-                "get_all_events should not return Compacted events"
+            // Should contain exactly one Compacted marker (from latest compaction)
+            let compacted_count = events
+                .iter()
+                .filter(|e| matches!(e, YakEvent::Compacted(_)))
+                .count();
+            assert_eq!(
+                compacted_count, 1,
+                "get_all_events should return exactly one Compacted marker"
             );
 
             // Both yaks should be present (from latest snapshot)

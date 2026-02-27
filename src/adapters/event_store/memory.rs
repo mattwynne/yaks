@@ -27,6 +27,9 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
         return Ok(events.to_vec());
     };
 
+    // Extract the Compacted event's metadata
+    let compaction_metadata = events[idx].metadata().clone();
+
     // Replay events before the compaction to build state
     let pre_compaction = &events[..idx];
     let post_compaction = &events[idx + 1..];
@@ -144,7 +147,7 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
                     field_name: "state".to_string(),
                     content: yak.state.clone(),
                 },
-                EventMetadata::default_legacy(),
+                compaction_metadata.clone(),
             ));
         }
 
@@ -156,7 +159,7 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
                         field_name: "context.md".to_string(),
                         content: context.clone(),
                     },
-                    EventMetadata::default_legacy(),
+                    compaction_metadata.clone(),
                 ));
             }
         }
@@ -168,10 +171,13 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
                     field_name: field_name.clone(),
                     content: content.clone(),
                 },
-                EventMetadata::default_legacy(),
+                compaction_metadata.clone(),
             ));
         }
     }
+
+    // Include the Compacted marker event
+    result.push(YakEvent::Compacted(compaction_metadata));
 
     // Append post-compaction events (excluding any Compacted events)
     for event in post_compaction {

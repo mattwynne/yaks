@@ -399,6 +399,7 @@ impl GitEventStore {
         &self,
         tree: &git2::Tree,
         events: &mut Vec<YakEvent>,
+        compaction_metadata: &crate::domain::event_metadata::EventMetadata,
     ) -> Result<()> {
         use crate::domain::field::RESERVED_FIELDS;
         use crate::domain::slug::{Name, YakId};
@@ -542,7 +543,7 @@ impl GitEventStore {
                             field_name: "state".to_string(),
                             content: state.to_string(),
                         },
-                        crate::domain::event_metadata::EventMetadata::default_legacy(),
+                        compaction_metadata.clone(),
                     ));
                 }
             }
@@ -558,7 +559,7 @@ impl GitEventStore {
                             field_name: "context.md".to_string(),
                             content: content.to_string(),
                         },
-                        crate::domain::event_metadata::EventMetadata::default_legacy(),
+                        compaction_metadata.clone(),
                     ));
                 }
             }
@@ -583,7 +584,7 @@ impl GitEventStore {
                         field_name: field_name.to_string(),
                         content: content.to_string(),
                     },
-                    crate::domain::event_metadata::EventMetadata::default_legacy(),
+                    compaction_metadata.clone(),
                 ));
             }
         }
@@ -887,6 +888,7 @@ impl EventStore for GitEventStore {
         revwalk.push(latest.id())?;
 
         let mut compaction_tree: Option<git2::Tree> = None;
+        let mut compaction_metadata: Option<crate::domain::event_metadata::EventMetadata> = None;
 
         for oid in revwalk {
             let oid = oid?;
@@ -901,6 +903,18 @@ impl EventStore for GitEventStore {
 
             // Check for Compacted commit — stop walking and use its tree
             if first_line == "Compacted" {
+                use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+                let author = Author {
+                    name: commit.author().name().unwrap_or("unknown").to_string(),
+                    email: commit.author().email().unwrap_or("").to_string(),
+                };
+                let timestamp = Timestamp(commit.author().when().seconds());
+                let mut metadata = EventMetadata::new(author, timestamp);
+                metadata.event_id = Some(Self::extract_event_id(
+                    full_message,
+                    &commit.id().to_string(),
+                ));
+                compaction_metadata = Some(metadata);
                 compaction_tree = Some(commit.tree()?);
                 break;
             }
@@ -987,9 +1001,14 @@ impl EventStore for GitEventStore {
         }
 
         if let Some(tree) = compaction_tree {
+            let metadata = compaction_metadata.unwrap();
+
             // Synthesize events from the compaction snapshot tree
             let mut snapshot_events = Vec::new();
-            self.collect_compaction_events(&tree, &mut snapshot_events)?;
+            self.collect_compaction_events(&tree, &mut snapshot_events, &metadata)?;
+
+            // Include the Compacted marker event
+            snapshot_events.push(YakEvent::Compacted(metadata));
 
             // post_compaction_events are newest-first; reverse to
             // chronological then append after snapshot events
