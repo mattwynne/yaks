@@ -264,14 +264,30 @@ impl GitEventStore {
                 self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
             }
 
-            YakEvent::Compacted(_, _) => {
-                // Compacted keeps the current tree unchanged — the
-                // snapshot IS the current tree state.
-                match current_tree {
-                    Some(tree) => Ok(tree.id()),
-                    None => {
-                        anyhow::bail!("Cannot compact: no tree state exists")
+            YakEvent::Compacted(snapshots, _) => {
+                if snapshots.is_empty() {
+                    // Legacy: no snapshots, preserve current tree
+                    match current_tree {
+                        Some(tree) => Ok(tree.id()),
+                        None => {
+                            anyhow::bail!("Cannot compact: no tree state exists")
+                        }
                     }
+                } else {
+                    // Build tree from snapshots
+                    let mut root_builder = self.repo.treebuilder(None)?;
+                    for snap in snapshots {
+                        let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
+                            .name(snap.name.as_str())
+                            .state(&snap.state)
+                            .context(snap.context.as_deref().unwrap_or(""))
+                            .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
+                            .metadata(&snap.created_by, snap.created_at)
+                            .custom_fields(&snap.fields)
+                            .build()?;
+                        root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
+                    }
+                    Ok(root_builder.write()?)
                 }
             }
         }

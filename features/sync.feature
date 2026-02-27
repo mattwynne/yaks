@@ -280,7 +280,7 @@ Feature: yx sync - Collaborate on Yaks via Git
           ○ make the tea
         """
 
-  @fullstack @wip
+  @fullstack
   Rule: Sync reports when a compaction is received
 
     Example: Bob sees compaction message after Alice compacts
