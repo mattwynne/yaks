@@ -2,6 +2,8 @@
 
 use anyhow::Result;
 
+use crate::domain::slug::YakId;
+
 use super::{Application, UseCase};
 
 pub struct ShowYak {
@@ -46,6 +48,46 @@ impl ShowYak {
             }
         }
 
+        // Child subtree
+        if !yak.children.is_empty() {
+            app.display.info("");
+            Self::display_subtree(app, &yak.children, "")?;
+        }
+
+        Ok(())
+    }
+
+    fn display_subtree(
+        app: &mut Application,
+        child_ids: &[YakId],
+        prefix: &str,
+    ) -> Result<()> {
+        // Fetch and sort children (done first, then alphabetical)
+        let mut children: Vec<_> = child_ids
+            .iter()
+            .filter_map(|id| app.store.get_yak(id).ok())
+            .collect();
+        children.sort_by(|a, b| {
+            match (a.state == "done", b.state == "done") {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.cmp(&b.name),
+            }
+        });
+
+        for (i, child) in children.iter().enumerate() {
+            let is_last = i == children.len() - 1;
+            let connector = if is_last { "╰─ " } else { "├─ " };
+            let node_prefix = format!("{prefix}{connector}");
+            app.display
+                .display_yak_pretty(&node_prefix, &child.name, &child.state);
+
+            if !child.children.is_empty() {
+                let continuation = if is_last { "   " } else { "│  " };
+                let child_prefix = format!("{prefix}{continuation}");
+                Self::display_subtree(app, &child.children, &child_prefix)?;
+            }
+        }
         Ok(())
     }
 }
@@ -269,6 +311,137 @@ mod tests {
             "Expected 3 lines (no context section), got {} lines: {:?}",
             lines.len(),
             lines
+        );
+    }
+
+    #[test]
+    fn shows_child_subtree_below_metadata() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("parent")).unwrap();
+        app.handle(AddYak::new("alpha").with_parent(Some("parent")))
+            .unwrap();
+        app.handle(AddYak::new("beta").with_parent(Some("parent")))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("parent")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Should contain children with tree connectors
+        let alpha_line = lines.iter().find(|l| l.contains("alpha"));
+        let beta_line = lines.iter().find(|l| l.contains("beta"));
+        assert!(
+            alpha_line.is_some(),
+            "Expected child 'alpha' in output: {:?}",
+            lines
+        );
+        assert!(
+            beta_line.is_some(),
+            "Expected child 'beta' in output: {:?}",
+            lines
+        );
+        assert!(
+            alpha_line.unwrap().contains("├─"),
+            "Non-last child should have ├─ connector, got: {:?}",
+            alpha_line
+        );
+        assert!(
+            beta_line.unwrap().contains("╰─"),
+            "Last child should have ╰─ connector, got: {:?}",
+            beta_line
+        );
+    }
+
+    #[test]
+    fn no_subtree_when_no_children() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("lonely")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("lonely")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        // Should be just: name, blank, metadata (3 lines)
+        assert_eq!(
+            lines.len(),
+            3,
+            "Expected 3 lines (no subtree), got {} lines: {:?}",
+            lines.len(),
+            lines
+        );
+    }
+
+    #[test]
+    fn shows_nested_grandchildren_in_subtree() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("child").with_parent(Some("root")))
+            .unwrap();
+        app.handle(AddYak::new("grandchild").with_parent(Some("child")))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("root")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+
+        let grandchild_line = lines.iter().find(|l| l.contains("grandchild"));
+        assert!(
+            grandchild_line.is_some(),
+            "Expected grandchild in output: {:?}",
+            lines
+        );
+        // Grandchild under last child should have "   ╰─" prefix
+        assert!(
+            grandchild_line.unwrap().contains("╰─"),
+            "Grandchild should have tree connector, got: {:?}",
+            grandchild_line
         );
     }
 
