@@ -80,7 +80,8 @@ impl ShowYak {
             let padding = rule_width.saturating_sub(header.len());
             app.display
                 .info(&format!("{header}{}", "─".repeat(padding)));
-            Self::display_subtree(app, &yak.children, "")?;
+            app.display.info("");
+            Self::display_subtree(app, &yak.children, "  ")?;
         }
 
         // Long fields in ruled sections
@@ -410,13 +411,13 @@ mod tests {
             lines
         );
         assert!(
-            alpha_line.unwrap().contains("├─"),
-            "Non-last child should have ├─ connector, got: {:?}",
+            alpha_line.unwrap().starts_with("  ├─"),
+            "Non-last child should have indented ├─ connector, got: {:?}",
             alpha_line
         );
         assert!(
-            beta_line.unwrap().contains("╰─"),
-            "Last child should have ╰─ connector, got: {:?}",
+            beta_line.unwrap().starts_with("  ╰─"),
+            "Last child should have indented ╰─ connector, got: {:?}",
             beta_line
         );
     }
