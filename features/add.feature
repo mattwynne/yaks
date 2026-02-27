@@ -77,6 +77,33 @@ Feature: Add yaks
           - [todo] child
         """
 
+    Example: Adding a child to a done parent sets the parent back to todo
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I mark the yak "parent" as done
+      When I add the yak "child" under "parent"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+          - [todo] child
+        """
+
+    Example: Adding a child to a done grandparent sets ancestors back to todo
+      Given I have a clean git repository
+      And I add the yak "grandparent"
+      And I add the yak "parent" under "grandparent"
+      And I mark the yak "parent" as done
+      And I mark the yak "grandparent" as done
+      When I add the yak "child" under "parent"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] grandparent
+          - [todo] parent
+            - [todo] child
+        """
+
     Example: Nonexistent parent is rejected
       Given I have a clean git repository
       When I try to add the yak "child" under "nonexistent"
