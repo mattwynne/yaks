@@ -81,6 +81,7 @@ impl ShowYak {
             app.display
                 .info(&format!("{header}{}", "─".repeat(padding)));
             app.display.info("");
+            app.display.info("  ⋮");
             Self::display_subtree(app, &yak.children, "  ")?;
         }
 
