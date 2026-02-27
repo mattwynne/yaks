@@ -40,6 +40,30 @@ impl ShowYak {
         app.display
             .display_metadata_line(&yak.state, &yak.created_at, &yak.created_by);
 
+        // Classify custom fields into short and long
+        let mut short_fields: Vec<(&str, &str)> = Vec::new();
+        let mut long_fields: Vec<(&str, &str)> = Vec::new();
+        let mut field_names: Vec<&str> = yak.fields.keys().map(|k| k.as_str()).collect();
+        field_names.sort();
+        for name in &field_names {
+            let value = yak.fields[*name].as_str();
+            if value.contains('\n') || value.len() >= 60 {
+                long_fields.push((name, value));
+            } else {
+                short_fields.push((name, value));
+            }
+        }
+
+        // Short fields inline after metadata
+        if !short_fields.is_empty() {
+            let line = short_fields
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            app.display.info(&line);
+        }
+
         // Context body (if present and non-empty)
         if let Some(ref context) = yak.context {
             if !context.trim().is_empty() {
@@ -52,6 +76,24 @@ impl ShowYak {
         if !yak.children.is_empty() {
             app.display.info("");
             Self::display_subtree(app, &yak.children, "")?;
+        }
+
+        // Long fields in ruled sections
+        if !long_fields.is_empty() {
+            let rule_width: usize = 60;
+            for (i, (name, value)) in long_fields.iter().enumerate() {
+                app.display.info("");
+                // Header rule: ── name ────...
+                let header = format!("── {name} ");
+                let padding = rule_width.saturating_sub(header.len());
+                let header_rule = format!("{header}{}", "─".repeat(padding));
+                app.display.info(&header_rule);
+                app.display.info(value);
+                // Closing rule only after the last long field
+                if i == long_fields.len() - 1 {
+                    app.display.info(&"─".repeat(rule_width));
+                }
+            }
         }
 
         Ok(())
@@ -106,7 +148,7 @@ mod tests {
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
         InMemoryStorage,
     };
-    use crate::application::{AddYak, EditContext};
+    use crate::application::{AddYak, EditContext, WriteField};
     use crate::infrastructure::EventBus;
 
     fn make_app<'a>(
@@ -442,6 +484,157 @@ mod tests {
             grandchild_line.unwrap().contains("╰─"),
             "Grandchild should have tree connector, got: {:?}",
             grandchild_line
+        );
+    }
+
+    #[test]
+    fn short_fields_appear_after_metadata() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(WriteField::new("my yak", "priority").with_content("high"))
+            .unwrap();
+        app.handle(WriteField::new("my yak", "team").with_content("platform"))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        // Metadata line, then short fields line
+        let meta_line = lines.iter().position(|l| l.starts_with("State:")).unwrap();
+        let fields_line = &lines[meta_line + 1];
+        assert!(
+            fields_line.contains("priority: high"),
+            "Expected 'priority: high' in short fields line, got: {:?}",
+            fields_line
+        );
+        assert!(
+            fields_line.contains("team: platform"),
+            "Expected 'team: platform' in short fields line, got: {:?}",
+            fields_line
+        );
+        assert!(
+            fields_line.contains(" · "),
+            "Expected fields joined with ' · ', got: {:?}",
+            fields_line
+        );
+    }
+
+    #[test]
+    fn long_fields_appear_in_ruled_sections_at_bottom() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        let long_content = "Line one\nLine two\nLine three";
+        app.handle(WriteField::new("my yak", "notes").with_content(long_content))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        // Should have a ruled header with field name
+        assert!(
+            output.contains("── notes ─"),
+            "Expected ruled header for 'notes', got:\n{output}"
+        );
+        assert!(
+            output.contains("Line one\nLine two\nLine three"),
+            "Expected long field content, got:\n{output}"
+        );
+        // Last field gets a closing rule
+        assert!(
+            output.contains("──────────"),
+            "Expected closing rule, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn no_field_sections_when_no_custom_fields() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        assert!(
+            !output.contains("──"),
+            "Expected no ruled sections, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn long_value_on_single_line_goes_to_ruled_section() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        let long_value = "a".repeat(60); // exactly 60 chars = long
+        app.handle(WriteField::new("my yak", "description").with_content(&long_value))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("── description ─"),
+            "Expected ruled header for long single-line field, got:\n{output}"
         );
     }
 
