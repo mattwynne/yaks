@@ -15,6 +15,13 @@ pub trait DisplayPort {
     /// Display a yak entry in markdown format
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str);
 
-    /// Display a log entry with author, timestamp, and message
-    fn log_entry(&self, author_name: &str, author_email: &str, timestamp: &str, message: &str);
+    /// Display a log entry with event ID, author, timestamp, and message
+    fn log_entry(
+        &self,
+        event_id: &str,
+        author_name: &str,
+        author_email: &str,
+        timestamp: &str,
+        message: &str,
+    );
 }

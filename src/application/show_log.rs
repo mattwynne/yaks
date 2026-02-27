@@ -30,10 +30,12 @@ impl UseCase for ShowLog {
                 app.display.info("");
             }
             let meta = event.metadata();
+            let event_id = meta.event_id.as_deref().unwrap_or("-");
             let datetime =
                 DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
             let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
             app.display.log_entry(
+                event_id,
                 &meta.author.name,
                 &meta.author.email,
                 &formatted_time,
@@ -78,19 +80,25 @@ mod tests {
         );
 
         app.handle(AddYak::new("test yak")).unwrap();
+        buffer.clear();
         app.handle(ShowLog::new()).unwrap();
 
         let output = buffer.contents();
-        let messages: Vec<&str> = output.lines().collect();
+        let lines: Vec<&str> = output.lines().collect();
         assert!(
-            messages.iter().any(|m| m.contains("test@test.com")),
-            "Expected log to contain author email 'test@test.com', got: {:?}",
-            messages
+            lines[0].starts_with("event "),
+            "Expected first line to start with 'event ', got: {:?}",
+            lines[0]
         );
         assert!(
-            messages.iter().any(|m| m.contains("Added")),
+            lines.iter().any(|m| m.contains("test@test.com")),
+            "Expected log to contain author email 'test@test.com', got: {:?}",
+            lines
+        );
+        assert!(
+            lines.iter().any(|m| m.contains("Added")),
             "Expected log to contain 'Added' event message, got: {:?}",
-            messages
+            lines
         );
     }
 
@@ -125,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_show_log_separates_multiple_events_with_blank_line() {
+    fn test_show_log_uses_git_log_style_format() {
         let mut event_store = InMemoryEventStore::new();
         let reader = event_store.clone();
         let mut event_bus = EventBus::new();
@@ -147,48 +155,36 @@ mod tests {
             &auth,
         );
 
-        // Add two yaks to create two events
         app.handle(AddYak::new("first yak")).unwrap();
         app.handle(AddYak::new("second yak")).unwrap();
 
-        // Clear buffer to isolate ShowLog messages from AddYak messages
         buffer.clear();
 
         app.handle(ShowLog::new()).unwrap();
 
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // With 2 events, there should be exactly 1 blank separator between them
-        // The separator is an empty string added via display.info("")
-        // log_entry adds 2 lines per event (author line + message line)
-        // Expected order for 2 events:
-        // - Event 1 author line
-        // - Event 1 message line
-        // - Blank separator (only if i > 0, so before event 2)
-        // - Event 2 author line
-        // - Event 2 message line
-        // So we expect a blank line at index 2 (0-indexed)
 
-        // Find the index of the blank line
-        let blank_indices: Vec<usize> = lines
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, m)| if m.is_empty() { Some(idx) } else { None })
-            .collect();
-
+        // Each event is 5 lines: event, Author, Date, blank, message
+        // Between events there's a blank separator line
+        // So 2 events = 5 + 1 + 5 = 11 lines
         assert_eq!(
-            blank_indices.len(),
-            1,
-            "Expected exactly 1 blank separator, got {}. Full lines: {:?}",
-            blank_indices.len(),
+            lines.len(),
+            11,
+            "Expected 11 lines for 2 events, got {}. Lines: {:?}",
+            lines.len(),
             lines
         );
-
-        // The blank line should be at index 2 (after first event's 2 lines)
-        assert_eq!(
-            blank_indices[0], 2,
-            "Expected blank line at index 2 (between events), got index {}. Lines: {:?}",
-            blank_indices[0], lines
+        assert!(lines[0].starts_with("event "), "Line 1: {:?}", lines[0]);
+        assert!(lines[1].starts_with("Author: "), "Line 2: {:?}", lines[1]);
+        assert!(lines[2].starts_with("Date:   "), "Line 3: {:?}", lines[2]);
+        assert!(lines[3].is_empty(), "Line 4 should be blank");
+        assert!(
+            lines[4].starts_with("    "),
+            "Line 5 should be indented: {:?}",
+            lines[4]
         );
+        assert!(lines[5].is_empty(), "Line 6 should be separator");
+        assert!(lines[6].starts_with("event "), "Line 7: {:?}", lines[6]);
     }
 }

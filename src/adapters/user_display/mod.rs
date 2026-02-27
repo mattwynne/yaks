@@ -70,10 +70,28 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
-    fn log_entry(&self, author_name: &str, author_email: &str, timestamp: &str, message: &str) {
+    fn log_entry(
+        &self,
+        event_id: &str,
+        author_name: &str,
+        author_email: &str,
+        timestamp: &str,
+        message: &str,
+    ) {
         let mut out = self.output.lock().unwrap();
-        writeln!(out, "{} <{}>  {}", author_name, author_email, timestamp).unwrap();
-        writeln!(out, "{}", message).unwrap();
+        if self.options.color {
+            writeln!(out, "\x1b[33mevent {event_id}\x1b[0m").unwrap();
+            writeln!(out, "Author: {author_name} <{author_email}>").unwrap();
+            writeln!(out, "Date:   {timestamp}").unwrap();
+            writeln!(out).unwrap();
+            writeln!(out, "    {message}").unwrap();
+        } else {
+            writeln!(out, "event {event_id}").unwrap();
+            writeln!(out, "Author: {author_name} <{author_email}>").unwrap();
+            writeln!(out, "Date:   {timestamp}").unwrap();
+            writeln!(out).unwrap();
+            writeln!(out, "    {message}").unwrap();
+        }
     }
 }
 
