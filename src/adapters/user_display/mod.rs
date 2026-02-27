@@ -118,7 +118,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     fn display_section_rule(&self, label: &str) {
         let mut out = self.output.lock().unwrap();
         let header = format!("── {label} ");
-        let padding = self.options.width.saturating_sub(header.len());
+        let padding = self.options.width.saturating_sub(header.chars().count());
         let line = format!("{header}{}", "─".repeat(padding));
         if self.options.color {
             writeln!(out, "\x1b[2m{line}\x1b[0m").unwrap();

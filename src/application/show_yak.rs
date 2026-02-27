@@ -79,16 +79,14 @@ impl ShowYak {
 
         // Long fields in ruled sections
         if !long_fields.is_empty() {
-            for (i, (name, value)) in long_fields.iter().enumerate() {
+            for (_i, (name, value)) in long_fields.iter().enumerate() {
                 app.display.info("");
                 app.display.display_section_rule(name);
                 app.display.info(value);
-                // Closing rule only after the last long field
-                if i == long_fields.len() - 1 {
-                    app.display.display_closing_rule();
-                }
             }
         }
+
+        app.display.display_closing_rule();
 
         Ok(())
     }
@@ -340,11 +338,11 @@ mod tests {
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // Should be just: name, blank, metadata (3 lines)
+        // Box (3 lines) + closing rule (1 line) = 4 lines
         assert_eq!(
             lines.len(),
-            3,
-            "Expected 3 lines (no context section), got {} lines: {:?}",
+            4,
+            "Expected 4 lines (box + closing rule), got {} lines: {:?}",
             lines.len(),
             lines
         );
@@ -434,11 +432,11 @@ mod tests {
         app.handle(ShowYak::new("lonely")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // Should be just: name, blank, metadata (3 lines)
+        // Box (3 lines) + closing rule (1 line) = 4 lines
         assert_eq!(
             lines.len(),
-            3,
-            "Expected 3 lines (no subtree), got {} lines: {:?}",
+            4,
+            "Expected 4 lines (box + closing rule), got {} lines: {:?}",
             lines.len(),
             lines
         );
