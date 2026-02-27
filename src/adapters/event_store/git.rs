@@ -391,20 +391,14 @@ impl GitEventStore {
         Ok(None)
     }
 
-    /// Synthesize domain events from a compaction tree, preserving
-    /// the existing yak IDs stored as tree entry names.
+    /// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
     #[allow(clippy::cognitive_complexity)]
-    fn collect_compaction_events(
-        &self,
-        tree: &git2::Tree,
-        events: &mut Vec<YakEvent>,
-        compaction_metadata: &crate::domain::event_metadata::EventMetadata,
-    ) -> Result<()> {
+    fn read_snapshots_from_tree(&self, tree: &git2::Tree) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
         use crate::domain::field::RESERVED_FIELDS;
         use crate::domain::slug::{Name, YakId};
-        use std::collections::HashSet;
+        use crate::domain::yak_snapshot::YakSnapshot;
+        use std::collections::{HashMap, HashSet};
 
-        // Collect yak data from root-level tree entries
         struct YakData {
             id: String,
             name_str: String,
@@ -482,21 +476,18 @@ impl GitEventStore {
             }
         }
 
-        // Emit events using preserved IDs
-        for data in &ordered {
-            let id = YakId::from(data.id.as_str());
-            let name = Name::from(data.name_str.as_str());
-            let parent_id = data.parent_id_str.as_ref().map(|p| YakId::from(p.as_str()));
+        let mut snapshots = Vec::new();
 
+        for data in &ordered {
             let subtree = self.repo.find_tree(data.subtree_id)?;
 
             // Read .metadata.json if present
-            let added_metadata = if let Some(meta_entry) = subtree.get_name(".metadata.json") {
+            let (created_by, created_at) = if let Some(meta_entry) = subtree.get_name(".metadata.json") {
                 if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
                     if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                            use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
-                            EventMetadata::new(
+                            use crate::domain::event_metadata::{Author, Timestamp};
+                            (
                                 Author {
                                     name: json["created_by"]["name"]
                                         .as_str()
@@ -510,60 +501,37 @@ impl GitEventStore {
                                 Timestamp(json["created_at"].as_i64().unwrap_or(0)),
                             )
                         } else {
-                            crate::domain::event_metadata::EventMetadata::default_legacy()
+                            (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
                         }
                     } else {
-                        crate::domain::event_metadata::EventMetadata::default_legacy()
+                        (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
                     }
                 } else {
-                    crate::domain::event_metadata::EventMetadata::default_legacy()
+                    (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
                 }
             } else {
-                crate::domain::event_metadata::EventMetadata::default_legacy()
+                (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
             };
 
-            events.push(YakEvent::Added(
-                crate::domain::events::AddedEvent {
-                    name: name.clone(),
-                    id: id.clone(),
-                    parent_id: parent_id.clone(),
-                },
-                added_metadata,
-            ));
-
             // State
-            if let Some(state_entry) = subtree.get_name("state") {
+            let state = if let Some(state_entry) = subtree.get_name("state") {
                 let state_blob = self.repo.find_blob(state_entry.id())?;
-                let state = std::str::from_utf8(state_blob.content())?.trim();
-                if state != "todo" {
-                    events.push(YakEvent::FieldUpdated(
-                        crate::domain::events::FieldUpdatedEvent {
-                            id: id.clone(),
-                            field_name: "state".to_string(),
-                            content: state.to_string(),
-                        },
-                        compaction_metadata.clone(),
-                    ));
-                }
-            }
+                std::str::from_utf8(state_blob.content())?.trim().to_string()
+            } else {
+                "todo".to_string()
+            };
 
             // Context
-            if let Some(context_entry) = subtree.get_name("context.md") {
+            let context = if let Some(context_entry) = subtree.get_name("context.md") {
                 let context_blob = self.repo.find_blob(context_entry.id())?;
                 let content = std::str::from_utf8(context_blob.content())?;
-                if !content.is_empty() {
-                    events.push(YakEvent::FieldUpdated(
-                        crate::domain::events::FieldUpdatedEvent {
-                            id: id.clone(),
-                            field_name: "context.md".to_string(),
-                            content: content.to_string(),
-                        },
-                        compaction_metadata.clone(),
-                    ));
-                }
-            }
+                if content.is_empty() { None } else { Some(content.to_string()) }
+            } else {
+                None
+            };
 
             // Custom fields
+            let mut fields = HashMap::new();
             for field_entry in subtree.iter() {
                 if field_entry.kind() != Some(git2::ObjectType::Blob) {
                     continue;
@@ -577,18 +545,22 @@ impl GitEventStore {
                 }
                 let field_blob = self.repo.find_blob(field_entry.id())?;
                 let content = std::str::from_utf8(field_blob.content())?;
-                events.push(YakEvent::FieldUpdated(
-                    crate::domain::events::FieldUpdatedEvent {
-                        id: id.clone(),
-                        field_name: field_name.to_string(),
-                        content: content.to_string(),
-                    },
-                    compaction_metadata.clone(),
-                ));
+                fields.insert(field_name.to_string(), content.to_string());
             }
+
+            snapshots.push(YakSnapshot {
+                id: YakId::from(data.id.as_str()),
+                name: Name::from(data.name_str.as_str()),
+                parent_id: data.parent_id_str.as_ref().map(|p| YakId::from(p.as_str())),
+                state,
+                context,
+                fields,
+                created_by,
+                created_at,
+            });
         }
 
-        Ok(())
+        Ok(snapshots)
     }
 
     /// Read the current git tree state and synthesize domain events.
@@ -872,7 +844,11 @@ impl EventStore for GitEventStore {
         if self.get_latest_commit()?.is_none() {
             anyhow::bail!("Cannot compact an empty event store");
         }
-        let event = YakEvent::Compacted(vec![], metadata);
+        let snapshots = {
+            let tree = self.get_current_tree()?.unwrap();
+            self.read_snapshots_from_tree(&tree)?
+        };
+        let event = YakEvent::Compacted(snapshots, metadata);
         self.append(&event)
     }
 
@@ -1005,18 +981,17 @@ impl EventStore for GitEventStore {
         if let Some(tree) = compaction_tree {
             let metadata = compaction_metadata.unwrap();
 
-            // Synthesize events from the compaction snapshot tree
-            let mut snapshot_events = Vec::new();
-            self.collect_compaction_events(&tree, &mut snapshot_events, &metadata)?;
+            // Read snapshots from the compaction tree
+            let snapshots = self.read_snapshots_from_tree(&tree)?;
 
-            // Include the Compacted marker event
-            snapshot_events.push(YakEvent::Compacted(vec![], metadata));
+            let mut result = Vec::new();
+            result.push(YakEvent::Compacted(snapshots, metadata));
 
             // post_compaction_events are newest-first; reverse to
-            // chronological then append after snapshot events
+            // chronological then append after the Compacted event
             post_compaction_events.reverse();
-            snapshot_events.extend(post_compaction_events);
-            Ok(snapshot_events)
+            result.extend(post_compaction_events);
+            Ok(result)
         } else {
             // No compaction found — return all events chronologically
             post_compaction_events.reverse();
