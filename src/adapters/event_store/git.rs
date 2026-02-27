@@ -552,196 +552,44 @@ impl GitEventStore {
             return Ok(Vec::new());
         };
 
+        let snapshots = self.read_snapshots_from_tree(&tree)?;
         let mut events = Vec::new();
-        self.collect_snapshot_events(&tree, &mut events)?;
-        Ok(events)
-    }
 
-    #[allow(clippy::cognitive_complexity)]
-    fn collect_snapshot_events(&self, tree: &git2::Tree, events: &mut Vec<YakEvent>) -> Result<()> {
-        use crate::domain::field::RESERVED_FIELDS;
-        use crate::domain::slug::{generate_id, Name, YakId};
-        use std::collections::{HashMap, HashSet};
-
-        // First pass: collect all yak data from root-level entries
-        struct YakData {
-            name_str: String,
-            subtree_id: git2::Oid,
-            parent_id_str: Option<String>,
-        }
-
-        let mut yak_data: Vec<(String, YakData)> = Vec::new();
-
-        for entry in tree.iter() {
-            if entry.kind() != Some(git2::ObjectType::Tree) {
-                continue;
-            }
-            let entry_name = match entry.name() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-
-            let subtree = self.repo.find_tree(entry.id())?;
-
-            // A yak subtree has a `state` or `context.md` blob
-            let is_yak =
-                subtree.get_name("state").is_some() || subtree.get_name("context.md").is_some();
-            if !is_yak {
-                continue;
-            }
-
-            // Read name from `name` blob, falling back to directory entry name
-            let name_str = if let Some(name_entry) = subtree.get_name("name") {
-                let name_blob = self.repo.find_blob(name_entry.id())?;
-                std::str::from_utf8(name_blob.content())?.trim().to_string()
-            } else {
-                entry_name.clone()
-            };
-
-            // Read parent_id from blob if present
-            let parent_id_str = if let Some(pid_entry) = subtree.get_name("parent_id") {
-                let pid_blob = self.repo.find_blob(pid_entry.id())?;
-                Some(std::str::from_utf8(pid_blob.content())?.trim().to_string())
-            } else {
-                None
-            };
-
-            yak_data.push((
-                entry_name,
-                YakData {
-                    name_str,
-                    subtree_id: entry.id(),
-                    parent_id_str,
-                },
-            ));
-        }
-
-        // Topological sort: emit parentless yaks first, then yaks whose
-        // parent has already been emitted.
-        // Build a map from old tree-entry ID to parent_id for ordering.
-        let mut emitted: HashSet<String> = HashSet::new();
-        let mut remaining = yak_data;
-        let mut ordered: Vec<(String, YakData)> = Vec::new();
-
-        loop {
-            let before = remaining.len();
-            let mut still_remaining = Vec::new();
-
-            for item in remaining {
-                let can_emit = match &item.1.parent_id_str {
-                    None => true,
-                    Some(pid) => emitted.contains(pid),
-                };
-                if can_emit {
-                    emitted.insert(item.0.clone());
-                    ordered.push(item);
-                } else {
-                    still_remaining.push(item);
-                }
-            }
-
-            remaining = still_remaining;
-            if remaining.is_empty() || remaining.len() == before {
-                // Append any remaining (orphans) at end
-                ordered.extend(remaining);
-                break;
-            }
-        }
-
-        // Second pass: generate IDs and emit events.
-        // We need to map old parent_id strings to regenerated YakIds.
-        let mut old_entry_to_new_id: HashMap<String, YakId> = HashMap::new();
-        let mut emitted_ids: HashSet<YakId> = HashSet::new();
-
-        for (entry_name, data) in &ordered {
-            let parent_yak_id: Option<YakId> = data
-                .parent_id_str
-                .as_ref()
-                .and_then(|pid| old_entry_to_new_id.get(pid))
-                .cloned();
-
-            let id = generate_id(&data.name_str, parent_yak_id.as_ref());
-            let name = Name::from(data.name_str.as_str());
-
-            old_entry_to_new_id.insert(entry_name.clone(), id.clone());
-
-            // Skip duplicate entries that resolve to the same yak ID.
-            // This handles corrupted trees where multiple directory entries
-            // (e.g. "config" and "config-7bvf") contain the same yak name.
-            if !emitted_ids.insert(id.clone()) {
-                continue;
-            }
-
-            let subtree = self.repo.find_tree(data.subtree_id)?;
-
-            // Read .metadata.json if present
-            let added_metadata = if let Some(meta_entry) = subtree.get_name(".metadata.json") {
-                if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
-                    if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                            use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
-                            EventMetadata::new(
-                                Author {
-                                    name: json["created_by"]["name"]
-                                        .as_str()
-                                        .unwrap_or("unknown")
-                                        .to_string(),
-                                    email: json["created_by"]["email"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string(),
-                                },
-                                Timestamp(json["created_at"].as_i64().unwrap_or(0)),
-                            )
-                        } else {
-                            crate::domain::event_metadata::EventMetadata::default_legacy()
-                        }
-                    } else {
-                        crate::domain::event_metadata::EventMetadata::default_legacy()
-                    }
-                } else {
-                    crate::domain::event_metadata::EventMetadata::default_legacy()
-                }
-            } else {
-                crate::domain::event_metadata::EventMetadata::default_legacy()
-            };
-
-            // Added event
+        for snap in &snapshots {
+            // Added event with metadata from the snapshot
+            let metadata = crate::domain::event_metadata::EventMetadata::new(
+                snap.created_by.clone(),
+                snap.created_at,
+            );
             events.push(YakEvent::Added(
                 crate::domain::events::AddedEvent {
-                    name: name.clone(),
-                    id: id.clone(),
-                    parent_id: parent_yak_id.clone(),
+                    name: snap.name.clone(),
+                    id: snap.id.clone(),
+                    parent_id: snap.parent_id.clone(),
                 },
-                added_metadata,
+                metadata,
             ));
 
-            // State
-            if let Some(state_entry) = subtree.get_name("state") {
-                let state_blob = self.repo.find_blob(state_entry.id())?;
-                let state = std::str::from_utf8(state_blob.content())?.trim();
-                if state != "todo" {
-                    events.push(YakEvent::FieldUpdated(
-                        crate::domain::events::FieldUpdatedEvent {
-                            id: id.clone(),
-                            field_name: "state".to_string(),
-                            content: state.to_string(),
-                        },
-                        crate::domain::event_metadata::EventMetadata::default_legacy(),
-                    ));
-                }
+            // State (skip default "todo")
+            if snap.state != "todo" {
+                events.push(YakEvent::FieldUpdated(
+                    crate::domain::events::FieldUpdatedEvent {
+                        id: snap.id.clone(),
+                        field_name: "state".to_string(),
+                        content: snap.state.clone(),
+                    },
+                    crate::domain::event_metadata::EventMetadata::default_legacy(),
+                ));
             }
 
-            // Context
-            if let Some(context_entry) = subtree.get_name("context.md") {
-                let context_blob = self.repo.find_blob(context_entry.id())?;
-                let content = std::str::from_utf8(context_blob.content())?;
-                if !content.is_empty() {
+            // Context (skip empty)
+            if let Some(ref ctx) = snap.context {
+                if !ctx.is_empty() {
                     events.push(YakEvent::FieldUpdated(
                         crate::domain::events::FieldUpdatedEvent {
-                            id: id.clone(),
+                            id: snap.id.clone(),
                             field_name: "context.md".to_string(),
-                            content: content.to_string(),
+                            content: ctx.clone(),
                         },
                         crate::domain::event_metadata::EventMetadata::default_legacy(),
                     ));
@@ -749,31 +597,19 @@ impl GitEventStore {
             }
 
             // Custom fields
-            for field_entry in subtree.iter() {
-                if field_entry.kind() != Some(git2::ObjectType::Blob) {
-                    continue;
-                }
-                let field_name = match field_entry.name() {
-                    Some(n) => n,
-                    None => continue,
-                };
-                if RESERVED_FIELDS.contains(&field_name) {
-                    continue;
-                }
-                let field_blob = self.repo.find_blob(field_entry.id())?;
-                let content = std::str::from_utf8(field_blob.content())?;
+            for (field_name, content) in &snap.fields {
                 events.push(YakEvent::FieldUpdated(
                     crate::domain::events::FieldUpdatedEvent {
-                        id: id.clone(),
-                        field_name: field_name.to_string(),
-                        content: content.to_string(),
+                        id: snap.id.clone(),
+                        field_name: field_name.clone(),
+                        content: content.clone(),
                     },
                     crate::domain::event_metadata::EventMetadata::default_legacy(),
                 ));
             }
         }
 
-        Ok(())
+        Ok(events)
     }
 }
 
@@ -1317,19 +1153,44 @@ mod tests {
 
         let events = store.snapshot_events().unwrap();
 
-        // Should have an Added event with regenerated ID
+        // Should have an Added event with preserved ID
         let added = events
             .iter()
             .find(|e| matches!(e, YakEvent::Added(_, _)))
             .unwrap();
         if let YakEvent::Added(e, _) = added {
             assert_eq!(e.name, Name::from("test"));
-            assert!(
-                e.id.as_str().starts_with("test-"),
-                "Expected regenerated ID starting with 'test-', got '{}'",
-                e.id
-            );
+            assert_eq!(e.id, YakId::from("test-a1b2"));
             assert!(e.parent_id.is_none());
+        }
+    }
+
+    #[test]
+    fn snapshot_events_preserves_existing_yak_ids() {
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let events = store.snapshot_events().unwrap();
+        let added = events
+            .iter()
+            .find(|e| matches!(e, YakEvent::Added(_, _)))
+            .unwrap();
+        if let YakEvent::Added(e, _) = added {
+            assert_eq!(
+                e.id,
+                YakId::from("test-a1b2"),
+                "snapshot_events should preserve existing yak ID, not regenerate"
+            );
         }
     }
 
@@ -1412,10 +1273,13 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_events_regenerates_ids_for_legacy_yaks() {
+    fn snapshot_events_preserves_legacy_yak_ids() {
         let (_tmp, mut store) = setup_test_repo();
 
-        // Simulate a legacy yak where the tree key is a plain slug
+        // Legacy yak with plain slug ID (no suffix).
+        // Migrations (v2→v3) should have added proper IDs, but if
+        // a legacy yak still has a plain ID, snapshot_events
+        // preserves it as-is rather than regenerating.
         store
             .append(&YakEvent::Added(
                 AddedEvent {
@@ -1434,11 +1298,10 @@ mod tests {
             .unwrap();
 
         if let YakEvent::Added(e, _) = added {
-            // Should get a proper ID with suffix, not plain "dx"
-            assert!(
-                e.id.as_str().starts_with("dx-") && e.id.as_str().len() > 3,
-                "Expected regenerated ID like 'dx-xxxx', got '{}'",
-                e.id
+            assert_eq!(
+                e.id,
+                YakId::from("dx"),
+                "snapshot_events should preserve existing ID, even legacy plain slugs"
             );
         }
     }
