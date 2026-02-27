@@ -77,12 +77,17 @@ impl ShowYak {
         app.display
             .display_header_box(&ancestors, &yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children, &short_fields);
 
-        // Context body (if present and non-empty)
-        if let Some(ref context) = yak.context {
-            if !context.trim().is_empty() {
-                app.display.info("");
-                app.display.display_context(context);
-            }
+        // Context body
+        let has_context = yak.context.as_ref().map_or(false, |c| !c.trim().is_empty());
+        if has_context {
+            app.display.info("");
+            app.display.display_context(yak.context.as_ref().unwrap());
+        } else {
+            app.display.info("");
+            app.display.display_hint(&format!(
+                "This yak has no context yet. Add some with:\n\n  echo \"Here's the problem...\" | yx context {}",
+                yak.name
+            ));
         }
 
         // Long fields in ruled sections
@@ -98,6 +103,7 @@ impl ShowYak {
             }
         }
 
+        app.display.info("");
         app.display.display_closing_rule();
 
         Ok(())
@@ -321,14 +327,13 @@ mod tests {
 
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
-        let lines: Vec<&str> = output.lines().collect();
-        // Box (3 lines) + closing rule (1 line) = 4 lines
-        assert_eq!(
-            lines.len(),
-            4,
-            "Expected 4 lines (box + closing rule), got {} lines: {:?}",
-            lines.len(),
-            lines
+        assert!(
+            output.contains("This yak has no context yet"),
+            "Expected hint message when no context, got:\n{output}"
+        );
+        assert!(
+            output.contains("yx context my yak"),
+            "Expected hint with yak name, got:\n{output}"
         );
     }
 
@@ -399,15 +404,11 @@ mod tests {
 
         app.handle(ShowYak::new("lonely")).unwrap();
         let output = buffer.contents();
+        // No children in box — box should only have 3 lines (┌, │, └)
         let lines: Vec<&str> = output.lines().collect();
-        // Box (3 lines: ┌, │, └) + closing rule = 4 lines
-        assert_eq!(
-            lines.len(),
-            4,
-            "Expected 4 lines (box + closing rule), got {} lines: {:?}",
-            lines.len(),
-            lines
-        );
+        let top = lines.iter().position(|l| l.starts_with('┌')).unwrap();
+        let bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
+        assert_eq!(bottom - top, 2, "Box should have 3 lines (no children), got: {:?}", &lines[top..=bottom]);
     }
 
     #[test]

@@ -7,6 +7,9 @@ pub trait DisplayPort {
     /// Get the display width
     fn width(&self) -> usize;
 
+    /// Display a hint message (grey italic)
+    fn display_hint(&self, message: &str);
+
     /// Display success message
     fn success(&self, message: &str);
 

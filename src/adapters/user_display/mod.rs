@@ -39,6 +39,19 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         self.options.width
     }
 
+    fn display_hint(&self, message: &str) {
+        let mut out = self.output.lock().unwrap();
+        if self.options.color {
+            for line in message.lines() {
+                writeln!(out, "  \x1b[3;90m{line}\x1b[0m").unwrap();
+            }
+        } else {
+            for line in message.lines() {
+                writeln!(out, "  {line}").unwrap();
+            }
+        }
+    }
+
     fn success(&self, message: &str) {
         let mut out = self.output.lock().unwrap();
         writeln!(out, "{message}").unwrap();
