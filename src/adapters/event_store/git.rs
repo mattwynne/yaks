@@ -275,6 +275,7 @@ impl GitEventStore {
                     }
                 } else {
                     // Build tree from snapshots
+                    use super::migration::CURRENT_SCHEMA_VERSION;
                     let mut root_builder = self.repo.treebuilder(None)?;
                     for snap in snapshots {
                         let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
@@ -287,6 +288,9 @@ impl GitEventStore {
                             .build()?;
                         root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
                     }
+                    let version_blob =
+                        self.repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+                    root_builder.insert(".schema-version", version_blob, 0o100644)?;
                     Ok(root_builder.write()?)
                 }
             }
@@ -2229,6 +2233,39 @@ mod tests {
                 "refs/notes/yaks-peer should be cleaned up after sync"
             );
         }
+    }
+
+    #[test]
+    fn compact_preserves_schema_version_in_tree() {
+        use crate::adapters::event_store::migration::CURRENT_SCHEMA_VERSION;
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        store.compact(EventMetadata::default_legacy()).unwrap();
+
+        let tree = store.get_current_tree().unwrap().unwrap();
+        let schema_entry = tree
+            .get_name(".schema-version")
+            .expect(".schema-version should exist in tree after compact");
+        let blob = store.repo.find_blob(schema_entry.id()).unwrap();
+        let content = std::str::from_utf8(blob.content()).unwrap();
+        assert_eq!(
+            content,
+            CURRENT_SCHEMA_VERSION.to_string(),
+            "Schema version should be {} after compact",
+            CURRENT_SCHEMA_VERSION
+        );
     }
 
     #[test]
