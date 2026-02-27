@@ -36,6 +36,15 @@ impl ShowYak {
         app.display
             .display_header_box(&yak.name, &yak.state, &yak.created_at, &yak.created_by);
 
+        // Child subtree
+        if !yak.children.is_empty() {
+            app.display.info("");
+            app.display.display_section_rule("children");
+            app.display.info("");
+            app.display.info("  ⋮");
+            Self::display_subtree(app, &yak.children, "  ")?;
+        }
+
         // Classify custom fields into short and long
         let mut short_fields: Vec<(&str, &str)> = Vec::new();
         let mut long_fields: Vec<(&str, &str)> = Vec::new();
@@ -66,15 +75,6 @@ impl ShowYak {
                 app.display.info("");
                 app.display.display_context(context);
             }
-        }
-
-        // Child subtree
-        if !yak.children.is_empty() {
-            app.display.info("");
-            app.display.display_section_rule("children");
-            app.display.info("");
-            app.display.info("  ⋮");
-            Self::display_subtree(app, &yak.children, "  ")?;
         }
 
         // Long fields in ruled sections
