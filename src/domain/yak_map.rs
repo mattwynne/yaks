@@ -253,6 +253,9 @@ impl YakMap {
             ));
         }
 
+        // Demote done ancestors to todo when a new child is added
+        self.demote_done_ancestors_to_todo(&id);
+
         Ok(id)
     }
 
@@ -326,6 +329,24 @@ impl YakMap {
                             id: ancestor_id.clone(),
                             field_name: "state".to_string(),
                             content: "wip".to_string(),
+                        },
+                        self.metadata.clone(),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn demote_done_ancestors_to_todo(&mut self, id: &YakId) {
+        for ancestor_id in self.get_ancestor_ids(id) {
+            if let Some(parent) = self.yaks.get_mut(&ancestor_id) {
+                if parent.state == "done" {
+                    parent.state = "todo".to_string();
+                    self.pending_events.push(YakEvent::FieldUpdated(
+                        FieldUpdatedEvent {
+                            id: ancestor_id.clone(),
+                            field_name: "state".to_string(),
+                            content: "todo".to_string(),
                         },
                         self.metadata.clone(),
                     ));
@@ -1132,6 +1153,61 @@ mod tests {
     }
 
     #[test]
+    fn test_add_yak_demotes_done_parent_to_todo() {
+        let mut map = YakMap::new();
+        let parent_id = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        map.update_state(parent_id.clone(), "done".to_string())
+            .unwrap();
+        map.take_events();
+
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+            .unwrap();
+
+        assert_eq!(map.yaks.get(&parent_id).unwrap().state, "todo");
+        let events = map.take_events();
+        // Added + FieldUpdated(state=todo for parent)
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn test_add_yak_demotes_done_ancestors_through_multiple_levels() {
+        let mut map = YakMap::new();
+        let a_id = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b_id = map
+            .add_yak("b", Some(a_id.clone()), None, None, None, vec![])
+            .unwrap();
+        map.update_state(b_id.clone(), "done".to_string()).unwrap();
+        map.update_state(a_id.clone(), "done".to_string()).unwrap();
+        map.take_events();
+
+        map.add_yak("c", Some(b_id.clone()), None, None, None, vec![])
+            .unwrap();
+
+        assert_eq!(map.yaks.get(&a_id).unwrap().state, "todo");
+        assert_eq!(map.yaks.get(&b_id).unwrap().state, "todo");
+    }
+
+    #[test]
+    fn test_add_yak_does_not_demote_non_done_parent() {
+        let mut map = YakMap::new();
+        let parent_id = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        // Parent is "todo" (default)
+        map.take_events();
+
+        map.add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+            .unwrap();
+
+        assert_eq!(map.yaks.get(&parent_id).unwrap().state, "todo");
+        let events = map.take_events();
+        // Only Added event (no state change for parent)
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
     fn test_build_display_name_root() {
         let mut map = YakMap::new();
         let id = map.add_yak("test", None, None, None, None, vec![]).unwrap();
@@ -1776,44 +1852,47 @@ mod tests {
         // Catch mutant: `old_state == "done" || state != "done"`
         // would fire demote_done_ancestors_to_wip on todo->wip,
         // incorrectly demoting a done parent to wip.
+        //
+        // We use a parent that is "done" with no children, then
+        // directly set a child's state (without adding under done parent,
+        // since add now demotes done parents).
         let mut map = YakMap::new();
         let parent_id = map
             .add_yak("parent", None, None, None, None, vec![])
             .unwrap();
-        // Add one child as "done" so we can mark parent as done
-        let done_child_id = map
-            .add_yak(
-                "done-child",
-                Some(parent_id.clone()),
-                None,
-                Some("done".to_string()),
-                None,
-                vec![],
-            )
+        // Add child while parent is still todo
+        let child_id = map
+            .add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+            .unwrap();
+        // Mark child done so parent can be done
+        map.update_state(child_id.clone(), "done".to_string())
             .unwrap();
         map.update_state(parent_id.clone(), "done".to_string())
             .unwrap();
-        // Add a new child with default "todo" state after parent is done
-        let todo_child_id = map
-            .add_yak(
-                "todo-child",
-                Some(parent_id.clone()),
-                None,
-                None,
-                None,
-                vec![],
-            )
+        // Now reopen the child and re-done it to get parent back to done
+        map.update_state(child_id.clone(), "todo".to_string())
             .unwrap();
+        // Parent is now "wip" (demoted from done)
+        // Mark child done again and parent done again
+        map.update_state(child_id.clone(), "done".to_string())
+            .unwrap();
+        map.update_state(parent_id.clone(), "done".to_string())
+            .unwrap();
+        // Now reopen child to todo
+        map.update_state(child_id.clone(), "todo".to_string())
+            .unwrap();
+        // Parent is now "wip" (demoted from done by demote_done_ancestors_to_wip)
+        assert_eq!(map.yaks.get(&parent_id).unwrap().state, "wip");
         map.take_events();
 
-        // Transition todo-child from todo->wip (not from done)
-        map.update_state(todo_child_id, "wip".to_string()).unwrap();
+        // Transition child from todo->wip (not from done)
+        map.update_state(child_id, "wip".to_string()).unwrap();
 
-        // Parent should remain "done" - demote should NOT fire
+        // Parent should remain "wip" - demote should NOT fire (parent isn't done)
         assert_eq!(
             map.yaks.get(&parent_id).unwrap().state,
-            "done",
-            "Parent state should not be demoted when child transitions todo->wip"
+            "wip",
+            "Parent state should not be changed when child transitions todo->wip and parent is wip"
         );
         let events = map.take_events();
         assert_eq!(
@@ -1821,8 +1900,6 @@ mod tests {
             1,
             "Only one event (child state change) should be emitted"
         );
-        // done_child referenced to avoid unused warning
-        let _ = done_child_id;
     }
 
     #[test]
