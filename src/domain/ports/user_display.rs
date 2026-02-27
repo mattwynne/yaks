@@ -20,6 +20,9 @@ pub trait DisplayPort {
     /// No output when ancestors is empty.
     fn display_breadcrumb(&self, ancestors: &[Name]);
 
+    /// Display context body rendered as terminal markdown
+    fn display_context(&self, context: &str);
+
     /// Display metadata line for yx show (state, created date, author)
     fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author);
 

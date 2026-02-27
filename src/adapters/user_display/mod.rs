@@ -71,6 +71,22 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
+    fn display_context(&self, context: &str) {
+        let mut out = self.output.lock().unwrap();
+        if self.options.color {
+            let mut skin = termimad::MadSkin::default();
+            skin.headers[0].align = termimad::Alignment::Left;
+            let text = skin.term_text(context);
+            write!(out, "{text}").unwrap();
+        } else {
+            write!(out, "{context}").unwrap();
+            // Ensure trailing newline
+            if !context.ends_with('\n') {
+                writeln!(out).unwrap();
+            }
+        }
+    }
+
     fn display_breadcrumb(&self, ancestors: &[Name]) {
         if ancestors.is_empty() {
             return;

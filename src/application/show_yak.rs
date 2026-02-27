@@ -38,6 +38,14 @@ impl ShowYak {
         app.display
             .display_metadata_line(&yak.state, &yak.created_at, &yak.created_by);
 
+        // Context body (if present and non-empty)
+        if let Some(ref context) = yak.context {
+            if !context.trim().is_empty() {
+                app.display.info("");
+                app.display.display_context(context);
+            }
+        }
+
         Ok(())
     }
 }
@@ -56,7 +64,7 @@ mod tests {
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
         InMemoryStorage,
     };
-    use crate::application::AddYak;
+    use crate::application::{AddYak, EditContext};
     use crate::infrastructure::EventBus;
 
     fn make_app<'a>(
@@ -189,6 +197,78 @@ mod tests {
             lines[1].contains("○ child"),
             "Expected name on second line, got: {:?}",
             lines[1]
+        );
+    }
+
+    #[test]
+    fn shows_context_below_metadata() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        input.set_content(Some("Here is some context about this yak.".to_string()));
+        app.handle(EditContext::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("Here is some context about this yak."),
+            "Expected context in output, got: {output}"
+        );
+        // Context should appear after the metadata line
+        let meta_pos = output.find("State:").unwrap();
+        let context_pos = output.find("Here is some context").unwrap();
+        assert!(
+            context_pos > meta_pos,
+            "Context should appear after metadata"
+        );
+    }
+
+    #[test]
+    fn no_context_section_when_context_is_empty() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        // Should be just: name, blank, metadata (3 lines)
+        assert_eq!(
+            lines.len(),
+            3,
+            "Expected 3 lines (no context section), got {} lines: {:?}",
+            lines.len(),
+            lines
         );
     }
 
