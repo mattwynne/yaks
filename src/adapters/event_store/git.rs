@@ -354,42 +354,6 @@ impl GitEventStore {
         Ok(())
     }
 
-    /// Find the Compacted event from the raw git log, if any.
-    /// Returns a YakEvent::Compacted with full metadata including
-    /// event_id, which is needed for sync to correctly merge
-    /// compaction events across peers.
-    fn get_compaction_event(&self) -> Result<Option<YakEvent>> {
-        let Some(latest) = self.get_latest_commit()? else {
-            return Ok(None);
-        };
-
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-        revwalk.push(latest.id())?;
-
-        for oid in revwalk {
-            let oid = oid?;
-            let commit = self.repo.find_commit(oid)?;
-            let full_message = commit.message().unwrap_or("");
-            let first_line = full_message.lines().next().unwrap_or("").trim();
-            if first_line == "Compacted" {
-                use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
-                let author = Author {
-                    name: commit.author().name().unwrap_or("unknown").to_string(),
-                    email: commit.author().email().unwrap_or("").to_string(),
-                };
-                let timestamp = Timestamp(commit.author().when().seconds());
-                let mut metadata = EventMetadata::new(author, timestamp);
-                metadata.event_id = Some(Self::extract_event_id(
-                    full_message,
-                    &commit.id().to_string(),
-                ));
-                return Ok(Some(YakEvent::Compacted(vec![], metadata)));
-            }
-        }
-
-        Ok(None)
-    }
 
     /// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
     #[allow(clippy::cognitive_complexity)]
@@ -1063,20 +1027,9 @@ impl EventStore for GitEventStore {
         Self::fetch_peer_ref(&repo_path)?;
 
         // 2. Get local and peer events
-        let mut local_events = EventStore::get_all_events(self)?;
+        let local_events = EventStore::get_all_events(self)?;
         let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
-        let mut peer_events = EventStore::get_all_events(&peer)?;
-
-        // Include Compacted events (not returned by get_all_events)
-        // so the merge can track them across peers.
-        let local_compaction = self.get_compaction_event()?;
-        let peer_compaction = peer.get_compaction_event()?;
-        if let Some(ref ce) = local_compaction {
-            local_events.push(ce.clone());
-        }
-        if let Some(ref ce) = peer_compaction {
-            peer_events.push(ce.clone());
-        }
+        let peer_events = EventStore::get_all_events(&peer)?;
 
         let merge = super::merge_event_streams(&local_events, &peer_events);
 
@@ -1092,18 +1045,22 @@ impl EventStore for GitEventStore {
         }
 
         // Check if we received a compaction from the peer
-        let received_compaction = match (&local_compaction, &peer_compaction) {
-            (None, Some(ce)) => Some(ce.metadata().author.name.clone()),
-            _ => None,
-        };
+        let local_ids: std::collections::HashSet<String> = local_events
+            .iter()
+            .filter_map(|e| e.metadata().event_id.clone())
+            .collect();
+        let received_compaction = peer_events.iter().find(|e| {
+            matches!(e, YakEvent::Compacted(_, _))
+                && e.metadata().event_id.as_ref().map_or(false, |id| !local_ids.contains(id))
+        });
 
         output.info(&format!(
             "Pulled {} events, pushed {} events",
             merge.pulled, merge.pushed
         ));
 
-        if let Some(author) = received_compaction {
-            output.info(&format!("Received compaction from {}", author));
+        if let Some(ce) = received_compaction {
+            output.info(&format!("Received compaction from {}", ce.metadata().author.name));
         }
 
         // 3. Push refs/notes/yaks back to origin
