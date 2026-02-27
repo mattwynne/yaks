@@ -16,6 +16,7 @@ Yaks uses a hidden git ref to sync your yaks, allowing you to share the latest s
 ```bash
 yx add Fix the bug          # Add a new yak
 yx context Fix the bug      # Add context/notes
+yx show Fix the bug         # Show yak details
 yx ls                       # Show all yaks
 yx done Fix the bug         # Mark as complete
 yx rm Fix the bug           # Remove a yak
