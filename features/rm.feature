@@ -32,7 +32,7 @@ Feature: Remove yaks
       And I add the yak "Write tests" under "Fix the bug"
       When I try to remove the yak "Fix the bug"
       Then the command should fail
-      And the error should contain "child"
+      And the error should contain "--recursive"
 
   Rule: Recursive removal deletes the yak and all its descendants
 

@@ -413,7 +413,7 @@ impl YakMap {
         if !children.is_empty() {
             let display = self.build_display_name(&id);
             anyhow::bail!(
-                "Cannot remove '{}': it has {} child(ren). Remove children first.",
+                "Cannot remove '{}': it has {} child(ren). Use --recursive to remove it and all its descendants.",
                 display,
                 children.len()
             );
