@@ -161,6 +161,12 @@ enum Commands {
         #[arg(long, requires = "git_from_disk")]
         hard: bool,
     },
+    /// Compact the event stream into a snapshot
+    Compact {
+        /// Skip confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
     /// Sync yaks with git refs
     Sync,
     /// Show event log from refs/notes/yaks
@@ -544,6 +550,36 @@ fn main() -> Result<()> {
                     store.on_event(event)?;
                 }
             }
+            Ok(())
+        }
+        Commands::Compact { yes } => {
+            // 1. Auto-sync first
+            match app.sync_events() {
+                Ok(()) => {}
+                Err(e) => {
+                    eprintln!("Warning: sync failed: {}", e);
+                }
+            }
+
+            // 2. Confirmation prompt (unless --yes)
+            if !yes {
+                eprintln!(
+                    "Warning: collaborators with unsynced local events \
+                     will lose them. Ask them to run 'yx sync' first."
+                );
+                eprint!("Proceed? [y/N] ");
+                let mut answer = String::new();
+                std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer)?;
+                if answer.trim().to_lowercase() != "y" {
+                    return Ok(());
+                }
+            }
+
+            // 3. Compact the event store
+            app.compact_events()?;
+
+            // 4. Report success
+            println!("Compacted event stream.");
             Ok(())
         }
         Commands::Sync => app.handle(SyncYaks::new()),

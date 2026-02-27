@@ -101,6 +101,21 @@ impl<'a> Application<'a> {
         Ok(())
     }
 
+    /// Compact the event stream into a snapshot.
+    ///
+    /// Creates a Compacted event with the current tree state,
+    /// then rebuilds the projection.
+    pub fn compact_events(&mut self) -> Result<()> {
+        use crate::domain::event_metadata::{EventMetadata, Timestamp};
+        let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
+        self.event_store.compact(metadata)?;
+
+        // Rebuild projection from the compacted event stream
+        let all_events = self.event_store.get_all_events()?;
+        self.event_bus.rebuild(&all_events)?;
+        Ok(())
+    }
+
     fn save_yak_map(&mut self, yak_map: &mut YakMap) -> Result<()> {
         for event in yak_map.take_events() {
             self.event_store.append(&event)?;

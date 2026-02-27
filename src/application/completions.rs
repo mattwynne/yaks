@@ -15,6 +15,7 @@ pub const COMMANDS: &[&str] = &[
     "mv",
     "rename",
     "prune",
+    "compact",
     "context",
     "state",
     "field",
