@@ -10,6 +10,7 @@ pub mod ports;
 pub mod slug;
 pub mod yak;
 pub mod yak_map;
+pub mod yak_snapshot;
 
 pub use event::YakEvent;
 pub use event_metadata::{Author, EventMetadata, Timestamp};
@@ -20,6 +21,7 @@ pub use field::{
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use yak::{validate_state, validate_yak_name, Yak};
 pub use yak_map::YakMap;
+pub use yak_snapshot::YakSnapshot;
 
 // Re-exports used only in tests
 #[cfg(test)]
