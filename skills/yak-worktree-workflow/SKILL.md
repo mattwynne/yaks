@@ -1,3 +1,8 @@
+---
+name: yak-worktree-workflow
+description: Use when starting work on a yak - sets up an isolated git worktree, reads yak context, and guides the full cycle from claiming through merge and cleanup
+---
+
 # Yak Worktree Workflow
 
 **Working on yaks in isolation using git worktrees**
@@ -65,23 +70,23 @@ Ask specific questions:
 
 ### 4. Create a Worktree
 
-Create a worktree in `.worktrees/` with a descriptive branch name:
+Create a worktree in `.worktrees/` using the yak's immutable ID as the directory and branch name:
 
 ```bash
 mkdir -p .worktrees
-git worktree add .worktrees/descriptive-name -b descriptive-name
+git worktree add .worktrees/<yak-id> -b <yak-id>
 ```
 
-Example:
+Example (for a yak with ID `sort-ls-results-a1b2`):
 ```bash
-git worktree add .worktrees/sort-ls-results -b sort-ls-results
+git worktree add .worktrees/sort-ls-results-a1b2 -b sort-ls-results-a1b2
 ```
 
 ### 5. Record Worktree Location
 
 ```bash
 cd /path/to/main/repo  # Go back to main repo
-yx field "yak name" worktree ".worktrees/descriptive-name"
+yx field "yak name" worktree ".worktrees/<yak-id>"
 ```
 
 This helps track where work is happening. (WIP was already set in step 2.)
@@ -89,7 +94,7 @@ This helps track where work is happening. (WIP was already set in step 2.)
 ### 6. Switch to the Worktree
 
 ```bash
-cd .worktrees/descriptive-name
+cd .worktrees/<yak-id>
 ```
 
 All your work happens here. You're now on an isolated branch.
@@ -113,7 +118,7 @@ Return to the main repo and merge:
 
 ```bash
 cd /path/to/main/repo  # Back to main repo
-git merge descriptive-name
+git merge <yak-id>
 ```
 
 ### 9. Mark the Yak Done
@@ -129,8 +134,8 @@ Use the exact yak name (with spaces if needed). This automatically clears the "w
 Remove the worktree and delete the branch:
 
 ```bash
-git worktree remove .worktrees/descriptive-name
-git branch -d descriptive-name
+git worktree remove .worktrees/<yak-id>
+git branch -d <yak-id>
 ```
 
 ## Key Principles
@@ -153,10 +158,10 @@ Keep all worktrees in `.worktrees/` for consistency and easy cleanup.
 
 ### Branch Names
 
-Use descriptive, kebab-case branch names that match the worktree directory:
-- `sort-ls-results`
-- `implement-claim-command`
-- `refactor-bash-spaghetti`
+Use the yak's immutable ID as the branch name. This is already kebab-case and filesystem-safe, and it creates a direct link between the branch and the yak:
+- `sort-ls-results-a1b2`
+- `implement-claim-command-c3d4`
+- `refactor-bash-spaghetti-e5f6`
 
 ### Never Touch .yaks in This Project
 
@@ -226,35 +231,32 @@ yx state "sort ls results somehow" wip
 # 3. Read context (from main repo)
 yx context --show "sort ls results somehow"
 # Output: "Sort by done first, then by creation date..."
+# Note the yak's ID, e.g. sort-ls-results-a1b2
 
-# 4. Create worktree
-git worktree add .worktrees/sort-ls-results -b sort-ls-results
+# 4. Create worktree using the yak ID
+git worktree add .worktrees/sort-ls-results-a1b2 -b sort-ls-results-a1b2
 
 # 5. Record worktree location
-yx field "sort ls results somehow" worktree ".worktrees/sort-ls-results"
+yx field "sort ls results somehow" worktree ".worktrees/sort-ls-results-a1b2"
 
 # 6. Switch to worktree
-cd .worktrees/sort-ls-results
+cd .worktrees/sort-ls-results-a1b2
 
 # 7. Do the work (write tests, implement, commit)
 # ... work happens here ...
 
 # 8. Tests pass — merge immediately
 cd ../../..
-git merge sort-ls-results
+git merge sort-ls-results-a1b2
 
 # 9. Mark done
 yx done "sort ls results somehow"
 
 # 10. Cleanup
-git worktree remove .worktrees/sort-ls-results
-git branch -d sort-ls-results
+git worktree remove .worktrees/sort-ls-results-a1b2
+git branch -d sort-ls-results-a1b2
 ```
 
-## When NOT to Use Worktrees
+## Always Use Worktrees
 
-- Single-agent development (just work on main)
-- Quick fixes that won't conflict
-- User explicitly asks to work directly on main
-
-For multi-agent scenarios or parallel work, worktrees are essential.
+Every yak gets its own worktree, no exceptions. Even for quick fixes, the worktree workflow keeps work isolated and the commit history clean. If the user explicitly asks to work directly on main, that's their call — but default to a worktree.
