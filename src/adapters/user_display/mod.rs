@@ -241,12 +241,13 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             let mut skin = termimad::MadSkin::default();
             skin.headers[0].align = termimad::Alignment::Left;
             let text = skin.term_text(context);
-            write!(out, "{text}").unwrap();
+            // Indent each line by 2 spaces
+            for line in format!("{text}").lines() {
+                writeln!(out, "  {line}").unwrap();
+            }
         } else {
-            write!(out, "{context}").unwrap();
-            // Ensure trailing newline
-            if !context.ends_with('\n') {
-                writeln!(out).unwrap();
+            for line in context.lines() {
+                writeln!(out, "  {line}").unwrap();
             }
         }
     }
