@@ -76,9 +76,30 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             }
         }
 
-        // Compacted events are expanded by get_all_events() and should
-        // never reach the projection. Ignore if encountered.
-        YakEvent::Compacted(_, _) => {}
+        YakEvent::Compacted(snapshots, _) => {
+            store.clear_all()?;
+            for snap in snapshots {
+                store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
+                store.write_field(&snap.id, STATE_FIELD, &snap.state)?;
+                store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
+                if let Some(ref ctx) = snap.context {
+                    if !ctx.is_empty() {
+                        store.write_field(&snap.id, "context.md", ctx)?;
+                    }
+                }
+                let metadata_json = serde_json::json!({
+                    "created_by": {
+                        "name": snap.created_by.name,
+                        "email": snap.created_by.email
+                    },
+                    "created_at": snap.created_at.as_epoch_secs()
+                });
+                store.write_field(&snap.id, METADATA_FIELD, &metadata_json.to_string())?;
+                for (field_name, content) in &snap.fields {
+                    store.write_field(&snap.id, field_name, content)?;
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -99,6 +120,61 @@ mod tests {
             },
             EventMetadata::default_legacy(),
         )
+    }
+
+    #[test]
+    fn compacted_event_rebuilds_store_from_snapshots() {
+        use crate::domain::yak_snapshot::YakSnapshot;
+        use crate::domain::event_metadata::{Author, Timestamp};
+        use std::collections::HashMap;
+
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
+
+        // Pre-existing yak that should be cleared
+        let old_event = added_event("old yak", "old-a1b2");
+        listener.on_event(&old_event).unwrap();
+        assert_eq!(storage.list_yaks().unwrap().len(), 1);
+
+        // Compacted event with different yaks
+        let snapshots = vec![
+            YakSnapshot {
+                id: YakId::from("tea-a1b2"),
+                name: Name::from("make the tea"),
+                parent_id: None,
+                state: "wip".to_string(),
+                context: Some("use the good teapot".to_string()),
+                fields: HashMap::new(),
+                created_by: Author { name: "alice".into(), email: "alice@example.com".into() },
+                created_at: Timestamp(1000),
+            },
+            YakSnapshot {
+                id: YakId::from("biscuits-c3d4"),
+                name: Name::from("buy biscuits"),
+                parent_id: Some(YakId::from("tea-a1b2")),
+                state: "todo".to_string(),
+                context: None,
+                fields: HashMap::new(),
+                created_by: Author { name: "alice".into(), email: "alice@example.com".into() },
+                created_at: Timestamp(1000),
+            },
+        ];
+
+        let compacted = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        listener.on_event(&compacted).unwrap();
+
+        let yaks = storage.list_yaks().unwrap();
+        assert_eq!(yaks.len(), 2, "Should have exactly the 2 snapshot yaks");
+        assert!(
+            !yaks.iter().any(|y| y.name == Name::from("old yak")),
+            "Old yak should be cleared"
+        );
+
+        let tea = yaks.iter().find(|y| y.id == YakId::from("tea-a1b2")).unwrap();
+        assert_eq!(tea.state, "wip");
+
+        let biscuits = yaks.iter().find(|y| y.id == YakId::from("biscuits-c3d4")).unwrap();
+        assert_eq!(biscuits.parent_id.as_ref().unwrap(), &YakId::from("tea-a1b2"));
     }
 
     #[test]
