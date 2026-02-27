@@ -70,7 +70,7 @@ impl ShowYak {
 
         // Child subtree
         if !yak.children.is_empty() {
-            let rule_width: usize = 60;
+            let rule_width = app.display.width();
             app.display.info("");
             let header = "── children ";
             let padding = rule_width.saturating_sub(header.len());
@@ -83,7 +83,7 @@ impl ShowYak {
 
         // Long fields in ruled sections
         if !long_fields.is_empty() {
-            let rule_width: usize = 60;
+            let rule_width = app.display.width();
             for (i, (name, value)) in long_fields.iter().enumerate() {
                 app.display.info("");
                 // Header rule: ── name ────...

@@ -32,6 +32,7 @@ serde_json = "1"
 chrono = "0.4"
 uuid = { version = "1", features = ["v7"] }
 termimad = "0.34"
+terminal_size = "0.4"
 
 [dev-dependencies]
 tempfile = "3.15"

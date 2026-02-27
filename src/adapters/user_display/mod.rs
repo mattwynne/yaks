@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 pub struct ConsoleDisplayOptions {
     pub color: bool,
+    pub width: usize,
 }
 
 pub struct ConsoleDisplay {
@@ -23,14 +24,21 @@ impl ConsoleDisplay {
     }
 
     pub fn stdout() -> Self {
+        let width = terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .unwrap_or(80);
         Self::new(
             Box::new(std::io::stdout()),
-            ConsoleDisplayOptions { color: true },
+            ConsoleDisplayOptions { color: true, width },
         )
     }
 }
 
 impl crate::domain::ports::DisplayPort for ConsoleDisplay {
+    fn width(&self) -> usize {
+        self.options.width
+    }
+
     fn success(&self, message: &str) {
         let mut out = self.output.lock().unwrap();
         writeln!(out, "{message}").unwrap();
@@ -81,19 +89,24 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             .map(|dt| dt.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| "unknown".to_string());
         let content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
-        let width = content.chars().count();
-        let top = format!("┌{}┐", "─".repeat(width));
-        let bottom = format!("└{}┘", "─".repeat(width));
-        let middle = format!("│{content}│");
+        let content_width = content.chars().count();
+        // Use terminal width (minus 2 for │ borders), but at least content width
+        let inner_width = (self.options.width.saturating_sub(2)).max(content_width);
+        let padding = inner_width - content_width;
+        let top = format!("┌{}┐", "─".repeat(inner_width));
+        let bottom = format!("└{}┘", "─".repeat(inner_width));
+        let padded_content = format!("{content}{}", " ".repeat(padding));
+        let middle = format!("│{padded_content}│");
 
         if self.options.color {
+            let meta = format!("\x1b[90m · {state} · {date} · {}  \x1b[0m", created_by.name);
             let styled_content = match state {
-                "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m · {state} · {date} · {}  ", created_by.name),
-                "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m · {state} · {date} · {}  ", created_by.name),
-                _ => format!("  ○ {name} · {state} · {date} · {}  ", created_by.name),
+                "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{meta}"),
+                "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{meta}"),
+                _ => format!("  ○ \x1b[1m{name}\x1b[0m{meta}"),
             };
             writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
-            writeln!(out, "\x1b[2m│\x1b[0m{styled_content}\x1b[2m│\x1b[0m").unwrap();
+            writeln!(out, "\x1b[2m│\x1b[0m{styled_content}{}\x1b[2m│\x1b[0m", " ".repeat(padding)).unwrap();
             writeln!(out, "\x1b[2m{bottom}\x1b[0m").unwrap();
         } else {
             writeln!(out, "{top}").unwrap();
@@ -224,7 +237,7 @@ mod tests {
     fn make_display(color: bool) -> (ConsoleDisplay, TestBuffer) {
         let buffer = TestBuffer::new();
         let writer = buffer.clone();
-        let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color });
+        let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color, width: 60 });
         (display, buffer)
     }
 
@@ -436,6 +449,6 @@ mod tests {
 pub fn make_test_display() -> (ConsoleDisplay, TestBuffer) {
     let buffer = TestBuffer::new();
     let writer = buffer.clone();
-    let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color: false });
+    let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color: false, width: 60 });
     (display, buffer)
 }

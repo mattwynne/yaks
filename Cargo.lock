@@ -2331,6 +2331,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "termimad",
+ "terminal_size",
  "thiserror 1.0.69",
  "tokio",
  "uuid",

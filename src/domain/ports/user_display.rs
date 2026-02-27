@@ -4,6 +4,9 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::Name;
 
 pub trait DisplayPort {
+    /// Get the display width
+    fn width(&self) -> usize;
+
     /// Display success message
     fn success(&self, message: &str);
 
