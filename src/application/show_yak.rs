@@ -74,7 +74,12 @@ impl ShowYak {
 
         // Child subtree
         if !yak.children.is_empty() {
+            let rule_width: usize = 60;
             app.display.info("");
+            let header = "── children ";
+            let padding = rule_width.saturating_sub(header.len());
+            app.display
+                .info(&format!("{header}{}", "─".repeat(padding)));
             Self::display_subtree(app, &yak.children, "")?;
         }
 
@@ -384,6 +389,12 @@ mod tests {
         app.handle(ShowYak::new("parent")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
+
+        // Should have a ruled header for children
+        assert!(
+            output.contains("── children ─"),
+            "Expected ruled header for children section, got:\n{output}"
+        );
 
         // Should contain children with tree connectors
         let alpha_line = lines.iter().find(|l| l.contains("alpha"));
