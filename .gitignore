@@ -36,3 +36,5 @@ target/
 # cargo-mutants output
 mutants.out/
 mutants.out.old/
+
+.pi
