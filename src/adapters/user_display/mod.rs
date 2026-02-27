@@ -79,38 +79,69 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
-    fn display_header_box(&self, name: &Name, state: &str, created_at: &Timestamp, created_by: &Author) {
+    fn display_header_box(&self, name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)]) {
         let mut out = self.output.lock().unwrap();
-        let indicator = match state {
-            "wip" | "done" => "●",
-            _ => "○",
-        };
+
+        fn indicator_for(state: &str) -> &'static str {
+            match state {
+                "wip" | "done" => "●",
+                _ => "○",
+            }
+        }
+
+        let indicator = indicator_for(state);
         let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
             .map(|dt| dt.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| "unknown".to_string());
-        let content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
-        let content_width = content.chars().count();
-        // Use terminal width (minus 2 for │ borders), but at least content width
-        let inner_width = (self.options.width.saturating_sub(2)).max(content_width);
-        let padding = inner_width - content_width;
+        let header_content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
+        let header_width = header_content.chars().count();
+
+        // Build child lines to measure widths
+        let child_lines: Vec<String> = children.iter().enumerate().map(|(i, (cname, cstate))| {
+            let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
+            let ci = indicator_for(cstate);
+            format!("     {connector} {ci} {cname}  ")
+        }).collect();
+
+        // Inner width = max of header, all children, and terminal width - 2
+        let max_content_width = std::iter::once(header_width)
+            .chain(child_lines.iter().map(|l| l.chars().count()))
+            .max()
+            .unwrap();
+        let inner_width = (self.options.width.saturating_sub(2)).max(max_content_width);
+
         let top = format!("┌{}┐", "─".repeat(inner_width));
         let bottom = format!("└{}┘", "─".repeat(inner_width));
-        let padded_content = format!("{content}{}", " ".repeat(padding));
-        let middle = format!("│{padded_content}│");
 
         if self.options.color {
             let meta = format!("\x1b[90m · {state} · {date} · {}  \x1b[0m", created_by.name);
-            let styled_content = match state {
+            let styled_header = match state {
                 "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{meta}"),
                 "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{meta}"),
                 _ => format!("  ○ \x1b[1m{name}\x1b[0m{meta}"),
             };
+            let header_pad = inner_width - header_width;
             writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
-            writeln!(out, "\x1b[2m│\x1b[0m{styled_content}{}\x1b[2m│\x1b[0m", " ".repeat(padding)).unwrap();
+            writeln!(out, "\x1b[2m│\x1b[0m{styled_header}{}\x1b[2m│\x1b[0m", " ".repeat(header_pad)).unwrap();
+            for (i, (cname, cstate)) in children.iter().enumerate() {
+                let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
+                let styled_child = match cstate.as_str() {
+                    "wip" => format!("     {connector} \x1b[32m●\x1b[0m \x1b[1m{cname}\x1b[0m  "),
+                    "done" => format!("     {connector} \x1b[90m●\x1b[0m \x1b[90;9m{cname}\x1b[0m  "),
+                    _ => format!("     {connector} ○ {cname}  "),
+                };
+                let child_pad = inner_width - child_lines[i].chars().count();
+                writeln!(out, "\x1b[2m│\x1b[0m{styled_child}{}\x1b[2m│\x1b[0m", " ".repeat(child_pad)).unwrap();
+            }
             writeln!(out, "\x1b[2m{bottom}\x1b[0m").unwrap();
         } else {
             writeln!(out, "{top}").unwrap();
-            writeln!(out, "{middle}").unwrap();
+            let header_pad = inner_width - header_width;
+            writeln!(out, "│{header_content}{}│", " ".repeat(header_pad)).unwrap();
+            for (_i, line) in child_lines.iter().enumerate() {
+                let child_pad = inner_width - line.chars().count();
+                writeln!(out, "│{line}{}│", " ".repeat(child_pad)).unwrap();
+            }
             writeln!(out, "{bottom}").unwrap();
         }
     }
@@ -407,7 +438,7 @@ mod tests {
             name: "Matt Wynne".to_string(),
             email: "matt@example.com".to_string(),
         };
-        display.display_header_box(&name, "wip", &timestamp, &author);
+        display.display_header_box(&name, "wip", &timestamp, &author, &[]);
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
         assert!(lines[0].starts_with('┌'), "Expected top border, got: {:?}", lines[0]);

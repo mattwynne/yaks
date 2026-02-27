@@ -2,8 +2,6 @@
 
 use anyhow::Result;
 
-use crate::domain::slug::YakId;
-
 use super::{Application, UseCase};
 
 pub struct ShowYak {
@@ -32,18 +30,25 @@ impl ShowYak {
         ancestors.reverse();
         app.display.display_breadcrumb(&ancestors);
 
-        // Header box with name, state, date, author
-        app.display
-            .display_header_box(&yak.name, &yak.state, &yak.created_at, &yak.created_by);
+        // Collect immediate children for the header box
+        let box_children: Vec<_> = {
+            let mut kids: Vec<_> = yak.children.iter()
+                .filter_map(|id| app.store.get_yak(id).ok())
+                .map(|c| (c.name.clone(), c.state.clone()))
+                .collect();
+            kids.sort_by(|a, b| {
+                match (a.1 == "done", b.1 == "done") {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => a.0.cmp(&b.0),
+                }
+            });
+            kids
+        };
 
-        // Child subtree
-        if !yak.children.is_empty() {
-            app.display.info("");
-            app.display.display_section_rule("children");
-            app.display.info("");
-            app.display.info("  ⋮");
-            Self::display_subtree(app, &yak.children, "  ")?;
-        }
+        // Header box with name, state, date, author, and children
+        app.display
+            .display_header_box(&yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children);
 
         // Classify custom fields into short and long
         let mut short_fields: Vec<(&str, &str)> = Vec::new();
@@ -91,39 +96,6 @@ impl ShowYak {
         Ok(())
     }
 
-    fn display_subtree(
-        app: &mut Application,
-        child_ids: &[YakId],
-        prefix: &str,
-    ) -> Result<()> {
-        // Fetch and sort children (done first, then alphabetical)
-        let mut children: Vec<_> = child_ids
-            .iter()
-            .filter_map(|id| app.store.get_yak(id).ok())
-            .collect();
-        children.sort_by(|a, b| {
-            match (a.state == "done", b.state == "done") {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.cmp(&b.name),
-            }
-        });
-
-        for (i, child) in children.iter().enumerate() {
-            let is_last = i == children.len() - 1;
-            let connector = if is_last { "╰─ " } else { "├─ " };
-            let node_prefix = format!("{prefix}{connector}");
-            app.display
-                .display_yak_pretty(&node_prefix, &child.name, &child.state);
-
-            if !child.children.is_empty() {
-                let continuation = if is_last { "   " } else { "│  " };
-                let child_prefix = format!("{prefix}{continuation}");
-                Self::display_subtree(app, &child.children, &child_prefix)?;
-            }
-        }
-        Ok(())
-    }
 }
 
 impl UseCase for ShowYak {
@@ -349,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn shows_child_subtree_below_metadata() {
+    fn children_appear_inside_header_box() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -377,39 +349,23 @@ mod tests {
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
-        // Should have a ruled header for children
-        assert!(
-            output.contains("── children ─"),
-            "Expected ruled header for children section, got:\n{output}"
-        );
+        // Children should be inside the box (between ┌ and └)
+        let top = lines.iter().position(|l| l.starts_with('┌')).unwrap();
+        let bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
+        let alpha_pos = lines.iter().position(|l| l.contains("alpha")).unwrap();
+        let beta_pos = lines.iter().position(|l| l.contains("beta")).unwrap();
+        assert!(alpha_pos > top && alpha_pos < bottom, "alpha should be inside box");
+        assert!(beta_pos > top && beta_pos < bottom, "beta should be inside box");
 
-        // Should contain children with tree connectors
-        let alpha_line = lines.iter().find(|l| l.contains("alpha"));
-        let beta_line = lines.iter().find(|l| l.contains("beta"));
-        assert!(
-            alpha_line.is_some(),
-            "Expected child 'alpha' in output: {:?}",
-            lines
-        );
-        assert!(
-            beta_line.is_some(),
-            "Expected child 'beta' in output: {:?}",
-            lines
-        );
-        assert!(
-            alpha_line.unwrap().starts_with("  ├─"),
-            "Non-last child should have indented ├─ connector, got: {:?}",
-            alpha_line
-        );
-        assert!(
-            beta_line.unwrap().starts_with("  ╰─"),
-            "Last child should have indented ╰─ connector, got: {:?}",
-            beta_line
-        );
+        // Tree connectors
+        let alpha_line = lines[alpha_pos];
+        let beta_line = lines[beta_pos];
+        assert!(alpha_line.contains("├─"), "Non-last child should have ├─, got: {:?}", alpha_line);
+        assert!(beta_line.contains("╰─"), "Last child should have ╰─, got: {:?}", beta_line);
     }
 
     #[test]
-    fn no_subtree_when_no_children() {
+    fn no_children_in_box_when_none() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -432,56 +388,13 @@ mod tests {
         app.handle(ShowYak::new("lonely")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // Box (3 lines) + closing rule (1 line) = 4 lines
+        // Box (3 lines: ┌, │, └) + closing rule = 4 lines
         assert_eq!(
             lines.len(),
             4,
             "Expected 4 lines (box + closing rule), got {} lines: {:?}",
             lines.len(),
             lines
-        );
-    }
-
-    #[test]
-    fn shows_nested_grandchildren_in_subtree() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("root")).unwrap();
-        app.handle(AddYak::new("child").with_parent(Some("root")))
-            .unwrap();
-        app.handle(AddYak::new("grandchild").with_parent(Some("child")))
-            .unwrap();
-        buffer.clear();
-
-        app.handle(ShowYak::new("root")).unwrap();
-        let output = buffer.contents();
-        let lines: Vec<&str> = output.lines().collect();
-
-        let grandchild_line = lines.iter().find(|l| l.contains("grandchild"));
-        assert!(
-            grandchild_line.is_some(),
-            "Expected grandchild in output: {:?}",
-            lines
-        );
-        // Grandchild under last child should have "   ╰─" prefix
-        assert!(
-            grandchild_line.unwrap().contains("╰─"),
-            "Grandchild should have tree connector, got: {:?}",
-            grandchild_line
         );
     }
 
