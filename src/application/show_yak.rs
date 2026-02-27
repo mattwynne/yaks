@@ -32,13 +32,9 @@ impl ShowYak {
         ancestors.reverse();
         app.display.display_breadcrumb(&ancestors);
 
-        // Name with state indicator (reuses display_yak_pretty from yx list)
-        app.display.display_yak_pretty("", &yak.name, &yak.state);
-
-        // Blank line then metadata
-        app.display.info("");
+        // Header box with name, state, date, author
         app.display
-            .display_metadata_line(&yak.state, &yak.created_at, &yak.created_by);
+            .display_header_box(&yak.name, &yak.state, &yak.created_at, &yak.created_by);
 
         // Classify custom fields into short and long
         let mut short_fields: Vec<(&str, &str)> = Vec::new();
@@ -194,25 +190,25 @@ mod tests {
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
-        // First line: state indicator + name
+        // Header box
         assert!(
-            lines[0].contains("○ my yak"),
-            "Expected state indicator + name, got: {:?}",
+            lines[0].starts_with('┌'),
+            "Expected top border, got: {:?}",
             lines[0]
         );
-
-        // Second line: blank
-        assert_eq!(lines[1], "", "Expected blank line, got: {:?}", lines[1]);
-
-        // Third line: metadata
         assert!(
-            lines[2].starts_with("State: todo"),
-            "Expected metadata line, got: {:?}",
-            lines[2]
+            lines[1].contains("○ my yak"),
+            "Expected name in box, got: {:?}",
+            lines[1]
         );
         assert!(
-            lines[2].contains("Created:"),
-            "Expected created date in metadata, got: {:?}",
+            lines[1].contains("todo"),
+            "Expected state in box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[2].starts_with('└'),
+            "Expected bottom border, got: {:?}",
             lines[2]
         );
     }
@@ -241,10 +237,10 @@ mod tests {
         app.handle(ShowYak::new("root yak")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // First line should be the name, not a breadcrumb
+        // First line should be top border, not a breadcrumb
         assert!(
-            lines[0].contains("○ root yak"),
-            "Expected name as first line, got: {:?}",
+            lines[0].starts_with('┌'),
+            "Expected box top border as first line, got: {:?}",
             lines[0]
         );
     }
@@ -283,10 +279,10 @@ mod tests {
             "Expected breadcrumb path, got: {:?}",
             lines[0]
         );
-        // Second line: name with state indicator
+        // Second line: top border of box
         assert!(
-            lines[1].contains("○ child"),
-            "Expected name on second line, got: {:?}",
+            lines[1].starts_with('┌'),
+            "Expected box top border on second line, got: {:?}",
             lines[1]
         );
     }
@@ -320,12 +316,12 @@ mod tests {
             output.contains("Here is some context about this yak."),
             "Expected context in output, got: {output}"
         );
-        // Context should appear after the metadata line
-        let meta_pos = output.find("State:").unwrap();
+        // Context should appear after the header box
+        let box_pos = output.find('└').unwrap();
         let context_pos = output.find("Here is some context").unwrap();
         assert!(
-            context_pos > meta_pos,
-            "Context should appear after metadata"
+            context_pos > box_pos,
+            "Context should appear after header box"
         );
     }
 
@@ -528,9 +524,9 @@ mod tests {
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // Metadata line, then short fields line
-        let meta_line = lines.iter().position(|l| l.starts_with("State:")).unwrap();
-        let fields_line = &lines[meta_line + 1];
+        // Short fields appear after the box bottom border
+        let box_bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
+        let fields_line = &lines[box_bottom + 1];
         assert!(
             fields_line.contains("priority: high"),
             "Expected 'priority: high' in short fields line, got: {:?}",
@@ -614,8 +610,8 @@ mod tests {
         app.handle(ShowYak::new("my yak")).unwrap();
         let output = buffer.contents();
         assert!(
-            !output.contains("──"),
-            "Expected no ruled sections, got:\n{output}"
+            !output.contains("── "),
+            "Expected no ruled field sections, got:\n{output}"
         );
     }
 

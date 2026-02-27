@@ -71,6 +71,37 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
+    fn display_header_box(&self, name: &Name, state: &str, created_at: &Timestamp, created_by: &Author) {
+        let mut out = self.output.lock().unwrap();
+        let indicator = match state {
+            "wip" | "done" => "●",
+            _ => "○",
+        };
+        let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
+        let width = content.chars().count();
+        let top = format!("┌{}┐", "─".repeat(width));
+        let bottom = format!("└{}┘", "─".repeat(width));
+        let middle = format!("│{content}│");
+
+        if self.options.color {
+            let styled_content = match state {
+                "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m · {state} · {date} · {}  ", created_by.name),
+                "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m · {state} · {date} · {}  ", created_by.name),
+                _ => format!("  ○ {name} · {state} · {date} · {}  ", created_by.name),
+            };
+            writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
+            writeln!(out, "\x1b[2m│\x1b[0m{styled_content}\x1b[2m│\x1b[0m").unwrap();
+            writeln!(out, "\x1b[2m{bottom}\x1b[0m").unwrap();
+        } else {
+            writeln!(out, "{top}").unwrap();
+            writeln!(out, "{middle}").unwrap();
+            writeln!(out, "{bottom}").unwrap();
+        }
+    }
+
     fn display_context(&self, context: &str) {
         let mut out = self.output.lock().unwrap();
         if self.options.color {
@@ -330,6 +361,28 @@ mod tests {
             "unexpected ANSI codes in: {output}"
         );
         assert!(output.contains("  - [todo] todo yak"));
+    }
+
+    #[test]
+    fn header_box_renders_with_box_drawing_chars() {
+        let (display, buffer) = make_display(false);
+        let name = Name::from("my yak");
+        let timestamp = Timestamp(1739923200);
+        let author = Author {
+            name: "Matt Wynne".to_string(),
+            email: "matt@example.com".to_string(),
+        };
+        display.display_header_box(&name, "wip", &timestamp, &author);
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        assert!(lines[0].starts_with('┌'), "Expected top border, got: {:?}", lines[0]);
+        assert!(lines[0].ends_with('┐'), "Expected top border end, got: {:?}", lines[0]);
+        assert!(lines[1].contains("● my yak"), "Expected name in box, got: {:?}", lines[1]);
+        assert!(lines[1].contains("wip"), "Expected state in box, got: {:?}", lines[1]);
+        assert!(lines[1].contains("2025-02-19"), "Expected date in box, got: {:?}", lines[1]);
+        assert!(lines[1].contains("Matt Wynne"), "Expected author in box, got: {:?}", lines[1]);
+        assert!(lines[2].starts_with('└'), "Expected bottom border, got: {:?}", lines[2]);
+        assert!(lines[2].ends_with('┘'), "Expected bottom border end, got: {:?}", lines[2]);
     }
 
     #[test]
