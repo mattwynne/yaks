@@ -270,8 +270,7 @@ impl GitEventStore {
                 match current_tree {
                     Some(tree) => Ok(tree.id()),
                     None => {
-                        let builder = self.repo.treebuilder(None)?;
-                        Ok(builder.write()?)
+                        anyhow::bail!("Cannot compact: no tree state exists")
                     }
                 }
             }
@@ -870,6 +869,9 @@ impl EventStore for GitEventStore {
     }
 
     fn compact(&mut self, metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
+        if self.get_latest_commit()?.is_none() {
+            anyhow::bail!("Cannot compact an empty event store");
+        }
         let event = YakEvent::Compacted(metadata);
         self.append(&event)
     }

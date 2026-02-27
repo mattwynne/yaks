@@ -424,6 +424,16 @@ macro_rules! event_store_tests {
         }
 
         #[test]
+        fn compact_on_empty_store_fails() {
+            let (mut store, _guard) = $create_store;
+            let result = store.compact(EventMetadata::default_legacy());
+            assert!(
+                result.is_err(),
+                "compact on empty store should fail, not create an empty snapshot"
+            );
+        }
+
+        #[test]
         fn compact_creates_compacted_event() {
             let (mut store, _guard) = $create_store;
             store
