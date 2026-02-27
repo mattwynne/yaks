@@ -251,7 +251,7 @@ macro_rules! event_store_tests {
 
             // Compact
             store
-                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
                 .unwrap();
 
             let events = store.get_all_events().unwrap();
@@ -259,7 +259,7 @@ macro_rules! event_store_tests {
             // Should contain exactly one Compacted marker event
             let compacted_count = events
                 .iter()
-                .filter(|e| matches!(e, YakEvent::Compacted(_)))
+                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
                 .count();
             assert_eq!(
                 compacted_count, 1,
@@ -321,7 +321,7 @@ macro_rules! event_store_tests {
 
             // Compact
             store
-                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
                 .unwrap();
 
             // Add another yak after compaction
@@ -373,7 +373,7 @@ macro_rules! event_store_tests {
 
             // First compaction
             store
-                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
                 .unwrap();
 
             // Add bar after first compaction
@@ -390,7 +390,7 @@ macro_rules! event_store_tests {
 
             // Second compaction (should include foo + bar)
             store
-                .append(&YakEvent::Compacted(EventMetadata::default_legacy()))
+                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
                 .unwrap();
 
             let events = store.get_all_events().unwrap();
@@ -398,7 +398,7 @@ macro_rules! event_store_tests {
             // Should contain exactly one Compacted marker (from latest compaction)
             let compacted_count = events
                 .iter()
-                .filter(|e| matches!(e, YakEvent::Compacted(_)))
+                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
                 .count();
             assert_eq!(
                 compacted_count, 1,

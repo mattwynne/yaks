@@ -13,7 +13,7 @@ pub enum YakEvent {
     Removed(RemovedEvent, EventMetadata),
     Moved(MovedEvent, EventMetadata),
     FieldUpdated(FieldUpdatedEvent, EventMetadata),
-    Compacted(EventMetadata),
+    Compacted(Vec<super::yak_snapshot::YakSnapshot>, EventMetadata),
 }
 
 impl YakEvent {
@@ -23,7 +23,7 @@ impl YakEvent {
             Self::Removed(_, m) => m,
             Self::Moved(_, m) => m,
             Self::FieldUpdated(_, m) => m,
-            Self::Compacted(m) => m,
+            Self::Compacted(_, m) => m,
         }
     }
 
@@ -33,7 +33,7 @@ impl YakEvent {
             Self::Removed(e, _) => Self::Removed(e, metadata),
             Self::Moved(e, _) => Self::Moved(e, metadata),
             Self::FieldUpdated(e, _) => Self::FieldUpdated(e, metadata),
-            Self::Compacted(_) => Self::Compacted(metadata),
+            Self::Compacted(s, _) => Self::Compacted(s, metadata),
         }
     }
 
@@ -43,7 +43,7 @@ impl YakEvent {
             Self::Removed(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Moved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::FieldUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
-            Self::Compacted(_) => "Compacted".to_string(),
+            Self::Compacted(_, _) => "Compacted".to_string(),
         }
     }
 
@@ -51,7 +51,7 @@ impl YakEvent {
         let meta = EventMetadata::default_legacy();
         // Handle dataless events (no ": " separator)
         if message == "Compacted" {
-            return Ok(Self::Compacted(meta));
+            return Ok(Self::Compacted(vec![], meta));
         }
         let (tag, data) = message
             .split_once(": ")
@@ -115,7 +115,7 @@ impl YakEvent {
             Self::Removed(e, _) => e.id.as_str(),
             Self::Moved(e, _) => e.id.as_str(),
             Self::FieldUpdated(e, _) => e.id.as_str(),
-            Self::Compacted(_) => "",
+            Self::Compacted(_, _) => "",
         }
     }
 }
@@ -236,13 +236,13 @@ mod tests {
 
     #[test]
     fn format_message_compacted() {
-        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(vec![], EventMetadata::default_legacy());
         assert_eq!(event.format_message(), "Compacted");
     }
 
     #[test]
     fn parse_compacted_roundtrip() {
-        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(vec![], EventMetadata::default_legacy());
         let msg = event.format_message();
         let parsed = YakEvent::parse(&msg).unwrap();
         assert_eq!(parsed, event);
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn compacted_yak_id_is_empty() {
-        let event = YakEvent::Compacted(EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(vec![], EventMetadata::default_legacy());
         assert_eq!(event.yak_id(), "");
     }
 

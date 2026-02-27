@@ -264,7 +264,7 @@ impl GitEventStore {
                 self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
             }
 
-            YakEvent::Compacted(_) => {
+            YakEvent::Compacted(_, _) => {
                 // Compacted keeps the current tree unchanged — the
                 // snapshot IS the current tree state.
                 match current_tree {
@@ -384,7 +384,7 @@ impl GitEventStore {
                     full_message,
                     &commit.id().to_string(),
                 ));
-                return Ok(Some(YakEvent::Compacted(metadata)));
+                return Ok(Some(YakEvent::Compacted(vec![], metadata)));
             }
         }
 
@@ -872,7 +872,7 @@ impl EventStore for GitEventStore {
         if self.get_latest_commit()?.is_none() {
             anyhow::bail!("Cannot compact an empty event store");
         }
-        let event = YakEvent::Compacted(metadata);
+        let event = YakEvent::Compacted(vec![], metadata);
         self.append(&event)
     }
 
@@ -1010,7 +1010,7 @@ impl EventStore for GitEventStore {
             self.collect_compaction_events(&tree, &mut snapshot_events, &metadata)?;
 
             // Include the Compacted marker event
-            snapshot_events.push(YakEvent::Compacted(metadata));
+            snapshot_events.push(YakEvent::Compacted(vec![], metadata));
 
             // post_compaction_events are newest-first; reverse to
             // chronological then append after snapshot events

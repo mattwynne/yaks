@@ -30,7 +30,7 @@ impl UseCase for ShowLog {
         // Find the Compacted event index (if any)
         let compacted_idx = events
             .iter()
-            .position(|e| matches!(e, YakEvent::Compacted(_)));
+            .position(|e| matches!(e, YakEvent::Compacted(_, _)));
 
         let mut entry_count = 0;
         for (i, event) in events.iter().enumerate() {
@@ -52,7 +52,7 @@ impl UseCase for ShowLog {
                 DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
             let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
 
-            if matches!(event, YakEvent::Compacted(_)) {
+            if matches!(event, YakEvent::Compacted(_, _)) {
                 // Show snapshot events nested under the Compacted header
                 let snapshot_events = &events[..compacted_idx.unwrap()];
                 app.display.log_entry(

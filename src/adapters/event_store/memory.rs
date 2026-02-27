@@ -16,7 +16,7 @@ use crate::domain::{Yak, YakEvent};
 fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
     // Find latest Compacted event index
     let compaction_idx = events.iter().enumerate().rev().find_map(|(i, e)| {
-        if matches!(e, YakEvent::Compacted(_)) {
+        if matches!(e, YakEvent::Compacted(_, _)) {
             Some(i)
         } else {
             None
@@ -87,7 +87,7 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
                     }
                 }
             }
-            YakEvent::Compacted(_) => {
+            YakEvent::Compacted(_, _) => {
                 // Should not happen after recursive expansion, but
                 // ignore if it does
             }
@@ -177,11 +177,11 @@ fn expand_compacted_events(events: &[YakEvent]) -> Result<Vec<YakEvent>> {
     }
 
     // Include the Compacted marker event
-    result.push(YakEvent::Compacted(compaction_metadata));
+    result.push(YakEvent::Compacted(vec![], compaction_metadata));
 
     // Append post-compaction events (excluding any Compacted events)
     for event in post_compaction {
-        if !matches!(event, YakEvent::Compacted(_)) {
+        if !matches!(event, YakEvent::Compacted(_, _)) {
             result.push(event.clone());
         }
     }
@@ -245,7 +245,7 @@ impl EventStore for InMemoryEventStore {
             anyhow::bail!("Cannot compact an empty event store");
         }
         drop(events);
-        let event = YakEvent::Compacted(metadata);
+        let event = YakEvent::Compacted(vec![], metadata);
         self.append(&event)
     }
 

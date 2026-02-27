@@ -78,7 +78,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
 
         // Compacted events are expanded by get_all_events() and should
         // never reach the projection. Ignore if encountered.
-        YakEvent::Compacted(_) => {}
+        YakEvent::Compacted(_, _) => {}
     }
     Ok(())
 }
