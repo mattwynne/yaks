@@ -240,6 +240,11 @@ impl EventStore for InMemoryEventStore {
     }
 
     fn compact(&mut self, metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
+        let events = self.events.lock().unwrap();
+        if events.is_empty() {
+            anyhow::bail!("Cannot compact an empty event store");
+        }
+        drop(events);
         let event = YakEvent::Compacted(metadata);
         self.append(&event)
     }
