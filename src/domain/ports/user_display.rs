@@ -19,8 +19,8 @@ pub trait DisplayPort {
     /// Display a yak entry in markdown format
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str);
 
-    /// Display header box with name, state, date, author, and optional children tree
-    fn display_header_box(&self, name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)]);
+    /// Display header box with breadcrumb, name, state, date, author, and optional children tree
+    fn display_header_box(&self, ancestors: &[Name], name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)]);
 
     /// Display breadcrumb path (dimmed ancestor names joined with " > ", trailing " > ")
     /// No output when ancestors is empty.

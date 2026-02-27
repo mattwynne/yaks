@@ -28,7 +28,6 @@ impl ShowYak {
             current_parent = parent_yak.parent_id.clone();
         }
         ancestors.reverse();
-        app.display.display_breadcrumb(&ancestors);
 
         // Collect immediate children for the header box
         let box_children: Vec<_> = {
@@ -46,9 +45,9 @@ impl ShowYak {
             kids
         };
 
-        // Header box with name, state, date, author, and children
+        // Header box with breadcrumb, name, state, date, author, and children
         app.display
-            .display_header_box(&yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children);
+            .display_header_box(&ancestors, &yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children);
 
         // Classify custom fields into short and long
         let mut short_fields: Vec<(&str, &str)> = Vec::new();
@@ -234,16 +233,21 @@ mod tests {
         app.handle(ShowYak::new("child")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        // First line: breadcrumb
-        assert_eq!(
-            lines[0], "grandparent > parent > ",
-            "Expected breadcrumb path, got: {:?}",
+        // First line: top border of box
+        assert!(
+            lines[0].starts_with('┌'),
+            "Expected box top border, got: {:?}",
             lines[0]
         );
-        // Second line: top border of box
+        // Second line: breadcrumb inside the box
         assert!(
-            lines[1].starts_with('┌'),
-            "Expected box top border on second line, got: {:?}",
+            lines[1].contains("grandparent > parent >"),
+            "Expected breadcrumb inside box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].starts_with('│'),
+            "Breadcrumb should be inside box border, got: {:?}",
             lines[1]
         );
     }
