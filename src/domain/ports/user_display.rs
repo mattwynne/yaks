@@ -1,5 +1,6 @@
 // Display port trait - abstraction for displaying results to user
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::Name;
 
 pub trait DisplayPort {
@@ -14,6 +15,9 @@ pub trait DisplayPort {
 
     /// Display a yak entry in markdown format
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str);
+
+    /// Display metadata line for yx show (state, created date, author)
+    fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author);
 
     /// Display a log entry with event ID, author, timestamp, and message
     fn log_entry(

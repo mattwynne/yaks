@@ -1,5 +1,6 @@
 // CLI adapter - implementation using clap
 
+use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::Name;
 use std::io::Write;
 use std::sync::Mutex;
@@ -68,6 +69,15 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             writeln!(out, "{line}")
         }
         .unwrap();
+    }
+
+    fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author) {
+        let mut out = self.output.lock().unwrap();
+        let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let line = format!("State: {state} · Created: {date} by {}", created_by.name);
+        writeln!(out, "{line}").unwrap();
     }
 
     fn log_entry(
@@ -286,6 +296,19 @@ mod tests {
             "unexpected ANSI codes in: {output}"
         );
         assert!(output.contains("  - [todo] todo yak"));
+    }
+
+    #[test]
+    fn metadata_line_shows_state_date_and_author() {
+        let (display, buffer) = make_display(false);
+        let timestamp = Timestamp(1739923200); // 2025-02-19 00:00:00 UTC
+        let author = Author {
+            name: "Matt Wynne".to_string(),
+            email: "matt@example.com".to_string(),
+        };
+        display.display_metadata_line("todo", &timestamp, &author);
+        let output = buffer.contents();
+        assert_eq!(output, "State: todo · Created: 2025-02-19 by Matt Wynne\n");
     }
 }
 
