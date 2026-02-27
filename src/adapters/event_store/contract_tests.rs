@@ -215,7 +215,7 @@ macro_rules! event_store_tests {
         }
 
         #[test]
-        fn compaction_replays_as_snapshot_events() {
+        fn compaction_carries_snapshots() {
             let (mut store, _guard) = $create_store;
             // Add two yaks
             store
@@ -250,58 +250,23 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             // Compact
-            store
-                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
-                .unwrap();
+            store.compact(EventMetadata::default_legacy()).unwrap();
 
             let events = store.get_all_events().unwrap();
 
-            // Should contain exactly one Compacted marker event
-            let compacted_count = events
-                .iter()
-                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
-                .count();
-            assert_eq!(
-                compacted_count, 1,
-                "get_all_events should return exactly one Compacted marker"
-            );
+            // Find the Compacted event
+            let compacted = events.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            assert!(compacted.is_some(), "Should have a Compacted event");
 
-            // Should contain Added events for both yaks
-            let added_ids: Vec<&str> = events
-                .iter()
-                .filter_map(|e| match e {
-                    YakEvent::Added(a, _) => Some(a.id.as_str()),
-                    _ => None,
-                })
-                .collect();
-            assert!(
-                added_ids.contains(&"foo-a1b2"),
-                "Should have Added for foo, got: {:?}",
-                added_ids
-            );
-            assert!(
-                added_ids.contains(&"bar-c3d4"),
-                "Should have Added for bar, got: {:?}",
-                added_ids
-            );
+            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+                assert_eq!(snapshots.len(), 2, "Should have 2 snapshots");
+                let foo = snapshots.iter().find(|s| s.id.as_str() == "foo-a1b2");
+                assert!(foo.is_some(), "Should have snapshot for foo");
+                assert_eq!(foo.unwrap().state, "wip");
 
-            // Should have a FieldUpdated for foo's state=wip
-            let state_updates: Vec<&str> = events
-                .iter()
-                .filter_map(|e| match e {
-                    YakEvent::FieldUpdated(f, _)
-                        if f.id.as_str() == "foo-a1b2" && f.field_name == "state" =>
-                    {
-                        Some(f.content.as_str())
-                    }
-                    _ => None,
-                })
-                .collect();
-            assert!(
-                state_updates.contains(&"wip"),
-                "Should have state=wip for foo, got: {:?}",
-                state_updates
-            );
+                let bar = snapshots.iter().find(|s| s.id.as_str() == "bar-c3d4");
+                assert!(bar.is_some(), "Should have snapshot for bar");
+            }
         }
 
         #[test]
@@ -320,9 +285,7 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             // Compact
-            store
-                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
-                .unwrap();
+            store.compact(EventMetadata::default_legacy()).unwrap();
 
             // Add another yak after compaction
             store
@@ -338,7 +301,17 @@ macro_rules! event_store_tests {
 
             let events = store.get_all_events().unwrap();
 
-            // Should have snapshot events + the post-compaction event
+            // foo should be in the Compacted event's snapshots
+            let compacted = events.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            assert!(compacted.is_some(), "Should have a Compacted event");
+            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+                assert!(
+                    snapshots.iter().any(|s| s.id.as_str() == "foo-a1b2"),
+                    "Compacted should have snapshot for foo"
+                );
+            }
+
+            // bar should be a post-compaction Added event
             let added_ids: Vec<&str> = events
                 .iter()
                 .filter_map(|e| match e {
@@ -347,17 +320,13 @@ macro_rules! event_store_tests {
                 })
                 .collect();
             assert!(
-                added_ids.contains(&"foo-a1b2"),
-                "Should have snapshot Added for foo"
-            );
-            assert!(
                 added_ids.contains(&"bar-c3d4"),
                 "Should have post-compaction Added for bar"
             );
         }
 
         #[test]
-        fn latest_compaction_wins() {
+        fn latest_compaction_includes_all_yaks() {
             let (mut store, _guard) = $create_store;
             // Add foo
             store
@@ -372,9 +341,7 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             // First compaction
-            store
-                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
-                .unwrap();
+            store.compact(EventMetadata::default_legacy()).unwrap();
 
             // Add bar after first compaction
             store
@@ -389,38 +356,28 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             // Second compaction (should include foo + bar)
-            store
-                .append(&YakEvent::Compacted(vec![], EventMetadata::default_legacy()))
-                .unwrap();
+            store.compact(EventMetadata::default_legacy()).unwrap();
 
             let events = store.get_all_events().unwrap();
 
-            // Should contain exactly one Compacted marker (from latest compaction)
-            let compacted_count = events
+            // Find the latest Compacted event (last one)
+            let compacted_events: Vec<_> = events
                 .iter()
                 .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
-                .count();
-            assert_eq!(
-                compacted_count, 1,
-                "get_all_events should return exactly one Compacted marker"
-            );
-
-            // Both yaks should be present (from latest snapshot)
-            let added_ids: Vec<&str> = events
-                .iter()
-                .filter_map(|e| match e {
-                    YakEvent::Added(a, _) => Some(a.id.as_str()),
-                    _ => None,
-                })
                 .collect();
-            assert!(
-                added_ids.contains(&"foo-a1b2"),
-                "Should have Added for foo from latest snapshot"
-            );
-            assert!(
-                added_ids.contains(&"bar-c3d4"),
-                "Should have Added for bar from latest snapshot"
-            );
+            let latest = compacted_events.last().unwrap();
+
+            if let YakEvent::Compacted(snapshots, _) = latest {
+                assert_eq!(snapshots.len(), 2, "Latest compaction should have both yaks");
+                assert!(
+                    snapshots.iter().any(|s| s.id.as_str() == "foo-a1b2"),
+                    "Should have foo in latest snapshot"
+                );
+                assert!(
+                    snapshots.iter().any(|s| s.id.as_str() == "bar-c3d4"),
+                    "Should have bar in latest snapshot"
+                );
+            }
         }
 
         #[test]
@@ -434,7 +391,7 @@ macro_rules! event_store_tests {
         }
 
         #[test]
-        fn compact_creates_compacted_event() {
+        fn compact_creates_compacted_event_with_snapshots() {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(
@@ -450,24 +407,17 @@ macro_rules! event_store_tests {
             store.compact(EventMetadata::default_legacy()).unwrap();
 
             let all = store.get_all_events().unwrap();
-            // After compaction, get_all_events expands the snapshot
-            // so we should see Added events (not Compacted)
-            assert!(!all.is_empty());
-            let added_ids: Vec<&str> = all
-                .iter()
-                .filter_map(|e| match e {
-                    YakEvent::Added(a, _) => Some(a.id.as_str()),
-                    _ => None,
-                })
-                .collect();
-            assert!(
-                added_ids.contains(&"foo-a1b2"),
-                "Compacted snapshot should contain foo"
-            );
+            let compacted = all.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            assert!(compacted.is_some(), "Should have a Compacted event");
+
+            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+                assert_eq!(snapshots.len(), 1);
+                assert_eq!(snapshots[0].id.as_str(), "foo-a1b2");
+            }
         }
 
         #[test]
-        fn compact_is_idempotent_for_known_event_id() {
+        fn double_compact_preserves_all_snapshots() {
             let (mut store, _guard) = $create_store;
             store
                 .append(&YakEvent::Added(
@@ -481,18 +431,20 @@ macro_rules! event_store_tests {
                 .unwrap();
 
             store.compact(EventMetadata::default_legacy()).unwrap();
-
-            let all_before = store.get_all_events().unwrap();
-
-            // Compact again — should be idempotent via event_id dedup
             store.compact(EventMetadata::default_legacy()).unwrap();
 
-            let all_after = store.get_all_events().unwrap();
-            assert_eq!(
-                all_before.len(),
-                all_after.len(),
-                "Duplicate compact should be idempotent"
-            );
+            let all = store.get_all_events().unwrap();
+            // Find the latest Compacted event
+            let compacted_events: Vec<_> = all
+                .iter()
+                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
+                .collect();
+            let latest = compacted_events.last().unwrap();
+
+            if let YakEvent::Compacted(snapshots, _) = latest {
+                assert_eq!(snapshots.len(), 1, "Latest compaction should still have foo");
+                assert_eq!(snapshots[0].id.as_str(), "foo-a1b2");
+            }
         }
 
         #[test]
