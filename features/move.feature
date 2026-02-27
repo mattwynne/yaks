@@ -17,20 +17,28 @@ Feature: Move yaks in hierarchy
           - [todo] child-yak
         """
 
-  Rule: --below is a synonym for --under
+  Rule: --below, --in, --into, and --blocks are synonyms for --under
 
     @fullstack
-    Example: Move a yak using --below
+    Scenario Outline: Move a yak using a synonym for --under
       Given I have a clean git repository
       And I add the yak "child-yak"
       And I add the yak "parent"
-      When I run yx mv child-yak --below parent
+      When I run yx mv child-yak <flag> parent
       And I list the yaks in "markdown" format
       Then the output should be:
         """
         - [todo] parent
           - [todo] child-yak
         """
+
+      Examples:
+        | flag     |
+        | --under  |
+        | --below  |
+        | --in     |
+        | --into   |
+        | --blocks |
 
   Rule: --to-root moves a yak to root level
 
