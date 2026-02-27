@@ -19,6 +19,17 @@ impl ShowYak {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
 
+        // Breadcrumb: walk parent chain to collect ancestor names (root-first)
+        let mut ancestors = Vec::new();
+        let mut current_parent = yak.parent_id.clone();
+        while let Some(pid) = current_parent {
+            let parent_yak = app.store.get_yak(&pid)?;
+            ancestors.push(parent_yak.name.clone());
+            current_parent = parent_yak.parent_id.clone();
+        }
+        ancestors.reverse();
+        app.display.display_breadcrumb(&ancestors);
+
         // Name with state indicator (reuses display_yak_pretty from yx list)
         app.display.display_yak_pretty("", &yak.name, &yak.state);
 
@@ -104,6 +115,80 @@ mod tests {
             lines[2].contains("Created:"),
             "Expected created date in metadata, got: {:?}",
             lines[2]
+        );
+    }
+
+    #[test]
+    fn root_yak_has_no_breadcrumb_line() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("root yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("root yak")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        // First line should be the name, not a breadcrumb
+        assert!(
+            lines[0].contains("○ root yak"),
+            "Expected name as first line, got: {:?}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn nested_yak_shows_breadcrumb_path() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("grandparent")).unwrap();
+        app.handle(AddYak::new("parent").with_parent(Some("grandparent")))
+            .unwrap();
+        app.handle(AddYak::new("child").with_parent(Some("parent")))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("child")).unwrap();
+        let output = buffer.contents();
+        let lines: Vec<&str> = output.lines().collect();
+        // First line: breadcrumb
+        assert_eq!(
+            lines[0], "grandparent > parent > ",
+            "Expected breadcrumb path, got: {:?}",
+            lines[0]
+        );
+        // Second line: name with state indicator
+        assert!(
+            lines[1].contains("○ child"),
+            "Expected name on second line, got: {:?}",
+            lines[1]
         );
     }
 

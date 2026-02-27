@@ -71,6 +71,24 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
+    fn display_breadcrumb(&self, ancestors: &[Name]) {
+        if ancestors.is_empty() {
+            return;
+        }
+        let mut out = self.output.lock().unwrap();
+        let path = ancestors
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(" > ");
+        let line = format!("{path} > ");
+        if self.options.color {
+            writeln!(out, "\x1b[2m{line}\x1b[0m").unwrap();
+        } else {
+            writeln!(out, "{line}").unwrap();
+        }
+    }
+
     fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author) {
         let mut out = self.output.lock().unwrap();
         let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
@@ -296,6 +314,37 @@ mod tests {
             "unexpected ANSI codes in: {output}"
         );
         assert!(output.contains("  - [todo] todo yak"));
+    }
+
+    #[test]
+    fn breadcrumb_empty_ancestors_produces_no_output() {
+        let (display, buffer) = make_display(false);
+        display.display_breadcrumb(&[]);
+        assert_eq!(buffer.contents(), "");
+    }
+
+    #[test]
+    fn breadcrumb_single_ancestor() {
+        let (display, buffer) = make_display(false);
+        display.display_breadcrumb(&[Name::from("parent")]);
+        assert_eq!(buffer.contents(), "parent > \n");
+    }
+
+    #[test]
+    fn breadcrumb_multiple_ancestors() {
+        let (display, buffer) = make_display(false);
+        display.display_breadcrumb(&[Name::from("grandparent"), Name::from("parent")]);
+        assert_eq!(buffer.contents(), "grandparent > parent > \n");
+    }
+
+    #[test]
+    fn breadcrumb_with_color_is_dimmed() {
+        let (display, buffer) = make_display(true);
+        display.display_breadcrumb(&[Name::from("root"), Name::from("mid")]);
+        let output = buffer.contents();
+        assert!(output.contains("\x1b[2m"), "expected dim ANSI code in: {output}");
+        assert!(output.contains("root > mid > "));
+        assert!(output.contains("\x1b[0m"), "expected reset ANSI code in: {output}");
     }
 
     #[test]
