@@ -280,6 +280,19 @@ Feature: yx sync - Collaborate on Yaks via Git
           ○ make the tea
         """
 
+  @fullstack
+  Rule: Sync reports when a compaction is received
+
+    Example: Bob sees compaction message after Alice compacts
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And alice has compacted yaks
+      And alice has synced yaks
+      When bob syncs yaks
+      Then the output should include "compaction"
+
   @wip
   Rule: Sync tells you what changed
 

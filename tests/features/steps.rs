@@ -1138,6 +1138,20 @@ async fn repo_has_synced_in_process(world: &mut InProcessWorld, repo: String) ->
     world.sync_repo(&repo)
 }
 
+#[given(regex = r#"^([\w-]+) has compacted yaks$"#)]
+async fn repo_has_compacted(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["compact", "--yes"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Failed to compact yaks in repo '{}':\nstdout: {}\nstderr: {}",
+            repo,
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
 #[when(regex = r#"^([\w-]+) syncs yaks$"#)]
 async fn repo_syncs_yaks(world: &mut FullStackWorld, repo: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["sync"])?;
