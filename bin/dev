@@ -12,6 +12,7 @@ setup() {
 
   echo "Installing git hooks..."
   prek install
+  prek install -t pre-merge-commit
   echo "✅ Development environment ready"
 }
 

@@ -12,8 +12,18 @@ if [ ! -f "$MARKER" ]; then
   exit 1
 fi
 
-# Check if any modified tracked file is newer than the marker
+# Check modified (unstaged) files — catches normal commits
 for file in $(git ls-files -m); do
+  if [ -f "$file" ] && [ "$file" -nt "$MARKER" ]; then
+    echo "❌ You have un-verified changes. Run \`dev check\`"
+    exit 1
+  fi
+done
+
+# Check staged files that differ from HEAD — catches merges
+# During pre-merge-commit, incoming changes are staged but not
+# yet committed, so git ls-files -m misses them entirely.
+for file in $(git diff --cached --name-only HEAD 2>/dev/null); do
   if [ -f "$file" ] && [ "$file" -nt "$MARKER" ]; then
     echo "❌ You have un-verified changes. Run \`dev check\`"
     exit 1
