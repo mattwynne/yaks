@@ -14,6 +14,10 @@ ADRs document significant architectural and design decisions.
 | [0006](0006-separate-move-and-rename-operations.md) | Separate move and rename operations | accepted |
 | [0007](0007-sync-is-an-eventstore-responsibility-not-a-separate-port.md) | Sync is an EventStore responsibility | accepted |
 | [0008](0008-keep-main-rs-thin-only-wiring-and-routing.md) | Keep main.rs thin: only wiring and routing | accepted |
+| [0009](0009-compacted-event-design-and-known-gaps.md) | Compacted event design | accepted |
+| [0010](0010-state-reconstruction-mechanisms.md) | State reconstruction mechanisms | accepted |
+| [0011](0011-schema-versioning-and-sync-compatibility.md) | Schema versioning and sync compatibility | accepted |
+| [0012](0012-compact-after-migration-to-hide-pre-migration-history.md) | Compact after migration to hide pre-migration history | accepted |
 
 ## When to Write an ADR
 
