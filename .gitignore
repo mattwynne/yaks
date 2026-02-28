@@ -40,3 +40,4 @@ mutants.out.old/
 # pi agent config (allow prompts, ignore the rest)
 .pi/*
 !.pi/prompts/
+!.pi/extensions/
