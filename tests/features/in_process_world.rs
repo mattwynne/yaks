@@ -11,9 +11,11 @@ use yx::adapters::{
     TestBuffer,
 };
 use yx::application::{
-    AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
+    AddTag, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
+    ListTags, RemoveTag,
     SetState, ShowContext, ShowField, StartYak, SyncYaks, WriteField,
 };
+use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
 
@@ -431,6 +433,28 @@ impl TestWorld for InProcessWorld {
         let key = key.to_string();
         let value = value.to_string();
         self.execute(move |app| app.handle(AddYak::new(&name).with_field(&key, &value)))
+    }
+
+    fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let normalized: Vec<String> = tags
+            .iter()
+            .map(|t| normalize_tag(t))
+            .collect::<Result<_>>()?;
+        let name = name.to_string();
+        self.execute(move |app| app.handle(AddTag::new(&name, normalized)))
+    }
+
+    fn remove_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let normalized: Vec<String> = tags
+            .iter()
+            .map(|t| normalize_tag(t))
+            .collect::<Result<_>>()?;
+        let name = name.to_string();
+        self.execute(move |app| app.handle(RemoveTag::new(&name, normalized)))
+    }
+
+    fn list_tags(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(ListTags::new(name)))
     }
 
     fn get_exit_code(&self) -> i32 {

@@ -1188,6 +1188,24 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["add", name, "--field", &field_arg])
     }
 
+    fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let mut args = vec!["tag", "add", name];
+        let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+        args.extend(tag_refs);
+        self.run_yx(&args)
+    }
+
+    fn remove_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let mut args = vec!["tag", "rm", name];
+        let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+        args.extend(tag_refs);
+        self.run_yx(&args)
+    }
+
+    fn list_tags(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["tag", "list", name])
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
