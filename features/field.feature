@@ -61,14 +61,15 @@ Feature: Yak fields
       And I show the "notes" field of "my yak"
       Then the output should include "seed notes - edited"
 
-  Rule: The name field is set automatically on add
-    When a yak is added, a "name" field is created containing
-    the yak's display name.
+  Rule: The .name field is set automatically on add
+    When a yak is added, a ".name" field is created containing
+    the yak's display name. Reserved fields use dot-prefix to
+    avoid collision with user-defined fields.
 
-    Example: Adding a yak creates a name field
+    Example: Adding a yak creates a .name field
       Given I have a clean git repository
       And I add the yak "my yak"
-      When I show the "name" field of "my yak"
+      When I show the ".name" field of "my yak"
       Then the output should be:
         """
         my yak
@@ -76,15 +77,15 @@ Feature: Yak fields
         my yak
         """
 
-  Rule: The name field is updated on rename
-    When a yak is renamed, the name field is updated to
+  Rule: The .name field is updated on rename
+    When a yak is renamed, the .name field is updated to
     match the new name.
 
-    Example: Renaming a yak updates its name field
+    Example: Renaming a yak updates its .name field
       Given I have a clean git repository
       And I add the yak "old name"
       When I rename the yak "old name" to "new name"
-      And I show the "name" field of "new name"
+      And I show the ".name" field of "new name"
       Then the output should be:
         """
         new name
@@ -93,19 +94,19 @@ Feature: Yak fields
         """
 
   Rule: Reserved field names are rejected
-    Certain field names conflict with internal storage and cannot
-    be used as custom field names.
+    Dot-prefixed reserved field names cannot be used as custom
+    field names. They are used internally by yx.
 
     Example: Writing to a reserved field name fails
       Given I have a clean git repository
       And I add the yak "my yak"
-      When I try to set the "context.md" field of "my yak" to "content"
+      When I try to set the ".context.md" field of "my yak" to "content"
       Then the command should fail
-      And the error should contain "Field name 'context.md' is reserved"
+      And the error should contain "Field name '.context.md' is reserved"
 
-    Example: Writing to the name field fails
+    Example: Writing to the .name field fails
       Given I have a clean git repository
       And I add the yak "my yak"
-      When I try to set the "name" field of "my yak" to "custom name"
+      When I try to set the ".name" field of "my yak" to "custom name"
       Then the command should fail
-      And the error should contain "Field name 'name' is reserved"
+      And the error should contain "Field name '.name' is reserved"

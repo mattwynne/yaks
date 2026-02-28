@@ -176,7 +176,7 @@ mod tests {
             let mut app = Application::new(
                 &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
             );
-            let result = app.handle(EditField::new("my yak", "state"));
+            let result = app.handle(EditField::new("my yak", ".state"));
             assert!(result.is_err());
         }
     }

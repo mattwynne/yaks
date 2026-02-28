@@ -18,7 +18,7 @@ Feature: yx rename command
       Given I have a clean git repository
       And I add the yak "old name"
       When I rename the yak "old name" to "new name"
-      And I show the "id" field of "new name"
+      And I show the ".id" field of "new name"
       Then the output should include "old-name-"
 
   Rule: Renaming a child does not move it

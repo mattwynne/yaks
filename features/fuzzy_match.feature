@@ -50,5 +50,5 @@ Feature: Fuzzy match on yak names
       And I add the yak "project"
       And I add the yak "fix the build" under "project"
       When I set the state of "proj" to "wip"
-      And I show the "state" field of "project"
+      And I show the ".state" field of "project"
       Then the output should include "wip"

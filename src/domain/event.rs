@@ -71,7 +71,7 @@ impl YakEvent {
                 Ok(Self::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from(values[0].as_str()),
-                        field_name: "name".to_string(),
+                        field_name: ".name".to_string(),
                         content: values[1].clone(),
                     },
                     meta,
@@ -86,7 +86,7 @@ impl YakEvent {
                 Ok(Self::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from(values[0].as_str()),
-                        field_name: "state".to_string(),
+                        field_name: ".state".to_string(),
                         content: values[1].clone(),
                     },
                     meta,
@@ -98,7 +98,7 @@ impl YakEvent {
                 Ok(Self::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from(values[0].as_str()),
-                        field_name: "context.md".to_string(),
+                        field_name: ".context.md".to_string(),
                         content: String::new(),
                     },
                     meta,
@@ -168,12 +168,12 @@ mod tests {
         let event = YakEvent::FieldUpdated(
             FieldUpdatedEvent {
                 id: YakId::from("test"),
-                field_name: "state".to_string(),
+                field_name: ".state".to_string(),
                 content: "wip".to_string(),
             },
             EventMetadata::default_legacy(),
         );
-        assert_eq!(event.format_message(), "FieldUpdated: \"test\" \"state\"");
+        assert_eq!(event.format_message(), "FieldUpdated: \"test\" \".state\"");
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
         match event {
             YakEvent::FieldUpdated(e, _) => {
                 assert_eq!(e.id, YakId::from("my-yak-a1b2"));
-                assert_eq!(e.field_name, "name");
+                assert_eq!(e.field_name, ".name");
                 assert_eq!(e.content, "new name");
             }
             _ => panic!("Expected FieldUpdated"),
@@ -227,7 +227,7 @@ mod tests {
         match event {
             YakEvent::FieldUpdated(e, _) => {
                 assert_eq!(e.id, YakId::from("test-a1b2"));
-                assert_eq!(e.field_name, "state");
+                assert_eq!(e.field_name, ".state");
                 assert_eq!(e.content, "wip");
             }
             _ => panic!("Expected FieldUpdated"),
@@ -260,7 +260,7 @@ mod tests {
         match event {
             YakEvent::FieldUpdated(e, _) => {
                 assert_eq!(e.id, YakId::from("test-a1b2"));
-                assert_eq!(e.field_name, "context.md");
+                assert_eq!(e.field_name, ".context.md");
                 assert_eq!(e.content, "");
             }
             _ => panic!("Expected FieldUpdated"),

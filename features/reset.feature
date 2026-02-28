@@ -50,13 +50,13 @@ Feature: yx reset - Rebuild yaks from git tree
 
     Old-style yak directories used raw names or IDs as directory names.
     Reset rebuilds the disk projection using slugs for directory names,
-    with proper `name` and `id` files inside.
+    with proper `.name` and `.id` files inside.
 
     Example: Reset creates slug-based directory with name and id files
       Given a yak "my old yak" created with the v2 schema
       When I reset the yaks
-      Then the yak "my-old-yak" should have a "name" file containing "my old yak"
-      And the yak "my-old-yak" should have an "id" file
+      Then the yak "my-old-yak" should have a ".name" file containing "my old yak"
+      And the yak "my-old-yak" should have an ".id" file
 
   Rule: Reset handles duplicate entries in corrupted git trees
 

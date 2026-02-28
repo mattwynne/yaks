@@ -1011,10 +1011,10 @@ async fn yak_directory_named(world: &mut FullStackWorld, slug: String) -> Result
     if !dir.exists() {
         anyhow::bail!("Expected yak directory '{}' to exist at {:?}", slug, dir);
     }
-    let marker = dir.join("context.md");
+    let marker = dir.join(".context.md");
     if !marker.exists() {
         anyhow::bail!(
-            "Directory '{}' exists but does not contain context.md",
+            "Directory '{}' exists but does not contain .context.md",
             slug
         );
     }
