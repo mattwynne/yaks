@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::slug::Name;
-use crate::domain::{Yak, YakEvent};
+use crate::domain::YakEvent;
 
 
 fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
@@ -143,10 +143,6 @@ impl EventStore for InMemoryEventStore {
         self.append(&event)
     }
 
-    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
-        Ok(0)
-    }
-
     fn sync(
         &mut self,
         _bus: &mut crate::infrastructure::event_bus::EventBus,
@@ -250,14 +246,6 @@ mod tests {
 
         assert_eq!(events.len(), 0);
         assert!(events.is_empty());
-    }
-
-    #[test]
-    fn test_reset_from_snapshot_returns_zero() {
-        let mut store = InMemoryEventStore::new();
-        let result = store.reset_from_snapshot(&[]).unwrap();
-
-        assert_eq!(result, 0);
     }
 
     mod sync {

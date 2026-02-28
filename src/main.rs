@@ -162,12 +162,9 @@ enum Commands {
         /// Rebuild .yaks directory from git tree (default)
         #[arg(long)]
         disk_from_git: bool,
-        /// Rebuild git tree from .yaks directory
+        /// Wipe git history and replay yaks from disk through Application layer
         #[arg(long)]
         git_from_disk: bool,
-        /// Wipe git history and replay through Application layer
-        #[arg(long, requires = "git_from_disk")]
-        hard: bool,
     },
     /// Compact the event stream into a snapshot
     Compact {
@@ -420,7 +417,6 @@ fn main() -> Result<()> {
         Commands::Reset {
             disk_from_git,
             git_from_disk,
-            hard,
         } => {
             // Validate flags
             if disk_from_git && git_from_disk {
@@ -431,8 +427,8 @@ fn main() -> Result<()> {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Error: not in a git repository"))?;
 
-            if git_from_disk && hard {
-                // Hard reset: wipe git history and replay through Application
+            if git_from_disk {
+                // Wipe git history and replay through Application
                 let yaks = storage.list_yaks()?;
 
                 // Delete refs/notes/yaks to wipe git event history
@@ -539,19 +535,13 @@ fn main() -> Result<()> {
                     }
                 }
 
-                println!("Hard reset: {} yaks", yaks.len());
+                println!("Reset from disk: {} yaks", yaks.len());
                 println!();
                 println!("To update the remote, run:");
                 println!("  git push origin refs/notes/yaks --force");
                 println!();
                 println!("Collaborators must then run:");
                 println!("  git fetch origin refs/notes/yaks:refs/notes/yaks --force");
-            } else if git_from_disk {
-                // Rebuild git tree from .yaks directory
-                let yaks = storage.list_yaks()?;
-                let mut event_store = GitEventStore::new(root)?;
-                let count = event_store.reset_from_snapshot(&yaks)?;
-                println!("Snapshot: {} yaks", count);
             } else {
                 // Default: rebuild .yaks directory from git tree
                 let event_store = GitEventStore::new(root)?;

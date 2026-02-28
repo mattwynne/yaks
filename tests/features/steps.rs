@@ -1289,19 +1289,6 @@ async fn reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()> {
     Ok(())
 }
 
-#[when(expr = "I hard reset the yaks from disk to git")]
-async fn hard_reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()> {
-    world.run_raw(&["reset", "--git-from-disk", "--hard"])?;
-    if world.get_exit_code() != 0 {
-        anyhow::bail!(
-            "yx reset --git-from-disk --hard failed:\nstdout: {}\nstderr: {}",
-            world.get_output(),
-            world.get_error()
-        );
-    }
-    Ok(())
-}
-
 #[then(regex = r#"^([\w-]+) should have a yak called "(.+)"$"#)]
 async fn repo_should_have_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["ls", "--format", "plain"])?;

@@ -1,5 +1,5 @@
 use crate::domain::event_metadata::EventMetadata;
-use crate::domain::{Yak, YakEvent};
+use crate::domain::YakEvent;
 use crate::infrastructure::event_bus::EventBus;
 use anyhow::Result;
 
@@ -8,7 +8,6 @@ use super::DisplayPort;
 pub trait EventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()>;
     fn get_all_events(&self) -> Result<Vec<YakEvent>>;
-    fn reset_from_snapshot(&mut self, yaks: &[Yak]) -> Result<usize>;
     fn sync(&mut self, bus: &mut EventBus, output: &dyn DisplayPort) -> Result<()>;
 
     /// Create and append a Compacted event, which represents a

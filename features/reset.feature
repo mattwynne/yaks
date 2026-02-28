@@ -78,20 +78,7 @@ Feature: yx reset - Rebuild yaks from git tree
       When I reset the yaks
       Then the file "notes.txt" should still exist in the yak directory
 
-  Rule: Reset can rebuild git tree from disk
-
-    Example: Round-trip from disk to git and back preserves yaks
-      Given I add the yak "alpha"
-      And I add the yak "beta" under "alpha"
-      When I set the state of "beta" to "wip"
-      And I reset the yaks from disk to git
-      And I reset the yaks
-      And I list the yaks in "markdown" format
-      Then the output should be:
-        """
-        - [wip] alpha
-          - [wip] beta
-        """
+  Rule: Reset preserves state changes on nested yaks
 
     Example: Reset preserves state changes on nested yaks
       Given I add the yak "parent"
@@ -117,17 +104,17 @@ Feature: yx reset - Rebuild yaks from git tree
           - [todo] renamed child
         """
 
-  Rule: Hard reset replays yaks through the Application layer
+  Rule: Reset from disk replays yaks through the Application layer
 
-    When --hard is used with --git-from-disk, the git event
-    history is wiped and rebuilt by replaying each yak through
-    AddYak. This produces clean individual event commits.
+    When --git-from-disk is used, the git event history is wiped
+    and rebuilt by replaying each yak through AddYak. This produces
+    clean individual event commits.
 
-    Example: Hard reset preserves yak data
+    Example: Reset from disk preserves yak data
       Given I add the yak "alpha"
       And I add the yak "beta" under "alpha"
       When I set the state of "beta" to "wip"
-      And I hard reset the yaks from disk to git
+      And I reset the yaks from disk to git
       And I list the yaks in "markdown" format
       Then the output should be:
         """
@@ -135,31 +122,31 @@ Feature: yx reset - Rebuild yaks from git tree
           - [wip] beta
         """
 
-    Example: Hard reset preserves context and custom fields
+    Example: Reset from disk preserves context and custom fields
       When I add the yak "my yak" with context "important notes"
       And I set the "plan" field of "my yak" to "step one"
-      And I hard reset the yaks from disk to git
+      And I reset the yaks from disk to git
       And I show the context of "my yak"
       Then the output should include "important notes"
       When I show the "plan" field of "my yak"
       Then the output should include "step one"
 
-    Example: Hard reset produces clean event log
+    Example: Reset from disk produces clean event log
       Given I add the yak "one"
       And I add the yak "two"
-      When I hard reset the yaks from disk to git
+      When I reset the yaks from disk to git
       And I run yx log
       Then the output should include "Added"
       And the output should not include "Snapshot"
 
-    Example: Hard reset preserves author in event log
+    Example: Reset from disk preserves author in event log
       Given I add the yak "my yak"
-      When I hard reset the yaks from disk to git
+      When I reset the yaks from disk to git
       And I run yx log
       Then the output should include "<"
 
-    Example: Hard reset uses current user for legacy yaks without metadata
+    Example: Reset from disk uses current user for legacy yaks without metadata
       Given a yak "legacy yak" created with the v2 schema
-      When I hard reset the yaks from disk to git
+      When I reset the yaks from disk to git
       And I run yx log
       Then the output should not include "unknown"

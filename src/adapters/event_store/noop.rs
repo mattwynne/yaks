@@ -5,7 +5,7 @@
 // any git infrastructure.
 
 use crate::domain::ports::EventStore;
-use crate::domain::{Yak, YakEvent};
+use crate::domain::YakEvent;
 use anyhow::Result;
 
 pub struct NoOpEventStore;
@@ -17,10 +17,6 @@ impl EventStore for NoOpEventStore {
     fn get_all_events(&self) -> Result<Vec<YakEvent>> {
         Ok(vec![])
     }
-    fn reset_from_snapshot(&mut self, _yaks: &[Yak]) -> Result<usize> {
-        Ok(0)
-    }
-
     fn compact(&mut self, _metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
         Ok(())
     }
