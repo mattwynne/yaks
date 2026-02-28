@@ -2,107 +2,11 @@ use anyhow::Result;
 use git2::Repository;
 use std::path::Path;
 
-use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::YakEvent;
 
-/// Builds a git tree object representing a single yak's subtree.
-///
-/// A yak subtree contains blobs for each field (state, context.md, name,
-/// etc.) plus optional metadata. This builder provides a single place to
-/// construct these subtrees, used by `build_tree_from_event` (for
-/// the `Added` event).
-///
-/// # Example
-///
-/// ```ignore
-/// let oid = YakSubtreeBuilder::new(&repo)
-///     .name("fix the tests")
-///     .state("todo")
-///     .context("")
-///     .metadata(&author, timestamp)
-///     .parent_id(Some("parent-a1b2"))
-///     .build()?;
-/// ```
-struct YakSubtreeBuilder<'r> {
-    repo: &'r Repository,
-    entries: Vec<(&'static str, String)>,
-    custom_fields: Vec<(String, String)>,
-}
-
-impl<'r> YakSubtreeBuilder<'r> {
-    fn new(repo: &'r Repository) -> Self {
-        Self {
-            repo,
-            entries: Vec::new(),
-            custom_fields: Vec::new(),
-        }
-    }
-
-    /// Set the yak's display name.
-    fn name(mut self, name: &str) -> Self {
-        self.entries.push((".name", name.to_string()));
-        self
-    }
-
-    /// Set the yak's state (todo, wip, done).
-    fn state(mut self, state: &str) -> Self {
-        self.entries.push((".state", state.to_string()));
-        self
-    }
-
-    /// Set the yak's context markdown content.
-    fn context(mut self, content: &str) -> Self {
-        self.entries.push((".context.md", content.to_string()));
-        self
-    }
-
-    /// Set the parent yak's ID, if this yak is nested.
-    fn parent_id(mut self, parent_id: Option<&str>) -> Self {
-        if let Some(pid) = parent_id {
-            self.entries.push((".parent_id", pid.to_string()));
-        }
-        self
-    }
-
-    /// Write the `.created.json` blob with author and timestamp.
-    fn metadata(mut self, author: &Author, timestamp: Timestamp) -> Self {
-        let json = serde_json::json!({
-            "created_by": {
-                "name": author.name,
-                "email": author.email
-            },
-            "created_at": timestamp.as_epoch_secs()
-        });
-        self.entries.push((".created.json", json.to_string()));
-        self
-    }
-
-    /// Add custom (non-reserved) fields to the subtree.
-    fn custom_fields(mut self, fields: &std::collections::HashMap<String, String>) -> Self {
-        for (name, content) in fields {
-            self.custom_fields.push((name.clone(), content.clone()));
-        }
-        self
-    }
-
-    /// Write all collected entries to a new git tree object.
-    fn build(self) -> Result<git2::Oid> {
-        let mut builder = self.repo.treebuilder(None)?;
-
-        for (name, content) in &self.entries {
-            let blob = self.repo.blob(content.as_bytes())?;
-            builder.insert(name, blob, 0o100644)?;
-        }
-
-        for (name, content) in &self.custom_fields {
-            let blob = self.repo.blob(content.as_bytes())?;
-            builder.insert(name, blob, 0o100644)?;
-        }
-
-        Ok(builder.write()?)
-    }
-}
+use super::commit;
+use super::tree;
 
 pub struct GitEventStore {
     repo: Repository,
@@ -138,8 +42,18 @@ impl GitEventStore {
         }
     }
 
+    /// Access the underlying repository.
+    pub(super) fn repo(&self) -> &Repository {
+        &self.repo
+    }
+
+    /// Access the ref name.
+    pub(super) fn ref_name(&self) -> &str {
+        &self.ref_name
+    }
+
     /// Get the latest commit on refs/notes/yaks, if any
-    fn get_latest_commit(&self) -> Result<Option<git2::Commit<'_>>> {
+    pub(super) fn get_latest_commit(&self) -> Result<Option<git2::Commit<'_>>> {
         match self.repo.refname_to_id(&self.ref_name) {
             Ok(oid) => Ok(Some(self.repo.find_commit(oid)?)),
             Err(_) => Ok(None),
@@ -147,420 +61,11 @@ impl GitEventStore {
     }
 
     /// Get the current tree from refs/notes/yaks, if any
-    fn get_current_tree(&self) -> Result<Option<git2::Tree<'_>>> {
+    pub(super) fn get_current_tree(&self) -> Result<Option<git2::Tree<'_>>> {
         match self.get_latest_commit()? {
             Some(commit) => Ok(Some(commit.tree()?)),
             None => Ok(None),
         }
-    }
-
-    /// Get a yak's subtree from the root tree by its ID (direct root lookup).
-    fn get_yak_subtree(
-        &self,
-        root: Option<&git2::Tree>,
-        yak_id: &str,
-    ) -> Result<Option<git2::Tree<'_>>> {
-        let Some(root) = root else {
-            return Ok(None);
-        };
-
-        match root.get_name(yak_id) {
-            Some(entry) => Ok(Some(self.repo.find_tree(entry.id())?)),
-            None => Ok(None),
-        }
-    }
-
-    /// Update a file in a yak's subtree, returning new root tree OID
-    fn update_yak_file(
-        &self,
-        current_tree: Option<&git2::Tree>,
-        yak_id: &str,
-        file_name: &str,
-        content: &str,
-    ) -> Result<git2::Oid> {
-        let blob_oid = self.repo.blob(content.as_bytes())?;
-
-        // Build the yak's subtree
-        let yak_subtree = self.get_yak_subtree(current_tree, yak_id)?;
-        let mut yak_builder = self.repo.treebuilder(yak_subtree.as_ref())?;
-        yak_builder.insert(file_name, blob_oid, 0o100644)?;
-        let yak_tree_oid = yak_builder.write()?;
-
-        // Rebuild root tree with updated yak subtree
-        self.set_yak_in_root(current_tree, yak_id, Some(yak_tree_oid))
-    }
-
-    /// Set (or remove) a yak subtree in the root tree.
-    fn set_yak_in_root(
-        &self,
-        root: Option<&git2::Tree>,
-        yak_id: &str,
-        subtree_oid: Option<git2::Oid>,
-    ) -> Result<git2::Oid> {
-        let mut builder = self.repo.treebuilder(root)?;
-        match subtree_oid {
-            Some(oid) => {
-                builder.insert(yak_id, oid, 0o040000)?;
-            }
-            None => {
-                let _ = builder.remove(yak_id);
-            }
-        }
-        Ok(builder.write()?)
-    }
-
-    /// Build an updated tree by applying an event to the current tree.
-    /// All operations happen in git's object database - no filesystem IO.
-    fn build_tree_from_event(
-        &self,
-        event: &YakEvent,
-        current_tree: Option<&git2::Tree>,
-    ) -> Result<git2::Oid> {
-        match event {
-            YakEvent::Added(e, metadata) => {
-                let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
-                    .name(e.name.as_str())
-                    .state("todo")
-                    .context("")
-                    .metadata(&metadata.author, metadata.timestamp)
-                    .parent_id(e.parent_id.as_ref().map(|p| p.as_str()))
-                    .build()?;
-                self.set_yak_in_root(current_tree, e.id.as_str(), Some(yak_tree_oid))
-            }
-
-            YakEvent::Removed(e, _) => {
-                // Flat: yak is always at root by its ID
-                self.set_yak_in_root(current_tree, e.id.as_str(), None)
-            }
-
-            YakEvent::Moved(e, _) => {
-                // In flat structure, moving just updates the parent_id blob
-                let yak_id = e.id.as_str();
-                let subtree = self.get_yak_subtree(current_tree, yak_id)?;
-                let mut builder = self.repo.treebuilder(subtree.as_ref())?;
-
-                match &e.new_parent {
-                    Some(parent_id) => {
-                        let blob = self.repo.blob(parent_id.as_str().as_bytes())?;
-                        builder.insert(".parent_id", blob, 0o100644)?;
-                    }
-                    None => {
-                        let _ = builder.remove(".parent_id");
-                    }
-                }
-
-                let new_subtree_oid = builder.write()?;
-                self.set_yak_in_root(current_tree, yak_id, Some(new_subtree_oid))
-            }
-
-            YakEvent::FieldUpdated(e, _) => {
-                // Flat: yak is always at root by its ID
-                self.update_yak_file(current_tree, e.id.as_str(), &e.field_name, &e.content)
-            }
-
-            YakEvent::Compacted(snapshots, _) => {
-                if snapshots.is_empty() {
-                    // Legacy: no snapshots, preserve current tree
-                    match current_tree {
-                        Some(tree) => Ok(tree.id()),
-                        None => {
-                            anyhow::bail!("Cannot compact: no tree state exists")
-                        }
-                    }
-                } else {
-                    // Build tree from snapshots
-                    use super::migration::CURRENT_SCHEMA_VERSION;
-                    let mut root_builder = self.repo.treebuilder(None)?;
-                    for snap in snapshots {
-                        let yak_tree_oid = YakSubtreeBuilder::new(&self.repo)
-                            .name(snap.name.as_str())
-                            .state(&snap.state)
-                            .context(snap.context.as_deref().unwrap_or(""))
-                            .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
-                            .metadata(&snap.created_by, snap.created_at)
-                            .custom_fields(&snap.fields)
-                            .build()?;
-                        root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
-                    }
-                    let version_blob = self
-                        .repo
-                        .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
-                    root_builder.insert(".schema-version", version_blob, 0o100644)?;
-                    Ok(root_builder.write()?)
-                }
-            }
-        }
-    }
-    /// Check if any existing commit has the given Event-Id trailer
-    fn has_event_id(&self, event_id: &str) -> Result<bool> {
-        let Some(latest) = self.get_latest_commit()? else {
-            return Ok(false);
-        };
-
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-        revwalk.push(latest.id())?;
-
-        for oid in revwalk {
-            let oid = oid?;
-            let commit = self.repo.find_commit(oid)?;
-            let message = commit.message().unwrap_or("");
-            if Self::message_has_event_id(message, event_id) {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
-    /// Check if a commit message contains a specific Event-Id trailer
-    fn message_has_event_id(message: &str, event_id: &str) -> bool {
-        let prefix = "Event-Id: ";
-        for line in message.lines() {
-            let trimmed = line.trim();
-            if let Some(id) = trimmed.strip_prefix(prefix) {
-                if id.trim() == event_id {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    /// Extract the Event-Id from a commit message, falling back to a
-    /// provided default (typically the commit SHA for legacy commits).
-    fn extract_event_id(message: &str, fallback: &str) -> String {
-        let prefix = "Event-Id: ";
-        for line in message.lines() {
-            let trimmed = line.trim();
-            if let Some(id) = trimmed.strip_prefix(prefix) {
-                let id = id.trim();
-                if !id.is_empty() {
-                    return id.to_string();
-                }
-            }
-        }
-        fallback.to_string()
-    }
-
-    /// Fetch refs/notes/yaks from origin into a temporary peer ref.
-    /// Returns an error if sync is not configured (no origin remote).
-    fn fetch_peer_ref(repo_path: &Path) -> Result<()> {
-        let fetch_output = std::process::Command::new("git")
-            .args(["fetch", "origin", "+refs/notes/yaks:refs/notes/yaks-peer"])
-            .current_dir(repo_path)
-            .output();
-
-        let has_origin = match fetch_output {
-            Ok(out) => {
-                if out.status.success() {
-                    true
-                } else {
-                    let stderr = String::from_utf8_lossy(&out.stderr);
-                    stderr.contains("couldn't find remote ref")
-                }
-            }
-            Err(_) => false,
-        };
-
-        if !has_origin {
-            anyhow::bail!("Sync not configured");
-        }
-        Ok(())
-    }
-
-    /// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
-    #[allow(clippy::cognitive_complexity)]
-    fn read_snapshots_from_tree(
-        &self,
-        tree: &git2::Tree,
-    ) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
-        use crate::domain::field::RESERVED_FIELDS;
-        use crate::domain::slug::{Name, YakId};
-        use crate::domain::yak_snapshot::YakSnapshot;
-        use std::collections::{HashMap, HashSet};
-
-        struct YakData {
-            id: String,
-            name_str: String,
-            subtree_id: git2::Oid,
-            parent_id_str: Option<String>,
-        }
-
-        let mut yak_data: Vec<YakData> = Vec::new();
-
-        for entry in tree.iter() {
-            if entry.kind() != Some(git2::ObjectType::Tree) {
-                continue;
-            }
-            let entry_name = match entry.name() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-
-            let subtree = self.repo.find_tree(entry.id())?;
-
-            let is_yak =
-                subtree.get_name(".state").is_some() || subtree.get_name(".context.md").is_some();
-            if !is_yak {
-                continue;
-            }
-
-            let name_str = if let Some(name_entry) = subtree.get_name(".name") {
-                let name_blob = self.repo.find_blob(name_entry.id())?;
-                std::str::from_utf8(name_blob.content())?.trim().to_string()
-            } else {
-                entry_name.clone()
-            };
-
-            let parent_id_str = if let Some(pid_entry) = subtree.get_name(".parent_id") {
-                let pid_blob = self.repo.find_blob(pid_entry.id())?;
-                Some(std::str::from_utf8(pid_blob.content())?.trim().to_string())
-            } else {
-                None
-            };
-
-            yak_data.push(YakData {
-                id: entry_name,
-                name_str,
-                subtree_id: entry.id(),
-                parent_id_str,
-            });
-        }
-
-        // Topological sort: parents before children
-        let mut emitted: HashSet<String> = HashSet::new();
-        let mut remaining = yak_data;
-        let mut ordered: Vec<YakData> = Vec::new();
-
-        loop {
-            let before = remaining.len();
-            let mut still_remaining = Vec::new();
-
-            for item in remaining {
-                let can_emit = match &item.parent_id_str {
-                    None => true,
-                    Some(pid) => emitted.contains(pid),
-                };
-                if can_emit {
-                    emitted.insert(item.id.clone());
-                    ordered.push(item);
-                } else {
-                    still_remaining.push(item);
-                }
-            }
-
-            remaining = still_remaining;
-            if remaining.is_empty() || remaining.len() == before {
-                ordered.extend(remaining);
-                break;
-            }
-        }
-
-        let mut snapshots = Vec::new();
-
-        for data in &ordered {
-            let subtree = self.repo.find_tree(data.subtree_id)?;
-
-            // Read .created.json if present
-            let meta_oid = subtree.get_name(".created.json").map(|e| e.id());
-            let (created_by, created_at) = if let Some(meta_id) = meta_oid {
-                if let Ok(meta_blob) = self.repo.find_blob(meta_id) {
-                    if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                            use crate::domain::event_metadata::{Author, Timestamp};
-                            (
-                                Author {
-                                    name: json["created_by"]["name"]
-                                        .as_str()
-                                        .unwrap_or("unknown")
-                                        .to_string(),
-                                    email: json["created_by"]["email"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string(),
-                                },
-                                Timestamp(json["created_at"].as_i64().unwrap_or(0)),
-                            )
-                        } else {
-                            (
-                                crate::domain::event_metadata::Author::unknown(),
-                                crate::domain::event_metadata::Timestamp::zero(),
-                            )
-                        }
-                    } else {
-                        (
-                            crate::domain::event_metadata::Author::unknown(),
-                            crate::domain::event_metadata::Timestamp::zero(),
-                        )
-                    }
-                } else {
-                    (
-                        crate::domain::event_metadata::Author::unknown(),
-                        crate::domain::event_metadata::Timestamp::zero(),
-                    )
-                }
-            } else {
-                (
-                    crate::domain::event_metadata::Author::unknown(),
-                    crate::domain::event_metadata::Timestamp::zero(),
-                )
-            };
-
-            // State
-            let state = if let Some(state_entry) = subtree.get_name(".state") {
-                let state_blob = self.repo.find_blob(state_entry.id())?;
-                std::str::from_utf8(state_blob.content())?
-                    .trim()
-                    .to_string()
-            } else {
-                "todo".to_string()
-            };
-
-            // Context
-            let context = if let Some(context_entry) = subtree.get_name(".context.md") {
-                let context_blob = self.repo.find_blob(context_entry.id())?;
-                let content = std::str::from_utf8(context_blob.content())?;
-                if content.is_empty() {
-                    None
-                } else {
-                    Some(content.to_string())
-                }
-            } else {
-                None
-            };
-
-            // Custom fields
-            let mut fields = HashMap::new();
-            for field_entry in subtree.iter() {
-                if field_entry.kind() != Some(git2::ObjectType::Blob) {
-                    continue;
-                }
-                let field_name = match field_entry.name() {
-                    Some(n) => n,
-                    None => continue,
-                };
-                if RESERVED_FIELDS.contains(&field_name) {
-                    continue;
-                }
-                let field_blob = self.repo.find_blob(field_entry.id())?;
-                let content = std::str::from_utf8(field_blob.content())?;
-                fields.insert(field_name.to_string(), content.to_string());
-            }
-
-            snapshots.push(YakSnapshot {
-                id: YakId::from(data.id.as_str()),
-                name: Name::from(data.name_str.as_str()),
-                parent_id: data.parent_id_str.as_ref().map(|p| YakId::from(p.as_str())),
-                state,
-                context,
-                fields,
-                created_by,
-                created_at,
-            });
-        }
-
-        Ok(snapshots)
     }
 
     /// Read the current git tree state and synthesize domain events.
@@ -572,7 +77,7 @@ impl GitEventStore {
             return Ok(Vec::new());
         };
 
-        let snapshots = self.read_snapshots_from_tree(&tree)?;
+        let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
         let mut events = Vec::new();
 
         for snap in &snapshots {
@@ -639,13 +144,13 @@ impl EventStore for GitEventStore {
         let event_id = event.metadata().event_id.clone().unwrap();
 
         // Idempotent: skip if we already have a commit with this event_id
-        if self.has_event_id(&event_id)? {
+        if commit::has_event_id(&self.repo, &self.ref_name, &event_id)? {
             return Ok(());
         }
 
         let current_tree = self.get_current_tree()?;
 
-        let tree_oid = self.build_tree_from_event(&event, current_tree.as_ref())?;
+        let tree_oid = tree::build_tree_from_event(&self.repo, &event, current_tree.as_ref())?;
 
         // Ensure .schema-version is stamped on every commit's tree.
         // This is critical for sync: peer refs must be identifiable by version.
@@ -707,7 +212,7 @@ impl EventStore for GitEventStore {
         }
         let snapshots = {
             let tree = self.get_current_tree()?.unwrap();
-            self.read_snapshots_from_tree(&tree)?
+            tree::read_snapshots_from_tree(&self.repo, &tree)?
         };
         let event = YakEvent::Compacted(snapshots, metadata);
         self.append(&event)
@@ -749,7 +254,7 @@ impl EventStore for GitEventStore {
                 };
                 let timestamp = Timestamp(commit.author().when().seconds());
                 let mut metadata = EventMetadata::new(author, timestamp);
-                metadata.event_id = Some(Self::extract_event_id(
+                metadata.event_id = Some(commit::extract_event_id(
                     full_message,
                     &commit.id().to_string(),
                 ));
@@ -770,7 +275,7 @@ impl EventStore for GitEventStore {
 
                     // Extract Event-Id from commit message trailer,
                     // falling back to the commit SHA for legacy commits
-                    metadata.event_id = Some(Self::extract_event_id(
+                    metadata.event_id = Some(commit::extract_event_id(
                         full_message,
                         &commit.id().to_string(),
                     ));
@@ -843,7 +348,7 @@ impl EventStore for GitEventStore {
             let metadata = compaction_metadata.unwrap();
 
             // Read snapshots from the compaction tree
-            let snapshots = self.read_snapshots_from_tree(&tree)?;
+            let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
 
             let mut result = Vec::new();
             result.push(YakEvent::Compacted(snapshots, metadata));
@@ -862,105 +367,10 @@ impl EventStore for GitEventStore {
 
     fn sync(
         &mut self,
-        _bus: &mut crate::infrastructure::event_bus::EventBus,
+        bus: &mut crate::infrastructure::event_bus::EventBus,
         output: &dyn crate::domain::ports::DisplayPort,
     ) -> Result<()> {
-        let repo_path = self
-            .repo
-            .workdir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot sync: bare repository"))?
-            .to_path_buf();
-
-        // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
-        Self::fetch_peer_ref(&repo_path)?;
-
-        // 2. Check peer schema version and migrate if needed
-        let peer_location = super::migration::EventStoreLocation {
-            repo: &self.repo,
-            ref_name: "refs/notes/yaks-peer",
-        };
-        if let Some(peer_version) = super::migration::read_schema_version(&peer_location)? {
-            if peer_version > super::migration::CURRENT_SCHEMA_VERSION {
-                // Clean up peer ref before bailing
-                let _ = self
-                    .repo
-                    .find_reference("refs/notes/yaks-peer")
-                    .and_then(|mut r| r.delete());
-                anyhow::bail!(
-                    "Remote yaks use schema version {} but this version of yx only supports {}. \
-                     Please update yx.",
-                    peer_version,
-                    super::migration::CURRENT_SCHEMA_VERSION
-                );
-            }
-        }
-
-        // Migrate the peer ref to the current schema version
-        super::migration::Migrator::for_current_version().ensure_schema(&peer_location)?;
-
-        // 3. Get local and peer events
-        let local_events = EventStore::get_all_events(self)?;
-        let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
-        let peer_events = EventStore::get_all_events(&peer)?;
-
-        let merge = super::merge_event_streams(&local_events, &peer_events);
-
-        if merge.pulled > 0 {
-            // Delete the local ref and replay all events in sorted order
-            if let Ok(mut r) = self.repo.find_reference(&self.ref_name) {
-                r.delete()?;
-            }
-
-            for event in &merge.events {
-                self.append(event)?;
-            }
-        }
-
-        // Check if we received a compaction from the peer
-        let local_ids: std::collections::HashSet<String> = local_events
-            .iter()
-            .filter_map(|e| e.metadata().event_id.clone())
-            .collect();
-        let received_compaction = peer_events.iter().find(|e| {
-            matches!(e, YakEvent::Compacted(_, _))
-                && e.metadata()
-                    .event_id
-                    .as_ref()
-                    .is_some_and(|id| !local_ids.contains(id))
-        });
-
-        output.info(&format!(
-            "Pulled {} events, pushed {} events",
-            merge.pulled, merge.pushed
-        ));
-
-        if let Some(ce) = received_compaction {
-            output.info(&format!(
-                "Received compaction from {}",
-                ce.metadata().author.name
-            ));
-        }
-
-        // 3. Push refs/notes/yaks back to origin
-        if self.repo.refname_to_id(&self.ref_name).is_ok() {
-            let push_output = std::process::Command::new("git")
-                .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
-                .current_dir(&repo_path)
-                .output()?;
-
-            if !push_output.status.success() {
-                let stderr = String::from_utf8_lossy(&push_output.stderr);
-                anyhow::bail!("Failed to push to origin: {}", stderr.trim());
-            }
-        }
-
-        // 4. Clean up the temporary peer ref
-        let _ = self
-            .repo
-            .find_reference("refs/notes/yaks-peer")
-            .and_then(|mut r| r.delete());
-
-        Ok(())
+        super::sync::sync_with_remote(self, bus, output)
     }
 }
 

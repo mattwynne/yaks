@@ -1,3 +1,4 @@
+mod commit;
 pub mod git;
 #[cfg(any(test, feature = "test-support"))]
 pub mod memory;
@@ -8,6 +9,8 @@ pub mod migrate_v4_to_v5;
 pub mod migrate_v5_to_v6;
 pub mod migration;
 pub mod noop;
+mod sync;
+mod tree;
 
 pub use git::GitEventStore;
 #[cfg(any(test, feature = "test-support"))]
