@@ -8,6 +8,7 @@ pub mod events;
 pub mod field;
 pub mod ports;
 pub mod slug;
+pub mod tag;
 pub mod yak;
 pub mod yak_map;
 pub mod yak_snapshot;
@@ -19,6 +20,7 @@ pub use field::{
     NAME_FIELD, STATE_FIELD,
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
+pub use tag::{format_tag, normalize_tag};
 pub use yak::{validate_state, validate_yak_name, Yak};
 pub use yak_map::YakMap;
 pub use yak_snapshot::YakSnapshot;

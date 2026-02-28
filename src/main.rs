@@ -8,11 +8,13 @@ use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
-    AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
+    AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
     GenerateCompletions, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit,
+    ListTags, RemoveTag,
     ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
     WriteContext, WriteField,
 };
+use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
 
@@ -170,6 +172,12 @@ enum Commands {
         #[arg(long)]
         git_from_disk: bool,
     },
+    /// Manage tags on a yak
+    #[command(alias = "tags")]
+    Tag {
+        #[command(subcommand)]
+        action: TagAction,
+    },
     /// Compact the event stream into a snapshot
     Compact {
         /// Skip confirmation prompt
@@ -185,6 +193,32 @@ enum Commands {
     Completions {
         #[arg(last = true)]
         words: Vec<String>,
+    },
+}
+
+#[derive(Parser, Debug)]
+enum TagAction {
+    /// Add tags to a yak
+    Add {
+        /// The yak name
+        name: String,
+        /// Tags to add
+        #[arg(required = true)]
+        tags: Vec<String>,
+    },
+    /// Remove tags from a yak
+    #[command(alias = "remove")]
+    Rm {
+        /// The yak name
+        name: String,
+        /// Tags to remove
+        #[arg(required = true)]
+        tags: Vec<String>,
+    },
+    /// List tags on a yak
+    List {
+        /// The yak name
+        name: String,
     },
 }
 
@@ -370,6 +404,23 @@ fn route_command(
                 handler.handle(ResetDiskFromGit::new())
             }
         }
+        Commands::Tag { action } => match action {
+            TagAction::Add { name, tags } => {
+                let normalized: Vec<String> = tags
+                    .iter()
+                    .map(|t| normalize_tag(t))
+                    .collect::<Result<_>>()?;
+                handler.handle(AddTag::new(&name, normalized))
+            }
+            TagAction::Rm { name, tags } => {
+                let normalized: Vec<String> = tags
+                    .iter()
+                    .map(|t| normalize_tag(t))
+                    .collect::<Result<_>>()?;
+                handler.handle(RemoveTag::new(&name, normalized))
+            }
+            TagAction::List { name } => handler.handle(ListTags::new(&name)),
+        },
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync => handler.handle(SyncYaks::new()),
         Commands::Log => handler.handle(ShowLog::new()),

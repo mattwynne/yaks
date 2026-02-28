@@ -1,5 +1,6 @@
 // Application layer - use cases that orchestrate domain + ports
 
+mod add_tag;
 mod add_yak;
 mod app;
 mod command_handler;
@@ -9,9 +10,11 @@ mod done_yak;
 mod edit_context;
 mod edit_field;
 mod generate_completions;
+mod list_tags;
 mod list_yaks;
 mod move_yak;
 mod prune_yaks;
+mod remove_tag;
 mod remove_yak;
 mod rename_yak;
 mod reset_disk_from_git;
@@ -27,6 +30,7 @@ mod use_case;
 mod write_context;
 mod write_field;
 
+pub use add_tag::AddTag;
 pub use add_yak::AddYak;
 pub use app::Application;
 pub use command_handler::CommandHandler;
@@ -36,9 +40,11 @@ pub use done_yak::DoneYak;
 pub use edit_context::EditContext;
 pub use edit_field::EditField;
 pub use generate_completions::GenerateCompletions;
+pub use list_tags::ListTags;
 pub use list_yaks::ListYaks;
 pub use move_yak::MoveYak;
 pub use prune_yaks::PruneYaks;
+pub use remove_tag::RemoveTag;
 pub use remove_yak::RemoveYak;
 pub use rename_yak::RenameYak;
 pub use reset_disk_from_git::ResetDiskFromGit;

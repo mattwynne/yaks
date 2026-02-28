@@ -111,6 +111,15 @@ pub trait TestWorld {
     /// Add a yak with a custom field
     fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()>;
 
+    /// Add tags to a yak
+    fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()>;
+
+    /// Remove tags from a yak
+    fn remove_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()>;
+
+    /// List tags on a yak
+    fn list_tags(&mut self, name: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

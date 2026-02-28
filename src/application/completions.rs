@@ -23,6 +23,8 @@ pub const COMMANDS: &[&str] = &[
     "reset",
     "sync",
     "log",
+    "tag",
+    "tags",
     "completions",
 ];
 
