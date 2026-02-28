@@ -766,4 +766,63 @@ EOF
   done
 }
 
+# @cmd Merge a branch into main (check + rebase + fast-forward)
+# @arg branch! Branch to merge
+# @alias mg
+merge() {
+  local branch="${argc_branch}"
+
+  # Must be on main
+  local current
+  current=$(git branch --show-current)
+  if [ "$current" != "main" ]; then
+    echo "❌ Must be on main (currently on $current)"
+    return 1
+  fi
+
+  # Branch must exist
+  if ! git rev-parse --verify "$branch" >/dev/null 2>&1; then
+    echo "❌ Branch '$branch' does not exist"
+    return 1
+  fi
+
+  # Check on the branch first — main stays clean
+  echo "Switching to $branch to run checks..."
+  git checkout "$branch"
+
+  echo ""
+  if ! check; then
+    echo ""
+    echo "❌ dev check failed on $branch — fix before merging"
+    git checkout main
+    return 1
+  fi
+
+  echo ""
+  echo "Rebasing $branch onto main..."
+  git checkout main
+  if ! git rebase main "$branch" --no-verify; then
+    echo "❌ Rebase failed — resolve conflicts, then run again"
+    return 1
+  fi
+
+  # Fast-forward main
+  git checkout main
+  git merge --ff-only "$branch" --no-verify
+
+  # Clean up branch and any associated worktree
+  local worktree
+  worktree=$(git worktree list --porcelain \
+    | grep -B2 "branch refs/heads/$branch" \
+    | grep "^worktree " | sed 's/^worktree //')
+  if [ -n "$worktree" ]; then
+    echo "Removing worktree: $worktree"
+    git worktree remove "$worktree"
+  fi
+  git branch -d "$branch"
+
+  echo ""
+  echo "✅ Branch $branch merged to main"
+}
+
 eval "$(argc --argc-eval "$0" "$@")"

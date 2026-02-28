@@ -173,9 +173,13 @@ use a worktree, even if the change seems small.
 
 ## Completing a Yak
 
-**Merge early and often.** When work is done and tests pass, merge
-to main immediately. Do not wait for permission. This is trunk-based
+**Merge early and often.** When work is done, merge to main
+immediately. Do not wait for permission. This is trunk-based
 development — branch age is the enemy.
+
+**Always use `dev merge <branch>` to merge.** This rebases the
+branch onto main, runs `dev check`, and only fast-forwards main
+if all checks pass. Never use `git merge` directly.
 
 After merging:
 1. `yx done "<yak-name>"` — mark the yak complete

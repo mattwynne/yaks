@@ -114,12 +114,16 @@ The commits stay on your feature branch, isolated from main.
 **Merge as soon as tests pass.** Do not wait for permission. This
 is trunk-based development — branch age is the enemy.
 
-Return to the main repo and merge:
+Return to the main repo and merge (rebase + check + fast-forward):
 
 ```bash
 cd /path/to/main/repo  # Back to main repo
-git merge <yak-id>
+dev merge <yak-id>
 ```
+
+This rebases the branch onto main, runs `dev check`, and only
+fast-forwards main if all checks pass. If checks fail, main is
+rolled back.
 
 ### 9. Mark the Yak Done
 
@@ -245,9 +249,9 @@ cd .worktrees/sort-ls-results-a1b2
 # 7. Do the work (write tests, implement, commit)
 # ... work happens here ...
 
-# 8. Tests pass — merge immediately
+# 8. Tests pass — merge immediately (rebase + check + fast-forward)
 cd ../../..
-git merge sort-ls-results-a1b2
+dev merge sort-ls-results-a1b2
 
 # 9. Mark done
 yx done "sort ls results somehow"

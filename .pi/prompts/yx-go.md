@@ -41,4 +41,4 @@ Follow these steps:
    - Steps: implement, run tests, commit to the worktree branch
      with a message referencing the yak ID
    - Instruction to mark done when finished: `yx done "$@"`
-   - Instruction NOT to merge — we created the branch, we merge it
+   - Instruction NOT to merge — we merge it with `dev merge <branch>`
