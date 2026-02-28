@@ -37,4 +37,6 @@ target/
 mutants.out/
 mutants.out.old/
 
-.pi
+# pi agent config (allow prompts, ignore the rest)
+.pi/*
+!.pi/prompts/
