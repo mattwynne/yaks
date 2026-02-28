@@ -1,4 +1,4 @@
-# 14. Aggregate Loads from Projected Snapshot, Not Event Replay
+# 15. Aggregate Loads from Projected Snapshot, Not Event Replay
 
 Date: 2026-02-28
 
