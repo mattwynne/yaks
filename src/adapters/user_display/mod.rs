@@ -92,6 +92,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn display_header_box(
         &self,
         ancestors: &[Name],

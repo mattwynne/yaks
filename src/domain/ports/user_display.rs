@@ -23,6 +23,7 @@ pub trait DisplayPort {
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str);
 
     /// Display header box with breadcrumb, name, state, date, author, children, and short fields
+    #[allow(clippy::too_many_arguments)]
     fn display_header_box(
         &self,
         ancestors: &[Name],

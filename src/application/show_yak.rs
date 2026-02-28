@@ -85,7 +85,7 @@ impl ShowYak {
         );
 
         // Context body
-        let has_context = yak.context.as_ref().map_or(false, |c| !c.trim().is_empty());
+        let has_context = yak.context.as_ref().is_some_and(|c| !c.trim().is_empty());
         if has_context {
             app.display.info("");
             app.display.display_context(yak.context.as_ref().unwrap());
@@ -99,7 +99,7 @@ impl ShowYak {
 
         // Long fields in ruled sections
         if !long_fields.is_empty() {
-            for (_i, (name, value)) in long_fields.iter().enumerate() {
+            for (name, value) in long_fields.iter() {
                 app.display.info("");
                 app.display.display_section_rule(&title_case(name));
                 let indented: String = value

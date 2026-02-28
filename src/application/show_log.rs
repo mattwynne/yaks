@@ -27,12 +27,10 @@ impl UseCase for ShowLog {
             .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
         let events = reader.get_all_events()?;
 
-        let mut entry_count = 0;
-        for event in events.iter() {
+        for (entry_count, event) in events.iter().enumerate() {
             if entry_count > 0 {
                 app.display.info("");
             }
-            entry_count += 1;
 
             let meta = event.metadata();
             let event_id = meta.event_id.as_deref().unwrap_or("-");

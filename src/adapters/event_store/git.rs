@@ -901,7 +901,7 @@ impl EventStore for GitEventStore {
                 && e.metadata()
                     .event_id
                     .as_ref()
-                    .map_or(false, |id| !local_ids.contains(id))
+                    .is_some_and(|id| !local_ids.contains(id))
         });
 
         output.info(&format!(

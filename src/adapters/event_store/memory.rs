@@ -6,6 +6,7 @@ use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::slug::Name;
 use crate::domain::YakEvent;
 
+#[allow(clippy::cognitive_complexity)]
 fn build_snapshots_from_events(
     events: &[YakEvent],
 ) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
