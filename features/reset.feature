@@ -5,6 +5,8 @@ Feature: yx reset - Rebuild yaks from git tree
   refs/notes/yaks. This validates that the git tree is correct
   by materializing it back to the filesystem.
 
+  See also: docs/adr/0010-state-reconstruction-mechanisms.md
+
   Background:
     Given I have a clean git repository
 

@@ -6,6 +6,10 @@ Feature: yx compact - Compact the event stream
   existing yaks are preserved but the individual history events
   are replaced by snapshot events following a Compacted marker.
 
+  See also:
+    - docs/adr/0009-compacted-event-design-and-known-gaps.md
+    - docs/adr/0010-state-reconstruction-mechanisms.md
+
   Background:
     Given I have a clean git repository
 
