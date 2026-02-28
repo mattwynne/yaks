@@ -21,6 +21,11 @@ impl InputPort for NullInput {
     ) -> Result<Option<String>> {
         Ok(None)
     }
+
+    fn confirm(&self, _message: &str) -> Result<bool> {
+        // Non-interactive: always decline
+        Ok(false)
+    }
 }
 
 #[cfg(test)]
@@ -42,5 +47,11 @@ mod tests {
                 .unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn confirm_returns_false() {
+        let input = NullInput;
+        assert!(!input.confirm("proceed?").unwrap());
     }
 }

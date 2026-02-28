@@ -28,6 +28,13 @@ impl InputPort for ConsoleInput {
         // Interactive mode (TTY): open editor
         self.edit_content(initial_content, template)
     }
+
+    fn confirm(&self, message: &str) -> Result<bool> {
+        eprint!("{} [y/N] ", message);
+        let mut answer = String::new();
+        std::io::BufRead::read_line(&mut io::stdin().lock(), &mut answer)?;
+        Ok(answer.trim().to_lowercase() == "y")
+    }
 }
 
 impl ConsoleInput {

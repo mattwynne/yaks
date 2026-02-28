@@ -62,6 +62,10 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         writeln!(out, "{message}").unwrap();
     }
 
+    fn warn(&self, message: &str) {
+        eprintln!("Warning: {message}");
+    }
+
     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
         let mut out = self.output.lock().unwrap();
         if self.options.color {

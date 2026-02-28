@@ -7,7 +7,7 @@ use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
 use anyhow::Result;
 
-use super::UseCase;
+use super::{CommandHandler, UseCase};
 
 /// Application bundles the infrastructure adapters needed by use cases
 ///
@@ -117,6 +117,12 @@ impl<'a> Application<'a> {
     /// app.handle(AddYak::new("my yak"))?;
     /// ```
     pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {
+        use_case.execute(self)
+    }
+}
+
+impl<'a> CommandHandler for Application<'a> {
+    fn handle(&mut self, use_case: impl UseCase) -> Result<()> {
         use_case.execute(self)
     }
 }

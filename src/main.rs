@@ -8,9 +8,10 @@ use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
-    AddYak, Application, CompactEvents, DoneYak, EditContext, EditField, GenerateCompletions,
-    ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk,
-    SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks, WriteField,
+    AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
+    GenerateCompletions, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit,
+    ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
+    WriteField,
 };
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
@@ -200,6 +201,167 @@ impl yx::domain::ports::AuthenticationPort for UnknownAuthentication {
     }
 }
 
+/// Pre-computed stdin state, determined once in main() before routing.
+///
+/// This lets route_command make stdin-dependent decisions without
+/// touching any adapter types.
+struct StdinState {
+    has_data: bool,
+    /// Pre-read stdin content (consumed once). Available for commands
+    /// that need it as initial editor content (e.g. context --edit
+    /// with piped stdin).
+    content: Option<String>,
+}
+
+/// Route a CLI command to its use case via CommandHandler.
+///
+/// This function physically cannot access Application internals,
+/// adapter types, or domain types — it only sees `CommandHandler`
+/// with a single `handle()` method. The compiler enforces the
+/// architectural boundary from ADR 0013.
+fn route_command(
+    cmd: Commands,
+    handler: &mut impl CommandHandler,
+    stdin: StdinState,
+) -> Result<()> {
+    match cmd {
+        Commands::Add {
+            name,
+            under,
+            state,
+            context,
+            edit,
+            id,
+            fields,
+        } => {
+            let name_str = name.join(" ");
+            let has_explicit_context = context.is_some();
+            // Resolve context: --context flag > --edit (editor) > piped stdin
+            let resolved_context = if has_explicit_context {
+                context
+            } else if edit {
+                // Editor mode — pass no context, let the use case open editor
+                None
+            } else {
+                // Try stdin content
+                stdin.content.clone().filter(|c| !c.trim().is_empty())
+            };
+            let mut use_case = AddYak::new(&name_str)
+                .with_parent(under.as_deref())
+                .with_state(state.as_deref())
+                .with_context(resolved_context.as_deref())
+                .with_id(id.as_deref())
+                .with_edit(edit && !has_explicit_context);
+            for (key, value) in &fields {
+                use_case = use_case.with_field(key, value);
+            }
+            handler.handle(use_case)
+        }
+        Commands::List { format, only } => handler.handle(ListYaks::new(&format, only.as_deref())),
+        Commands::Done { name, recursive } => {
+            let name_str = name.join(" ");
+            handler.handle(DoneYak::new(&name_str, recursive))
+        }
+        Commands::Start { name, recursive } => {
+            let name_str = name.join(" ");
+            handler.handle(StartYak::new(&name_str, recursive))
+        }
+        Commands::Remove { name, recursive } => {
+            let name_str = name.join(" ");
+            handler.handle(RemoveYak::new(&name_str).with_recursive(recursive))
+        }
+        Commands::Prune => handler.handle(PruneYaks::new()),
+        Commands::Move {
+            name,
+            under,
+            to_root,
+        } => {
+            let name_str = name.join(" ");
+            if to_root {
+                handler.handle(MoveYak::to_root(&name_str))
+            } else {
+                let parent_str = under.unwrap().join(" ");
+                handler.handle(MoveYak::under(&name_str, &parent_str))
+            }
+        }
+        Commands::Rename { from, to } => handler.handle(RenameYak::new(&from, &to)),
+        Commands::Show { name } => {
+            let name_str = name.join(" ");
+            handler.handle(ShowYak::new(&name_str))
+        }
+        Commands::Context {
+            name,
+            show: _,
+            edit,
+        } => {
+            let name_str = name.join(" ");
+            if edit {
+                let mut use_case = EditContext::new(&name_str);
+                // If stdin was piped, use it as initial content for the editor
+                if let Some(ref content) = stdin.content {
+                    use_case = use_case.with_initial_content(content);
+                }
+                handler.handle(use_case)
+            } else if stdin.has_data {
+                handler.handle(EditContext::new(&name_str))
+            } else {
+                // Default (no piped data, no --edit): show
+                // --show kept for backward compat
+                handler.handle(ShowContext::new(&name_str))
+            }
+        }
+        Commands::State {
+            name,
+            state,
+            recursive,
+        } => {
+            let name_str = name.join(" ");
+            handler.handle(SetState::new(&name_str, &state).with_recursive(recursive))
+        }
+        Commands::Field {
+            name,
+            field,
+            show: _,
+            edit,
+        } => {
+            let name_str = name.join(" ");
+            if edit {
+                let mut use_case = EditField::new(&name_str, &field);
+                // If stdin was piped, use it as initial content for the editor
+                if let Some(ref content) = stdin.content {
+                    use_case = use_case.with_initial_content(content);
+                }
+                handler.handle(use_case)
+            } else if stdin.has_data {
+                handler.handle(WriteField::new(&name_str, &field))
+            } else {
+                // Default (no piped data, no --edit): show
+                handler.handle(ShowField::new(&name_str, &field))
+            }
+        }
+        Commands::Reset {
+            disk_from_git,
+            git_from_disk,
+        } => {
+            if disk_from_git && git_from_disk {
+                anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
+            }
+
+            if git_from_disk {
+                handler.handle(ResetGitFromDisk::new())
+            } else {
+                handler.handle(ResetDiskFromGit::new())
+            }
+        }
+        Commands::Compact { yes } => {
+            handler.handle(CompactEvents::new().with_skip_confirm(yes))
+        }
+        Commands::Sync => handler.handle(SyncYaks::new()),
+        Commands::Log => handler.handle(ShowLog::new()),
+        Commands::Completions { words } => handler.handle(GenerateCompletions::new(words)),
+    }
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
@@ -212,6 +374,21 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let skip_git = std::env::var("YX_SKIP_GIT_CHECKS").is_ok();
+
+    // Pre-compute stdin state before any adapter construction.
+    // This is the only place main() touches an adapter directly — it
+    // passes the result into route_command so routing stays pure.
+    let has_stdin = ConsoleInput::stdin_has_readable_data();
+    let stdin_content = if has_stdin {
+        let input = ConsoleInput;
+        input.read_stdin_content().ok().flatten()
+    } else {
+        None
+    };
+    let stdin = StdinState {
+        has_data: has_stdin,
+        content: stdin_content,
+    };
 
     // Initialize event infrastructure
     // Discover git repo root using libgit2
@@ -290,176 +467,10 @@ fn main() -> Result<()> {
         auth.as_ref(),
     );
 
-    match cli.command {
-        Commands::Add {
-            name,
-            under,
-            state,
-            context,
-            edit,
-            id,
-            fields,
-        } => {
-            let name_str = name.join(" ");
-            // Resolve context: --context, --edit (editor), piped stdin
-            let context = if context.is_some() {
-                context
-            } else if edit {
-                let input = ConsoleInput;
-                let template = format!("# {}\n\n", name_str);
-                input
-                    .edit_content(None, Some(&template))?
-                    .filter(|c| !c.trim().is_empty())
-            } else {
-                let input = ConsoleInput;
-                input.read_stdin_content().ok().flatten()
-            };
-            let mut use_case = AddYak::new(&name_str)
-                .with_parent(under.as_deref())
-                .with_state(state.as_deref())
-                .with_context(context.as_deref())
-                .with_id(id.as_deref());
-            for (key, value) in &fields {
-                use_case = use_case.with_field(key, value);
-            }
-            app.handle(use_case)
-        }
-        Commands::List { format, only } => app.handle(ListYaks::new(&format, only.as_deref())),
-        Commands::Done { name, recursive } => {
-            let name_str = name.join(" ");
-            app.handle(DoneYak::new(&name_str, recursive))
-        }
-        Commands::Start { name, recursive } => {
-            let name_str = name.join(" ");
-            app.handle(StartYak::new(&name_str, recursive))
-        }
-        Commands::Remove { name, recursive } => {
-            let name_str = name.join(" ");
-            app.handle(RemoveYak::new(&name_str).with_recursive(recursive))
-        }
-        Commands::Prune => app.handle(PruneYaks::new()),
-        Commands::Move {
-            name,
-            under,
-            to_root,
-        } => {
-            let name_str = name.join(" ");
-            if to_root {
-                app.handle(MoveYak::to_root(&name_str))
-            } else {
-                let parent_str = under.unwrap().join(" ");
-                app.handle(MoveYak::under(&name_str, &parent_str))
-            }
-        }
-        Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
-        Commands::Show { name } => {
-            let name_str = name.join(" ");
-            app.handle(ShowYak::new(&name_str))
-        }
-        Commands::Context {
-            name,
-            show: _,
-            edit,
-        } => {
-            let name_str = name.join(" ");
-            if edit {
-                let mut use_case = EditContext::new(&name_str);
-                // If stdin has data, use it as initial content for the editor
-                if ConsoleInput::stdin_has_readable_data() {
-                    let input = ConsoleInput;
-                    if let Some(stdin_content) = input.read_stdin_content()? {
-                        use_case = use_case.with_initial_content(&stdin_content);
-                    }
-                }
-                app.handle(use_case)
-            } else if ConsoleInput::stdin_has_readable_data() {
-                app.handle(EditContext::new(&name_str))
-            } else {
-                // Default (no piped data, no --edit): show
-                // --show kept for backward compat
-                app.handle(ShowContext::new(&name_str))
-            }
-        }
-        Commands::State {
-            name,
-            state,
-            recursive,
-        } => {
-            let name_str = name.join(" ");
-            app.handle(SetState::new(&name_str, &state).with_recursive(recursive))
-        }
-        Commands::Field {
-            name,
-            field,
-            show: _,
-            edit,
-        } => {
-            let name_str = name.join(" ");
-            if edit {
-                let mut use_case = EditField::new(&name_str, &field);
-                // If stdin has data, use it as initial content for the editor
-                if ConsoleInput::stdin_has_readable_data() {
-                    let input = ConsoleInput;
-                    if let Some(content) = input.read_stdin_content()? {
-                        use_case = use_case.with_initial_content(&content);
-                    }
-                }
-                app.handle(use_case)
-            } else if ConsoleInput::stdin_has_readable_data() {
-                app.handle(WriteField::new(&name_str, &field))
-            } else {
-                // Default (no piped data, no --edit): show
-                app.handle(ShowField::new(&name_str, &field))
-            }
-        }
-        Commands::Reset {
-            disk_from_git,
-            git_from_disk,
-        } => {
-            if disk_from_git && git_from_disk {
-                anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
-            }
-
-            if git_from_disk {
-                app.handle(ResetGitFromDisk::new())
-            } else {
-                app.handle(ResetDiskFromGit::new())
-            }
-        }
-        Commands::Compact { yes } => {
-            // 1. Auto-sync first
-            match app.sync_events() {
-                Ok(()) => {}
-                Err(e) => {
-                    eprintln!("Warning: sync failed: {}", e);
-                }
-            }
-
-            // 2. Confirmation prompt (unless --yes)
-            if !yes {
-                eprintln!(
-                    "Warning: collaborators with unsynced local events \
-                     will lose them. Ask them to run 'yx sync' first."
-                );
-                eprint!("Proceed? [y/N] ");
-                let mut answer = String::new();
-                std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer)?;
-                if answer.trim().to_lowercase() != "y" {
-                    return Ok(());
-                }
-            }
-
-            // 3. Compact the event store
-            app.handle(CompactEvents::new())?;
-
-            // 4. Report success
-            println!("Compacted event stream.");
-            Ok(())
-        }
-        Commands::Sync => app.handle(SyncYaks::new()),
-        Commands::Log => app.handle(ShowLog::new()),
-        Commands::Completions { words } => app.handle(GenerateCompletions::new(words))
-    }
+    // Route command through CommandHandler trait — main() cannot
+    // accidentally bypass use cases because route_command only
+    // sees `&mut impl CommandHandler`.
+    route_command(cli.command, &mut app, stdin)
 }
 
 #[cfg(test)]
