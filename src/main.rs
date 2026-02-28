@@ -11,7 +11,7 @@ use yx::application::{
     AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
     GenerateCompletions, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit,
     ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
-    WriteField,
+    WriteContext, WriteField,
 };
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
@@ -209,7 +209,6 @@ impl yx::domain::ports::AuthenticationPort for UnknownAuthentication {
 /// This lets route_command make stdin-dependent decisions without
 /// touching any adapter types.
 struct StdinState {
-    has_data: bool,
     /// Pre-read stdin content (consumed once). Available for commands
     /// that need it as initial editor content (e.g. context --edit
     /// with piped stdin).
@@ -305,8 +304,8 @@ fn route_command(
                     use_case = use_case.with_initial_content(content);
                 }
                 handler.handle(use_case)
-            } else if stdin.has_data {
-                handler.handle(EditContext::new(&name_str))
+            } else if let Some(ref content) = stdin.content {
+                handler.handle(WriteContext::new(&name_str, content))
             } else {
                 // Default (no piped data, no --edit): show
                 // --show kept for backward compat
@@ -335,8 +334,8 @@ fn route_command(
                     use_case = use_case.with_initial_content(content);
                 }
                 handler.handle(use_case)
-            } else if stdin.has_data {
-                handler.handle(WriteField::new(&name_str, &field))
+            } else if let Some(ref content) = stdin.content {
+                handler.handle(WriteField::new(&name_str, &field).with_content(content))
             } else {
                 // Default (no piped data, no --edit): show
                 handler.handle(ShowField::new(&name_str, &field))
@@ -381,15 +380,13 @@ fn main() -> Result<()> {
     // Pre-compute stdin state before any adapter construction.
     // This is the only place main() touches an adapter directly — it
     // passes the result into route_command so routing stays pure.
-    let has_stdin = ConsoleInput::stdin_has_readable_data();
-    let stdin_content = if has_stdin {
+    let stdin_content = if ConsoleInput::stdin_has_readable_data() {
         let input = ConsoleInput;
         input.read_stdin_content().ok().flatten()
     } else {
         None
     };
     let stdin = StdinState {
-        has_data: has_stdin,
         content: stdin_content,
     };
 
