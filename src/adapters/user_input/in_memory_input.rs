@@ -10,6 +10,7 @@ use std::cell::RefCell;
 /// Useful for unit tests that need to simulate user input.
 pub struct InMemoryInput {
     content: RefCell<Option<String>>,
+    confirm_response: RefCell<bool>,
 }
 
 impl InMemoryInput {
@@ -17,6 +18,7 @@ impl InMemoryInput {
     pub fn new() -> Self {
         Self {
             content: RefCell::new(None),
+            confirm_response: RefCell::new(true),
         }
     }
 
@@ -24,12 +26,18 @@ impl InMemoryInput {
     pub fn with_content(content: String) -> Self {
         Self {
             content: RefCell::new(Some(content)),
+            confirm_response: RefCell::new(true),
         }
     }
 
     /// Set the content that will be returned by request_content
     pub fn set_content(&self, content: Option<String>) {
         *self.content.borrow_mut() = content;
+    }
+
+    /// Set the response for confirm() calls
+    pub fn set_confirm(&self, response: bool) {
+        *self.confirm_response.borrow_mut() = response;
     }
 }
 
@@ -47,6 +55,10 @@ impl InputPort for InMemoryInput {
     ) -> Result<Option<String>> {
         // Return the predefined content
         Ok(self.content.borrow().clone())
+    }
+
+    fn confirm(&self, _message: &str) -> Result<bool> {
+        Ok(*self.confirm_response.borrow())
     }
 }
 
@@ -83,5 +95,18 @@ mod tests {
             .request_content(Some("initial"), Some("template"))
             .unwrap();
         assert_eq!(result, Some("predefined".to_string()));
+    }
+
+    #[test]
+    fn test_confirm_defaults_to_true() {
+        let input = InMemoryInput::new();
+        assert!(input.confirm("proceed?").unwrap());
+    }
+
+    #[test]
+    fn test_confirm_can_be_set_to_false() {
+        let input = InMemoryInput::new();
+        input.set_confirm(false);
+        assert!(!input.confirm("proceed?").unwrap());
     }
 }

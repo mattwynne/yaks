@@ -17,6 +17,10 @@ pub struct AddYak {
     fields: Vec<(String, String)>,
     author_override: Option<Author>,
     timestamp_override: Option<Timestamp>,
+    /// When true, launch $EDITOR for initial context (uses InputPort)
+    edit: bool,
+    /// When true and no context/edit provided, try reading stdin (uses InputPort)
+    read_stdin: bool,
 }
 
 impl AddYak {
@@ -31,6 +35,8 @@ impl AddYak {
             fields: vec![],
             author_override: None,
             timestamp_override: None,
+            edit: false,
+            read_stdin: false,
         }
     }
 
@@ -76,6 +82,18 @@ impl AddYak {
         self
     }
 
+    /// Launch $EDITOR for initial context (handled via InputPort)
+    pub fn with_edit(mut self, edit: bool) -> Self {
+        self.edit = edit;
+        self
+    }
+
+    /// Try reading stdin for initial context when no --context or --edit
+    pub fn with_read_stdin(mut self, read_stdin: bool) -> Self {
+        self.read_stdin = read_stdin;
+        self
+    }
+
     /// Execute the use case with the application's infrastructure
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         use crate::domain::event_metadata::EventMetadata;
@@ -90,7 +108,20 @@ impl AddYak {
             None
         };
 
-        let context = self.context.clone();
+        // Resolve context: explicit > editor > stdin
+        let context = if self.context.is_some() {
+            self.context.clone()
+        } else if self.edit {
+            let template = format!("# {}\n\n", self.name);
+            app.input
+                .request_content(None, Some(&template))?
+                .filter(|c| !c.trim().is_empty())
+        } else if self.read_stdin {
+            // Try reading from stdin via input port (returns None if no data)
+            app.input.request_content(None, None).ok().flatten()
+        } else {
+            None
+        };
 
         let metadata = EventMetadata::new(
             self.author_override
@@ -404,5 +435,67 @@ mod tests {
         assert!(!events.is_empty(), "Expected at least one event");
         assert_eq!(events[0].metadata().author, custom_author);
         assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
+    }
+
+    #[test]
+    fn test_add_yak_with_edit_uses_input_port() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::with_content("editor context".to_string());
+        let auth = InMemoryAuthentication::new();
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        AddYak::new("test")
+            .with_edit(true)
+            .execute(&mut app)
+            .unwrap();
+
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert_eq!(yak.context, Some("editor context".to_string()));
+    }
+
+    #[test]
+    fn test_add_yak_with_read_stdin_uses_input_port() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::with_content("stdin context".to_string());
+        let auth = InMemoryAuthentication::new();
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        AddYak::new("test")
+            .with_read_stdin(true)
+            .execute(&mut app)
+            .unwrap();
+
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert_eq!(yak.context, Some("stdin context".to_string()));
     }
 }

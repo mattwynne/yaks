@@ -16,6 +16,9 @@ pub trait DisplayPort {
     /// Display informational message
     fn info(&self, message: &str);
 
+    /// Display warning message (to stderr)
+    fn warn(&self, message: &str);
+
     /// Display a yak entry in pretty format (tree-drawing with colored status)
     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str);
 

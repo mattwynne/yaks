@@ -26,4 +26,15 @@ pub trait InputPort {
         initial_content: Option<&str>,
         template: Option<&str>,
     ) -> Result<Option<String>>;
+
+    /// Ask the user to confirm an action
+    ///
+    /// # Arguments
+    /// * `message` - The message/question to display
+    ///
+    /// # Returns
+    /// * `Ok(true)` - User confirmed
+    /// * `Ok(false)` - User declined
+    /// * `Err(_)` - Error occurred
+    fn confirm(&self, message: &str) -> Result<bool>;
 }
