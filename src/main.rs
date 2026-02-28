@@ -120,6 +120,9 @@ enum Commands {
     Show {
         /// The yak name (space-separated words)
         name: Vec<String>,
+        /// Output as JSON (for agent/script consumption)
+        #[arg(long)]
+        json: bool,
     },
     /// Show or edit yak context
     Context {
@@ -352,9 +355,9 @@ fn main() -> Result<()> {
             }
         }
         Commands::Rename { from, to } => app.handle(RenameYak::new(&from, &to)),
-        Commands::Show { name } => {
+        Commands::Show { name, json } => {
             let name_str = name.join(" ");
-            app.handle(ShowYak::new(&name_str))
+            app.handle(ShowYak::new(&name_str).with_json(json))
         }
         Commands::Context {
             name,

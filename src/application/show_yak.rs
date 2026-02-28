@@ -20,18 +20,60 @@ fn title_case(s: &str) -> String {
 
 pub struct ShowYak {
     name: String,
+    json: bool,
 }
 
 impl ShowYak {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
+            json: false,
         }
+    }
+
+    pub fn with_json(mut self, json: bool) -> Self {
+        self.json = json;
+        self
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
+
+        if self.json {
+            let children: Vec<serde_json::Value> = yak
+                .children
+                .iter()
+                .filter_map(|cid| app.store.get_yak(cid).ok())
+                .map(|c| {
+                    serde_json::json!({
+                        "id": c.id.as_str(),
+                        "name": c.name.as_str(),
+                        "state": c.state,
+                    })
+                })
+                .collect();
+
+            let fields: serde_json::Map<String, serde_json::Value> = yak
+                .fields
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                .collect();
+
+            let json = serde_json::json!({
+                "id": id.as_str(),
+                "name": yak.name.as_str(),
+                "state": yak.state,
+                "parent_id": yak.parent_id.as_ref().map(|p| p.as_str()),
+                "context": yak.context,
+                "fields": fields,
+                "children": children,
+            });
+
+            app.display
+                .info(&serde_json::to_string_pretty(&json)?);
+            return Ok(());
+        }
 
         // Breadcrumb: walk parent chain to collect ancestor names (root-first)
         let mut ancestors = Vec::new();
@@ -609,6 +651,54 @@ mod tests {
             !output.contains("── description"),
             "Should not have ruled section for single-line field, got:\n{output}"
         );
+    }
+
+    #[test]
+    fn json_output_includes_all_fields() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(
+            AddYak::new("parent yak")
+                .with_context(Some("some notes"))
+                .with_state(Some("wip"))
+                .with_field("plan", "step 1"),
+        )
+        .unwrap();
+        app.handle(AddYak::new("child").with_parent(Some("parent yak")))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("parent yak").with_json(true))
+            .unwrap();
+        let output = buffer.contents();
+        let json: serde_json::Value = serde_json::from_str(&output)
+            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
+
+        assert_eq!(json["name"], "parent yak");
+        assert_eq!(json["state"], "wip");
+        assert_eq!(json["context"], "some notes");
+        assert_eq!(json["parent_id"], serde_json::Value::Null);
+        assert_eq!(json["fields"]["plan"], "step 1");
+
+        let children = json["children"].as_array().unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0]["name"], "child");
+        assert_eq!(children[0]["state"], "todo");
+        assert!(children[0]["id"].as_str().unwrap().starts_with("child-"));
     }
 
     #[test]
