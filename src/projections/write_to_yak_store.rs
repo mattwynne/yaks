@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{YakEvent, CREATED_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakEvent, CONTEXT_FIELD, CREATED_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
     fn clear(&mut self) -> Result<()> {
@@ -84,7 +84,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
                 if let Some(ref ctx) = snap.context {
                     if !ctx.is_empty() {
-                        store.write_field(&snap.id, "context.md", ctx)?;
+                        store.write_field(&snap.id, CONTEXT_FIELD, ctx)?;
                     }
                 }
                 let metadata_json = serde_json::json!({

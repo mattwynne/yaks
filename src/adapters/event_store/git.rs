@@ -41,26 +41,26 @@ impl<'r> YakSubtreeBuilder<'r> {
 
     /// Set the yak's display name.
     fn name(mut self, name: &str) -> Self {
-        self.entries.push(("name", name.to_string()));
+        self.entries.push((".name", name.to_string()));
         self
     }
 
     /// Set the yak's state (todo, wip, done).
     fn state(mut self, state: &str) -> Self {
-        self.entries.push(("state", state.to_string()));
+        self.entries.push((".state", state.to_string()));
         self
     }
 
     /// Set the yak's context markdown content.
     fn context(mut self, content: &str) -> Self {
-        self.entries.push(("context.md", content.to_string()));
+        self.entries.push((".context.md", content.to_string()));
         self
     }
 
     /// Set the parent yak's ID, if this yak is nested.
     fn parent_id(mut self, parent_id: Option<&str>) -> Self {
         if let Some(pid) = parent_id {
-            self.entries.push(("parent_id", pid.to_string()));
+            self.entries.push((".parent_id", pid.to_string()));
         }
         self
     }
@@ -242,10 +242,10 @@ impl GitEventStore {
                 match &e.new_parent {
                     Some(parent_id) => {
                         let blob = self.repo.blob(parent_id.as_str().as_bytes())?;
-                        builder.insert("parent_id", blob, 0o100644)?;
+                        builder.insert(".parent_id", blob, 0o100644)?;
                     }
                     None => {
-                        let _ = builder.remove("parent_id");
+                        let _ = builder.remove(".parent_id");
                     }
                 }
 
@@ -401,19 +401,19 @@ impl GitEventStore {
             let subtree = self.repo.find_tree(entry.id())?;
 
             let is_yak =
-                subtree.get_name("state").is_some() || subtree.get_name("context.md").is_some();
+                subtree.get_name(".state").is_some() || subtree.get_name(".context.md").is_some();
             if !is_yak {
                 continue;
             }
 
-            let name_str = if let Some(name_entry) = subtree.get_name("name") {
+            let name_str = if let Some(name_entry) = subtree.get_name(".name") {
                 let name_blob = self.repo.find_blob(name_entry.id())?;
                 std::str::from_utf8(name_blob.content())?.trim().to_string()
             } else {
                 entry_name.clone()
             };
 
-            let parent_id_str = if let Some(pid_entry) = subtree.get_name("parent_id") {
+            let parent_id_str = if let Some(pid_entry) = subtree.get_name(".parent_id") {
                 let pid_blob = self.repo.find_blob(pid_entry.id())?;
                 Some(std::str::from_utf8(pid_blob.content())?.trim().to_string())
             } else {
@@ -508,7 +508,7 @@ impl GitEventStore {
             };
 
             // State
-            let state = if let Some(state_entry) = subtree.get_name("state") {
+            let state = if let Some(state_entry) = subtree.get_name(".state") {
                 let state_blob = self.repo.find_blob(state_entry.id())?;
                 std::str::from_utf8(state_blob.content())?
                     .trim()
@@ -518,7 +518,7 @@ impl GitEventStore {
             };
 
             // Context
-            let context = if let Some(context_entry) = subtree.get_name("context.md") {
+            let context = if let Some(context_entry) = subtree.get_name(".context.md") {
                 let context_blob = self.repo.find_blob(context_entry.id())?;
                 let content = std::str::from_utf8(context_blob.content())?;
                 if content.is_empty() {
@@ -595,7 +595,7 @@ impl GitEventStore {
                 events.push(YakEvent::FieldUpdated(
                     crate::domain::events::FieldUpdatedEvent {
                         id: snap.id.clone(),
-                        field_name: "state".to_string(),
+                        field_name: ".state".to_string(),
                         content: snap.state.clone(),
                     },
                     crate::domain::event_metadata::EventMetadata::default_legacy(),
@@ -608,7 +608,7 @@ impl GitEventStore {
                     events.push(YakEvent::FieldUpdated(
                         crate::domain::events::FieldUpdatedEvent {
                             id: snap.id.clone(),
-                            field_name: "context.md".to_string(),
+                            field_name: ".context.md".to_string(),
                             content: ctx.clone(),
                         },
                         crate::domain::event_metadata::EventMetadata::default_legacy(),
@@ -1103,7 +1103,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test-a1b2"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "wip".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -1125,7 +1125,7 @@ mod tests {
         let subtree = subtree.as_tree().unwrap();
 
         // Verify state was updated
-        let state_entry = subtree.get_name("state").unwrap();
+        let state_entry = subtree.get_name(".state").unwrap();
         let state_blob = state_entry.to_object(&store.repo).unwrap();
         let state_content = std::str::from_utf8(state_blob.as_blob().unwrap().content()).unwrap();
         assert_eq!(state_content, "wip");
@@ -1177,7 +1177,7 @@ mod tests {
         // Child should have parent_id blob
         let child_entry = tree.get_name("child-c3d4").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
-        let parent_id_blob = child_tree.get_name("parent_id").unwrap();
+        let parent_id_blob = child_tree.get_name(".parent_id").unwrap();
         let parent_id = store.repo.find_blob(parent_id_blob.id()).unwrap();
         assert_eq!(
             std::str::from_utf8(parent_id.content()).unwrap(),
@@ -1188,7 +1188,7 @@ mod tests {
         let parent_entry = tree.get_name("parent-a1b2").unwrap();
         let parent_tree = store.repo.find_tree(parent_entry.id()).unwrap();
         assert!(
-            parent_tree.get_name("parent_id").is_none(),
+            parent_tree.get_name(".parent_id").is_none(),
             "Root yak should not have parent_id blob"
         );
     }
@@ -1270,7 +1270,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test-a1b2"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "wip".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -1281,7 +1281,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test-a1b2"),
-                    field_name: "context.md".to_string(),
+                    field_name: ".context.md".to_string(),
                     content: "some notes".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -1293,13 +1293,13 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "state" && f.content == "wip")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == ".state" && f.content == "wip")),
             "Expected FieldUpdated event for state 'wip'"
         );
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "context.md" && f.content == "some notes")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == ".context.md" && f.content == "some notes")),
             "Expected FieldUpdated event for context.md"
         );
     }
@@ -1324,7 +1324,7 @@ mod tests {
         assert!(
             !events
                 .iter()
-                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == "state")),
+                .any(|e| matches!(e, YakEvent::FieldUpdated(f, _) if f.field_name == ".state")),
             "Should not emit FieldUpdated for state when state is 'todo'"
         );
     }
@@ -1525,7 +1525,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("child-c3d4"),
-                    field_name: "name".to_string(),
+                    field_name: ".name".to_string(),
                     content: "renamed child".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -1550,7 +1550,7 @@ mod tests {
         let child_entry = tree.get_name("child-c3d4").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
 
-        let name_blob = child_tree.get_name("name").unwrap();
+        let name_blob = child_tree.get_name(".name").unwrap();
         let name = store.repo.find_blob(name_blob.id()).unwrap();
         assert_eq!(
             std::str::from_utf8(name.content()).unwrap(),
@@ -1591,7 +1591,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("child-c3d4"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "done".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -1611,7 +1611,7 @@ mod tests {
         let child_entry = tree.get_name("child-c3d4").unwrap();
         let child_tree = store.repo.find_tree(child_entry.id()).unwrap();
 
-        let state_blob = child_tree.get_name("state").unwrap();
+        let state_blob = child_tree.get_name(".state").unwrap();
         let state = store.repo.find_blob(state_blob.id()).unwrap();
         assert_eq!(std::str::from_utf8(state.content()).unwrap(), "done");
     }

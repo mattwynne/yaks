@@ -636,7 +636,7 @@ mod tests {
             .on_event(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test"),
-                    field_name: "context.md".to_string(),
+                    field_name: ".context.md".to_string(),
                     content: "new context".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -666,7 +666,7 @@ mod tests {
             .on_event(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "wip".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -696,7 +696,7 @@ mod tests {
             .on_event(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("test"),
-                    field_name: "context.md".to_string(),
+                    field_name: ".context.md".to_string(),
                     content: "context".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -786,7 +786,7 @@ mod tests {
             .on_event(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: YakId::from("my-yak-a1b2"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "wip".to_string(),
                 },
                 EventMetadata::default_legacy(),
@@ -871,10 +871,10 @@ mod tests {
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
         assert_eq!(yak.fields.get("plan"), Some(&"Step 1\nStep 2".to_string()));
         // Reserved fields should not appear in custom fields
-        assert!(!yak.fields.contains_key("state"));
-        assert!(!yak.fields.contains_key("context.md"));
-        assert!(!yak.fields.contains_key("name"));
-        assert!(!yak.fields.contains_key("id"));
+        assert!(!yak.fields.contains_key(".state"));
+        assert!(!yak.fields.contains_key(".context.md"));
+        assert!(!yak.fields.contains_key(".name"));
+        assert!(!yak.fields.contains_key(".id"));
     }
 
     #[test]

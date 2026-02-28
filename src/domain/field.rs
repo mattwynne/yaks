@@ -3,12 +3,12 @@
 use anyhow::Result;
 
 /// Reserved field names that have special meaning
-pub const STATE_FIELD: &str = "state";
-pub const CONTEXT_FIELD: &str = "context.md";
-pub const NAME_FIELD: &str = "name";
-pub const ID_FIELD: &str = "id";
+pub const STATE_FIELD: &str = ".state";
+pub const CONTEXT_FIELD: &str = ".context.md";
+pub const NAME_FIELD: &str = ".name";
+pub const ID_FIELD: &str = ".id";
 pub const CREATED_FIELD: &str = ".created.json";
-pub const PARENT_ID_FIELD: &str = "parent_id";
+pub const PARENT_ID_FIELD: &str = ".parent_id";
 
 /// All reserved field names
 pub const RESERVED_FIELDS: &[&str] = &[
@@ -81,28 +81,28 @@ mod tests {
 
     #[test]
     fn test_validate_field_name_reserved_state() {
-        let result = validate_field_name("state");
+        let result = validate_field_name(".state");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("reserved"));
     }
 
     #[test]
     fn test_validate_field_name_reserved_context() {
-        let result = validate_field_name("context.md");
+        let result = validate_field_name(".context.md");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("reserved"));
     }
 
     #[test]
     fn test_validate_field_name_reserved_name() {
-        let result = validate_field_name("name");
+        let result = validate_field_name(".name");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("reserved"));
     }
 
     #[test]
     fn test_validate_field_name_reserved_parent_id() {
-        let result = validate_field_name("parent_id");
+        let result = validate_field_name(".parent_id");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("reserved"));
     }
@@ -110,9 +110,9 @@ mod tests {
     #[test]
     fn test_validate_field_name_format_allows_reserved() {
         // Format validation allows reserved names (for reading)
-        assert!(validate_field_name_format("name").is_ok());
-        assert!(validate_field_name_format("state").is_ok());
-        assert!(validate_field_name_format("context.md").is_ok());
+        assert!(validate_field_name_format(".name").is_ok());
+        assert!(validate_field_name_format(".state").is_ok());
+        assert!(validate_field_name_format(".context.md").is_ok());
     }
 
     #[test]
@@ -130,5 +130,21 @@ mod tests {
         assert!(validate_field_name("field:name").is_err());
         assert!(validate_field_name("field*name").is_err());
         assert!(validate_field_name("field?name").is_err());
+    }
+}
+
+#[cfg(test)]
+mod dot_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn bare_names_no_longer_reserved() {
+        // Bare names like "state", "name", "context.md" are now available
+        // as user-defined fields since reserved fields are dot-prefixed
+        assert!(validate_field_name("state").is_ok());
+        assert!(validate_field_name("name").is_ok());
+        assert!(validate_field_name("context.md").is_ok());
+        assert!(validate_field_name("id").is_ok());
+        assert!(validate_field_name("parent_id").is_ok());
     }
 }

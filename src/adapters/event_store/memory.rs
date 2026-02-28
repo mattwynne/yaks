@@ -43,9 +43,9 @@ fn build_snapshots_from_events(
             YakEvent::FieldUpdated(e, _) => {
                 if let Some(yak) = yaks.get_mut(e.id.as_str()) {
                     match e.field_name.as_str() {
-                        "state" => yak.state = e.content.clone(),
-                        "context.md" => yak.context = Some(e.content.clone()),
-                        "name" => yak.name = Name::from(e.content.as_str()),
+                        ".state" => yak.state = e.content.clone(),
+                        ".context.md" => yak.context = Some(e.content.clone()),
+                        ".name" => yak.name = Name::from(e.content.as_str()),
                         _ => {
                             yak.fields.insert(e.field_name.clone(), e.content.clone());
                         }
@@ -216,7 +216,7 @@ mod tests {
             .append(&YakEvent::FieldUpdated(
                 crate::domain::events::FieldUpdatedEvent {
                     id: YakId::from("test-a1b2"),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: "wip".to_string(),
                 },
                 EventMetadata::default_legacy(),

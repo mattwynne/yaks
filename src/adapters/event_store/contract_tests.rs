@@ -116,7 +116,7 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from("foo-a1b2"),
-                        field_name: "state".to_string(),
+                        field_name: ".state".to_string(),
                         content: "wip".to_string(),
                     },
                     EventMetadata::default_legacy(),
@@ -232,7 +232,7 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from("foo-a1b2"),
-                        field_name: "state".to_string(),
+                        field_name: ".state".to_string(),
                         content: "wip".to_string(),
                     },
                     EventMetadata::default_legacy(),
@@ -476,7 +476,7 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from("test-a1b2"),
-                        field_name: "state".to_string(),
+                        field_name: ".state".to_string(),
                         content: "wip".to_string(),
                     },
                     EventMetadata::default_legacy(),
@@ -495,7 +495,7 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::FieldUpdated(
                     FieldUpdatedEvent {
                         id: YakId::from("test2-c3d4"),
-                        field_name: "context.md".to_string(),
+                        field_name: ".context.md".to_string(),
                         content: "some context".to_string(),
                     },
                     EventMetadata::default_legacy(),

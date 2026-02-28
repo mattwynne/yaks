@@ -224,7 +224,7 @@ impl YakMap {
             self.pending_events.push(YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: id.clone(),
-                    field_name: "context.md".to_string(),
+                    field_name: ".context.md".to_string(),
                     content,
                 },
                 self.metadata.clone(),
@@ -235,7 +235,7 @@ impl YakMap {
             self.pending_events.push(YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
                     id: id.clone(),
-                    field_name: "state".to_string(),
+                    field_name: ".state".to_string(),
                     content: initial_state,
                 },
                 self.metadata.clone(),
@@ -282,7 +282,7 @@ impl YakMap {
         self.pending_events.push(YakEvent::FieldUpdated(
             FieldUpdatedEvent {
                 id: id.clone(),
-                field_name: "state".to_string(),
+                field_name: ".state".to_string(),
                 content: state,
             },
             self.metadata.clone(),
@@ -327,7 +327,7 @@ impl YakMap {
                     self.pending_events.push(YakEvent::FieldUpdated(
                         FieldUpdatedEvent {
                             id: ancestor_id.clone(),
-                            field_name: "state".to_string(),
+                            field_name: ".state".to_string(),
                             content: "wip".to_string(),
                         },
                         self.metadata.clone(),
@@ -345,7 +345,7 @@ impl YakMap {
                     self.pending_events.push(YakEvent::FieldUpdated(
                         FieldUpdatedEvent {
                             id: ancestor_id.clone(),
-                            field_name: "state".to_string(),
+                            field_name: ".state".to_string(),
                             content: "todo".to_string(),
                         },
                         self.metadata.clone(),
@@ -363,7 +363,7 @@ impl YakMap {
                     self.pending_events.push(YakEvent::FieldUpdated(
                         FieldUpdatedEvent {
                             id: ancestor_id.clone(),
-                            field_name: "state".to_string(),
+                            field_name: ".state".to_string(),
                             content: "wip".to_string(),
                         },
                         self.metadata.clone(),
@@ -381,7 +381,7 @@ impl YakMap {
         self.pending_events.push(YakEvent::FieldUpdated(
             FieldUpdatedEvent {
                 id,
-                field_name: "context.md".to_string(),
+                field_name: ".context.md".to_string(),
                 content: context,
             },
             self.metadata.clone(),
@@ -474,7 +474,7 @@ impl YakMap {
         self.pending_events.push(YakEvent::FieldUpdated(
             FieldUpdatedEvent {
                 id,
-                field_name: "name".to_string(),
+                field_name: ".name".to_string(),
                 content: new_name.to_string(),
             },
             self.metadata.clone(),
@@ -1068,7 +1068,7 @@ mod tests {
                 _,
             ) => {
                 assert!(!id.as_str().is_empty());
-                assert_eq!(field_name, "context.md");
+                assert_eq!(field_name, ".context.md");
                 assert_eq!(content, "context");
             }
             _ => panic!("Expected FieldUpdated event second"),
@@ -1422,7 +1422,7 @@ mod tests {
                 _,
             ) => {
                 assert!(!id.as_str().is_empty());
-                assert_eq!(field_name, "context.md");
+                assert_eq!(field_name, ".context.md");
                 assert_eq!(content, "new context");
             }
             _ => panic!("Expected FieldUpdated event"),
@@ -1571,7 +1571,7 @@ mod tests {
                 _,
             ) => {
                 assert_eq!(event_id, &id);
-                assert_eq!(field_name, "name");
+                assert_eq!(field_name, ".name");
                 assert_eq!(content, "new");
             }
             _ => panic!("Expected FieldUpdated event"),
@@ -1690,7 +1690,7 @@ mod tests {
                 _,
             ) => {
                 assert_eq!(event_id, &id);
-                assert_eq!(field_name, "state");
+                assert_eq!(field_name, ".state");
                 assert_eq!(content, "wip");
             }
             _ => panic!("Expected FieldUpdated event for state"),
@@ -1948,7 +1948,7 @@ mod tests {
                 },
                 _,
             ) => {
-                assert_eq!(field_name, "context.md");
+                assert_eq!(field_name, ".context.md");
                 assert_eq!(content, "context");
             }
             _ => panic!("Expected FieldUpdated for context.md second"),
@@ -1962,7 +1962,7 @@ mod tests {
                 },
                 _,
             ) => {
-                assert_eq!(field_name, "state");
+                assert_eq!(field_name, ".state");
                 assert_eq!(content, "wip");
             }
             _ => panic!("Expected FieldUpdated for state third"),

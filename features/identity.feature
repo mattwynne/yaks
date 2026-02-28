@@ -11,7 +11,7 @@ Feature: Yak identity
     Example: A yak has a readable ID based on its name
       Given I have a clean git repository
       When I add the yak "Fix the bug"
-      And I show the "id" field of "Fix the bug"
+      And I show the ".id" field of "Fix the bug"
       Then the output should include "fix-the-bug-"
 
     @fullstack
@@ -19,14 +19,14 @@ Feature: Yak identity
       Given I have a clean git repository
       And I add the yak "old name"
       When I rename the yak "old name" to "new name"
-      And I show the "id" field of "new name"
+      And I show the ".id" field of "new name"
       Then the output should include "old-name-"
 
     Example: Child yak ID is based on its own name
       Given I have a clean git repository
       And I add the yak "project"
       And I add the yak "fix the build" under "project"
-      When I show the "id" field of "fix the build"
+      When I show the ".id" field of "fix the build"
       Then the output should include "fix-the-build-"
 
   Rule: Directory names are human-readable slugs
