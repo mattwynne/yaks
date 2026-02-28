@@ -7,7 +7,7 @@ pub const STATE_FIELD: &str = "state";
 pub const CONTEXT_FIELD: &str = "context.md";
 pub const NAME_FIELD: &str = "name";
 pub const ID_FIELD: &str = "id";
-pub const METADATA_FIELD: &str = ".metadata.json";
+pub const CREATED_FIELD: &str = ".created.json";
 pub const PARENT_ID_FIELD: &str = "parent_id";
 
 /// All reserved field names
@@ -16,7 +16,7 @@ pub const RESERVED_FIELDS: &[&str] = &[
     CONTEXT_FIELD,
     NAME_FIELD,
     ID_FIELD,
-    METADATA_FIELD,
+    CREATED_FIELD,
     PARENT_ID_FIELD,
 ];
 

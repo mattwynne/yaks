@@ -257,7 +257,7 @@ impl ReadYakStore for InMemoryStorage {
             .map(|pid| YakId::from(pid.as_str()));
 
         let (created_by, created_at) = fields
-            .get(".metadata.json")
+            .get(".created.json")
             .and_then(|content| serde_json::from_str::<serde_json::Value>(content).ok())
             .map(|json| {
                 let author = Author {
@@ -330,7 +330,7 @@ impl ReadYakStore for InMemoryStorage {
                 .map(|pid| YakId::from(pid.as_str()));
 
             let (created_by, created_at) = fields
-                .get(".metadata.json")
+                .get(".created.json")
                 .and_then(|content| serde_json::from_str::<serde_json::Value>(content).ok())
                 .map(|json| {
                     let author = Author {

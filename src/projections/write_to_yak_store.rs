@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{YakEvent, METADATA_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakEvent, CREATED_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
     fn clear(&mut self) -> Result<()> {
@@ -50,7 +50,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 },
                 "created_at": metadata.timestamp.as_epoch_secs()
             });
-            store.write_field(key, METADATA_FIELD, &metadata_json.to_string())?;
+            store.write_field(key, CREATED_FIELD, &metadata_json.to_string())?;
         }
 
         YakEvent::Removed(RemovedEvent { id }, _) => {
@@ -94,7 +94,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                     },
                     "created_at": snap.created_at.as_epoch_secs()
                 });
-                store.write_field(&snap.id, METADATA_FIELD, &metadata_json.to_string())?;
+                store.write_field(&snap.id, CREATED_FIELD, &metadata_json.to_string())?;
                 for (field_name, content) in &snap.fields {
                     store.write_field(&snap.id, field_name, content)?;
                 }

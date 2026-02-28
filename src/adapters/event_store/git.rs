@@ -65,7 +65,7 @@ impl<'r> YakSubtreeBuilder<'r> {
         self
     }
 
-    /// Write the `.metadata.json` blob with author and timestamp.
+    /// Write the `.created.json` blob with author and timestamp.
     fn metadata(mut self, author: &Author, timestamp: Timestamp) -> Self {
         let json = serde_json::json!({
             "created_by": {
@@ -74,7 +74,7 @@ impl<'r> YakSubtreeBuilder<'r> {
             },
             "created_at": timestamp.as_epoch_secs()
         });
-        self.entries.push((".metadata.json", json.to_string()));
+        self.entries.push((".created.json", json.to_string()));
         self
     }
 
@@ -462,10 +462,14 @@ impl GitEventStore {
         for data in &ordered {
             let subtree = self.repo.find_tree(data.subtree_id)?;
 
-            // Read .metadata.json if present
+            // Read .created.json if present (fall back to .metadata.json for pre-v5 compat)
+            let meta_oid = subtree
+                .get_name(".created.json")
+                .or_else(|| subtree.get_name(".metadata.json"))
+                .map(|e| e.id());
             let (created_by, created_at) =
-                if let Some(meta_entry) = subtree.get_name(".metadata.json") {
-                    if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
+                if let Some(meta_id) = meta_oid {
+                    if let Ok(meta_blob) = self.repo.find_blob(meta_id) {
                         if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
                                 use crate::domain::event_metadata::{Author, Timestamp};

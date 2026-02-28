@@ -227,11 +227,13 @@ impl DirectoryStorage {
         })
     }
 
-    /// Read created_by and created_at from .metadata.json in a yak directory.
-    /// Returns (Author::unknown(), Timestamp::zero()) if the file is absent or unparseable.
+    /// Read created_by and created_at from .created.json in a yak directory.
+    /// Falls back to .metadata.json for backward compatibility with pre-v5 stores.
+    /// Returns (Author::unknown(), Timestamp::zero()) if neither file is present or parseable.
     fn read_metadata(dir: &Path) -> (Author, Timestamp) {
-        let metadata_path = dir.join(".metadata.json");
-        if let Ok(content) = fs::read_to_string(&metadata_path) {
+        let content = fs::read_to_string(dir.join(".created.json"))
+            .or_else(|_| fs::read_to_string(dir.join(".metadata.json")));
+        if let Ok(content) = content {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 let author = Author {
                     name: json["created_by"]["name"]
@@ -1261,7 +1263,7 @@ mod tests {
         storage.on_event(&event).unwrap();
 
         // The yak directory is slug-based (from name), not id-based
-        let content = std::fs::read_to_string(temp.path().join("my-yak/.metadata.json")).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("my-yak/.created.json")).unwrap();
         let json: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(json["created_by"]["name"], "Test");
         assert_eq!(json["created_by"]["email"], "test@test.com");

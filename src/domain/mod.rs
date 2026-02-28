@@ -15,7 +15,7 @@ pub mod yak_snapshot;
 pub use event::YakEvent;
 pub use event_metadata::{Author, EventMetadata, Timestamp};
 pub use field::{
-    validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, METADATA_FIELD,
+    validate_field_name, validate_field_name_format, CONTEXT_FIELD, ID_FIELD, CREATED_FIELD,
     NAME_FIELD, STATE_FIELD,
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
