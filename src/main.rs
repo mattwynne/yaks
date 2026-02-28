@@ -363,21 +363,15 @@ fn main() -> Result<()> {
         } => {
             let name_str = name.join(" ");
             if edit {
-                let input = ConsoleInput;
-                // If stdin has data, use it as initial content; otherwise use existing context
-                let initial = if ConsoleInput::stdin_has_readable_data() {
-                    input.read_stdin_content()?.unwrap_or_default()
-                } else {
-                    let yak = app
-                        .store
-                        .get_yak(&app.store.fuzzy_find_yak_id(&name_str)?)?;
-                    yak.context.unwrap_or_default()
-                };
-                let id = app.store.fuzzy_find_yak_id(&name_str)?;
-                if let Some(content) = input.edit_content(Some(&initial), None)? {
-                    app.with_yak_map(|yak_map| yak_map.update_context(id.clone(), content))?;
+                let mut use_case = EditContext::new(&name_str);
+                // If stdin has data, use it as initial content for the editor
+                if ConsoleInput::stdin_has_readable_data() {
+                    let input = ConsoleInput;
+                    if let Some(stdin_content) = input.read_stdin_content()? {
+                        use_case = use_case.with_initial_content(&stdin_content);
+                    }
                 }
-                Ok(())
+                app.handle(use_case)
             } else if ConsoleInput::stdin_has_readable_data() {
                 app.handle(EditContext::new(&name_str))
             } else {
