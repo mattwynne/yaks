@@ -18,8 +18,8 @@ pub struct YakSnapshot {
     pub created_at: Timestamp,
 }
 
-impl From<&super::yak::Yak> for YakSnapshot {
-    fn from(yak: &super::yak::Yak) -> Self {
+impl From<&super::yak::YakView> for YakSnapshot {
+    fn from(yak: &super::yak::YakView) -> Self {
         Self {
             id: yak.id.clone(),
             name: yak.name.clone(),

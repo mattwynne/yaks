@@ -4,7 +4,7 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -416,7 +416,7 @@ impl WriteYakStore for DirectoryStorage {
 }
 
 impl ReadYakStore for DirectoryStorage {
-    fn get_yak(&self, id: &YakId) -> Result<Yak> {
+    fn get_yak(&self, id: &YakId) -> Result<YakView> {
         let dir = self
             .resolve_by_id(id.as_str())
             .or_else(|| {
@@ -446,7 +446,7 @@ impl ReadYakStore for DirectoryStorage {
         let parent_id = self.read_parent_id(&dir);
         let (created_by, created_at) = Self::read_metadata(&dir);
 
-        Ok(Yak {
+        Ok(YakView {
             id: id.clone(),
             name: Name::from(display_name),
             parent_id,
@@ -459,7 +459,7 @@ impl ReadYakStore for DirectoryStorage {
         })
     }
 
-    fn list_yaks(&self) -> Result<Vec<Yak>> {
+    fn list_yaks(&self) -> Result<Vec<YakView>> {
         let mut yaks = Vec::new();
 
         if !self.base_path.exists() {
@@ -508,7 +508,7 @@ impl ReadYakStore for DirectoryStorage {
             let parent_id = self.read_parent_id(path);
             let (created_by, created_at) = Self::read_metadata(path);
 
-            yaks.push(Yak {
+            yaks.push(YakView {
                 id: YakId::from(id),
                 name: Name::from(display_name),
                 parent_id,
@@ -534,7 +534,7 @@ impl ReadYakStore for DirectoryStorage {
 
         // If not found, try fuzzy match on the name
         let yaks = ReadYakStore::list_yaks(self)?;
-        let matches: Vec<&Yak> = yaks
+        let matches: Vec<&YakView> = yaks
             .iter()
             .filter(|yak| {
                 yak.name

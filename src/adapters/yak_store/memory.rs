@@ -4,7 +4,7 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{Yak, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -206,7 +206,7 @@ impl WriteYakStore for InMemoryStorage {
 }
 
 impl ReadYakStore for InMemoryStorage {
-    fn get_yak(&self, id: &YakId) -> Result<Yak> {
+    fn get_yak(&self, id: &YakId) -> Result<YakView> {
         let yaks = self.yaks.read().unwrap();
         let key = Self::resolve_key_from_yaks(&yaks, id.as_str())
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
@@ -275,7 +275,7 @@ impl ReadYakStore for InMemoryStorage {
             })
             .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
 
-        Ok(Yak {
+        Ok(YakView {
             id: YakId::from(key.as_str()),
             name: Name::from(display_name),
             parent_id,
@@ -288,7 +288,7 @@ impl ReadYakStore for InMemoryStorage {
         })
     }
 
-    fn list_yaks(&self) -> Result<Vec<Yak>> {
+    fn list_yaks(&self) -> Result<Vec<YakView>> {
         let yaks = self.yaks.read().unwrap();
         let mut result = Vec::new();
 
@@ -348,7 +348,7 @@ impl ReadYakStore for InMemoryStorage {
                 })
                 .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
 
-            result.push(Yak {
+            result.push(YakView {
                 id: YakId::from(key.as_str()),
                 name: Name::from(display_name),
                 parent_id,

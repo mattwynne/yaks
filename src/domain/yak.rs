@@ -1,4 +1,4 @@
-// Yak domain model - a simple value object
+// YakView - read-model projection of a yak
 
 use std::collections::HashMap;
 
@@ -19,8 +19,13 @@ pub fn validate_state(state: &str) -> Result<(), String> {
     }
 }
 
+/// Read-model projection of a yak.
+///
+/// This is a DTO (data transfer object) with public fields, used for
+/// displaying yak data. It is NOT the core domain entity — see `YakState`
+/// (inside `YakMap`) for the authoritative domain type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Yak {
+pub struct YakView {
     pub id: YakId,
     pub name: Name,
     pub parent_id: Option<YakId>,
@@ -32,7 +37,7 @@ pub struct Yak {
     pub created_at: Timestamp,
 }
 
-impl Yak {
+impl YakView {
     pub fn is_done(&self) -> bool {
         self.state == "done"
     }
@@ -60,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_is_done_derived_from_state() {
-        let yak = Yak {
+        let yak = YakView {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,
@@ -73,7 +78,7 @@ mod tests {
         };
         assert!(!yak.is_done());
 
-        let done_yak = Yak {
+        let done_yak = YakView {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,

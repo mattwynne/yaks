@@ -1,5 +1,5 @@
 // Core business logic - independent of infrastructure
-// Contains Yak model, validation rules, domain operations, and port traits
+// Contains YakView model, validation rules, domain operations, and port traits
 
 pub mod event;
 pub mod event_format;
@@ -21,7 +21,7 @@ pub use field::{
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use tag::{format_tag, normalize_tag};
-pub use yak::{validate_state, validate_yak_name, Yak};
+pub use yak::{validate_state, validate_yak_name, YakView};
 pub use yak_map::YakMap;
 pub use yak_snapshot::YakSnapshot;
 

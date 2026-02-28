@@ -53,10 +53,10 @@ impl SetState {
     /// Recursively collect all descendant IDs (breadth-first, parents before children).
     fn collect_descendants(
         parent_id: &YakId,
-        all_yaks: &[crate::domain::Yak],
+        all_yaks: &[crate::domain::YakView],
         result: &mut Vec<YakId>,
     ) {
-        let children: Vec<&crate::domain::Yak> = all_yaks
+        let children: Vec<&crate::domain::YakView> = all_yaks
             .iter()
             .filter(|yak| yak.parent_id.as_ref() == Some(parent_id))
             .collect();

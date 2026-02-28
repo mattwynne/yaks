@@ -26,7 +26,7 @@ adapters to ports, and routes commands to use cases. See
 
 Core business logic. No dependencies on infrastructure.
 
-- **`yak.rs`** - `Yak` entity (id, name, parent_id, state, context, fields, children)
+- **`yak.rs`** - `YakView` read-model DTO (id, name, parent_id, state, context, fields, children)
 - **`yak_map.rs`** - `YakMap` aggregate: the write model that enforces all
   invariants (e.g. parent must exist, parent can't be done if children aren't)
 - **`event.rs`** - `YakEvent` enum: Added, Removed, Moved, FieldUpdated.

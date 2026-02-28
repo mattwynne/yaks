@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 
 use crate::domain::slug::YakId;
-use crate::domain::Yak;
+use crate::domain::YakView;
 
 use super::{AddYak, Application, UseCase};
 
@@ -42,7 +42,7 @@ impl UseCase for ResetGitFromDisk {
         app.event_bus.rebuild(&[])?;
 
         // 4. Replay yaks through AddYak in topological order (parents before children)
-        let yak_index: HashMap<&YakId, &Yak> = yaks.iter().map(|y| (&y.id, y)).collect();
+        let yak_index: HashMap<&YakId, &YakView> = yaks.iter().map(|y| (&y.id, y)).collect();
 
         // Find roots: yaks not appearing in any other yak's children list
         let mut child_ids = HashSet::new();
@@ -51,7 +51,7 @@ impl UseCase for ResetGitFromDisk {
                 child_ids.insert(child_id);
             }
         }
-        let roots: Vec<&Yak> = yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
+        let roots: Vec<&YakView> = yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
 
         for root_yak in &roots {
             replay_yak(app, root_yak, &yak_index, None)?;
@@ -74,8 +74,8 @@ impl UseCase for ResetGitFromDisk {
 
 fn replay_yak(
     app: &mut Application,
-    yak: &Yak,
-    yak_index: &HashMap<&YakId, &Yak>,
+    yak: &YakView,
+    yak_index: &HashMap<&YakId, &YakView>,
     parent_id: Option<&str>,
 ) -> Result<()> {
     let has_real_metadata = yak.created_at != crate::domain::Timestamp::zero();

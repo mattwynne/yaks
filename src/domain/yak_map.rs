@@ -45,7 +45,7 @@ impl YakMap {
         let mut yaks = HashMap::new();
         for yak in &yaks_list {
             // Stores now return leaf names directly (no slash-splitting needed).
-            // Use parent_id from Yak struct directly.
+            // Use parent_id from YakView struct directly.
             yaks.insert(
                 yak.id.clone(),
                 YakState {
@@ -720,15 +720,15 @@ mod tests {
     #[test]
     fn test_from_store_empty() {
         use crate::domain::ports::ReadYakStore;
-        use crate::domain::Yak;
+        use crate::domain::YakView;
 
         struct MockStore;
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
+            fn get_yak(&self, _id: &YakId) -> Result<YakView> {
                 anyhow::bail!("empty")
             }
-            fn list_yaks(&self) -> Result<Vec<Yak>> {
+            fn list_yaks(&self) -> Result<Vec<YakView>> {
                 Ok(vec![])
             }
             fn fuzzy_find_yak_id(&self, _query: &str) -> Result<YakId> {
@@ -749,14 +749,14 @@ mod tests {
     #[test]
     fn test_from_store_with_yaks() {
         use crate::domain::ports::ReadYakStore;
-        use crate::domain::Yak;
+        use crate::domain::YakView;
 
         struct MockStore {
-            yaks: Vec<Yak>,
+            yaks: Vec<YakView>,
         }
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, id: &YakId) -> Result<Yak> {
+            fn get_yak(&self, id: &YakId) -> Result<YakView> {
                 self.yaks
                     .iter()
                     .find(|y| y.id == *id)
@@ -764,7 +764,7 @@ mod tests {
                     .ok_or_else(|| anyhow::anyhow!("Yak not found"))
             }
 
-            fn list_yaks(&self) -> Result<Vec<Yak>> {
+            fn list_yaks(&self) -> Result<Vec<YakView>> {
                 Ok(self.yaks.clone())
             }
 
@@ -784,7 +784,7 @@ mod tests {
         use crate::domain::event_metadata::{Author, Timestamp};
         let store = MockStore {
             yaks: vec![
-                Yak {
+                YakView {
                     id: YakId::from("test1-aaaa"),
                     name: Name::from("test1"),
                     parent_id: None,
@@ -795,7 +795,7 @@ mod tests {
                     created_by: Author::unknown(),
                     created_at: Timestamp::zero(),
                 },
-                Yak {
+                YakView {
                     id: YakId::from("test2-bbbb"),
                     name: Name::from("test2"),
                     parent_id: None,
@@ -833,19 +833,19 @@ mod tests {
     #[test]
     fn test_from_store_uses_parent_id_and_leaf_name() {
         use crate::domain::ports::ReadYakStore;
-        use crate::domain::Yak;
+        use crate::domain::YakView;
 
         struct MockStore;
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
+            fn get_yak(&self, _id: &YakId) -> Result<YakView> {
                 anyhow::bail!("Not needed")
             }
 
-            fn list_yaks(&self) -> Result<Vec<Yak>> {
+            fn list_yaks(&self) -> Result<Vec<YakView>> {
                 use crate::domain::event_metadata::{Author, Timestamp};
                 Ok(vec![
-                    Yak {
+                    YakView {
                         id: YakId::from("parent-aaaa"),
                         name: Name::from("parent"),
                         parent_id: None,
@@ -856,7 +856,7 @@ mod tests {
                         created_by: Author::unknown(),
                         created_at: Timestamp::zero(),
                     },
-                    Yak {
+                    YakView {
                         // Stores now return leaf names with explicit parent_id
                         id: YakId::from("child-bbbb"),
                         name: Name::from("child"),
@@ -888,19 +888,19 @@ mod tests {
     #[test]
     fn test_from_store_uses_parent_id_from_yak() {
         use crate::domain::ports::ReadYakStore;
-        use crate::domain::Yak;
+        use crate::domain::YakView;
 
         struct MockStore;
 
         impl ReadYakStore for MockStore {
-            fn get_yak(&self, _id: &YakId) -> Result<Yak> {
+            fn get_yak(&self, _id: &YakId) -> Result<YakView> {
                 anyhow::bail!("Not needed")
             }
 
-            fn list_yaks(&self) -> Result<Vec<Yak>> {
+            fn list_yaks(&self) -> Result<Vec<YakView>> {
                 use crate::domain::event_metadata::{Author, Timestamp};
                 Ok(vec![
-                    Yak {
+                    YakView {
                         id: YakId::from("parent-aaaa"),
                         name: Name::from("parent"),
                         parent_id: None,
@@ -911,7 +911,7 @@ mod tests {
                         created_by: Author::unknown(),
                         created_at: Timestamp::zero(),
                     },
-                    Yak {
+                    YakView {
                         id: YakId::from("child-bbbb"),
                         // Leaf-only name: no slash to derive parent from
                         name: Name::from("child"),
@@ -941,7 +941,7 @@ mod tests {
         assert_eq!(
             child.parent_id,
             Some(YakId::from("parent-aaaa")),
-            "from_store should use parent_id from Yak struct"
+            "from_store should use parent_id from YakView struct"
         );
     }
 
