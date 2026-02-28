@@ -141,6 +141,11 @@ impl EventStore for InMemoryEventStore {
         Ok(self.events.lock().unwrap().clone())
     }
 
+    fn wipe(&mut self) -> Result<()> {
+        self.events.lock().unwrap().clear();
+        Ok(())
+    }
+
     fn compact(&mut self, metadata: crate::domain::event_metadata::EventMetadata) -> Result<()> {
         let events = self.events.lock().unwrap();
         if events.is_empty() {

@@ -9,11 +9,10 @@ use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddYak, Application, CompactEvents, DoneYak, EditContext, EditField, GenerateCompletions,
-    ListYaks, MoveYak, PruneYaks,
-    RemoveYak, RenameYak, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
-    WriteField,
+    ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk,
+    SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks, WriteField,
 };
-use yx::domain::ports::{EventListener, EventStore, ReadYakStore};
+use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
 
 /// DAG-based TODO list CLI for software teams
@@ -417,141 +416,15 @@ fn main() -> Result<()> {
             disk_from_git,
             git_from_disk,
         } => {
-            // Validate flags
             if disk_from_git && git_from_disk {
                 anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
             }
 
-            let root = repo_root
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Error: not in a git repository"))?;
-
             if git_from_disk {
-                // Wipe git history and replay through Application
-                let yaks = storage.list_yaks()?;
-
-                // Delete refs/notes/yaks to wipe git event history
-                {
-                    let repo = git2::Repository::open(root)?;
-                    let delete_result = repo.find_reference("refs/notes/yaks");
-                    if let Ok(mut reference) = delete_result {
-                        reference.delete()?;
-                    }
-                }
-
-                // Clear disk
-                storage.clear()?;
-
-                // Create fresh event infrastructure for replay
-                let mut replay_store = GitEventStore::new(root)?;
-                let mut replay_bus = EventBus::new();
-                replay_bus.register(Box::new(storage.clone()));
-
-                let replay_display = ConsoleDisplay::stdout();
-                let replay_input = yx::adapters::user_input::NullInput;
-                let replay_auth = GitAuthentication::new(root)?;
-                let mut replay_app = Application::new(
-                    &mut replay_store,
-                    &mut replay_bus,
-                    &storage,
-                    &replay_display,
-                    &replay_input,
-                    None,
-                    &replay_auth,
-                );
-
-                // Build index for topological traversal
-                use std::collections::HashMap;
-                let yak_index: HashMap<&yx::domain::slug::YakId, &yx::domain::Yak> =
-                    yaks.iter().map(|y| (&y.id, y)).collect();
-
-                // Find roots (yaks not appearing in any children list)
-                let mut child_ids = std::collections::HashSet::new();
-                for yak in &yaks {
-                    for child_id in &yak.children {
-                        child_ids.insert(child_id);
-                    }
-                }
-                let roots: Vec<&yx::domain::Yak> =
-                    yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
-
-                // Replay each yak through AddYak in topological order
-                fn replay_yak(
-                    app: &mut Application,
-                    yak: &yx::domain::Yak,
-                    yak_index: &HashMap<&yx::domain::slug::YakId, &yx::domain::Yak>,
-                    parent_id: Option<&str>,
-                ) -> Result<()> {
-                    let has_real_metadata = yak.created_at != yx::domain::Timestamp::zero();
-                    let mut use_case = AddYak::new(yak.name.as_str())
-                        .with_id(Some(yak.id.as_str()))
-                        .with_context(yak.context.as_deref())
-                        .with_author(if has_real_metadata {
-                            Some(yak.created_by.clone())
-                        } else {
-                            None
-                        })
-                        .with_timestamp(if has_real_metadata {
-                            Some(yak.created_at)
-                        } else {
-                            None
-                        });
-                    if yak.state != "todo" {
-                        use_case = use_case.with_state(Some(&yak.state));
-                    }
-                    if let Some(pid) = parent_id {
-                        use_case = use_case.with_parent(Some(pid));
-                    }
-                    for (key, value) in &yak.fields {
-                        use_case = use_case.with_field(key, value);
-                    }
-                    app.handle(use_case)?;
-
-                    for child_id in &yak.children {
-                        if let Some(child) = yak_index.get(child_id) {
-                            replay_yak(app, child, yak_index, Some(yak.id.as_str()))?;
-                        }
-                    }
-                    Ok(())
-                }
-
-                for root_yak in &roots {
-                    replay_yak(&mut replay_app, root_yak, &yak_index, None)?;
-                }
-
-                // Stamp schema version on the new event history
-                {
-                    let repo = git2::Repository::open(root)?;
-                    if repo.find_reference("refs/notes/yaks").is_ok() {
-                        let location = yx::adapters::event_store::migration::EventStoreLocation {
-                            repo: &repo,
-                            ref_name: "refs/notes/yaks",
-                        };
-                        yx::adapters::event_store::migration::write_schema_version(
-                            &location,
-                            yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION,
-                        )?;
-                    }
-                }
-
-                println!("Reset from disk: {} yaks", yaks.len());
-                println!();
-                println!("To update the remote, run:");
-                println!("  git push origin refs/notes/yaks --force");
-                println!();
-                println!("Collaborators must then run:");
-                println!("  git fetch origin refs/notes/yaks:refs/notes/yaks --force");
+                app.handle(ResetGitFromDisk::new())
             } else {
-                // Default: rebuild .yaks directory from git tree
-                let event_store = GitEventStore::new(root)?;
-                let events = event_store.snapshot_events()?;
-                let mut store = storage.clone();
-                store.clear()?;
-                for event in &events {
-                    store.on_event(event)?;
-                }
+                app.handle(ResetDiskFromGit::new())
             }
-            Ok(())
         }
         Commands::Compact { yes } => {
             // 1. Auto-sync first
