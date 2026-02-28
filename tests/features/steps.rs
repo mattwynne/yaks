@@ -2,6 +2,12 @@
 //
 // These steps work with both FullStackWorld and InProcessWorld
 // through the TestWorld trait interface.
+//
+// The `both_worlds!` macro eliminates duplication by generating
+// step registrations for both world types from a single definition.
+// Each shared step has one implementation function that works with
+// `&mut dyn TestWorld`, and the macro creates thin wrappers for
+// both concrete world types.
 
 use anyhow::{Context, Result};
 use cucumber::{given, then, when};
@@ -12,7 +18,508 @@ use super::test_world::{strip_ansi_codes, TestWorld};
 use yx::application::{AddYak, EditContext, ListYaks, MoveYak, RemoveYak, SetState, ShowContext};
 
 // ============================================================================
-// Given steps
+// Macro to eliminate step definition duplication
+// ============================================================================
+//
+// Cucumber-rs proc macros require step functions to have a concrete World
+// type parameter. Since we run tests against both FullStackWorld and
+// InProcessWorld, every shared step would need two identical definitions.
+//
+// This macro generates two thin wrappers (one per world type) that delegate
+// to a shared implementation function taking `&mut dyn TestWorld`.
+
+macro_rules! both_worlds {
+    // given — no extra params
+    (given($($attr:tt)*) fn $fs_name:ident / $ip_name:ident () -> $impl_fn:ident) => {
+        #[given($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+
+        #[given($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+    };
+    // given — with params
+    (given($($attr:tt)*) fn $fs_name:ident / $ip_name:ident ($($p:ident : $t:ident),+) -> $impl_fn:ident) => {
+        #[given($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+
+        #[given($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+    };
+
+    // when — no extra params
+    (when($($attr:tt)*) fn $fs_name:ident / $ip_name:ident () -> $impl_fn:ident) => {
+        #[when($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+
+        #[when($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+    };
+    // when — with params
+    (when($($attr:tt)*) fn $fs_name:ident / $ip_name:ident ($($p:ident : $t:ident),+) -> $impl_fn:ident) => {
+        #[when($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+
+        #[when($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+    };
+
+    // then — no extra params
+    (then($($attr:tt)*) fn $fs_name:ident / $ip_name:ident () -> $impl_fn:ident) => {
+        #[then($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+
+        #[then($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld) -> Result<()> {
+            $impl_fn(world)
+        }
+    };
+    // then — with params
+    (then($($attr:tt)*) fn $fs_name:ident / $ip_name:ident ($($p:ident : $t:ident),+) -> $impl_fn:ident) => {
+        #[then($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+
+        #[then($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld, $($p : $t),+) -> Result<()> {
+            $impl_fn(world, $($p),+)
+        }
+    };
+
+    // then_docstring — step gets a &Step param
+    (then_docstring($($attr:tt)*) fn $fs_name:ident / $ip_name:ident () -> $impl_fn:ident) => {
+        #[then($($attr)*)]
+        async fn $fs_name(world: &mut FullStackWorld, step: &cucumber::gherkin::Step) -> Result<()> {
+            $impl_fn(world, step)
+        }
+
+        #[then($($attr)*)]
+        async fn $ip_name(world: &mut InProcessWorld, step: &cucumber::gherkin::Step) -> Result<()> {
+            $impl_fn(world, step)
+        }
+    };
+}
+
+// ============================================================================
+// Shared step implementations (work with any TestWorld)
+// ============================================================================
+
+fn impl_add_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.add_yak(&yak_name)
+}
+
+fn impl_add_yak_under(world: &mut dyn TestWorld, yak_name: String, parent: String) -> Result<()> {
+    world.add_yak_under(&yak_name, &parent)
+}
+
+fn impl_done_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.done_yak(&yak_name)
+}
+
+fn impl_list_yaks(world: &mut dyn TestWorld) -> Result<()> {
+    world.list_yaks()
+}
+
+fn impl_list_yaks_format(world: &mut dyn TestWorld, format: String) -> Result<()> {
+    world.list_yaks_with_format(&format)
+}
+
+fn impl_list_yaks_format_filter(
+    world: &mut dyn TestWorld,
+    format: String,
+    only: String,
+) -> Result<()> {
+    world.list_yaks_with_format_and_filter(&format, &only)
+}
+
+fn impl_yak_count(world: &mut dyn TestWorld, expected: usize) -> Result<()> {
+    check_yak_count(world, expected)
+}
+
+fn impl_try_add_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.try_add_yak(&yak_name)
+}
+
+fn impl_try_add_yak_under(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    parent: String,
+) -> Result<()> {
+    world.try_add_yak_under(&yak_name, &parent)
+}
+
+fn impl_remove_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.remove_yak(&yak_name)
+}
+
+fn impl_remove_yak_recursive(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.remove_yak_recursive(&yak_name)
+}
+
+fn impl_try_remove_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.try_remove_yak(&yak_name)
+}
+
+fn impl_done_yak_when(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.done_yak(&yak_name)
+}
+
+fn impl_try_done_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.try_done_yak(&yak_name)
+}
+
+fn impl_done_yak_recursive(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
+    world.done_yak_recursive(&yak_name)
+}
+
+fn impl_set_context(world: &mut dyn TestWorld, name: String, content: String) -> Result<()> {
+    world.set_context(&name, &content)
+}
+
+fn impl_show_context(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.show_context(&name)
+}
+
+fn impl_prune_done_yaks(world: &mut dyn TestWorld) -> Result<()> {
+    world.prune_yaks()
+}
+
+fn impl_set_state(world: &mut dyn TestWorld, name: String, state: String) -> Result<()> {
+    world.set_state(&name, &state)
+}
+
+fn impl_try_set_state(world: &mut dyn TestWorld, name: String, state: String) -> Result<()> {
+    world.try_set_state(&name, &state)
+}
+
+fn impl_start_yak(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.start_yak(&name)
+}
+
+fn impl_move_yak_under(world: &mut dyn TestWorld, name: String, parent: String) -> Result<()> {
+    world.move_yak_under(&name, &parent)
+}
+
+fn impl_move_yak_to_root(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.move_yak_to_root(&name)
+}
+
+fn impl_try_move_both_flags(world: &mut dyn TestWorld, name: String, parent: String) -> Result<()> {
+    world.try_move_yak_under_and_to_root(&name, &parent)
+}
+
+fn impl_try_move_no_flags(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.try_move_yak_no_flags(&name)
+}
+
+fn impl_rename_yak(world: &mut dyn TestWorld, from: String, to: String) -> Result<()> {
+    world.rename_yak(&from, &to)
+}
+
+fn impl_try_rename_yak(world: &mut dyn TestWorld, from: String, to: String) -> Result<()> {
+    world.try_rename_yak(&from, &to)
+}
+
+fn impl_set_field(
+    world: &mut dyn TestWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.set_field(&name, &field, &content)
+}
+
+fn impl_try_set_field(
+    world: &mut dyn TestWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.try_set_field(&name, &field, &content)
+}
+
+fn impl_show_field(world: &mut dyn TestWorld, field: String, name: String) -> Result<()> {
+    world.show_field(&name, &field)
+}
+
+fn impl_add_yak_with_state(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    state: String,
+) -> Result<()> {
+    world.add_yak_with_state(&yak_name, &state)
+}
+
+fn impl_add_yak_with_context(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    context: String,
+) -> Result<()> {
+    world.add_yak_with_context(&yak_name, &context)
+}
+
+fn impl_add_yak_with_id(world: &mut dyn TestWorld, yak_name: String, id: String) -> Result<()> {
+    world.add_yak_with_id(&yak_name, &id)
+}
+
+fn impl_add_yak_with_field(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    world.add_yak_with_field(&yak_name, &key, &value)
+}
+
+fn impl_tag_yak(world: &mut dyn TestWorld, name: String, tag: String) -> Result<()> {
+    world.add_tags(&name, vec![tag])
+}
+
+fn impl_tag_yak_multi(
+    world: &mut dyn TestWorld,
+    name: String,
+    tag1: String,
+    tag2: String,
+) -> Result<()> {
+    world.add_tags(&name, vec![tag1, tag2])
+}
+
+fn impl_remove_tag(world: &mut dyn TestWorld, tag: String, name: String) -> Result<()> {
+    world.remove_tags(&name, vec![tag])
+}
+
+fn impl_list_tags(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.list_tags(&name)
+}
+
+fn impl_command_fails(world: &dyn TestWorld) -> Result<()> {
+    check_command_fails(world)
+}
+
+fn impl_error_contains(world: &dyn TestWorld, expected: String) -> Result<()> {
+    check_error_contains(world, &expected)
+}
+
+fn impl_output_should_be(world: &dyn TestWorld, step: &cucumber::gherkin::Step) -> Result<()> {
+    check_output(world, step)
+}
+
+fn impl_output_empty(world: &dyn TestWorld) -> Result<()> {
+    check_empty_output(world)
+}
+
+fn impl_should_succeed(world: &dyn TestWorld) -> Result<()> {
+    check_should_succeed(world)
+}
+
+fn impl_output_includes(world: &dyn TestWorld, expected: String) -> Result<()> {
+    check_output_includes(world, &expected)
+}
+
+fn impl_output_not_includes(world: &dyn TestWorld, expected: String) -> Result<()> {
+    check_output_not_includes(world, &expected)
+}
+
+fn impl_line_of_output_includes(
+    world: &dyn TestWorld,
+    line_num: usize,
+    expected: String,
+) -> Result<()> {
+    check_line_of_output_includes(world, line_num, &expected)
+}
+
+// ============================================================================
+// Shared step registrations (both FullStackWorld and InProcessWorld)
+// ============================================================================
+
+// -- Given steps --
+
+both_worlds!(given(regex = r#"^I add the yak "([^"]+)"$"#)
+    fn given_add_yak_fs / given_add_yak_ip (yak_name: String) -> impl_add_yak);
+
+both_worlds!(given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)
+    fn given_add_yak_under_fs / given_add_yak_under_ip (yak_name: String, parent: String) -> impl_add_yak_under);
+
+both_worlds!(given(regex = r#"^I mark the yak "(.+)" as done$"#)
+    fn given_done_yak_fs / given_done_yak_ip (yak_name: String) -> impl_done_yak);
+
+// -- When steps --
+
+both_worlds!(when(expr = "I list the yaks")
+    fn when_list_yaks_fs / when_list_yaks_ip () -> impl_list_yaks);
+
+both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format$"#)
+    fn when_list_yaks_format_fs / when_list_yaks_format_ip (format: String) -> impl_list_yaks_format);
+
+both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+)"$"#)
+    fn when_list_yaks_format_filter_fs / when_list_yaks_format_filter_ip (format: String, only: String) -> impl_list_yaks_format_filter);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)"$"#)
+    fn when_add_yak_fs / when_add_yak_ip (yak_name: String) -> impl_add_yak);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)
+    fn when_add_yak_under_fs / when_add_yak_under_ip (yak_name: String, parent: String) -> impl_add_yak_under);
+
+both_worlds!(when(regex = r#"^there should be (\d+) yaks?$"#)
+    fn when_yak_count_fs / when_yak_count_ip (expected: usize) -> impl_yak_count);
+
+both_worlds!(when(regex = r#"^I try to add the yak "([^"]+)"$"#)
+    fn when_try_add_yak_fs / when_try_add_yak_ip (yak_name: String) -> impl_try_add_yak);
+
+both_worlds!(when(regex = r#"^I try to add the yak "([^"]+)" under "([^"]+)"$"#)
+    fn when_try_add_yak_under_fs / when_try_add_yak_under_ip (yak_name: String, parent: String) -> impl_try_add_yak_under);
+
+both_worlds!(when(regex = r#"^I remove the yak "(.+)"$"#)
+    fn when_remove_yak_fs / when_remove_yak_ip (yak_name: String) -> impl_remove_yak);
+
+both_worlds!(when(regex = r#"^I remove the yak "(.+)" recursively$"#)
+    fn when_remove_yak_recursive_fs / when_remove_yak_recursive_ip (yak_name: String) -> impl_remove_yak_recursive);
+
+both_worlds!(when(regex = r#"^I try to remove the yak "(.+)"$"#)
+    fn when_try_remove_yak_fs / when_try_remove_yak_ip (yak_name: String) -> impl_try_remove_yak);
+
+both_worlds!(when(regex = r#"^I mark the yak "(.+)" as done$"#)
+    fn when_done_yak_fs / when_done_yak_ip (yak_name: String) -> impl_done_yak_when);
+
+both_worlds!(when(regex = r#"^I try to mark the yak "(.+)" as done$"#)
+    fn when_try_done_yak_fs / when_try_done_yak_ip (yak_name: String) -> impl_try_done_yak);
+
+both_worlds!(when(regex = r#"^I mark the yak "(.+)" as done recursively$"#)
+    fn when_done_yak_recursive_fs / when_done_yak_recursive_ip (yak_name: String) -> impl_done_yak_recursive);
+
+both_worlds!(when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)
+    fn when_set_context_fs / when_set_context_ip (name: String, content: String) -> impl_set_context);
+
+both_worlds!(when(regex = r#"^I show the context of "(.+)"$"#)
+    fn when_show_context_fs / when_show_context_ip (name: String) -> impl_show_context);
+
+both_worlds!(when(expr = "I prune done yaks")
+    fn when_prune_done_yaks_fs / when_prune_done_yaks_ip () -> impl_prune_done_yaks);
+
+both_worlds!(when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)
+    fn when_set_state_fs / when_set_state_ip (name: String, state: String) -> impl_set_state);
+
+both_worlds!(when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)
+    fn when_try_set_state_fs / when_try_set_state_ip (name: String, state: String) -> impl_try_set_state);
+
+both_worlds!(when(regex = r#"^I start "(.+)"$"#)
+    fn when_start_yak_fs / when_start_yak_ip (name: String) -> impl_start_yak);
+
+both_worlds!(when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)
+    fn when_move_yak_under_fs / when_move_yak_under_ip (name: String, parent: String) -> impl_move_yak_under);
+
+both_worlds!(when(regex = r#"^I move the yak "(.+)" to root$"#)
+    fn when_move_yak_to_root_fs / when_move_yak_to_root_ip (name: String) -> impl_move_yak_to_root);
+
+both_worlds!(when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$"#)
+    fn when_try_move_both_flags_fs / when_try_move_both_flags_ip (name: String, parent: String) -> impl_try_move_both_flags);
+
+both_worlds!(when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)
+    fn when_try_move_no_flags_fs / when_try_move_no_flags_ip (name: String) -> impl_try_move_no_flags);
+
+both_worlds!(when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)
+    fn when_rename_yak_fs / when_rename_yak_ip (from: String, to: String) -> impl_rename_yak);
+
+both_worlds!(when(regex = r#"^I try to rename the yak "(.+)" to "(.+)"$"#)
+    fn when_try_rename_yak_fs / when_try_rename_yak_ip (from: String, to: String) -> impl_try_rename_yak);
+
+both_worlds!(when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)
+    fn when_set_field_fs / when_set_field_ip (field: String, name: String, content: String) -> impl_set_field);
+
+both_worlds!(when(regex = r#"^I try to set the "(.+)" field of "(.+)" to "(.+)"$"#)
+    fn when_try_set_field_fs / when_try_set_field_ip (field: String, name: String, content: String) -> impl_try_set_field);
+
+both_worlds!(when(regex = r#"^I show the "(.+)" field of "(.+)"$"#)
+    fn when_show_field_fs / when_show_field_ip (field: String, name: String) -> impl_show_field);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)
+    fn when_add_yak_with_state_fs / when_add_yak_with_state_ip (yak_name: String, state: String) -> impl_add_yak_with_state);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)
+    fn when_add_yak_with_context_fs / when_add_yak_with_context_ip (yak_name: String, context: String) -> impl_add_yak_with_context);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)
+    fn when_add_yak_with_id_fs / when_add_yak_with_id_ip (yak_name: String, id: String) -> impl_add_yak_with_id);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)
+    fn when_add_yak_with_field_fs / when_add_yak_with_field_ip (yak_name: String, key: String, value: String) -> impl_add_yak_with_field);
+
+// -- Tag steps --
+
+both_worlds!(when(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)
+    fn when_tag_yak_fs / when_tag_yak_ip (name: String, tag: String) -> impl_tag_yak);
+
+both_worlds!(when(regex = r#"^I tag "(.+)" with "(.+)" and "(.+)"$"#)
+    fn when_tag_yak_multi_fs / when_tag_yak_multi_ip (name: String, tag1: String, tag2: String) -> impl_tag_yak_multi);
+
+both_worlds!(when(regex = r#"^I remove the tag "(.+)" from "(.+)"$"#)
+    fn when_remove_tag_fs / when_remove_tag_ip (tag: String, name: String) -> impl_remove_tag);
+
+both_worlds!(when(regex = r#"^I list tags on "(.+)"$"#)
+    fn when_list_tags_fs / when_list_tags_ip (name: String) -> impl_list_tags);
+
+// -- Then steps --
+
+both_worlds!(then(expr = "the command should fail")
+    fn then_command_fails_fs / then_command_fails_ip () -> impl_command_fails);
+
+both_worlds!(then(regex = r#"^the error should contain "(.+)"$"#)
+    fn then_error_contains_fs / then_error_contains_ip (expected: String) -> impl_error_contains);
+
+both_worlds!(then_docstring(expr = "the output should be:")
+    fn then_output_should_be_fs / then_output_should_be_ip () -> impl_output_should_be);
+
+both_worlds!(then(expr = "the output should be empty")
+    fn then_output_empty_fs / then_output_empty_ip () -> impl_output_empty);
+
+both_worlds!(then(expr = "it should succeed")
+    fn then_should_succeed_fs / then_should_succeed_ip () -> impl_should_succeed);
+
+both_worlds!(then(regex = r#"^the output should include "(.+)"$"#)
+    fn then_output_includes_fs / then_output_includes_ip (expected: String) -> impl_output_includes);
+
+both_worlds!(then(regex = r#"^the output should not include "(.+)"$"#)
+    fn then_output_not_includes_fs / then_output_not_includes_ip (expected: String) -> impl_output_not_includes);
+
+both_worlds!(then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)
+    fn then_line_of_output_includes_fs / then_line_of_output_includes_ip (line_num: usize, expected: String) -> impl_line_of_output_includes);
+
+// -- Multi-repo steps shared via matching methods on both worlds --
+
+both_worlds!(given(regex = r#"^a bare git repository called ([\w-]+)$"#)
+    fn given_bare_git_repo_fs / given_bare_git_repo_ip (name: String) -> impl_bare_git_repo);
+
+both_worlds!(given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)
+    fn given_git_clone_fs / given_git_clone_ip (origin: String, clone_name: String) -> impl_git_clone);
+
+fn impl_bare_git_repo(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.create_bare_repo(&name)
+}
+
+fn impl_git_clone(world: &mut dyn TestWorld, origin: String, clone_name: String) -> Result<()> {
+    world.create_clone(&origin, &clone_name)
+}
+
+// ============================================================================
+// Steps where the two worlds differ: "I have a clean git repository"
 // ============================================================================
 
 #[given(expr = "I have a clean git repository")]
@@ -26,64 +533,8 @@ async fn clean_git_repo_in_process(_world: &mut InProcessWorld) -> Result<()> {
     Ok(())
 }
 
-#[given(regex = r#"^I add the yak "([^"]+)"$"#)]
-async fn add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.add_yak(&yak_name)
-}
-
-#[given(regex = r#"^I add the yak "([^"]+)"$"#)]
-async fn add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.add_yak(&yak_name)
-}
-
-#[given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn add_yak_under_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.add_yak_under(&yak_name, &parent)
-}
-
-#[given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn add_yak_under_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.add_yak_under(&yak_name, &parent)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn when_add_yak_under_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.add_yak_under(&yak_name, &parent)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn when_add_yak_under_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.add_yak_under(&yak_name, &parent)
-}
-
-#[given(regex = r#"^I mark the yak "(.+)" as done$"#)]
-async fn done_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.done_yak(&yak_name)
-}
-
-#[given(regex = r#"^I mark the yak "(.+)" as done$"#)]
-async fn done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.done_yak(&yak_name)
-}
-
 // ============================================================================
-// V1 schema fixture (inline duplication of the v1 event store format)
+// V1/V2 schema fixtures (full-stack only — frozen snapshots of old formats)
 // ============================================================================
 
 /// Create a yak directly in the git event store using the v1 schema format.
@@ -95,29 +546,22 @@ async fn v1_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     world.init_git()?;
     let repo_path = world.default_repo_path();
 
-    // -- Build the event store commit on refs/notes/yaks --
-
-    // Create blobs for yak files
     let state_oid = git_hash_object(repo_path, "todo")?;
     let context_oid = git_hash_object(repo_path, "")?;
 
-    // Create yak subtree: state + context.md
     let yak_tree_input = format!(
         "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
         state_oid, context_oid
     );
     let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
 
-    // Create root tree containing the yak subtree
     let root_tree_input = format!("040000 tree {}\t{}\n", yak_tree_oid, yak_name);
     let root_tree_oid = git_mktree(repo_path, &root_tree_input)?;
 
-    // Create commit on refs/notes/yaks
     let message = format!("Added: \"{}\"", yak_name);
     let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
     git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
 
-    // -- Build the .yaks/ projection (YAK_PATH = repo_path in tests) --
     let yak_dir = repo_path.join(&yak_name);
     std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
     std::fs::write(yak_dir.join("state"), "todo").context("Failed to write state")?;
@@ -127,8 +571,6 @@ async fn v1_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
 }
 
 /// Create a yak directly in the git event store using the v2 schema format.
-/// Same as v1 (no name, no id) but with .schema-version = "2" in the root tree.
-/// This is a frozen snapshot so the migration test stays stable.
 #[given(regex = r#"^a yak "(.+)" created with the v2 schema$"#)]
 async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     world.init_git()?;
@@ -138,14 +580,12 @@ async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     let context_oid = git_hash_object(repo_path, "")?;
     let version_oid = git_hash_object(repo_path, "2")?;
 
-    // Create yak subtree: state + context.md (no name, no id — old-style)
     let yak_tree_input = format!(
         "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
         state_oid, context_oid
     );
     let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
 
-    // Create root tree with yak subtree + .schema-version
     let root_tree_input = format!(
         "040000 tree {}\t{}\n100644 blob {}\t.schema-version\n",
         yak_tree_oid, yak_name, version_oid
@@ -156,7 +596,6 @@ async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
     git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
 
-    // Build the .yaks/ projection (YAK_PATH = repo_path in tests)
     let yak_dir = repo_path.join(&yak_name);
     std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
     std::fs::write(yak_dir.join("state"), "todo").context("Failed to write state")?;
@@ -166,12 +605,9 @@ async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
 }
 
 // ============================================================================
-// Corrupted git tree fixture
+// Corrupted git tree fixture (full-stack only)
 // ============================================================================
 
-/// Create a corrupted git tree with two entries that resolve to the same yak
-/// name. Simulates the corruption caused by running the old sync binary which
-/// flattened slug-based directory names back to plain names, creating duplicates.
 #[given(regex = r#"^a corrupted git tree with duplicate entries for "(.+)"$"#)]
 async fn corrupted_duplicate_tree(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     world.init_git()?;
@@ -181,15 +617,12 @@ async fn corrupted_duplicate_tree(world: &mut FullStackWorld, yak_name: String) 
     let context_oid = git_hash_object(repo_path, "")?;
     let name_oid = git_hash_object(repo_path, &yak_name)?;
 
-    // Create yak subtree with name blob (modern format)
     let yak_tree_input = format!(
         "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n100644 blob {}\tname\n",
         state_oid, context_oid, name_oid
     );
     let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
 
-    // Create root tree with TWO entries pointing to the same yak name:
-    // one with the plain name, one with a slug-id suffix (e.g. "config-7bvf")
     let root_tree_input = format!(
         "040000 tree {}\t{}\n040000 tree {}\t{}-7bvf\n",
         yak_tree_oid, yak_name, yak_tree_oid, yak_name
@@ -203,7 +636,7 @@ async fn corrupted_duplicate_tree(world: &mut FullStackWorld, yak_name: String) 
     Ok(())
 }
 
-// -- Git plumbing helpers for v1 fixture --
+// -- Git plumbing helpers --
 
 fn git_hash_object(repo_path: &std::path::Path, content: &str) -> Result<String> {
     let output = std::process::Command::new("git")
@@ -269,17 +702,13 @@ fn git_update_ref(repo_path: &std::path::Path, ref_name: &str, oid: &str) -> Res
     Ok(())
 }
 
-/// Stamp a schema version beyond what the current binary supports directly on
-/// origin's event store ref. Simulates a peer that upgraded to a newer yx version.
-/// We use alice's clone as a workspace to manipulate git objects, then push to origin.
+/// Stamp a schema version beyond what the current binary supports.
 #[given(expr = "origin has been migrated beyond the current schema version")]
 async fn origin_migrated_beyond(world: &mut FullStackWorld) -> Result<()> {
-    // Use alice's clone as a workspace (any clone will do)
     let repo_path = world.repo_path("alice")?;
     let future_version = yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION + 1;
     let version_oid = git_hash_object(&repo_path, &future_version.to_string())?;
 
-    // Read the current tree for refs/notes/yaks
     let current_ref = std::process::Command::new("git")
         .args(["rev-parse", "refs/notes/yaks"])
         .current_dir(&repo_path)
@@ -298,7 +727,6 @@ async fn origin_migrated_beyond(world: &mut FullStackWorld) -> Result<()> {
         .trim()
         .to_string();
 
-    // Replace .schema-version in the tree
     let ls_tree = std::process::Command::new("git")
         .args(["ls-tree", &tree_oid])
         .current_dir(&repo_path)
@@ -324,7 +752,6 @@ async fn origin_migrated_beyond(world: &mut FullStackWorld) -> Result<()> {
     )?;
     git_update_ref(&repo_path, "refs/notes/yaks", &new_commit_oid)?;
 
-    // Push the updated ref to origin
     let push = std::process::Command::new("git")
         .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
         .current_dir(&repo_path)
@@ -338,388 +765,6 @@ async fn origin_migrated_beyond(world: &mut FullStackWorld) -> Result<()> {
     }
 
     Ok(())
-}
-
-// ============================================================================
-// When steps
-// ============================================================================
-
-#[when(expr = "I list the yaks")]
-async fn list_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    world.list_yaks()
-}
-
-#[when(expr = "I list the yaks")]
-async fn list_yaks_in_process(world: &mut InProcessWorld) -> Result<()> {
-    world.list_yaks()
-}
-
-#[when(regex = r#"^I list the yaks in "(.+)" format$"#)]
-async fn list_yaks_format_full_stack(world: &mut FullStackWorld, format: String) -> Result<()> {
-    world.list_yaks_with_format(&format)
-}
-
-#[when(regex = r#"^I list the yaks in "(.+)" format$"#)]
-async fn list_yaks_format_in_process(world: &mut InProcessWorld, format: String) -> Result<()> {
-    world.list_yaks_with_format(&format)
-}
-
-#[when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+)"$"#)]
-async fn list_yaks_format_filter_full_stack(
-    world: &mut FullStackWorld,
-    format: String,
-    only: String,
-) -> Result<()> {
-    world.list_yaks_with_format_and_filter(&format, &only)
-}
-
-#[when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+)"$"#)]
-async fn list_yaks_format_filter_in_process(
-    world: &mut InProcessWorld,
-    format: String,
-    only: String,
-) -> Result<()> {
-    world.list_yaks_with_format_and_filter(&format, &only)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)"$"#)]
-async fn when_add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.add_yak(&yak_name)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)"$"#)]
-async fn when_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.add_yak(&yak_name)
-}
-
-#[when(regex = r#"^there should be (\d+) yaks?$"#)]
-async fn yak_count_full_stack(world: &mut FullStackWorld, expected: usize) -> Result<()> {
-    check_yak_count(world, expected)
-}
-
-#[when(regex = r#"^there should be (\d+) yaks?$"#)]
-async fn yak_count_in_process(world: &mut InProcessWorld, expected: usize) -> Result<()> {
-    check_yak_count(world, expected)
-}
-
-#[when(regex = r#"^I try to add the yak "([^"]+)"$"#)]
-async fn try_add_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.try_add_yak(&yak_name)
-}
-
-#[when(regex = r#"^I try to add the yak "([^"]+)"$"#)]
-async fn try_add_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.try_add_yak(&yak_name)
-}
-
-#[when(regex = r#"^I try to add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn try_add_yak_under_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.try_add_yak_under(&yak_name, &parent)
-}
-
-#[when(regex = r#"^I try to add the yak "([^"]+)" under "([^"]+)"$"#)]
-async fn try_add_yak_under_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    parent: String,
-) -> Result<()> {
-    world.try_add_yak_under(&yak_name, &parent)
-}
-
-#[when(regex = r#"^I remove the yak "(.+)"$"#)]
-async fn remove_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.remove_yak(&yak_name)
-}
-
-#[when(regex = r#"^I remove the yak "(.+)"$"#)]
-async fn remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.remove_yak(&yak_name)
-}
-
-#[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
-async fn remove_yak_recursive_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-) -> Result<()> {
-    world.remove_yak_recursive(&yak_name)
-}
-
-#[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
-async fn remove_yak_recursive_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-) -> Result<()> {
-    world.remove_yak_recursive(&yak_name)
-}
-
-#[when(regex = r#"^I try to remove the yak "(.+)"$"#)]
-async fn try_remove_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.try_remove_yak(&yak_name)
-}
-
-#[when(regex = r#"^I try to remove the yak "(.+)"$"#)]
-async fn try_remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.try_remove_yak(&yak_name)
-}
-
-#[when(regex = r#"^I mark the yak "(.+)" as done$"#)]
-async fn when_done_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.done_yak(&yak_name)
-}
-
-#[when(regex = r#"^I mark the yak "(.+)" as done$"#)]
-async fn when_done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.done_yak(&yak_name)
-}
-
-#[when(regex = r#"^I try to mark the yak "(.+)" as done$"#)]
-async fn try_done_yak_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.try_done_yak(&yak_name)
-}
-
-#[when(regex = r#"^I try to mark the yak "(.+)" as done$"#)]
-async fn try_done_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.try_done_yak(&yak_name)
-}
-
-#[when(regex = r#"^I mark the yak "(.+)" as done recursively$"#)]
-async fn done_yak_recursive_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
-    world.done_yak_recursive(&yak_name)
-}
-
-#[when(regex = r#"^I mark the yak "(.+)" as done recursively$"#)]
-async fn done_yak_recursive_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
-    world.done_yak_recursive(&yak_name)
-}
-
-#[when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)]
-async fn set_context_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.set_context(&name, &content)
-}
-
-#[when(regex = r#"^I set the context of "(.+)" to "(.+)"$"#)]
-async fn set_context_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.set_context(&name, &content)
-}
-
-#[when(regex = r#"^I show the context of "(.+)"$"#)]
-async fn show_context_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.show_context(&name)
-}
-
-#[when(regex = r#"^I show the context of "(.+)"$"#)]
-async fn show_context_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.show_context(&name)
-}
-
-#[when(expr = "I prune done yaks")]
-async fn prune_done_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    world.prune_yaks()
-}
-
-#[when(expr = "I prune done yaks")]
-async fn prune_done_yaks_in_process(world: &mut InProcessWorld) -> Result<()> {
-    world.prune_yaks()
-}
-
-#[when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)]
-async fn set_state_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    state: String,
-) -> Result<()> {
-    world.set_state(&name, &state)
-}
-
-#[when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)]
-async fn set_state_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    state: String,
-) -> Result<()> {
-    world.set_state(&name, &state)
-}
-
-#[when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)]
-async fn try_set_state_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    state: String,
-) -> Result<()> {
-    world.try_set_state(&name, &state)
-}
-
-#[when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)]
-async fn try_set_state_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    state: String,
-) -> Result<()> {
-    world.try_set_state(&name, &state)
-}
-
-#[when(regex = r#"^I start "(.+)"$"#)]
-async fn start_yak_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.start_yak(&name)
-}
-
-#[when(regex = r#"^I start "(.+)"$"#)]
-async fn start_yak_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.start_yak(&name)
-}
-
-#[when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)]
-async fn move_yak_under_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    parent: String,
-) -> Result<()> {
-    world.move_yak_under(&name, &parent)
-}
-
-#[when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)]
-async fn move_yak_under_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    parent: String,
-) -> Result<()> {
-    world.move_yak_under(&name, &parent)
-}
-
-#[when(regex = r#"^I move the yak "(.+)" to root$"#)]
-async fn move_yak_to_root_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.move_yak_to_root(&name)
-}
-
-#[when(regex = r#"^I move the yak "(.+)" to root$"#)]
-async fn move_yak_to_root_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.move_yak_to_root(&name)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$"#)]
-async fn try_move_yak_both_flags_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    parent: String,
-) -> Result<()> {
-    world.try_move_yak_under_and_to_root(&name, &parent)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$"#)]
-async fn try_move_yak_both_flags_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    parent: String,
-) -> Result<()> {
-    world.try_move_yak_under_and_to_root(&name, &parent)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)]
-async fn try_move_yak_no_flags_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.try_move_yak_no_flags(&name)
-}
-
-#[when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)]
-async fn try_move_yak_no_flags_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.try_move_yak_no_flags(&name)
-}
-
-#[when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)]
-async fn rename_yak_full_stack(world: &mut FullStackWorld, from: String, to: String) -> Result<()> {
-    world.rename_yak(&from, &to)
-}
-
-#[when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)]
-async fn rename_yak_in_process(world: &mut InProcessWorld, from: String, to: String) -> Result<()> {
-    world.rename_yak(&from, &to)
-}
-
-#[when(regex = r#"^I try to rename the yak "(.+)" to "(.+)"$"#)]
-async fn try_rename_yak_full_stack(
-    world: &mut FullStackWorld,
-    from: String,
-    to: String,
-) -> Result<()> {
-    world.try_rename_yak(&from, &to)
-}
-
-#[when(regex = r#"^I try to rename the yak "(.+)" to "(.+)"$"#)]
-async fn try_rename_yak_in_process(
-    world: &mut InProcessWorld,
-    from: String,
-    to: String,
-) -> Result<()> {
-    world.try_rename_yak(&from, &to)
-}
-
-#[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
-async fn set_field_full_stack(
-    world: &mut FullStackWorld,
-    field: String,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.set_field(&name, &field, &content)
-}
-
-#[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)]
-async fn set_field_in_process(
-    world: &mut InProcessWorld,
-    field: String,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.set_field(&name, &field, &content)
-}
-
-#[when(regex = r#"^I try to set the "(.+)" field of "(.+)" to "(.+)"$"#)]
-async fn try_set_field_full_stack(
-    world: &mut FullStackWorld,
-    field: String,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.try_set_field(&name, &field, &content)
-}
-
-#[when(regex = r#"^I try to set the "(.+)" field of "(.+)" to "(.+)"$"#)]
-async fn try_set_field_in_process(
-    world: &mut InProcessWorld,
-    field: String,
-    name: String,
-    content: String,
-) -> Result<()> {
-    world.try_set_field(&name, &field, &content)
-}
-
-#[when(regex = r#"^I show the "(.+)" field of "(.+)"$"#)]
-async fn show_field_full_stack(
-    world: &mut FullStackWorld,
-    field: String,
-    name: String,
-) -> Result<()> {
-    world.show_field(&name, &field)
-}
-
-#[when(regex = r#"^I show the "(.+)" field of "(.+)"$"#)]
-async fn show_field_in_process(
-    world: &mut InProcessWorld,
-    field: String,
-    name: String,
-) -> Result<()> {
-    world.show_field(&name, &field)
 }
 
 // ============================================================================
@@ -813,85 +858,6 @@ async fn try_run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> 
     let parsed = shell_split(&args);
     let arg_vec: Vec<&str> = parsed.iter().map(|s| s.as_str()).collect();
     world.run_raw(&arg_vec)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)]
-async fn when_add_yak_with_state_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    state: String,
-) -> Result<()> {
-    world.add_yak_with_state(&yak_name, &state)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with state "([^"]+)"$"#)]
-async fn when_add_yak_with_state_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    state: String,
-) -> Result<()> {
-    world.add_yak_with_state(&yak_name, &state)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)]
-async fn when_add_yak_with_context_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    context: String,
-) -> Result<()> {
-    world.add_yak_with_context(&yak_name, &context)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)]
-async fn when_add_yak_with_context_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    context: String,
-) -> Result<()> {
-    world.add_yak_with_context(&yak_name, &context)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)]
-async fn when_add_yak_with_id_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    id: String,
-) -> Result<()> {
-    world.add_yak_with_id(&yak_name, &id)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)]
-async fn when_add_yak_with_id_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    id: String,
-) -> Result<()> {
-    world.add_yak_with_id(&yak_name, &id)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)]
-async fn when_add_yak_with_field_full_stack(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    key: String,
-    value: String,
-) -> Result<()> {
-    world.add_yak_with_field(&yak_name, &key, &value)
-}
-
-#[when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)]
-async fn when_add_yak_with_field_in_process(
-    world: &mut InProcessWorld,
-    yak_name: String,
-    key: String,
-    value: String,
-) -> Result<()> {
-    world.add_yak_with_field(&yak_name, &key, &value)
-}
-
-#[then(regex = r#"^the output should include "(.+)"$"#)]
-async fn output_includes_in_process(world: &mut InProcessWorld, expected: String) -> Result<()> {
-    check_output_includes(world, &expected)
 }
 
 #[when(regex = r#"^I add the yak "(.+)" with context "(.+)" from stdin$"#)]
@@ -1021,33 +987,104 @@ async fn yak_directory_named(world: &mut FullStackWorld, slug: String) -> Result
     Ok(())
 }
 
-// ============================================================================
-// Multi-repo steps (sync tests)
-// ============================================================================
-
-#[given(regex = r#"^a bare git repository called ([\w-]+)$"#)]
-async fn bare_git_repo(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.create_bare_repo(&name)
+#[given(regex = r#"^a file "(.+)" exists in the yak directory$"#)]
+async fn file_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
+    let path = world.default_repo_path().join(&filename);
+    std::fs::write(&path, "test content").context(format!("Failed to create {}", filename))
 }
 
-#[given(regex = r#"^a bare git repository called ([\w-]+)$"#)]
-async fn bare_git_repo_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.create_bare_repo(&name)
+#[then(regex = r#"^the file "(.+)" should still exist in the yak directory$"#)]
+async fn file_still_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
+    let path = world.default_repo_path().join(&filename);
+    if !path.exists() {
+        anyhow::bail!("Expected file '{}' to still exist after reset", filename);
+    }
+    Ok(())
 }
 
-#[given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)]
-async fn git_clone(world: &mut FullStackWorld, origin: String, clone: String) -> Result<()> {
-    world.create_clone(&origin, &clone)
-}
-
-#[given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)]
-async fn git_clone_in_process(
-    world: &mut InProcessWorld,
-    origin: String,
-    clone: String,
+#[then(regex = r#"^the yak "(.+)" should have a "(.+)" file containing "(.+)"$"#)]
+async fn yak_has_file_with_content(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    file_name: String,
+    expected_content: String,
 ) -> Result<()> {
-    world.create_clone(&origin, &clone)
+    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    if !path.exists() {
+        anyhow::bail!(
+            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
+            file_name,
+            yak_name
+        );
+    }
+    let content = std::fs::read_to_string(&path)
+        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
+    if content.trim() != expected_content {
+        anyhow::bail!(
+            "Expected '{}' file to contain '{}', got '{}'",
+            file_name,
+            expected_content,
+            content.trim()
+        );
+    }
+    Ok(())
 }
+
+#[then(regex = r#"^the yak "(.+)" should have an "(.+)" file$"#)]
+async fn yak_has_file(
+    world: &mut FullStackWorld,
+    yak_name: String,
+    file_name: String,
+) -> Result<()> {
+    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    if !path.exists() {
+        anyhow::bail!(
+            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
+            file_name,
+            yak_name
+        );
+    }
+    let content = std::fs::read_to_string(&path)
+        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
+    if content.trim().is_empty() {
+        anyhow::bail!(
+            "Expected '{}' file for yak '{}' to be non-empty",
+            file_name,
+            yak_name
+        );
+    }
+    Ok(())
+}
+
+#[when(expr = "I reset the yaks")]
+async fn reset_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
+    world.run_raw(&["reset"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "yx reset failed:\nstdout: {}\nstderr: {}",
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+#[when(expr = "I reset the yaks from disk to git")]
+async fn reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()> {
+    world.run_raw(&["reset", "--git-from-disk"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "yx reset --git-from-disk failed:\nstdout: {}\nstderr: {}",
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+// ============================================================================
+// Multi-repo steps with different implementations per world
+// ============================================================================
 
 #[given(regex = r#"^a git clone of ([\w-]+) via file URL called ([\w-]+)$"#)]
 async fn git_clone_via_file_url(
@@ -1261,7 +1298,6 @@ async fn repo_syncs_yaks_in_process(world: &mut InProcessWorld, repo: String) ->
 #[when(regex = r#"^(\w+) tries to sync yaks$"#)]
 async fn repo_tries_to_sync(world: &mut FullStackWorld, repo: String) -> Result<()> {
     world.run_yx_in_repo(&repo, &["sync"])?;
-    // Don't bail on error — caller will check exit code and error message
     Ok(())
 }
 
@@ -1273,101 +1309,6 @@ async fn repo_has_ref(world: &mut FullStackWorld, repo: String, ref_name: String
             "Expected repo '{}' to have ref '{}', but show-ref failed",
             repo,
             ref_name
-        );
-    }
-    Ok(())
-}
-
-#[given(regex = r#"^a file "(.+)" exists in the yak directory$"#)]
-async fn file_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
-    let path = world.default_repo_path().join(&filename);
-    std::fs::write(&path, "test content").context(format!("Failed to create {}", filename))
-}
-
-#[then(regex = r#"^the file "(.+)" should still exist in the yak directory$"#)]
-async fn file_still_exists_in_yak_dir(world: &mut FullStackWorld, filename: String) -> Result<()> {
-    let path = world.default_repo_path().join(&filename);
-    if !path.exists() {
-        anyhow::bail!("Expected file '{}' to still exist after reset", filename);
-    }
-    Ok(())
-}
-
-#[then(regex = r#"^the yak "(.+)" should have a "(.+)" file containing "(.+)"$"#)]
-async fn yak_has_file_with_content(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    file_name: String,
-    expected_content: String,
-) -> Result<()> {
-    let path = world.default_repo_path().join(&yak_name).join(&file_name);
-    if !path.exists() {
-        anyhow::bail!(
-            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
-            file_name,
-            yak_name
-        );
-    }
-    let content = std::fs::read_to_string(&path)
-        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
-    if content.trim() != expected_content {
-        anyhow::bail!(
-            "Expected '{}' file to contain '{}', got '{}'",
-            file_name,
-            expected_content,
-            content.trim()
-        );
-    }
-    Ok(())
-}
-
-#[then(regex = r#"^the yak "(.+)" should have an "(.+)" file$"#)]
-async fn yak_has_file(
-    world: &mut FullStackWorld,
-    yak_name: String,
-    file_name: String,
-) -> Result<()> {
-    let path = world.default_repo_path().join(&yak_name).join(&file_name);
-    if !path.exists() {
-        anyhow::bail!(
-            "Expected file '{}' in yak '{}' directory, but it doesn't exist",
-            file_name,
-            yak_name
-        );
-    }
-    let content = std::fs::read_to_string(&path)
-        .context(format!("Failed to read {} for yak {}", file_name, yak_name))?;
-    if content.trim().is_empty() {
-        anyhow::bail!(
-            "Expected '{}' file for yak '{}' to be non-empty",
-            file_name,
-            yak_name
-        );
-    }
-    Ok(())
-}
-
-#[when(expr = "I reset the yaks")]
-async fn reset_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    world.run_raw(&["reset"])?;
-    if world.get_exit_code() != 0 {
-        anyhow::bail!(
-            "yx reset failed:\nstdout: {}\nstderr: {}",
-            world.get_output(),
-            world.get_error()
-        );
-    }
-    Ok(())
-}
-
-#[when(expr = "I reset the yaks from disk to git")]
-async fn reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()> {
-    world.run_raw(&["reset", "--git-from-disk"])?;
-    if world.get_exit_code() != 0 {
-        anyhow::bail!(
-            "yx reset --git-from-disk failed:\nstdout: {}\nstderr: {}",
-            world.get_output(),
-            world.get_error()
         );
     }
     Ok(())
@@ -1420,7 +1361,6 @@ async fn repos_have_same_yaks(
         .expect("step requires a docstring")
         .trim()
         .to_string();
-
     for repo in [&repo_a, &repo_b] {
         world.run_yx_in_repo(repo, &["ls", "--format", "pretty"])?;
         let output = world.get_output().trim().to_string();
@@ -1449,7 +1389,6 @@ async fn repos_have_same_yaks_in_process(
         .expect("step requires a docstring")
         .trim()
         .to_string();
-
     for repo in [&repo_a, &repo_b] {
         world.execute_in_repo(repo, |app| app.handle(ListYaks::new("pretty", None)))?;
         let output = world.get_repo_output(repo)?.trim().to_string();
@@ -1477,7 +1416,6 @@ async fn repo_should_have_yaks(
         .expect("step requires a docstring")
         .trim()
         .to_string();
-
     world.run_yx_in_repo(&repo, &["ls", "--format", "pretty"])?;
     let output = world.get_output().trim().to_string();
     if output != expected {
@@ -1503,7 +1441,6 @@ async fn repo_should_have_yaks_in_process(
         .expect("step requires a docstring")
         .trim()
         .to_string();
-
     world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("pretty", None)))?;
     let output = world.get_repo_output(&repo)?.trim().to_string();
     if output != expected {
@@ -1565,13 +1502,7 @@ async fn repo_yak_should_have_state(
     world.run_yx_in_repo(&repo, &["ls", "--format", "plain", "--only", &state])?;
     let output = world.get_output();
     if !output.contains(&yak) {
-        anyhow::bail!(
-            "Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}",
-            yak,
-            repo,
-            state,
-            output
-        );
+        anyhow::bail!("Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}", yak, repo, state, output);
     }
     Ok(())
 }
@@ -1588,13 +1519,7 @@ async fn repo_yak_should_have_state_in_process(
     })?;
     let output = world.get_repo_output(&repo)?;
     if !output.contains(&yak) {
-        anyhow::bail!(
-            "Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}",
-            yak,
-            repo,
-            state,
-            output
-        );
+        anyhow::bail!("Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}", yak, repo, state, output);
     }
     Ok(())
 }
@@ -1641,160 +1566,19 @@ async fn repo_yak_should_have_context_in_process(
     Ok(())
 }
 
-#[then(expr = "it should succeed")]
-async fn should_succeed_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    check_should_succeed(world)
-}
-
-#[then(regex = r#"^the output should include "(.+)"$"#)]
-async fn output_includes_full_stack(world: &mut FullStackWorld, expected: String) -> Result<()> {
-    check_output_includes(world, &expected)
-}
-
-#[then(regex = r#"^the output should not include "(.+)"$"#)]
-async fn output_not_includes_full_stack(
-    world: &mut FullStackWorld,
-    expected: String,
-) -> Result<()> {
-    check_output_not_includes(world, &expected)
-}
-
-#[then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)]
-async fn line_of_output_includes_full_stack(
-    world: &mut FullStackWorld,
-    line_num: usize,
-    expected: String,
-) -> Result<()> {
-    check_line_of_output_includes(world, line_num, &expected)
-}
-
-// ============================================================================
-// Then steps
-// ============================================================================
-
-#[then(expr = "the command should fail")]
-async fn command_fails_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    check_command_fails(world)
-}
-
-#[then(expr = "the command should fail")]
-async fn command_fails_in_process(world: &mut InProcessWorld) -> Result<()> {
-    check_command_fails(world)
-}
-
-#[then(regex = r#"^the error should contain "(.+)"$"#)]
-async fn error_contains_full_stack(world: &mut FullStackWorld, expected: String) -> Result<()> {
-    check_error_contains(world, &expected)
-}
-
-#[then(regex = r#"^the error should contain "(.+)"$"#)]
-async fn error_contains_in_process(world: &mut InProcessWorld, expected: String) -> Result<()> {
-    check_error_contains(world, &expected)
-}
-
-#[then(expr = "the output should be:")]
-async fn output_should_be_full_stack(
-    world: &mut FullStackWorld,
-    step: &cucumber::gherkin::Step,
-) -> Result<()> {
-    check_output(world, step)
-}
-
-#[then(expr = "the output should be:")]
-async fn output_should_be_in_process(
-    world: &mut InProcessWorld,
-    step: &cucumber::gherkin::Step,
-) -> Result<()> {
-    check_output(world, step)
-}
-
-#[then(expr = "the output should be empty")]
-async fn output_should_be_empty_full_stack(world: &mut FullStackWorld) -> Result<()> {
-    check_empty_output(world)
-}
-
-#[then(expr = "the output should be empty")]
-async fn output_should_be_empty_in_process(world: &mut InProcessWorld) -> Result<()> {
-    check_empty_output(world)
-}
-
-// ============================================================================
-// Tag steps
-// ============================================================================
-
-#[when(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)]
-async fn tag_yak_full_stack(world: &mut FullStackWorld, name: String, tag: String) -> Result<()> {
-    world.add_tags(&name, vec![tag])
-}
-
-#[when(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)]
-async fn tag_yak_in_process(world: &mut InProcessWorld, name: String, tag: String) -> Result<()> {
-    world.add_tags(&name, vec![tag])
-}
-
-#[when(regex = r#"^I tag "(.+)" with "(.+)" and "(.+)"$"#)]
-async fn tag_yak_multi_full_stack(
-    world: &mut FullStackWorld,
-    name: String,
-    tag1: String,
-    tag2: String,
-) -> Result<()> {
-    world.add_tags(&name, vec![tag1, tag2])
-}
-
-#[when(regex = r#"^I tag "(.+)" with "(.+)" and "(.+)"$"#)]
-async fn tag_yak_multi_in_process(
-    world: &mut InProcessWorld,
-    name: String,
-    tag1: String,
-    tag2: String,
-) -> Result<()> {
-    world.add_tags(&name, vec![tag1, tag2])
-}
-
-#[when(regex = r#"^I remove the tag "(.+)" from "(.+)"$"#)]
-async fn remove_tag_full_stack(
-    world: &mut FullStackWorld,
-    tag: String,
-    name: String,
-) -> Result<()> {
-    world.remove_tags(&name, vec![tag])
-}
-
-#[when(regex = r#"^I remove the tag "(.+)" from "(.+)"$"#)]
-async fn remove_tag_in_process(
-    world: &mut InProcessWorld,
-    tag: String,
-    name: String,
-) -> Result<()> {
-    world.remove_tags(&name, vec![tag])
-}
-
-#[when(regex = r#"^I list tags on "(.+)"$"#)]
-async fn list_tags_full_stack(world: &mut FullStackWorld, name: String) -> Result<()> {
-    world.list_tags(&name)
-}
-
-#[when(regex = r#"^I list tags on "(.+)"$"#)]
-async fn list_tags_in_process(world: &mut InProcessWorld, name: String) -> Result<()> {
-    world.list_tags(&name)
-}
-
 // ============================================================================
 // Helper functions
 // ============================================================================
 
-fn check_output<W: TestWorld>(world: &W, step: &cucumber::gherkin::Step) -> Result<()> {
+fn check_output<W: TestWorld + ?Sized>(world: &W, step: &cucumber::gherkin::Step) -> Result<()> {
     let expected = step
         .docstring
         .as_ref()
         .context("Expected docstring in step")?;
-
     let expected_text = expected.trim();
     let output = world.get_output();
     let actual = output.trim();
     let actual_no_ansi = strip_ansi_codes(actual);
-
     if actual_no_ansi != expected_text {
         anyhow::bail!(
             "\nExpected:\n{}\n\nActual:\n{}",
@@ -1802,30 +1586,27 @@ fn check_output<W: TestWorld>(world: &W, step: &cucumber::gherkin::Step) -> Resu
             actual_no_ansi
         );
     }
-
     Ok(())
 }
 
-fn check_yak_count<W: TestWorld>(world: &mut W, expected: usize) -> Result<()> {
+fn check_yak_count<W: TestWorld + ?Sized>(world: &mut W, expected: usize) -> Result<()> {
     world.list_yaks_with_format("plain")?;
     let output = world.get_output();
     let actual = output.trim().lines().filter(|l| !l.is_empty()).count();
-
     if actual != expected {
         anyhow::bail!("Expected {} yak(s), but found {}", expected, actual);
     }
-
     Ok(())
 }
 
-fn check_command_fails<W: TestWorld>(world: &W) -> Result<()> {
+fn check_command_fails<W: TestWorld + ?Sized>(world: &W) -> Result<()> {
     if world.get_exit_code() == 0 {
         anyhow::bail!("Expected command to fail, but it succeeded");
     }
     Ok(())
 }
 
-fn check_error_contains<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+fn check_error_contains<W: TestWorld + ?Sized>(world: &W, expected: &str) -> Result<()> {
     let error = world.get_error();
     if !error.contains(expected) {
         anyhow::bail!(
@@ -1837,18 +1618,16 @@ fn check_error_contains<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
     Ok(())
 }
 
-fn check_empty_output<W: TestWorld>(world: &W) -> Result<()> {
+fn check_empty_output<W: TestWorld + ?Sized>(world: &W) -> Result<()> {
     let output = world.get_output();
     let actual = output.trim();
-
     if !actual.is_empty() {
         anyhow::bail!("\nExpected empty output\n\nActual:\n{}", actual);
     }
-
     Ok(())
 }
 
-fn check_should_succeed<W: TestWorld>(world: &W) -> Result<()> {
+fn check_should_succeed<W: TestWorld + ?Sized>(world: &W) -> Result<()> {
     if world.get_exit_code() != 0 {
         anyhow::bail!(
             "Expected command to succeed, but it failed with exit code {}.\nstderr: {}",
@@ -1859,7 +1638,7 @@ fn check_should_succeed<W: TestWorld>(world: &W) -> Result<()> {
     Ok(())
 }
 
-fn check_output_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+fn check_output_includes<W: TestWorld + ?Sized>(world: &W, expected: &str) -> Result<()> {
     let output = world.get_output();
     let output_no_ansi = strip_ansi_codes(&output);
     if !output_no_ansi.contains(expected) {
@@ -1872,7 +1651,7 @@ fn check_output_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> 
     Ok(())
 }
 
-fn check_line_of_output_includes<W: TestWorld>(
+fn check_line_of_output_includes<W: TestWorld + ?Sized>(
     world: &W,
     line_num: usize,
     expected: &str,
@@ -1880,7 +1659,6 @@ fn check_line_of_output_includes<W: TestWorld>(
     let output = world.get_output();
     let output_no_ansi = strip_ansi_codes(&output);
     let lines: Vec<&str> = output_no_ansi.lines().collect();
-
     if line_num == 0 || line_num > lines.len() {
         anyhow::bail!(
             "Line {} does not exist. Output has {} line(s):\n{}",
@@ -1889,7 +1667,6 @@ fn check_line_of_output_includes<W: TestWorld>(
             output_no_ansi
         );
     }
-
     let line = lines[line_num - 1];
     if !line.contains(expected) {
         anyhow::bail!(
@@ -1902,7 +1679,7 @@ fn check_line_of_output_includes<W: TestWorld>(
     Ok(())
 }
 
-fn check_output_not_includes<W: TestWorld>(world: &W, expected: &str) -> Result<()> {
+fn check_output_not_includes<W: TestWorld + ?Sized>(world: &W, expected: &str) -> Result<()> {
     let output = world.get_output();
     let output_no_ansi = strip_ansi_codes(&output);
     if output_no_ansi.contains(expected) {
@@ -1916,13 +1693,11 @@ fn check_output_not_includes<W: TestWorld>(world: &W, expected: &str) -> Result<
 }
 
 /// Split a string into arguments, respecting double-quoted strings.
-/// `""` becomes an empty string, `"foo bar"` becomes `foo bar`.
 pub fn shell_split(s: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
     let mut has_token = false;
-
     for c in s.chars() {
         match c {
             '"' => {
@@ -1941,10 +1716,8 @@ pub fn shell_split(s: &str) -> Vec<String> {
             }
         }
     }
-
     if has_token {
         result.push(current);
     }
-
     result
 }

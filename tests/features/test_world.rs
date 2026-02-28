@@ -120,6 +120,12 @@ pub trait TestWorld {
     /// List tags on a yak
     fn list_tags(&mut self, name: &str) -> Result<()>;
 
+    /// Create a bare git repository for multi-repo tests
+    fn create_bare_repo(&mut self, name: &str) -> Result<()>;
+
+    /// Create a clone of a repository for multi-repo tests
+    fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()>;
+
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

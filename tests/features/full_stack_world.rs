@@ -1206,6 +1206,14 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["tag", "list", name])
     }
 
+    fn create_bare_repo(&mut self, name: &str) -> Result<()> {
+        FullStackWorld::create_bare_repo(self, name)
+    }
+
+    fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()> {
+        FullStackWorld::create_clone(self, origin, clone)
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }

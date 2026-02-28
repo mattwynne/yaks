@@ -457,6 +457,14 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(ListTags::new(name)))
     }
 
+    fn create_bare_repo(&mut self, name: &str) -> Result<()> {
+        InProcessWorld::create_bare_repo(self, name)
+    }
+
+    fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()> {
+        InProcessWorld::create_clone(self, origin, clone)
+    }
+
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
