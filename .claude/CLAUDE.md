@@ -93,6 +93,16 @@ feedback, composability, speed (< 100ms).
 
 ## Development Workflow
 
+**All work must be tracked in a yak.** Before starting any non-trivial
+work (bug fixes, refactoring, new features, infrastructure changes),
+check whether it's modelled in a yak. If not, challenge the human:
+
+> "This work isn't tracked in a yak. Should we create one before
+> proceeding? e.g. `yx add <suggested name> --under <parent>`"
+
+This keeps the yak tree honest and avoids untracked work drifting
+off course. The only exceptions are trivial one-line fixes.
+
 **Test-Driven Development (TDD)**:
 1. Write ONE failing test (Cucumber scenario or Rust test)
 2. Run tests (RED)
