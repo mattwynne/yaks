@@ -14,6 +14,10 @@ pub trait EventStore {
     /// snapshot of the full state at this point in the event stream.
     fn compact(&mut self, metadata: EventMetadata) -> Result<()>;
 
+    /// Clear all events, preparing for a full replay.
+    /// Used by the reset-git-from-disk workflow.
+    fn wipe(&mut self) -> Result<()>;
+
     fn get_events(&self, yak_id: &str) -> Result<Vec<YakEvent>> {
         Ok(self
             .get_all_events()?
