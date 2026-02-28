@@ -124,6 +124,24 @@ contains the actual work tracker for this project.
 - **For demos**: Use `YAK_PATH=/tmp/demo-yaks yx <command>`
 - **NEVER**: Run `rm -rf .yaks` or modify `.yaks` contents directly
 
+## ADR Policy
+
+**Never modify existing accepted ADRs.** Write new ADRs that supersede
+them instead.
+
+## Looking at a Yak
+
+**Use `yx show <name>` to look at a yak.** It displays the tree,
+context, worktree location, and metadata in one shot. NEVER browse
+the `.yaks` directory to read yak state — always use `yx` commands.
+
+```bash
+yx show make the tea         # Full view of one yak
+yx ls                        # Tree overview of all yaks
+yx context --show make the tea  # Just the context
+yx field --show make the tea plan  # Just a specific field
+```
+
 ## CRITICAL: Picking Up a Yak
 
 **First action when picking up ANY yak: mark it as WIP.**
