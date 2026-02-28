@@ -36,6 +36,7 @@ impl TreePrefix {
 }
 
 use super::{Application, UseCase};
+use crate::domain::tag::format_tag;
 
 pub struct ListYaks {
     format: String,
@@ -211,6 +212,18 @@ impl ListYaks {
             .map(|y| y.state.as_str())
             .unwrap_or("todo");
 
+        let tags: Vec<String> = node
+            .yak
+            .as_ref()
+            .and_then(|y| y.fields.get("tags"))
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(format_tag)
+                    .collect()
+            })
+            .unwrap_or_default();
+
         match format {
             "plain" => app.display.info(&node.full_path),
             "pretty" => {
@@ -223,11 +236,12 @@ impl ListYaks {
                 };
                 let node_prefix = format!(" {}", tree_prefix);
                 app.display
-                    .display_yak_pretty(&node_prefix, &node.name, state);
+                    .display_yak_pretty(&node_prefix, &node.name, state, &tags);
             }
             _ => {
                 let depth = prefix.lines.len();
-                app.display.display_yak_markdown(depth, &node.name, state);
+                app.display
+                    .display_yak_markdown(depth, &node.name, state, &tags);
             }
         }
     }
@@ -609,6 +623,126 @@ mod tests {
             leaf_line.unwrap().starts_with(" │  ╰─ ○"),
             "Grandchild under non-last parent should have space + │ continuation, got: {:?}",
             leaf_line
+        );
+    }
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use crate::adapters::user_display::ConsoleDisplay;
+    use crate::adapters::{
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
+    };
+    use crate::application::{AddTag, AddYak, Application, ListYaks};
+    use crate::infrastructure::EventBus;
+
+    fn make_app<'a>(
+        event_store: &'a mut InMemoryEventStore,
+        event_bus: &'a mut EventBus,
+        storage: &'a InMemoryStorage,
+        display: &'a ConsoleDisplay,
+        input: &'a InMemoryInput,
+        auth: &'a InMemoryAuthentication,
+    ) -> Application<'a> {
+        Application::new(event_store, event_bus, storage, display, input, None, auth)
+    }
+
+    #[test]
+    fn pretty_list_shows_tags_inline() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(AddTag::new("my yak", vec!["v1.0".to_string()]))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("pretty", None)).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("@v1.0"),
+            "Expected @v1.0 in pretty list output, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn markdown_list_shows_tags_inline() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(AddTag::new(
+            "my yak",
+            vec!["v1.0".to_string(), "needs-review".to_string()],
+        ))
+        .unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("markdown", None)).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("@v1.0"),
+            "Expected @v1.0 in markdown list output, got:\n{output}"
+        );
+        assert!(
+            output.contains("@needs-review"),
+            "Expected @needs-review in markdown list output, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn pretty_list_without_tags_has_no_at() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("pretty", None)).unwrap();
+        let output = buffer.contents();
+        assert!(
+            !output.contains("@"),
+            "Expected no @ in pretty list when no tags, got:\n{output}"
         );
     }
 }

@@ -20,10 +20,10 @@ pub trait DisplayPort {
     fn warn(&self, message: &str);
 
     /// Display a yak entry in pretty format (tree-drawing with colored status)
-    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str);
+    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str, tags: &[String]);
 
     /// Display a yak entry in markdown format
-    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str);
+    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str, tags: &[String]);
 
     /// Display header box with breadcrumb, name, state, date, author, children, and short fields
     #[allow(clippy::too_many_arguments)]
@@ -36,6 +36,7 @@ pub trait DisplayPort {
         created_by: &Author,
         children: &[(Name, String)],
         fields: &[(String, String)],
+        tags: &[String],
     );
 
     /// Display breadcrumb path (dimmed ancestor names joined with " > ", trailing " > ")

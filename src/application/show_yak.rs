@@ -3,6 +3,7 @@
 use anyhow::Result;
 
 use super::{Application, UseCase};
+use crate::domain::tag::format_tag;
 
 /// Convert a snake_case field name to Title Case (e.g. "relates_to" → "Relates To")
 fn title_case(s: &str) -> String {
@@ -60,6 +61,12 @@ impl ShowYak {
                 .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
                 .collect();
 
+            let tags: Vec<&str> = yak
+                .fields
+                .get("tags")
+                .map(|t| t.lines().filter(|l| !l.is_empty()).collect())
+                .unwrap_or_default();
+
             let json = serde_json::json!({
                 "id": id.as_str(),
                 "name": yak.name.as_str(),
@@ -68,6 +75,7 @@ impl ShowYak {
                 "context": yak.context,
                 "fields": fields,
                 "children": children,
+                "tags": tags,
             });
 
             app.display.info(&serde_json::to_string_pretty(&json)?);
@@ -106,6 +114,9 @@ impl ShowYak {
         let mut field_names: Vec<&str> = yak.fields.keys().map(|k| k.as_str()).collect();
         field_names.sort();
         for name in &field_names {
+            if *name == "tags" {
+                continue;
+            } // Skip tags — displayed separately
             let value = yak.fields[*name].as_str().trim();
             if value.contains('\n') {
                 long_fields.push((name, value));
@@ -114,7 +125,19 @@ impl ShowYak {
             }
         }
 
-        // Header box with breadcrumb, name, state, date, author, children, and short fields
+        // Extract tags for display
+        let tags: Vec<String> = yak
+            .fields
+            .get("tags")
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(format_tag)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Header box with breadcrumb, name, state, date, author, children, short fields, and tags
         app.display.display_header_box(
             &ancestors,
             &yak.name,
@@ -123,6 +146,7 @@ impl ShowYak {
             &yak.created_by,
             &box_children,
             &short_fields,
+            &tags,
         );
 
         // Context body
@@ -720,5 +744,208 @@ mod tests {
 
         let result = app.handle(ShowYak::new("nonexistent"));
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use crate::adapters::user_display::ConsoleDisplay;
+    use crate::adapters::{
+        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
+        InMemoryStorage,
+    };
+    use crate::application::{AddTag, AddYak, Application, ShowYak};
+    use crate::infrastructure::EventBus;
+
+    fn make_app<'a>(
+        event_store: &'a mut InMemoryEventStore,
+        event_bus: &'a mut EventBus,
+        storage: &'a InMemoryStorage,
+        display: &'a ConsoleDisplay,
+        input: &'a InMemoryInput,
+        auth: &'a InMemoryAuthentication,
+    ) -> Application<'a> {
+        Application::new(event_store, event_bus, storage, display, input, None, auth)
+    }
+
+    #[test]
+    fn show_displays_tags_with_at_prefix() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(AddTag::new(
+            "my yak",
+            vec!["v1.0".to_string(), "needs-review".to_string()],
+        ))
+        .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        assert!(
+            output.contains("@v1.0"),
+            "Expected @v1.0 in output, got:\n{output}"
+        );
+        assert!(
+            output.contains("@needs-review"),
+            "Expected @needs-review in output, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn show_without_tags_has_no_at_symbol() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        assert!(
+            !output.contains("@"),
+            "Expected no @ in output when yak has no tags, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn json_output_includes_tags_array() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(AddTag::new(
+            "my yak",
+            vec!["v1.0".to_string(), "needs-review".to_string()],
+        ))
+        .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak").with_json(true)).unwrap();
+        let output = buffer.contents();
+        let json: serde_json::Value = serde_json::from_str(&output)
+            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
+
+        let tags = json["tags"]
+            .as_array()
+            .expect("Expected tags array in JSON");
+        assert!(
+            tags.contains(&serde_json::json!("v1.0")),
+            "Expected v1.0 in tags: {:?}",
+            tags
+        );
+        assert!(
+            tags.contains(&serde_json::json!("needs-review")),
+            "Expected needs-review in tags: {:?}",
+            tags
+        );
+    }
+
+    #[test]
+    fn json_output_has_empty_tags_when_no_tags() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak").with_json(true)).unwrap();
+        let output = buffer.contents();
+        let json: serde_json::Value = serde_json::from_str(&output)
+            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
+
+        let tags = json["tags"]
+            .as_array()
+            .expect("Expected tags array in JSON");
+        assert!(
+            tags.is_empty(),
+            "Expected empty tags array, got: {:?}",
+            tags
+        );
+    }
+
+    #[test]
+    fn tags_field_not_shown_in_custom_fields_section() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        app.handle(AddTag::new("my yak", vec!["v1.0".to_string()]))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak")).unwrap();
+        let output = buffer.contents();
+        // "Tags:" would appear if tags were treated as a regular field in the box
+        assert!(
+            !output.contains("Tags:"),
+            "Tags should not appear as a custom field with 'Tags:' label, got:\n{output}"
+        );
     }
 }

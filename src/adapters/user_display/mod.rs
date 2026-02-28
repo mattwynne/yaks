@@ -66,28 +66,49 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         eprintln!("Warning: {message}");
     }
 
-    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str) {
+    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str, tags: &[String]) {
         let mut out = self.output.lock().unwrap();
+        let tag_suffix = if tags.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", tags.join(" "))
+        };
         if self.options.color {
+            let dim_tags = if tag_suffix.is_empty() {
+                String::new()
+            } else {
+                format!("\x1b[90m{}\x1b[0m", tag_suffix)
+            };
             match state {
-                "wip" => writeln!(out, "{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
-                "done" => writeln!(out, "{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
-                _ => writeln!(out, "{prefix}○ {name}"),
+                "wip" => writeln!(
+                    out,
+                    "{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{dim_tags}"
+                ),
+                "done" => writeln!(
+                    out,
+                    "{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{dim_tags}"
+                ),
+                _ => writeln!(out, "{prefix}○ {name}{dim_tags}"),
             }
         } else {
             let indicator = match state {
                 "wip" | "done" => "●",
                 _ => "○",
             };
-            writeln!(out, "{prefix}{indicator} {name}")
+            writeln!(out, "{prefix}{indicator} {name}{tag_suffix}")
         }
         .unwrap();
     }
 
-    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str) {
+    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str, tags: &[String]) {
         let mut out = self.output.lock().unwrap();
         let indent = "  ".repeat(depth);
-        let line = format!("{indent}- [{state}] {name}");
+        let tag_suffix = if tags.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", tags.join(" "))
+        };
+        let line = format!("{indent}- [{state}] {name}{tag_suffix}");
         if self.options.color && state == "done" {
             writeln!(out, "\x1b[90m{line}\x1b[0m")
         } else {
@@ -106,6 +127,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         created_by: &Author,
         children: &[(Name, String)],
         fields: &[(String, String)],
+        tags: &[String],
     ) {
         let mut out = self.output.lock().unwrap();
 
@@ -168,9 +190,17 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             })
             .collect();
 
+        // Build tags line (if any)
+        let tags_line: Option<String> = if tags.is_empty() {
+            None
+        } else {
+            Some(format!("  {}  ", tags.join(" ")))
+        };
+
         // Inner width = max of all lines and terminal width - 2
         let max_content_width = std::iter::once(header_width)
             .chain(breadcrumb.iter().map(|b| b.chars().count()))
+            .chain(tags_line.iter().map(|t| t.chars().count()))
             .chain(child_lines.iter().map(|l| l.chars().count()))
             .chain(field_lines.iter().map(|l| l.chars().count()))
             .max()
@@ -232,6 +262,16 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             write_box_line(&mut out, &styled_header, header_width, true);
         } else {
             write_box_line(&mut out, &header_content, header_width, false);
+        }
+
+        // Tags line (after name, before children)
+        if let Some(ref tl) = tags_line {
+            if color {
+                let styled_tags = format!("  \x1b[90m{}\x1b[0m  ", tags.join(" "));
+                write_box_line(&mut out, &styled_tags, tl.chars().count(), true);
+            } else {
+                write_box_line(&mut out, tl, tl.chars().count(), false);
+            }
         }
 
         // Children
@@ -474,7 +514,7 @@ mod tests {
     fn pretty_wip_with_color_has_ansi() {
         let (display, buffer) = make_display(true);
         let name = Name::from("my yak");
-        display.display_yak_pretty("", &name, "wip");
+        display.display_yak_pretty("", &name, "wip", &[]);
         let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
         assert!(output.contains("my yak"));
@@ -484,7 +524,7 @@ mod tests {
     fn pretty_done_with_color_has_ansi() {
         let (display, buffer) = make_display(true);
         let name = Name::from("finished yak");
-        display.display_yak_pretty("", &name, "done");
+        display.display_yak_pretty("", &name, "done", &[]);
         let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
     }
@@ -493,7 +533,7 @@ mod tests {
     fn pretty_wip_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("my yak");
-        display.display_yak_pretty("", &name, "wip");
+        display.display_yak_pretty("", &name, "wip", &[]);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -507,7 +547,7 @@ mod tests {
     fn pretty_done_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("done yak");
-        display.display_yak_pretty("", &name, "done");
+        display.display_yak_pretty("", &name, "done", &[]);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -520,7 +560,7 @@ mod tests {
     fn pretty_todo_without_color_uses_open_circle() {
         let (display, buffer) = make_display(false);
         let name = Name::from("todo yak");
-        display.display_yak_pretty("", &name, "todo");
+        display.display_yak_pretty("", &name, "todo", &[]);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -533,7 +573,7 @@ mod tests {
     fn markdown_done_with_color_has_ansi() {
         let (display, buffer) = make_display(true);
         let name = Name::from("done yak");
-        display.display_yak_markdown(0, &name, "done");
+        display.display_yak_markdown(0, &name, "done", &[]);
         let output = buffer.contents();
         assert!(
             output.contains("\x1b[90m"),
@@ -546,7 +586,7 @@ mod tests {
     fn markdown_done_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("done yak");
-        display.display_yak_markdown(0, &name, "done");
+        display.display_yak_markdown(0, &name, "done", &[]);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -559,7 +599,7 @@ mod tests {
     fn markdown_todo_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("todo yak");
-        display.display_yak_markdown(1, &name, "todo");
+        display.display_yak_markdown(1, &name, "todo", &[]);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -577,7 +617,7 @@ mod tests {
             name: "Matt Wynne".to_string(),
             email: "matt@example.com".to_string(),
         };
-        display.display_header_box(&[], &name, "wip", &timestamp, &author, &[], &[]);
+        display.display_header_box(&[], &name, "wip", &timestamp, &author, &[], &[], &[]);
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
         assert!(
