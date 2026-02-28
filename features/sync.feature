@@ -293,6 +293,24 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then the output should include "compaction"
 
+  Rule: Unsynced events survive compaction by another peer
+
+    Example: Bob's unsynced yak survives Alice's compaction
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And bob has a yak called "buy biscuits"
+      And alice has compacted yaks
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should have a yak called "make the tea"
+      And bob should have a yak called "buy biscuits"
+      When alice syncs yaks
+      Then alice should have a yak called "make the tea"
+      And alice should have a yak called "buy biscuits"
+
   @wip
   Rule: Sync tells you what changed
 
