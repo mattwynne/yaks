@@ -8,7 +8,7 @@ use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
-    complete_with_state, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
+    complete_with_state, AddYak, Application, CompactEvents, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
     RemoveYak, RenameYak, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
     WriteField,
 };
@@ -588,7 +588,7 @@ fn main() -> Result<()> {
             }
 
             // 3. Compact the event store
-            app.compact_events()?;
+            app.handle(CompactEvents::new())?;
 
             // 4. Report success
             println!("Compacted event stream.");

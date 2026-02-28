@@ -14,8 +14,8 @@ use super::UseCase;
 /// This struct represents the application layer's view of infrastructure.
 /// Use cases are constructed with domain data, then executed with an Application.
 pub struct Application<'a> {
-    event_store: &'a mut dyn EventStore,
-    event_bus: &'a mut EventBus,
+    pub(super) event_store: &'a mut dyn EventStore,
+    pub(super) event_bus: &'a mut EventBus,
     pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
@@ -98,21 +98,6 @@ impl<'a> Application<'a> {
         let all_events = self.event_store.get_all_events()?;
         self.event_bus.rebuild(&all_events)?;
 
-        Ok(())
-    }
-
-    /// Compact the event stream into a snapshot.
-    ///
-    /// Creates a Compacted event with the current tree state,
-    /// then rebuilds the projection.
-    pub fn compact_events(&mut self) -> Result<()> {
-        use crate::domain::event_metadata::{EventMetadata, Timestamp};
-        let metadata = EventMetadata::new(self.auth.current_author(), Timestamp::now());
-        self.event_store.compact(metadata)?;
-
-        // Rebuild projection from the compacted event stream
-        let all_events = self.event_store.get_all_events()?;
-        self.event_bus.rebuild(&all_events)?;
         Ok(())
     }
 

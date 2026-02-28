@@ -2,6 +2,7 @@
 
 mod add_yak;
 mod app;
+mod compact_events;
 mod completions;
 mod done_yak;
 mod edit_context;
@@ -22,6 +23,7 @@ mod write_field;
 
 pub use add_yak::AddYak;
 pub use app::Application;
+pub use compact_events::CompactEvents;
 pub use completions::{complete, complete_with_state, COMMANDS};
 pub use done_yak::DoneYak;
 pub use edit_context::EditContext;
