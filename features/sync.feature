@@ -41,8 +41,8 @@ Feature: yx sync - Collaborate on Yaks via Git
       When alice syncs yaks
       Then alice and bob both have the same yaks:
         """
-          ○ buy biscuits
-          ○ make the tea
+        ○ buy biscuits
+         ○ make the tea
         """
 
   @fullstack
@@ -95,8 +95,8 @@ Feature: yx sync - Collaborate on Yaks via Git
       When bob syncs yaks
       Then bob should have these yaks:
         """
-          ○ make the tea
-          ╰─ ○ buy biscuits
+        ○ make the tea
+         ╰─ ○ buy biscuits
         """
 
   Rule: Field changes propagate through sync
@@ -276,8 +276,8 @@ Feature: yx sync - Collaborate on Yaks via Git
       When alice syncs yaks
       Then alice and bob both have the same yaks:
         """
-          ○ buy biscuits
-          ○ make the tea
+        ○ buy biscuits
+         ○ make the tea
         """
 
   @fullstack

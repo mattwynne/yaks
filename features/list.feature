@@ -78,9 +78,9 @@ Feature: List yaks
       When I list the yaks
       Then the output should be:
         """
-          ○ parent
-          ├─ ○ child a
-          ╰─ ○ child b
+        ○ parent
+         ├─ ○ child a
+         ╰─ ○ child b
         """
 
     Example: Pretty format shows tree connectors for deep nesting
@@ -92,10 +92,10 @@ Feature: List yaks
       When I list the yaks
       Then the output should be:
         """
-          ○ root
-          ├─ ○ branch
-          │  ╰─ ○ leaf
-          ╰─ ○ sibling
+        ○ root
+         ├─ ○ branch
+         │  ╰─ ○ leaf
+         ╰─ ○ sibling
         """
 
     Example: Nested yaks are indented under their parent

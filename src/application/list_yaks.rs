@@ -73,6 +73,11 @@ impl ListYaks {
         // Build hierarchy tree
         let tree = self.build_tree(app, yaks);
 
+        // Pretty format: top margin
+        if normalized_format == "pretty" {
+            app.display.info("");
+        }
+
         // Display tree with filtering
         let mut has_output = false;
         let root_prefix = TreePrefix::new();
@@ -84,6 +89,11 @@ impl ListYaks {
             &root_prefix,
             &mut has_output,
         );
+
+        // Pretty format: bottom margin
+        if normalized_format == "pretty" && has_output {
+            app.display.info("");
+        }
 
         // If filtered and nothing to show
         if !has_output && normalized_format == "markdown" {
@@ -204,13 +214,14 @@ impl ListYaks {
         match format {
             "plain" => app.display.info(&node.full_path),
             "pretty" => {
-                let node_prefix = if prefix.lines.is_empty() {
+                let tree_prefix = if prefix.lines.is_empty() {
                     String::new()
                 } else {
                     let ancestor_continuations = &prefix.lines[1..];
                     let connector = if is_last { "╰─ " } else { "├─ " };
                     format!("{}{}", ancestor_continuations.join(""), connector)
                 };
+                let node_prefix = format!(" {}", tree_prefix);
                 app.display
                     .display_yak_pretty(&node_prefix, &node.name, state);
             }
@@ -411,23 +422,35 @@ mod tests {
 
         assert!(parent_line.is_some() && aaa_line.is_some() && zzz_line.is_some());
 
-        // Root has no prefix
+        // Pretty format has 1-char whitespace margin all around
         assert!(
-            parent_line.unwrap().starts_with("○"),
-            "Root should have no prefix, got: {:?}",
+            messages.first().unwrap().is_empty(),
+            "Expected leading blank line for top margin, got: {:?}",
+            messages
+        );
+        assert!(
+            messages.last().unwrap().is_empty(),
+            "Expected trailing blank line for bottom margin, got: {:?}",
+            messages
+        );
+
+        // Root has space prefix (left margin)
+        assert!(
+            parent_line.unwrap().starts_with(" ○"),
+            "Root should have space prefix, got: {:?}",
             parent_line
         );
 
-        // Non-last child gets ├─ connector
+        // Non-last child gets space + ├─ connector
         assert!(
-            aaa_line.unwrap().starts_with("├─ ○"),
-            "Non-last child 'aaa' should have ├─ connector, got: {:?}",
+            aaa_line.unwrap().starts_with(" ├─ ○"),
+            "Non-last child 'aaa' should have ' ├─' connector, got: {:?}",
             aaa_line
         );
-        // Last child gets ╰─ connector
+        // Last child gets space + ╰─ connector
         assert!(
-            zzz_line.unwrap().starts_with("╰─ ○"),
-            "Last child 'zzz' should have ╰─ connector, got: {:?}",
+            zzz_line.unwrap().starts_with(" ╰─ ○"),
+            "Last child 'zzz' should have ' ╰─' connector, got: {:?}",
             zzz_line
         );
     }
@@ -581,10 +604,10 @@ mod tests {
             messages
         );
 
-        // Leaf under non-last branch should show │ continuation + ╰─ connector
+        // Leaf under non-last branch should show space + │ continuation + ╰─ connector
         assert!(
-            leaf_line.unwrap().starts_with("│  ╰─ ○"),
-            "Grandchild under non-last parent should have │ continuation, got: {:?}",
+            leaf_line.unwrap().starts_with(" │  ╰─ ○"),
+            "Grandchild under non-last parent should have space + │ continuation, got: {:?}",
             leaf_line
         );
     }
