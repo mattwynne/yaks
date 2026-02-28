@@ -57,7 +57,6 @@ impl<'r> YakSubtreeBuilder<'r> {
         self
     }
 
-
     /// Set the parent yak's ID, if this yak is nested.
     fn parent_id(mut self, parent_id: Option<&str>) -> Self {
         if let Some(pid) = parent_id {
@@ -283,8 +282,9 @@ impl GitEventStore {
                             .build()?;
                         root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
                     }
-                    let version_blob =
-                        self.repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+                    let version_blob = self
+                        .repo
+                        .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
                     root_builder.insert(".schema-version", version_blob, 0o100644)?;
                     Ok(root_builder.write()?)
                 }
@@ -369,10 +369,12 @@ impl GitEventStore {
         Ok(())
     }
 
-
     /// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
     #[allow(clippy::cognitive_complexity)]
-    fn read_snapshots_from_tree(&self, tree: &git2::Tree) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
+    fn read_snapshots_from_tree(
+        &self,
+        tree: &git2::Tree,
+    ) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
         use crate::domain::field::RESERVED_FIELDS;
         use crate::domain::slug::{Name, YakId};
         use crate::domain::yak_snapshot::YakSnapshot;
@@ -461,41 +463,56 @@ impl GitEventStore {
             let subtree = self.repo.find_tree(data.subtree_id)?;
 
             // Read .metadata.json if present
-            let (created_by, created_at) = if let Some(meta_entry) = subtree.get_name(".metadata.json") {
-                if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
-                    if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                            use crate::domain::event_metadata::{Author, Timestamp};
-                            (
-                                Author {
-                                    name: json["created_by"]["name"]
-                                        .as_str()
-                                        .unwrap_or("unknown")
-                                        .to_string(),
-                                    email: json["created_by"]["email"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string(),
-                                },
-                                Timestamp(json["created_at"].as_i64().unwrap_or(0)),
-                            )
+            let (created_by, created_at) =
+                if let Some(meta_entry) = subtree.get_name(".metadata.json") {
+                    if let Ok(meta_blob) = self.repo.find_blob(meta_entry.id()) {
+                        if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
+                                use crate::domain::event_metadata::{Author, Timestamp};
+                                (
+                                    Author {
+                                        name: json["created_by"]["name"]
+                                            .as_str()
+                                            .unwrap_or("unknown")
+                                            .to_string(),
+                                        email: json["created_by"]["email"]
+                                            .as_str()
+                                            .unwrap_or("")
+                                            .to_string(),
+                                    },
+                                    Timestamp(json["created_at"].as_i64().unwrap_or(0)),
+                                )
+                            } else {
+                                (
+                                    crate::domain::event_metadata::Author::unknown(),
+                                    crate::domain::event_metadata::Timestamp::zero(),
+                                )
+                            }
                         } else {
-                            (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
+                            (
+                                crate::domain::event_metadata::Author::unknown(),
+                                crate::domain::event_metadata::Timestamp::zero(),
+                            )
                         }
                     } else {
-                        (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
+                        (
+                            crate::domain::event_metadata::Author::unknown(),
+                            crate::domain::event_metadata::Timestamp::zero(),
+                        )
                     }
                 } else {
-                    (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
-                }
-            } else {
-                (crate::domain::event_metadata::Author::unknown(), crate::domain::event_metadata::Timestamp::zero())
-            };
+                    (
+                        crate::domain::event_metadata::Author::unknown(),
+                        crate::domain::event_metadata::Timestamp::zero(),
+                    )
+                };
 
             // State
             let state = if let Some(state_entry) = subtree.get_name("state") {
                 let state_blob = self.repo.find_blob(state_entry.id())?;
-                std::str::from_utf8(state_blob.content())?.trim().to_string()
+                std::str::from_utf8(state_blob.content())?
+                    .trim()
+                    .to_string()
             } else {
                 "todo".to_string()
             };
@@ -504,7 +521,11 @@ impl GitEventStore {
             let context = if let Some(context_entry) = subtree.get_name("context.md") {
                 let context_blob = self.repo.find_blob(context_entry.id())?;
                 let content = std::str::from_utf8(context_blob.content())?;
-                if content.is_empty() { None } else { Some(content.to_string()) }
+                if content.is_empty() {
+                    None
+                } else {
+                    Some(content.to_string())
+                }
             } else {
                 None
             };
@@ -828,7 +849,28 @@ impl EventStore for GitEventStore {
         // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
         Self::fetch_peer_ref(&repo_path)?;
 
-        // 2. Get local and peer events
+        // 2. Check peer schema version compatibility
+        let peer_location = super::migration::EventStoreLocation {
+            repo: &self.repo,
+            ref_name: "refs/notes/yaks-peer",
+        };
+        if let Some(peer_version) = super::migration::read_schema_version(&peer_location)? {
+            if peer_version > super::migration::CURRENT_SCHEMA_VERSION {
+                // Clean up peer ref before bailing
+                let _ = self
+                    .repo
+                    .find_reference("refs/notes/yaks-peer")
+                    .and_then(|mut r| r.delete());
+                anyhow::bail!(
+                    "Remote yaks use schema version {} but this version of yx only supports {}. \
+                     Please update yx.",
+                    peer_version,
+                    super::migration::CURRENT_SCHEMA_VERSION
+                );
+            }
+        }
+
+        // 3. Get local and peer events
         let local_events = EventStore::get_all_events(self)?;
         let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
         let peer_events = EventStore::get_all_events(&peer)?;
@@ -853,7 +895,10 @@ impl EventStore for GitEventStore {
             .collect();
         let received_compaction = peer_events.iter().find(|e| {
             matches!(e, YakEvent::Compacted(_, _))
-                && e.metadata().event_id.as_ref().map_or(false, |id| !local_ids.contains(id))
+                && e.metadata()
+                    .event_id
+                    .as_ref()
+                    .map_or(false, |id| !local_ids.contains(id))
         });
 
         output.info(&format!(
@@ -862,7 +907,10 @@ impl EventStore for GitEventStore {
         ));
 
         if let Some(ce) = received_compaction {
-            output.info(&format!("Received compaction from {}", ce.metadata().author.name));
+            output.info(&format!(
+                "Received compaction from {}",
+                ce.metadata().author.name
+            ));
         }
 
         // 3. Push refs/notes/yaks back to origin
@@ -1858,5 +1906,118 @@ mod tests {
             "Error should mention the field name, got: {}",
             err_msg
         );
+    }
+
+    mod peer_schema_version {
+        use super::*;
+        use crate::adapters::event_store::migration::{
+            write_schema_version, EventStoreLocation, CURRENT_SCHEMA_VERSION,
+        };
+        use crate::adapters::make_test_display;
+        use crate::infrastructure::event_bus::EventBus;
+
+        fn make_event(name: &str, id: &str) -> YakEvent {
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from(name),
+                    id: YakId::from(id),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            )
+        }
+
+        fn setup_origin_and_local() -> (TempDir, TempDir, GitEventStore) {
+            let origin_dir = TempDir::new().unwrap();
+            Repository::init_bare(origin_dir.path()).unwrap();
+
+            let local_dir = TempDir::new().unwrap();
+            let local_repo = Repository::init(local_dir.path()).unwrap();
+
+            let mut config = local_repo.config().unwrap();
+            config.set_str("user.name", "test").unwrap();
+            config.set_str("user.email", "test@test.com").unwrap();
+
+            local_repo
+                .remote("origin", origin_dir.path().to_str().unwrap())
+                .unwrap();
+
+            let store = GitEventStore::from_repo(local_repo);
+            (origin_dir, local_dir, store)
+        }
+
+        /// Stamp a specific schema version on the origin's refs/notes/yaks ref.
+        fn stamp_origin_schema_version(origin_dir: &TempDir, version: u32) {
+            let repo = Repository::open(origin_dir.path()).unwrap();
+            let location = EventStoreLocation {
+                repo: &repo,
+                ref_name: "refs/notes/yaks",
+            };
+            write_schema_version(&location, version).unwrap();
+        }
+
+        #[test]
+        fn sync_refuses_when_peer_schema_version_is_newer() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Add an event so origin has a ref
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("from-origin", "from-origin-a1b2"))
+                .unwrap();
+
+            // Stamp a future schema version on origin
+            stamp_origin_schema_version(&origin_dir, CURRENT_SCHEMA_VERSION + 1);
+
+            let mut bus = EventBus::new();
+            let (output, _) = make_test_display();
+
+            let result = local_store.sync(&mut bus, &output);
+            assert!(result.is_err(), "Sync should fail when peer is newer");
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("Please update yx"),
+                "Error should tell user to update, got: {}",
+                err
+            );
+        }
+
+        #[test]
+        fn sync_succeeds_when_peer_schema_version_matches() {
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            let mut origin_store = GitEventStore::new(origin_dir.path()).unwrap();
+            origin_store
+                .append(&make_event("from-origin", "from-origin-a1b2"))
+                .unwrap();
+
+            // Stamp the same schema version as local
+            stamp_origin_schema_version(&origin_dir, CURRENT_SCHEMA_VERSION);
+
+            let mut bus = EventBus::new();
+            let (output, _) = make_test_display();
+
+            local_store.sync(&mut bus, &output).unwrap();
+
+            let events = EventStore::get_all_events(&local_store).unwrap();
+            assert_eq!(events.len(), 1, "Sync should succeed normally");
+        }
+
+        #[test]
+        fn sync_succeeds_when_peer_has_no_schema_version() {
+            let (_origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Origin has no events, no schema version at all
+            // Just push a local event so there's something to sync
+            local_store
+                .append(&make_event("local-yak", "local-yak-a1b2"))
+                .unwrap();
+
+            let mut bus = EventBus::new();
+            let (output, _) = make_test_display();
+
+            // Should succeed — no peer ref means no version conflict
+            local_store.sync(&mut bus, &output).unwrap();
+        }
     }
 }

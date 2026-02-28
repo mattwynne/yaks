@@ -124,8 +124,8 @@ mod tests {
 
     #[test]
     fn compacted_event_rebuilds_store_from_snapshots() {
-        use crate::domain::yak_snapshot::YakSnapshot;
         use crate::domain::event_metadata::{Author, Timestamp};
+        use crate::domain::yak_snapshot::YakSnapshot;
         use std::collections::HashMap;
 
         let storage = InMemoryStorage::new();
@@ -145,7 +145,10 @@ mod tests {
                 state: "wip".to_string(),
                 context: Some("use the good teapot".to_string()),
                 fields: HashMap::new(),
-                created_by: Author { name: "alice".into(), email: "alice@example.com".into() },
+                created_by: Author {
+                    name: "alice".into(),
+                    email: "alice@example.com".into(),
+                },
                 created_at: Timestamp(1000),
             },
             YakSnapshot {
@@ -155,7 +158,10 @@ mod tests {
                 state: "todo".to_string(),
                 context: None,
                 fields: HashMap::new(),
-                created_by: Author { name: "alice".into(), email: "alice@example.com".into() },
+                created_by: Author {
+                    name: "alice".into(),
+                    email: "alice@example.com".into(),
+                },
                 created_at: Timestamp(1000),
             },
         ];
@@ -170,11 +176,20 @@ mod tests {
             "Old yak should be cleared"
         );
 
-        let tea = yaks.iter().find(|y| y.id == YakId::from("tea-a1b2")).unwrap();
+        let tea = yaks
+            .iter()
+            .find(|y| y.id == YakId::from("tea-a1b2"))
+            .unwrap();
         assert_eq!(tea.state, "wip");
 
-        let biscuits = yaks.iter().find(|y| y.id == YakId::from("biscuits-c3d4")).unwrap();
-        assert_eq!(biscuits.parent_id.as_ref().unwrap(), &YakId::from("tea-a1b2"));
+        let biscuits = yaks
+            .iter()
+            .find(|y| y.id == YakId::from("biscuits-c3d4"))
+            .unwrap();
+        assert_eq!(
+            biscuits.parent_id.as_ref().unwrap(),
+            &YakId::from("tea-a1b2")
+        );
     }
 
     #[test]

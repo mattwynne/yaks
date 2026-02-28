@@ -255,7 +255,9 @@ macro_rules! event_store_tests {
             let events = store.get_all_events().unwrap();
 
             // Find the Compacted event
-            let compacted = events.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            let compacted = events
+                .iter()
+                .find(|e| matches!(e, YakEvent::Compacted(_, _)));
             assert!(compacted.is_some(), "Should have a Compacted event");
 
             if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
@@ -302,7 +304,9 @@ macro_rules! event_store_tests {
             let events = store.get_all_events().unwrap();
 
             // foo should be in the Compacted event's snapshots
-            let compacted = events.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            let compacted = events
+                .iter()
+                .find(|e| matches!(e, YakEvent::Compacted(_, _)));
             assert!(compacted.is_some(), "Should have a Compacted event");
             if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
                 assert!(
@@ -368,7 +372,11 @@ macro_rules! event_store_tests {
             let latest = compacted_events.last().unwrap();
 
             if let YakEvent::Compacted(snapshots, _) = latest {
-                assert_eq!(snapshots.len(), 2, "Latest compaction should have both yaks");
+                assert_eq!(
+                    snapshots.len(),
+                    2,
+                    "Latest compaction should have both yaks"
+                );
                 assert!(
                     snapshots.iter().any(|s| s.id.as_str() == "foo-a1b2"),
                     "Should have foo in latest snapshot"
@@ -442,7 +450,11 @@ macro_rules! event_store_tests {
             let latest = compacted_events.last().unwrap();
 
             if let YakEvent::Compacted(snapshots, _) = latest {
-                assert_eq!(snapshots.len(), 1, "Latest compaction should still have foo");
+                assert_eq!(
+                    snapshots.len(),
+                    1,
+                    "Latest compaction should still have foo"
+                );
                 assert_eq!(snapshots[0].id.as_str(), "foo-a1b2");
             }
         }

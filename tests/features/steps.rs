@@ -269,6 +269,77 @@ fn git_update_ref(repo_path: &std::path::Path, ref_name: &str, oid: &str) -> Res
     Ok(())
 }
 
+/// Stamp a schema version beyond what the current binary supports directly on
+/// origin's event store ref. Simulates a peer that upgraded to a newer yx version.
+/// We use alice's clone as a workspace to manipulate git objects, then push to origin.
+#[given(expr = "origin has been migrated beyond the current schema version")]
+async fn origin_migrated_beyond(world: &mut FullStackWorld) -> Result<()> {
+    // Use alice's clone as a workspace (any clone will do)
+    let repo_path = world.repo_path("alice")?;
+    let future_version = yx::adapters::event_store::migration::CURRENT_SCHEMA_VERSION + 1;
+    let version_oid = git_hash_object(&repo_path, &future_version.to_string())?;
+
+    // Read the current tree for refs/notes/yaks
+    let current_ref = std::process::Command::new("git")
+        .args(["rev-parse", "refs/notes/yaks"])
+        .current_dir(&repo_path)
+        .output()
+        .context("git rev-parse failed")?;
+    let commit_oid = String::from_utf8_lossy(&current_ref.stdout)
+        .trim()
+        .to_string();
+
+    let current_tree = std::process::Command::new("git")
+        .args(["rev-parse", &format!("{}^{{tree}}", commit_oid)])
+        .current_dir(&repo_path)
+        .output()
+        .context("git rev-parse tree failed")?;
+    let tree_oid = String::from_utf8_lossy(&current_tree.stdout)
+        .trim()
+        .to_string();
+
+    // Replace .schema-version in the tree
+    let ls_tree = std::process::Command::new("git")
+        .args(["ls-tree", &tree_oid])
+        .current_dir(&repo_path)
+        .output()
+        .context("git ls-tree failed")?;
+    let ls_output = String::from_utf8_lossy(&ls_tree.stdout);
+
+    let mut new_tree_input = String::new();
+    for line in ls_output.lines() {
+        if line.ends_with("\t.schema-version") {
+            new_tree_input.push_str(&format!("100644 blob {}\t.schema-version\n", version_oid));
+        } else {
+            new_tree_input.push_str(line);
+            new_tree_input.push('\n');
+        }
+    }
+    let new_tree_oid = git_mktree(&repo_path, &new_tree_input)?;
+    let new_commit_oid = git_commit_tree(
+        &repo_path,
+        &new_tree_oid,
+        &format!("Schema version: {}", future_version),
+        Some(&commit_oid),
+    )?;
+    git_update_ref(&repo_path, "refs/notes/yaks", &new_commit_oid)?;
+
+    // Push the updated ref to origin
+    let push = std::process::Command::new("git")
+        .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
+        .current_dir(&repo_path)
+        .output()
+        .context("git push failed")?;
+    if !push.status.success() {
+        anyhow::bail!(
+            "Failed to push schema version to origin: {}",
+            String::from_utf8_lossy(&push.stderr)
+        );
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // When steps
 // ============================================================================
@@ -370,12 +441,18 @@ async fn remove_yak_in_process(world: &mut InProcessWorld, yak_name: String) -> 
 }
 
 #[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
-async fn remove_yak_recursive_full_stack(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+async fn remove_yak_recursive_full_stack(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
     world.remove_yak_recursive(&yak_name)
 }
 
 #[when(regex = r#"^I remove the yak "(.+)" recursively$"#)]
-async fn remove_yak_recursive_in_process(world: &mut InProcessWorld, yak_name: String) -> Result<()> {
+async fn remove_yak_recursive_in_process(
+    world: &mut InProcessWorld,
+    yak_name: String,
+) -> Result<()> {
     world.remove_yak_recursive(&yak_name)
 }
 
@@ -1179,6 +1256,13 @@ async fn repo_syncs_yaks(world: &mut FullStackWorld, repo: String) -> Result<()>
 #[when(regex = r#"^([\w-]+) syncs yaks$"#)]
 async fn repo_syncs_yaks_in_process(world: &mut InProcessWorld, repo: String) -> Result<()> {
     world.sync_repo(&repo)
+}
+
+#[when(regex = r#"^(\w+) tries to sync yaks$"#)]
+async fn repo_tries_to_sync(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["sync"])?;
+    // Don't bail on error — caller will check exit code and error message
+    Ok(())
 }
 
 #[then(regex = r#"^([\w-]+) has a "(.+)" ref$"#)]

@@ -311,6 +311,20 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then alice should have a yak called "make the tea"
       And alice should have a yak called "buy biscuits"
 
+  Rule: Sync refuses when the remote uses a newer schema version
+
+    Example: Bob's outdated binary refuses to sync Alice's newer schema
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And bob has synced yaks
+      And origin has been migrated beyond the current schema version
+      When bob tries to sync yaks
+      Then the command should fail
+      And the error should contain "Please update yx"
+      And bob should have a yak called "make the tea"
+
   @wip
   Rule: Sync tells you what changed
 

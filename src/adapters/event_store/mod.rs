@@ -79,8 +79,7 @@ pub(crate) fn merge_event_streams(
         .position(|e| matches!(e, YakEvent::Compacted(_, _)))
     {
         if let YakEvent::Compacted(ref snapshots, _) = all_events[compact_idx] {
-            let snapshot_yak_ids: HashSet<&str> =
-                snapshots.iter().map(|s| s.id.as_str()).collect();
+            let snapshot_yak_ids: HashSet<&str> = snapshots.iter().map(|s| s.id.as_str()).collect();
 
             // Collect indices of events before Compacted that affect
             // yak IDs not in the snapshot (they'd be lost on replay).
@@ -259,11 +258,7 @@ mod merge_event_streams_tests {
         // After merge, B must appear AFTER Compacted so it's not wiped
         let shared = make_added("alpha", "alpha-a1b2", 50, "evt-shared");
         let bobs_event = make_added("beta", "beta-c3d4", 80, "evt-bob");
-        let compacted = make_compacted(
-            vec![snapshot("alpha", "alpha-a1b2")],
-            100,
-            "evt-compact",
-        );
+        let compacted = make_compacted(vec![snapshot("alpha", "alpha-a1b2")], 100, "evt-compact");
 
         let alice_events = vec![shared.clone(), compacted.clone()];
         let bob_events = vec![shared.clone(), bobs_event.clone()];
@@ -277,7 +272,10 @@ mod merge_event_streams_tests {
             .collect();
 
         // Bob's event must come AFTER compacted, not before it
-        let compact_pos = event_ids.iter().position(|id| *id == "evt-compact").unwrap();
+        let compact_pos = event_ids
+            .iter()
+            .position(|id| *id == "evt-compact")
+            .unwrap();
         let bob_pos = event_ids.iter().position(|id| *id == "evt-bob").unwrap();
         assert!(
             bob_pos > compact_pos,
@@ -293,11 +291,7 @@ mod merge_event_streams_tests {
         // Alice compacted with A in snapshot. Bob also has A.
         // A should stay before Compacted (normal sort order).
         let shared = make_added("alpha", "alpha-a1b2", 50, "evt-shared");
-        let compacted = make_compacted(
-            vec![snapshot("alpha", "alpha-a1b2")],
-            100,
-            "evt-compact",
-        );
+        let compacted = make_compacted(vec![snapshot("alpha", "alpha-a1b2")], 100, "evt-compact");
 
         let alice_events = vec![shared.clone(), compacted.clone()];
         let bob_events = vec![shared.clone()];
@@ -316,11 +310,7 @@ mod merge_event_streams_tests {
     #[test]
     fn events_after_compaction_timestamp_are_not_reordered() {
         // Bob's event at T=120 (after compaction at T=100) stays in place
-        let compacted = make_compacted(
-            vec![snapshot("alpha", "alpha-a1b2")],
-            100,
-            "evt-compact",
-        );
+        let compacted = make_compacted(vec![snapshot("alpha", "alpha-a1b2")], 100, "evt-compact");
         let bobs_event = make_added("beta", "beta-c3d4", 120, "evt-bob");
 
         let alice_events = vec![compacted.clone()];

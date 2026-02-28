@@ -45,16 +45,16 @@ impl ShowYak {
 
         // Collect immediate children for the header box
         let box_children: Vec<_> = {
-            let mut kids: Vec<_> = yak.children.iter()
+            let mut kids: Vec<_> = yak
+                .children
+                .iter()
                 .filter_map(|id| app.store.get_yak(id).ok())
                 .map(|c| (c.name.clone(), c.state.clone()))
                 .collect();
-            kids.sort_by(|a, b| {
-                match (a.1 == "done", b.1 == "done") {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.0.cmp(&b.0),
-                }
+            kids.sort_by(|a, b| match (a.1 == "done", b.1 == "done") {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.0.cmp(&b.0),
             });
             kids
         };
@@ -74,8 +74,15 @@ impl ShowYak {
         }
 
         // Header box with breadcrumb, name, state, date, author, children, and short fields
-        app.display
-            .display_header_box(&ancestors, &yak.name, &yak.state, &yak.created_at, &yak.created_by, &box_children, &short_fields);
+        app.display.display_header_box(
+            &ancestors,
+            &yak.name,
+            &yak.state,
+            &yak.created_at,
+            &yak.created_by,
+            &box_children,
+            &short_fields,
+        );
 
         // Context body
         let has_context = yak.context.as_ref().map_or(false, |c| !c.trim().is_empty());
@@ -95,7 +102,8 @@ impl ShowYak {
             for (_i, (name, value)) in long_fields.iter().enumerate() {
                 app.display.info("");
                 app.display.display_section_rule(&title_case(name));
-                let indented: String = value.lines()
+                let indented: String = value
+                    .lines()
                     .map(|l| format!("  {l}"))
                     .collect::<Vec<_>>()
                     .join("\n");
@@ -108,7 +116,6 @@ impl ShowYak {
 
         Ok(())
     }
-
 }
 
 impl UseCase for ShowYak {
@@ -371,14 +378,28 @@ mod tests {
         let bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
         let alpha_pos = lines.iter().position(|l| l.contains("alpha")).unwrap();
         let beta_pos = lines.iter().position(|l| l.contains("beta")).unwrap();
-        assert!(alpha_pos > top && alpha_pos < bottom, "alpha should be inside box");
-        assert!(beta_pos > top && beta_pos < bottom, "beta should be inside box");
+        assert!(
+            alpha_pos > top && alpha_pos < bottom,
+            "alpha should be inside box"
+        );
+        assert!(
+            beta_pos > top && beta_pos < bottom,
+            "beta should be inside box"
+        );
 
         // Tree connectors
         let alpha_line = lines[alpha_pos];
         let beta_line = lines[beta_pos];
-        assert!(alpha_line.contains("├─"), "Non-last child should have ├─, got: {:?}", alpha_line);
-        assert!(beta_line.contains("╰─"), "Last child should have ╰─, got: {:?}", beta_line);
+        assert!(
+            alpha_line.contains("├─"),
+            "Non-last child should have ├─, got: {:?}",
+            alpha_line
+        );
+        assert!(
+            beta_line.contains("╰─"),
+            "Last child should have ╰─, got: {:?}",
+            beta_line
+        );
     }
 
     #[test]
@@ -408,7 +429,12 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         let top = lines.iter().position(|l| l.starts_with('┌')).unwrap();
         let bottom = lines.iter().position(|l| l.starts_with('└')).unwrap();
-        assert_eq!(bottom - top, 2, "Box should have 3 lines (no children), got: {:?}", &lines[top..=bottom]);
+        assert_eq!(
+            bottom - top,
+            2,
+            "Box should have 3 lines (no children), got: {:?}",
+            &lines[top..=bottom]
+        );
     }
 
     #[test]
@@ -448,7 +474,10 @@ mod tests {
         let divider = lines.iter().position(|l| l.starts_with('├'));
         assert!(divider.is_some(), "Expected divider bar, got:\n{output}");
         let divider = divider.unwrap();
-        assert!(divider > top && divider < bottom, "Divider should be inside box");
+        assert!(
+            divider > top && divider < bottom,
+            "Divider should be inside box"
+        );
 
         // Title Case field names
         let priority_line = lines.iter().find(|l| l.contains("Priority:"));

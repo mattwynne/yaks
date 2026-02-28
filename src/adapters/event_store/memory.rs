@@ -6,8 +6,9 @@ use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::slug::Name;
 use crate::domain::YakEvent;
 
-
-fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
+fn build_snapshots_from_events(
+    events: &[YakEvent],
+) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
     use crate::domain::yak_snapshot::YakSnapshot;
     use std::collections::HashSet;
 
@@ -16,18 +17,23 @@ fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain:
     for event in events {
         match event {
             YakEvent::Added(e, m) => {
-                yaks.insert(e.id.as_str().to_string(), YakSnapshot {
-                    id: e.id.clone(),
-                    name: e.name.clone(),
-                    parent_id: e.parent_id.clone(),
-                    state: "todo".to_string(),
-                    context: None,
-                    fields: HashMap::new(),
-                    created_by: m.author.clone(),
-                    created_at: m.timestamp,
-                });
+                yaks.insert(
+                    e.id.as_str().to_string(),
+                    YakSnapshot {
+                        id: e.id.clone(),
+                        name: e.name.clone(),
+                        parent_id: e.parent_id.clone(),
+                        state: "todo".to_string(),
+                        context: None,
+                        fields: HashMap::new(),
+                        created_by: m.author.clone(),
+                        created_at: m.timestamp,
+                    },
+                );
             }
-            YakEvent::Removed(e, _) => { yaks.remove(e.id.as_str()); }
+            YakEvent::Removed(e, _) => {
+                yaks.remove(e.id.as_str());
+            }
             YakEvent::Moved(e, _) => {
                 if let Some(yak) = yaks.get_mut(e.id.as_str()) {
                     yak.parent_id = e.new_parent.clone();
@@ -39,7 +45,9 @@ fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain:
                         "state" => yak.state = e.content.clone(),
                         "context.md" => yak.context = Some(e.content.clone()),
                         "name" => yak.name = Name::from(e.content.as_str()),
-                        _ => { yak.fields.insert(e.field_name.clone(), e.content.clone()); }
+                        _ => {
+                            yak.fields.insert(e.field_name.clone(), e.content.clone());
+                        }
                     }
                 }
             }
@@ -188,22 +196,26 @@ mod tests {
     #[test]
     fn compact_stores_snapshot_in_event() {
         let mut store = InMemoryEventStore::new();
-        store.append(&YakEvent::Added(
-            AddedEvent {
-                name: Name::from("test"),
-                id: YakId::from("test-a1b2"),
-                parent_id: None,
-            },
-            EventMetadata::default_legacy(),
-        )).unwrap();
-        store.append(&YakEvent::FieldUpdated(
-            crate::domain::events::FieldUpdatedEvent {
-                id: YakId::from("test-a1b2"),
-                field_name: "state".to_string(),
-                content: "wip".to_string(),
-            },
-            EventMetadata::default_legacy(),
-        )).unwrap();
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        store
+            .append(&YakEvent::FieldUpdated(
+                crate::domain::events::FieldUpdatedEvent {
+                    id: YakId::from("test-a1b2"),
+                    field_name: "state".to_string(),
+                    content: "wip".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
 
         store.compact(EventMetadata::default_legacy()).unwrap();
 

@@ -92,7 +92,16 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         .unwrap();
     }
 
-    fn display_header_box(&self, ancestors: &[Name], name: &Name, state: &str, created_at: &Timestamp, created_by: &Author, children: &[(Name, String)], fields: &[(String, String)]) {
+    fn display_header_box(
+        &self,
+        ancestors: &[Name],
+        name: &Name,
+        state: &str,
+        created_at: &Timestamp,
+        created_by: &Author,
+        children: &[(Name, String)],
+        fields: &[(String, String)],
+    ) {
         let mut out = self.output.lock().unwrap();
 
         fn indicator_for(state: &str) -> &'static str {
@@ -111,26 +120,48 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         let breadcrumb = if ancestors.is_empty() {
             None
         } else {
-            let path = ancestors.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(" > ");
+            let path = ancestors
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(" > ");
             Some(format!("  {path} >   "))
         };
 
-        let header_content = format!("  {indicator} {name} · {state} · {date} · {}  ", created_by.name);
+        let header_content = format!(
+            "  {indicator} {name} · {state} · {date} · {}  ",
+            created_by.name
+        );
         let header_width = header_content.chars().count();
 
         // Build child lines
-        let child_lines: Vec<String> = children.iter().enumerate().map(|(i, (cname, cstate))| {
-            let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
-            let ci = indicator_for(cstate);
-            format!("  {connector} {ci} {cname}  ")
-        }).collect();
+        let child_lines: Vec<String> = children
+            .iter()
+            .enumerate()
+            .map(|(i, (cname, cstate))| {
+                let connector = if i == children.len() - 1 {
+                    "╰─"
+                } else {
+                    "├─"
+                };
+                let ci = indicator_for(cstate);
+                format!("  {connector} {ci} {cname}  ")
+            })
+            .collect();
 
         // Build field lines with right-aligned labels
-        let max_label_width = fields.iter().map(|(k, _)| k.chars().count()).max().unwrap_or(0);
-        let field_lines: Vec<String> = fields.iter().map(|(k, v)| {
-            let pad = max_label_width - k.chars().count();
-            format!("  {}{}: {}  ", " ".repeat(pad), k, v)
-        }).collect();
+        let max_label_width = fields
+            .iter()
+            .map(|(k, _)| k.chars().count())
+            .max()
+            .unwrap_or(0);
+        let field_lines: Vec<String> = fields
+            .iter()
+            .map(|(k, v)| {
+                let pad = max_label_width - k.chars().count();
+                format!("  {}{}: {}  ", " ".repeat(pad), k, v)
+            })
+            .collect();
 
         // Inner width = max of all lines and terminal width - 2
         let max_content_width = std::iter::once(header_width)
@@ -146,23 +177,30 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         let bottom = format!("└{}┘", "─".repeat(inner_width));
 
         // Helper to write a padded line inside the box
-        let write_box_line = |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
-            let pad = inner_width - visible_width;
-            if color {
-                writeln!(out, "\x1b[2m│\x1b[0m{content}{}\x1b[2m│\x1b[0m", " ".repeat(pad)).unwrap();
-            } else {
-                writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
-            }
-        };
+        let write_box_line =
+            |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
+                let pad = inner_width - visible_width;
+                if color {
+                    writeln!(
+                        out,
+                        "\x1b[2m│\x1b[0m{content}{}\x1b[2m│\x1b[0m",
+                        " ".repeat(pad)
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
+                }
+            };
 
-        let write_dim_line = |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
-            let pad = inner_width - visible_width;
-            if color {
-                writeln!(out, "\x1b[2m│{content}{}│\x1b[0m", " ".repeat(pad)).unwrap();
-            } else {
-                writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
-            }
-        };
+        let write_dim_line =
+            |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
+                let pad = inner_width - visible_width;
+                if color {
+                    writeln!(out, "\x1b[2m│{content}{}│\x1b[0m", " ".repeat(pad)).unwrap();
+                } else {
+                    writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
+                }
+            };
 
         let color = self.options.color;
 
@@ -193,16 +231,30 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
         // Children
         for (i, (cname, cstate)) in children.iter().enumerate() {
-            let connector = if i == children.len() - 1 { "╰─" } else { "├─" };
+            let connector = if i == children.len() - 1 {
+                "╰─"
+            } else {
+                "├─"
+            };
             if color {
                 let styled_child = match cstate.as_str() {
                     "wip" => format!("  {connector} \x1b[32m●\x1b[0m \x1b[1m{cname}\x1b[0m  "),
                     "done" => format!("  {connector} \x1b[90m●\x1b[0m \x1b[90;9m{cname}\x1b[0m  "),
                     _ => format!("  {connector} ○ {cname}  "),
                 };
-                write_box_line(&mut out, &styled_child, child_lines[i].chars().count(), true);
+                write_box_line(
+                    &mut out,
+                    &styled_child,
+                    child_lines[i].chars().count(),
+                    true,
+                );
             } else {
-                write_box_line(&mut out, &child_lines[i], child_lines[i].chars().count(), false);
+                write_box_line(
+                    &mut out,
+                    &child_lines[i],
+                    child_lines[i].chars().count(),
+                    false,
+                );
             }
         }
 
@@ -371,7 +423,8 @@ mod tests {
     fn make_display(color: bool) -> (ConsoleDisplay, TestBuffer) {
         let buffer = TestBuffer::new();
         let writer = buffer.clone();
-        let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color, width: 60 });
+        let display =
+            ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color, width: 60 });
         (display, buffer)
     }
 
@@ -522,14 +575,46 @@ mod tests {
         display.display_header_box(&[], &name, "wip", &timestamp, &author, &[], &[]);
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
-        assert!(lines[0].starts_with('┌'), "Expected top border, got: {:?}", lines[0]);
-        assert!(lines[0].ends_with('┐'), "Expected top border end, got: {:?}", lines[0]);
-        assert!(lines[1].contains("● my yak"), "Expected name in box, got: {:?}", lines[1]);
-        assert!(lines[1].contains("wip"), "Expected state in box, got: {:?}", lines[1]);
-        assert!(lines[1].contains("2025-02-19"), "Expected date in box, got: {:?}", lines[1]);
-        assert!(lines[1].contains("Matt Wynne"), "Expected author in box, got: {:?}", lines[1]);
-        assert!(lines[2].starts_with('└'), "Expected bottom border, got: {:?}", lines[2]);
-        assert!(lines[2].ends_with('┘'), "Expected bottom border end, got: {:?}", lines[2]);
+        assert!(
+            lines[0].starts_with('┌'),
+            "Expected top border, got: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[0].ends_with('┐'),
+            "Expected top border end, got: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("● my yak"),
+            "Expected name in box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].contains("wip"),
+            "Expected state in box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].contains("2025-02-19"),
+            "Expected date in box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].contains("Matt Wynne"),
+            "Expected author in box, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[2].starts_with('└'),
+            "Expected bottom border, got: {:?}",
+            lines[2]
+        );
+        assert!(
+            lines[2].ends_with('┘'),
+            "Expected bottom border end, got: {:?}",
+            lines[2]
+        );
     }
 
     #[test]
@@ -558,9 +643,15 @@ mod tests {
         let (display, buffer) = make_display(true);
         display.display_breadcrumb(&[Name::from("root"), Name::from("mid")]);
         let output = buffer.contents();
-        assert!(output.contains("\x1b[2m"), "expected dim ANSI code in: {output}");
+        assert!(
+            output.contains("\x1b[2m"),
+            "expected dim ANSI code in: {output}"
+        );
         assert!(output.contains("root > mid > "));
-        assert!(output.contains("\x1b[0m"), "expected reset ANSI code in: {output}");
+        assert!(
+            output.contains("\x1b[0m"),
+            "expected reset ANSI code in: {output}"
+        );
     }
 
     #[test]
@@ -583,6 +674,12 @@ mod tests {
 pub fn make_test_display() -> (ConsoleDisplay, TestBuffer) {
     let buffer = TestBuffer::new();
     let writer = buffer.clone();
-    let display = ConsoleDisplay::new(Box::new(writer), ConsoleDisplayOptions { color: false, width: 60 });
+    let display = ConsoleDisplay::new(
+        Box::new(writer),
+        ConsoleDisplayOptions {
+            color: false,
+            width: 60,
+        },
+    );
     (display, buffer)
 }

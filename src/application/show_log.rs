@@ -50,15 +50,11 @@ impl UseCase for ShowLog {
 
             if let YakEvent::Compacted(snapshots, _) = event {
                 for snap in snapshots {
-                    app.display.info(&format!(
-                        "        Added: \"{}\" \"{}\"",
-                        snap.name, snap.id
-                    ));
+                    app.display
+                        .info(&format!("        Added: \"{}\" \"{}\"", snap.name, snap.id));
                     if snap.state != "todo" {
-                        app.display.info(&format!(
-                            "        FieldUpdated: \"{}\" \"state\"",
-                            snap.id
-                        ));
+                        app.display
+                            .info(&format!("        FieldUpdated: \"{}\" \"state\"", snap.id));
                     }
                 }
             }
