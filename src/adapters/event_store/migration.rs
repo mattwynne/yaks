@@ -65,12 +65,12 @@ impl Migrator {
     }
 
     /// Ensure the event store is at the expected schema version.
+    /// Returns true if migrations were performed (and the projection should be reset).
+    ///
     /// - Brand new repo (no ref): stamps expected version on first write.
     /// - Version matches: no-op.
-    /// - Older version: runs migrations in order, stamps new version.
+    /// - Older version: runs migrations in order, then compacts.
     /// - Newer version: errors with "please update yx".
-    /// Ensure the event store is at the expected schema version.
-    /// Returns true if migrations were performed (and the projection should be reset).
     pub fn ensure_schema(&self, location: &EventStoreLocation) -> Result<bool> {
         let current = match read_schema_version(location)? {
             Some(v) => v,

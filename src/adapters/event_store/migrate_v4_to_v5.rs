@@ -64,7 +64,7 @@ impl Migration for MigrateV4ToV5 {
                 }
             } else {
                 // Blob entries (e.g., .schema-version) — keep as-is
-                root_builder.insert(entry_name, entry.id(), entry.filemode() as i32)?;
+                root_builder.insert(entry_name, entry.id(), entry.filemode())?;
             }
         }
 
