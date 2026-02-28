@@ -8,7 +8,7 @@ use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
-    complete_with_state, AddYak, Application, CompactEvents, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks,
+    complete_with_state, AddYak, Application, CompactEvents, DoneYak, EditContext, EditField, ListYaks, MoveYak, PruneYaks,
     RemoveYak, RenameYak, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
     WriteField,
 };
@@ -402,21 +402,15 @@ fn main() -> Result<()> {
         } => {
             let name_str = name.join(" ");
             if edit {
-                let input = ConsoleInput;
-                // If stdin has data, use it as initial content; otherwise use existing field
-                let initial = if ConsoleInput::stdin_has_readable_data() {
-                    input.read_stdin_content()?.unwrap_or_default()
-                } else {
-                    let yak = app
-                        .store
-                        .get_yak(&app.store.fuzzy_find_yak_id(&name_str)?)?;
-                    yak.fields.get(&field).cloned().unwrap_or_default()
-                };
-                if let Some(content) = input.edit_content(Some(&initial), None)? {
-                    app.handle(WriteField::new(&name_str, &field).with_content(&content))
-                } else {
-                    Ok(())
+                let mut use_case = EditField::new(&name_str, &field);
+                // If stdin has data, use it as initial content for the editor
+                if ConsoleInput::stdin_has_readable_data() {
+                    let input = ConsoleInput;
+                    if let Some(content) = input.read_stdin_content()? {
+                        use_case = use_case.with_initial_content(&content);
+                    }
                 }
+                app.handle(use_case)
             } else if ConsoleInput::stdin_has_readable_data() {
                 app.handle(WriteField::new(&name_str, &field))
             } else {
