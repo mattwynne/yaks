@@ -1718,7 +1718,6 @@ async fn output_should_be_empty_in_process(world: &mut InProcessWorld) -> Result
     check_empty_output(world)
 }
 
-
 // ============================================================================
 // Tag steps
 // ============================================================================
@@ -1734,22 +1733,40 @@ async fn tag_yak_in_process(world: &mut InProcessWorld, name: String, tag: Strin
 }
 
 #[when(regex = r#"^I tag "(.+)" with "(.+)" and "(.+)"$"#)]
-async fn tag_yak_multi_full_stack(world: &mut FullStackWorld, name: String, tag1: String, tag2: String) -> Result<()> {
+async fn tag_yak_multi_full_stack(
+    world: &mut FullStackWorld,
+    name: String,
+    tag1: String,
+    tag2: String,
+) -> Result<()> {
     world.add_tags(&name, vec![tag1, tag2])
 }
 
 #[when(regex = r#"^I tag "(.+)" with "(.+)" and "(.+)"$"#)]
-async fn tag_yak_multi_in_process(world: &mut InProcessWorld, name: String, tag1: String, tag2: String) -> Result<()> {
+async fn tag_yak_multi_in_process(
+    world: &mut InProcessWorld,
+    name: String,
+    tag1: String,
+    tag2: String,
+) -> Result<()> {
     world.add_tags(&name, vec![tag1, tag2])
 }
 
 #[when(regex = r#"^I remove the tag "(.+)" from "(.+)"$"#)]
-async fn remove_tag_full_stack(world: &mut FullStackWorld, tag: String, name: String) -> Result<()> {
+async fn remove_tag_full_stack(
+    world: &mut FullStackWorld,
+    tag: String,
+    name: String,
+) -> Result<()> {
     world.remove_tags(&name, vec![tag])
 }
 
 #[when(regex = r#"^I remove the tag "(.+)" from "(.+)"$"#)]
-async fn remove_tag_in_process(world: &mut InProcessWorld, tag: String, name: String) -> Result<()> {
+async fn remove_tag_in_process(
+    world: &mut InProcessWorld,
+    tag: String,
+    name: String,
+) -> Result<()> {
     world.remove_tags(&name, vec![tag])
 }
 

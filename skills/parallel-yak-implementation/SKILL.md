@@ -65,7 +65,22 @@ For each returning agent:
 
 If an agent fails, keep the yak as wip and investigate.
 
+## ⛔ The Main Branch Rule
+
+**Neither you nor your subagents may modify main's working
+tree.** Main is for merging finished branches only.
+
+- **Subagents** must each work in their own worktree
+- **The orchestrating agent** (you) must not stash, clean,
+  or edit files on main
+- If you see uncommitted changes on main, **stop and ask
+  the user** — they belong to someone else
+
 ## Common Mistakes
+
+**Working directly on main** - The most dangerous mistake.
+Always dispatch subagents with worktree instructions. If a
+subagent reports it's working on main, kill it immediately.
 
 **Forgetting to mark wip** - Agents start working but yaks
 still show as todo. Always mark wip BEFORE dispatching.

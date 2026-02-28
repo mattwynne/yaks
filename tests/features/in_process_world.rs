@@ -11,9 +11,9 @@ use yx::adapters::{
     TestBuffer,
 };
 use yx::application::{
-    AddTag, AddYak, Application, DoneYak, EditContext, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak,
-    ListTags, RemoveTag,
-    SetState, ShowContext, ShowField, StartYak, SyncYaks, WriteField,
+    AddTag, AddYak, Application, DoneYak, EditContext, ListTags, ListYaks, MoveYak, PruneYaks,
+    RemoveTag, RemoveYak, RenameYak, SetState, ShowContext, ShowField, StartYak, SyncYaks,
+    WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;

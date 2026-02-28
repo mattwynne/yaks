@@ -7,6 +7,19 @@ description: Use when starting work on a yak - sets up an isolated git worktree,
 
 **Working on yaks in isolation using git worktrees**
 
+## ⛔ The Main Branch Rule
+
+**Never modify main's working tree.** No commits, no edits,
+no stashing, no cleaning. Main is for merging finished
+branches only.
+
+If you see uncommitted changes on main, **stop and ask the
+user**. Those changes belong to someone else. Do not stash
+them, revert them, or clean them up.
+
+All implementation work — without exception — happens in a
+worktree on a feature branch.
+
 ## Purpose
 
 When multiple Claude agents work on the same yaks codebase, use git worktrees to:
@@ -263,4 +276,6 @@ git branch -d sort-ls-results-a1b2
 
 ## Always Use Worktrees
 
-Every yak gets its own worktree, no exceptions. Even for quick fixes, the worktree workflow keeps work isolated and the commit history clean. If the user explicitly asks to work directly on main, that's their call — but default to a worktree.
+Every yak gets its own worktree, no exceptions. Even for quick
+fixes, the worktree workflow keeps work isolated and the commit
+history clean. Never work directly on main.

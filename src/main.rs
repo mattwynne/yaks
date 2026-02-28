@@ -9,10 +9,9 @@ use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
-    GenerateCompletions, ListYaks, MoveYak, PruneYaks, RemoveYak, RenameYak, ResetDiskFromGit,
-    ListTags, RemoveTag,
-    ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak, StartYak, SyncYaks,
-    WriteContext, WriteField,
+    GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak,
+    ResetDiskFromGit, ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak,
+    StartYak, SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
