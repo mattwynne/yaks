@@ -4,7 +4,7 @@
 # Enable test-support feature so cucumber test target compiles
 features = ["test-support"]
 
-# Run both unit tests and in-process cucumber
+# Run both unit tests and cucumber (in-process mode is the default)
 additional_cargo_test_args = ["--lib", "--test", "cucumber"]
 
 # Exclude infrastructure that can only be tested at integration level:

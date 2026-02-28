@@ -224,7 +224,8 @@ test() {
 # @alias m
 mutate() {
   # Config in .cargo/mutants.toml sets features, test args, and exclusions
-  CUCUMBER_MODE=in-process YX_SKIP_GIT_CHECKS=1 cargo mutants "$@"
+  # In-process cucumber is now the default, no need to set CUCUMBER_MODE
+  YX_SKIP_GIT_CHECKS=1 cargo mutants "$@"
 }
 
 # @cmd Run mutation tests on changed files only (fast)
@@ -238,7 +239,7 @@ mutate-diff() {
     echo "No Rust changes vs main — nothing to mutate."
     return 0
   fi
-  CUCUMBER_MODE=in-process YX_SKIP_GIT_CHECKS=1 \
+  YX_SKIP_GIT_CHECKS=1 \
     cargo mutants --in-diff "$diff_file" "$@"
 }
 
@@ -372,9 +373,15 @@ check() {
     return 1
   fi
 
-  echo "Running unit tests..."
+  echo "Running unit + in-process cucumber tests..."
   if ! cargo test --features test-support; then
-    echo "❌ Unit tests failed"
+    echo "❌ Unit / in-process cucumber tests failed"
+    return 1
+  fi
+
+  echo "Running full-stack cucumber tests..."
+  if ! CUCUMBER_MODE=fullstack cargo test --test cucumber --features test-support; then
+    echo "❌ Full-stack cucumber tests failed"
     return 1
   fi
 

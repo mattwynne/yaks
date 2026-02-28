@@ -16,8 +16,19 @@ async fn run_all_features() {
     let has_compgen = has_bash_completion_support();
 
     // Choose World implementation based on CUCUMBER_MODE env var
+    // Default is in-process (fast, ~1s). Use CUCUMBER_MODE=fullstack for
+    // full integration tests that spawn the yx binary (~39s).
     match std::env::var("CUCUMBER_MODE").as_deref() {
-        Ok("in-process") => {
+        Ok("fullstack") => {
+            FullStackWorld::cucumber()
+                .filter_run("features/", move |_, rule, sc| {
+                    let wip = sc.tags.iter().any(|t| t == "wip")
+                        || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
+                    !wip && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
+                })
+                .await;
+        }
+        _ => {
             InProcessWorld::cucumber()
                 .filter_run("features/", |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
@@ -25,15 +36,6 @@ async fn run_all_features() {
                     let fullstack = sc.tags.iter().any(|t| t == "fullstack")
                         || rule.is_some_and(|r| r.tags.iter().any(|t| t == "fullstack"));
                     !wip && !fullstack
-                })
-                .await;
-        }
-        _ => {
-            FullStackWorld::cucumber()
-                .filter_run("features/", move |_, rule, sc| {
-                    let wip = sc.tags.iter().any(|t| t == "wip")
-                        || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
-                    !wip && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
                 })
                 .await;
         }
