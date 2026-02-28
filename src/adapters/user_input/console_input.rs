@@ -20,7 +20,15 @@ impl InputPort for ConsoleInput {
         initial_content: Option<&str>,
         template: Option<&str>,
     ) -> Result<Option<String>> {
-        // Try reading from stdin first (non-TTY)
+        // When initial_content or template is provided, the caller
+        // explicitly wants editor-based input (e.g. --edit flag).
+        // Go straight to the editor — stdin was already pre-read by
+        // main() and passed via with_initial_content() if needed.
+        if initial_content.is_some() || template.is_some() {
+            return self.edit_content(initial_content, template);
+        }
+
+        // No explicit edit intent — try reading from stdin (non-TTY)
         if !io::stdin().is_terminal() {
             return self.read_stdin_content();
         }
@@ -82,6 +90,22 @@ impl ConsoleInput {
         }
     }
 
+    /// Check whether stdin is connected to a pipe or regular file
+    /// (as opposed to a terminal or /dev/null).
+    pub fn stdin_is_piped() -> bool {
+        use std::os::unix::io::AsRawFd;
+
+        let stdin_fd = io::stdin().as_raw_fd();
+
+        let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+        let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
+        if stat_result != 0 {
+            return false;
+        }
+        let file_type = stat.st_mode & libc::S_IFMT;
+        file_type == libc::S_IFIFO || file_type == libc::S_IFREG
+    }
+
     pub fn stdin_has_readable_data() -> bool {
         use std::os::unix::io::AsRawFd;
 
@@ -89,14 +113,8 @@ impl ConsoleInput {
 
         // First check: Is it a pipe (FIFO) or a regular file
         // (redirect)?
-        let mut stat: libc::stat = unsafe { std::mem::zeroed() };
-        let stat_result = unsafe { libc::fstat(stdin_fd, &mut stat) };
-        if stat_result != 0 {
+        if !Self::stdin_is_piped() {
             return false;
-        }
-        let file_type = stat.st_mode & libc::S_IFMT;
-        if file_type != libc::S_IFIFO && file_type != libc::S_IFREG {
-            return false; // Not a pipe or file, don't try to read
         }
 
         // Second check: Is there data available to read?

@@ -209,6 +209,9 @@ impl yx::domain::ports::AuthenticationPort for UnknownAuthentication {
 /// This lets route_command make stdin-dependent decisions without
 /// touching any adapter types.
 struct StdinState {
+    /// True when stdin is connected to a pipe or file (even if empty).
+    /// Used to distinguish "no stdin" (show) from "empty stdin" (no-op).
+    is_piped: bool,
     /// Pre-read stdin content (consumed once). Available for commands
     /// that need it as initial editor content (e.g. context --edit
     /// with piped stdin).
@@ -306,6 +309,9 @@ fn route_command(
                 handler.handle(use_case)
             } else if let Some(ref content) = stdin.content {
                 handler.handle(WriteContext::new(&name_str, content))
+            } else if stdin.is_piped {
+                // Stdin was piped but empty — no-op (don't fall through to show)
+                Ok(())
             } else {
                 // Default (no piped data, no --edit): show
                 // --show kept for backward compat
@@ -336,6 +342,9 @@ fn route_command(
                 handler.handle(use_case)
             } else if let Some(ref content) = stdin.content {
                 handler.handle(WriteField::new(&name_str, &field).with_content(content))
+            } else if stdin.is_piped {
+                // Stdin was piped but empty — no-op (don't fall through to show)
+                Ok(())
             } else {
                 // Default (no piped data, no --edit): show
                 handler.handle(ShowField::new(&name_str, &field))
@@ -380,13 +389,15 @@ fn main() -> Result<()> {
     // Pre-compute stdin state before any adapter construction.
     // This is the only place main() touches an adapter directly — it
     // passes the result into route_command so routing stays pure.
-    let stdin_content = if ConsoleInput::stdin_has_readable_data() {
+    let is_piped = ConsoleInput::stdin_is_piped();
+    let stdin_content = if is_piped && ConsoleInput::stdin_has_readable_data() {
         let input = ConsoleInput;
         input.read_stdin_content().ok().flatten()
     } else {
         None
     };
     let stdin = StdinState {
+        is_piped,
         content: stdin_content,
     };
 
