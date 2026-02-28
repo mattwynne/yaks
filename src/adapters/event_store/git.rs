@@ -849,7 +849,7 @@ impl EventStore for GitEventStore {
         // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
         Self::fetch_peer_ref(&repo_path)?;
 
-        // 2. Check peer schema version compatibility
+        // 2. Check peer schema version and migrate if needed
         let peer_location = super::migration::EventStoreLocation {
             repo: &self.repo,
             ref_name: "refs/notes/yaks-peer",
@@ -869,6 +869,9 @@ impl EventStore for GitEventStore {
                 );
             }
         }
+
+        // Migrate the peer ref to the current schema version
+        super::migration::Migrator::for_current_version().ensure_schema(&peer_location)?;
 
         // 3. Get local and peer events
         let local_events = EventStore::get_all_events(self)?;
@@ -2018,6 +2021,78 @@ mod tests {
 
             // Should succeed — no peer ref means no version conflict
             local_store.sync(&mut bus, &output).unwrap();
+        }
+
+        #[test]
+        fn sync_migrates_peer_with_older_schema_version() {
+            use crate::adapters::event_store::migration::read_schema_version;
+
+            let (origin_dir, _local_dir, mut local_store) = setup_origin_and_local();
+
+            // Create a v3-format event on origin (has name and id, but uses
+            // nested tree structure which v3→v4 migration flattens).
+            // This is a realistic scenario: origin written by a binary one
+            // version behind.
+            {
+                let origin_repo = Repository::open(origin_dir.path()).unwrap();
+                let state_blob = origin_repo.blob(b"todo").unwrap();
+                let context_blob = origin_repo.blob(b"").unwrap();
+                let name_blob = origin_repo.blob(b"make the tea").unwrap();
+                let id_blob = origin_repo.blob(b"make-the-tea-a1b2").unwrap();
+
+                let mut yak_builder = origin_repo.treebuilder(None).unwrap();
+                yak_builder.insert("state", state_blob, 0o100644).unwrap();
+                yak_builder
+                    .insert("context.md", context_blob, 0o100644)
+                    .unwrap();
+                yak_builder.insert("name", name_blob, 0o100644).unwrap();
+                yak_builder.insert("id", id_blob, 0o100644).unwrap();
+                let yak_tree = yak_builder.write().unwrap();
+
+                let version_blob = origin_repo.blob(b"3").unwrap();
+                let mut root_builder = origin_repo.treebuilder(None).unwrap();
+                root_builder
+                    .insert("make-the-tea-a1b2", yak_tree, 0o040000)
+                    .unwrap();
+                root_builder
+                    .insert(".schema-version", version_blob, 0o100644)
+                    .unwrap();
+                let root_tree_oid = root_builder.write().unwrap();
+                let root_tree = origin_repo.find_tree(root_tree_oid).unwrap();
+
+                let sig = origin_repo.signature().unwrap();
+                origin_repo
+                    .commit(
+                        Some("refs/notes/yaks"),
+                        &sig,
+                        &sig,
+                        "Added: \"make the tea\" \"make-the-tea-a1b2\"",
+                        &root_tree,
+                        &[],
+                    )
+                    .unwrap();
+
+                // Verify origin is at v3
+                let origin_location = EventStoreLocation {
+                    repo: &origin_repo,
+                    ref_name: "refs/notes/yaks",
+                };
+                assert_eq!(
+                    read_schema_version(&origin_location).unwrap(),
+                    Some(3),
+                    "Origin should be at v3"
+                );
+            }
+
+            let mut bus = EventBus::new();
+            let (output, _) = make_test_display();
+
+            // Sync should succeed — migrating the peer ref from v3 to v4
+            local_store.sync(&mut bus, &output).unwrap();
+
+            // Verify we got the event
+            let events = EventStore::get_all_events(&local_store).unwrap();
+            assert_eq!(events.len(), 1, "Should have pulled the event from origin");
         }
     }
 }
