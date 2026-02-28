@@ -1,8 +1,8 @@
 // CommandHandler trait - structural enforcement that routing code
 // can only dispatch use cases, never access Application internals.
 
-use anyhow::Result;
 use super::UseCase;
+use anyhow::Result;
 
 /// Trait for dispatching use cases.
 ///

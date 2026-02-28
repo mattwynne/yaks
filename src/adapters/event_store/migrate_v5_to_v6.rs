@@ -286,9 +286,7 @@ mod tests {
         let name_blob = repo.blob(b"Test").unwrap();
 
         let mut yak_builder = repo.treebuilder(None).unwrap();
-        yak_builder
-            .insert(".state", state_blob, 0o100644)
-            .unwrap();
+        yak_builder.insert(".state", state_blob, 0o100644).unwrap();
         yak_builder.insert(".name", name_blob, 0o100644).unwrap();
         let yak_tree = yak_builder.write().unwrap();
 

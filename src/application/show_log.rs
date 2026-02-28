@@ -265,7 +265,9 @@ mod tests {
         let compacted_lines: Vec<&&str> = lines[compacted_idx..].iter().collect();
 
         assert!(
-            compacted_lines.iter().any(|l| l.contains("FieldUpdated") && l.contains("state")),
+            compacted_lines
+                .iter()
+                .any(|l| l.contains("FieldUpdated") && l.contains("state")),
             "Expected FieldUpdated for state in Compacted section, got: {:?}",
             compacted_lines
         );

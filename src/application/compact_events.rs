@@ -107,7 +107,9 @@ mod tests {
         // Event store should have a compacted event
         let events = EventStore::get_all_events(&event_store).unwrap();
         assert!(
-            events.iter().any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
+            events
+                .iter()
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Expected a Compacted event after compaction"
         );
     }
@@ -144,7 +146,9 @@ mod tests {
         // Event store should NOT have a compacted event
         let events = EventStore::get_all_events(&event_store).unwrap();
         assert!(
-            !events.iter().any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
+            !events
+                .iter()
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Should not compact when user declines"
         );
     }
@@ -173,11 +177,14 @@ mod tests {
         );
 
         app.handle(AddYak::new("test-yak")).unwrap();
-        app.handle(CompactEvents::new().with_skip_confirm(true)).unwrap();
+        app.handle(CompactEvents::new().with_skip_confirm(true))
+            .unwrap();
 
         let events = EventStore::get_all_events(&event_store).unwrap();
         assert!(
-            events.iter().any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
+            events
+                .iter()
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Should compact when skip_confirm is true"
         );
     }

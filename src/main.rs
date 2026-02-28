@@ -224,6 +224,49 @@ struct StdinState {
 /// adapter types, or domain types — it only sees `CommandHandler`
 /// with a single `handle()` method. The compiler enforces the
 /// architectural boundary from ADR 0013.
+fn route_context(
+    handler: &mut impl CommandHandler,
+    name: &str,
+    edit: bool,
+    stdin: &StdinState,
+) -> Result<()> {
+    if edit {
+        let mut use_case = EditContext::new(name);
+        if let Some(ref content) = stdin.content {
+            use_case = use_case.with_initial_content(content);
+        }
+        handler.handle(use_case)
+    } else if let Some(ref content) = stdin.content {
+        handler.handle(WriteContext::new(name, content))
+    } else if stdin.is_piped {
+        Ok(()) // Piped but empty — no-op
+    } else {
+        handler.handle(ShowContext::new(name))
+    }
+}
+
+fn route_field(
+    handler: &mut impl CommandHandler,
+    name: &str,
+    field: &str,
+    edit: bool,
+    stdin: &StdinState,
+) -> Result<()> {
+    if edit {
+        let mut use_case = EditField::new(name, field);
+        if let Some(ref content) = stdin.content {
+            use_case = use_case.with_initial_content(content);
+        }
+        handler.handle(use_case)
+    } else if let Some(ref content) = stdin.content {
+        handler.handle(WriteField::new(name, field).with_content(content))
+    } else if stdin.is_piped {
+        Ok(()) // Piped but empty — no-op
+    } else {
+        handler.handle(ShowField::new(name, field))
+    }
+}
+
 fn route_command(
     cmd: Commands,
     handler: &mut impl CommandHandler,
@@ -298,26 +341,7 @@ fn route_command(
             name,
             show: _,
             edit,
-        } => {
-            let name_str = name.join(" ");
-            if edit {
-                let mut use_case = EditContext::new(&name_str);
-                // If stdin was piped, use it as initial content for the editor
-                if let Some(ref content) = stdin.content {
-                    use_case = use_case.with_initial_content(content);
-                }
-                handler.handle(use_case)
-            } else if let Some(ref content) = stdin.content {
-                handler.handle(WriteContext::new(&name_str, content))
-            } else if stdin.is_piped {
-                // Stdin was piped but empty — no-op (don't fall through to show)
-                Ok(())
-            } else {
-                // Default (no piped data, no --edit): show
-                // --show kept for backward compat
-                handler.handle(ShowContext::new(&name_str))
-            }
-        }
+        } => route_context(handler, &name.join(" "), edit, &stdin),
         Commands::State {
             name,
             state,
@@ -331,25 +355,7 @@ fn route_command(
             field,
             show: _,
             edit,
-        } => {
-            let name_str = name.join(" ");
-            if edit {
-                let mut use_case = EditField::new(&name_str, &field);
-                // If stdin was piped, use it as initial content for the editor
-                if let Some(ref content) = stdin.content {
-                    use_case = use_case.with_initial_content(content);
-                }
-                handler.handle(use_case)
-            } else if let Some(ref content) = stdin.content {
-                handler.handle(WriteField::new(&name_str, &field).with_content(content))
-            } else if stdin.is_piped {
-                // Stdin was piped but empty — no-op (don't fall through to show)
-                Ok(())
-            } else {
-                // Default (no piped data, no --edit): show
-                handler.handle(ShowField::new(&name_str, &field))
-            }
-        }
+        } => route_field(handler, &name.join(" "), &field, edit, &stdin),
         Commands::Reset {
             disk_from_git,
             git_from_disk,
@@ -364,9 +370,7 @@ fn route_command(
                 handler.handle(ResetDiskFromGit::new())
             }
         }
-        Commands::Compact { yes } => {
-            handler.handle(CompactEvents::new().with_skip_confirm(yes))
-        }
+        Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync => handler.handle(SyncYaks::new()),
         Commands::Log => handler.handle(ShowLog::new()),
         Commands::Completions { words } => handler.handle(GenerateCompletions::new(words)),

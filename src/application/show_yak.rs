@@ -70,8 +70,7 @@ impl ShowYak {
                 "children": children,
             });
 
-            app.display
-                .info(&serde_json::to_string_pretty(&json)?);
+            app.display.info(&serde_json::to_string_pretty(&json)?);
             return Ok(());
         }
 

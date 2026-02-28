@@ -62,18 +62,29 @@ mod tests {
     use super::*;
     use crate::adapters::{make_test_display, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::application::AddYak;
-    use crate::domain::ports::{AuthenticationPort, ReadYakStore};
     use crate::domain::event_metadata::Author;
+    use crate::domain::ports::{AuthenticationPort, ReadYakStore};
     use crate::infrastructure::EventBus;
 
     struct TestAuth;
     impl AuthenticationPort for TestAuth {
         fn current_author(&self) -> Author {
-            Author { name: "test".to_string(), email: "test@test.com".to_string() }
+            Author {
+                name: "test".to_string(),
+                email: "test@test.com".to_string(),
+            }
         }
     }
 
-    fn setup() -> (InMemoryEventStore, EventBus, InMemoryStorage, crate::adapters::user_display::ConsoleDisplay, crate::adapters::TestBuffer, InMemoryInput, TestAuth) {
+    fn setup() -> (
+        InMemoryEventStore,
+        EventBus,
+        InMemoryStorage,
+        crate::adapters::user_display::ConsoleDisplay,
+        crate::adapters::TestBuffer,
+        InMemoryInput,
+        TestAuth,
+    ) {
         let event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -81,7 +92,15 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth;
-        (event_store, event_bus, storage, display, buffer, input, auth)
+        (
+            event_store,
+            event_bus,
+            storage,
+            display,
+            buffer,
+            input,
+            auth,
+        )
     }
 
     #[test]
@@ -90,16 +109,29 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
-            app.handle(AddYak::new("my yak").with_field("notes", "old value")).unwrap();
+            app.handle(AddYak::new("my yak").with_field("notes", "old value"))
+                .unwrap();
         }
 
         input.set_content(Some("new value".to_string()));
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             app.handle(EditField::new("my yak", "notes")).unwrap();
         }
@@ -115,16 +147,29 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
-            app.handle(AddYak::new("my yak").with_field("notes", "original")).unwrap();
+            app.handle(AddYak::new("my yak").with_field("notes", "original"))
+                .unwrap();
         }
 
         input.set_content(None);
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             app.handle(EditField::new("my yak", "notes")).unwrap();
         }
@@ -140,7 +185,13 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             app.handle(AddYak::new("my yak")).unwrap();
         }
@@ -149,7 +200,13 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             app.handle(EditField::new("my yak", "notes")).unwrap();
         }
@@ -165,7 +222,13 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             app.handle(AddYak::new("my yak")).unwrap();
         }
@@ -174,7 +237,13 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             let result = app.handle(EditField::new("my yak", ".state"));
             assert!(result.is_err());
@@ -187,9 +256,16 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
-            app.handle(AddYak::new("my yak").with_field("notes", "old value")).unwrap();
+            app.handle(AddYak::new("my yak").with_field("notes", "old value"))
+                .unwrap();
         }
 
         // Input returns "edited content" (simulating editor output)
@@ -197,10 +273,17 @@ mod tests {
 
         {
             let mut app = Application::new(
-                &mut event_store, &mut event_bus, &storage, &display, &input, None, &auth,
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
             );
             // Use with_initial_content to override what the editor sees
-            app.handle(EditField::new("my yak", "notes").with_initial_content("piped content")).unwrap();
+            app.handle(EditField::new("my yak", "notes").with_initial_content("piped content"))
+                .unwrap();
         }
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my yak").unwrap();

@@ -70,7 +70,8 @@ mod tests {
         );
 
         app.handle(AddYak::new("my yak")).unwrap();
-        app.handle(WriteContext::new("my yak", "piped content")).unwrap();
+        app.handle(WriteContext::new("my yak", "piped content"))
+            .unwrap();
         buffer.clear();
 
         app.handle(ShowContext::new("my yak")).unwrap();
