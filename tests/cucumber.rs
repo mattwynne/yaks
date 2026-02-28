@@ -21,7 +21,7 @@ async fn run_all_features() {
     match std::env::var("CUCUMBER_MODE").as_deref() {
         Ok("fullstack") => {
             FullStackWorld::cucumber()
-                .filter_run("features/", move |_, rule, sc| {
+                .filter_run_and_exit("features/", move |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
                         || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
                     !wip && (has_compgen || !sc.tags.iter().any(|t| t == "bash_completion"))
@@ -30,7 +30,7 @@ async fn run_all_features() {
         }
         _ => {
             InProcessWorld::cucumber()
-                .filter_run("features/", |_, rule, sc| {
+                .filter_run_and_exit("features/", |_, rule, sc| {
                     let wip = sc.tags.iter().any(|t| t == "wip")
                         || rule.is_some_and(|r| r.tags.iter().any(|t| t == "wip"));
                     let fullstack = sc.tags.iter().any(|t| t == "fullstack")
