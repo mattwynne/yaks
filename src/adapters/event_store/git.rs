@@ -462,36 +462,26 @@ impl GitEventStore {
         for data in &ordered {
             let subtree = self.repo.find_tree(data.subtree_id)?;
 
-            // Read .created.json if present (fall back to .metadata.json for pre-v5 compat)
-            let meta_oid = subtree
-                .get_name(".created.json")
-                .or_else(|| subtree.get_name(".metadata.json"))
-                .map(|e| e.id());
-            let (created_by, created_at) =
-                if let Some(meta_id) = meta_oid {
-                    if let Ok(meta_blob) = self.repo.find_blob(meta_id) {
-                        if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                                use crate::domain::event_metadata::{Author, Timestamp};
-                                (
-                                    Author {
-                                        name: json["created_by"]["name"]
-                                            .as_str()
-                                            .unwrap_or("unknown")
-                                            .to_string(),
-                                        email: json["created_by"]["email"]
-                                            .as_str()
-                                            .unwrap_or("")
-                                            .to_string(),
-                                    },
-                                    Timestamp(json["created_at"].as_i64().unwrap_or(0)),
-                                )
-                            } else {
-                                (
-                                    crate::domain::event_metadata::Author::unknown(),
-                                    crate::domain::event_metadata::Timestamp::zero(),
-                                )
-                            }
+            // Read .created.json if present
+            let meta_oid = subtree.get_name(".created.json").map(|e| e.id());
+            let (created_by, created_at) = if let Some(meta_id) = meta_oid {
+                if let Ok(meta_blob) = self.repo.find_blob(meta_id) {
+                    if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
+                            use crate::domain::event_metadata::{Author, Timestamp};
+                            (
+                                Author {
+                                    name: json["created_by"]["name"]
+                                        .as_str()
+                                        .unwrap_or("unknown")
+                                        .to_string(),
+                                    email: json["created_by"]["email"]
+                                        .as_str()
+                                        .unwrap_or("")
+                                        .to_string(),
+                                },
+                                Timestamp(json["created_at"].as_i64().unwrap_or(0)),
+                            )
                         } else {
                             (
                                 crate::domain::event_metadata::Author::unknown(),
@@ -509,7 +499,13 @@ impl GitEventStore {
                         crate::domain::event_metadata::Author::unknown(),
                         crate::domain::event_metadata::Timestamp::zero(),
                     )
-                };
+                }
+            } else {
+                (
+                    crate::domain::event_metadata::Author::unknown(),
+                    crate::domain::event_metadata::Timestamp::zero(),
+                )
+            };
 
             // State
             let state = if let Some(state_entry) = subtree.get_name("state") {
@@ -650,7 +646,24 @@ impl EventStore for GitEventStore {
         let current_tree = self.get_current_tree()?;
 
         let tree_oid = self.build_tree_from_event(&event, current_tree.as_ref())?;
-        let tree = self.repo.find_tree(tree_oid)?;
+
+        // Ensure .schema-version is stamped on every commit's tree.
+        // This is critical for sync: peer refs must be identifiable by version.
+        let tree = {
+            let built_tree = self.repo.find_tree(tree_oid)?;
+            if built_tree.get_name(".schema-version").is_some() {
+                built_tree
+            } else {
+                use super::migration::CURRENT_SCHEMA_VERSION;
+                let version_blob = self
+                    .repo
+                    .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+                let mut builder = self.repo.treebuilder(Some(&built_tree))?;
+                builder.insert(".schema-version", version_blob, 0o100644)?;
+                let stamped_oid = builder.write()?;
+                self.repo.find_tree(stamped_oid)?
+            }
+        };
 
         // Commit message includes the event_id as a trailer for
         // stable cross-repo identity during sync.
@@ -1005,6 +1018,37 @@ mod tests {
     }
 
     #[test]
+    fn append_stamps_schema_version_on_first_event() {
+        use crate::adapters::event_store::migration::{
+            read_schema_version, EventStoreLocation, CURRENT_SCHEMA_VERSION,
+        };
+
+        let (_tmp, mut store) = setup_test_repo();
+
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("test"),
+                    id: YakId::from("test-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let location = EventStoreLocation {
+            repo: &store.repo,
+            ref_name: "refs/notes/yaks",
+        };
+        let version = read_schema_version(&location).unwrap();
+        assert_eq!(
+            version,
+            Some(CURRENT_SCHEMA_VERSION),
+            "First append should stamp the current schema version"
+        );
+    }
+
+    #[test]
     fn added_with_id_keys_tree_entry_by_id() {
         let (_tmp, mut store) = setup_test_repo();
 
@@ -1060,11 +1104,11 @@ mod tests {
 
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Should have exactly one entry, keyed by id
+        // Should have exactly two entries: the yak and .schema-version
         assert_eq!(
             tree.len(),
-            1,
-            "Expected exactly 1 tree entry, got {}",
+            2,
+            "Expected exactly 2 tree entries (yak + .schema-version), got {}",
             tree.len()
         );
 
@@ -1109,8 +1153,8 @@ mod tests {
 
         let tree = store.get_current_tree().unwrap().unwrap();
 
-        // Root should have two entries: parent and child (flat)
-        assert_eq!(tree.len(), 2);
+        // Root should have three entries: parent, child, and .schema-version
+        assert_eq!(tree.len(), 3);
 
         // Both at root level
         assert!(

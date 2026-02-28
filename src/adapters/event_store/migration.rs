@@ -52,7 +52,9 @@ impl Migrator {
     }
 
     /// Run migration against a repo at the given path.
-    pub fn run(&self, repo_path: &Path, ref_name: &str) -> Result<()> {
+    /// Run migration against a repo at the given path.
+    /// Returns true if migrations were performed (and the projection should be reset).
+    pub fn run(&self, repo_path: &Path, ref_name: &str) -> Result<bool> {
         let repo = Repository::open(repo_path)
             .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
         let location = EventStoreLocation {
@@ -67,14 +69,16 @@ impl Migrator {
     /// - Version matches: no-op.
     /// - Older version: runs migrations in order, stamps new version.
     /// - Newer version: errors with "please update yx".
-    pub fn ensure_schema(&self, location: &EventStoreLocation) -> Result<()> {
+    /// Ensure the event store is at the expected schema version.
+    /// Returns true if migrations were performed (and the projection should be reset).
+    pub fn ensure_schema(&self, location: &EventStoreLocation) -> Result<bool> {
         let current = match read_schema_version(location)? {
             Some(v) => v,
-            None => return Ok(()), // Brand new repo — version stamped on first write
+            None => return Ok(false), // Brand new repo — version stamped on first write
         };
 
         if current == self.expected_version {
-            return Ok(());
+            return Ok(false);
         }
 
         if current > self.expected_version {
@@ -88,15 +92,23 @@ impl Migrator {
 
         // Run migrations from current to expected
         let mut version = current;
+        let mut migrated = false;
         for migration in &self.migrations {
             if migration.source_version() == version {
                 migration.migrate(location)?;
                 version = migration.target_version();
+                migrated = true;
             }
         }
 
-        write_schema_version(location, self.expected_version)?;
-        Ok(())
+        if migrated {
+            // Compact after migration: create a Compacted commit so that
+            // get_all_events() never walks past into pre-migration history.
+            compact_ref(location, self.expected_version)?;
+        } else {
+            write_schema_version(location, self.expected_version)?;
+        }
+        Ok(migrated)
     }
 }
 
@@ -146,6 +158,38 @@ pub fn write_schema_version(location: &EventStoreLocation, version: u32) -> Resu
         &sig,
         &sig,
         &format!("Schema version: {}", version),
+        &new_tree,
+        &[&parent],
+    )?;
+
+    Ok(())
+}
+
+/// Compact the event store after migration: create a Compacted commit whose tree
+/// is the current tip tree (with the schema version stamped). `get_all_events()`
+/// stops at Compacted commits, so pre-migration history is never visited.
+fn compact_ref(location: &EventStoreLocation, version: u32) -> Result<()> {
+    let oid = location.repo.refname_to_id(location.ref_name)?;
+    let parent = location.repo.find_commit(oid)?;
+    let current_tree = parent.tree()?;
+
+    // Stamp schema version on the tree
+    let version_blob = location.repo.blob(version.to_string().as_bytes())?;
+    let mut builder = location.repo.treebuilder(Some(&current_tree))?;
+    builder.insert(".schema-version", version_blob, 0o100644)?;
+    let new_tree_oid = builder.write()?;
+    let new_tree = location.repo.find_tree(new_tree_oid)?;
+
+    let sig = location
+        .repo
+        .signature()
+        .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+
+    location.repo.commit(
+        Some(location.ref_name),
+        &sig,
+        &sig,
+        &format!("Compacted\n\nEvent-Id: migration-to-v{}", version),
         &new_tree,
         &[&parent],
     )?;

@@ -226,11 +226,14 @@ fn main() -> Result<()> {
         PathBuf::from(".yaks")
     };
 
+    let needs_projection_reset;
     let mut event_store: Box<dyn EventStore> = if let Some(ref root) = repo_root {
-        // Run schema migration before using the event store
-        Migrator::for_current_version().run(root, "refs/notes/yaks")?;
+        // Run schema migration before using the event store.
+        // Returns true if migrations ran (projection needs rebuilding).
+        needs_projection_reset = Migrator::for_current_version().run(root, "refs/notes/yaks")?;
         Box::new(GitEventStore::new(root)?)
     } else if skip_git {
+        needs_projection_reset = false;
         // Outside a git repo but skipping git checks: use a no-op store
         Box::new(NoOpEventStore)
     } else {
@@ -248,6 +251,13 @@ fn main() -> Result<()> {
         DirectoryStorage::without_git(&yaks_path)?
     };
     event_bus.register(Box::new(storage.clone()));
+
+    // After migration, rebuild the disk projection from the compacted event store.
+    // This clears old files (e.g. .metadata.json) and writes the current format.
+    if needs_projection_reset {
+        let all_events = event_store.get_all_events()?;
+        event_bus.rebuild(&all_events)?;
+    }
 
     // Initialize other adapters
     let display = ConsoleDisplay::stdout();

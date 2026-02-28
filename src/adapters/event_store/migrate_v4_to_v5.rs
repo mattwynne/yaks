@@ -93,9 +93,7 @@ impl Migration for MigrateV4ToV5 {
 mod tests {
     use super::*;
     use crate::adapters::event_store::migration::tests::{read_yak_blob, setup_test_repo};
-    use crate::adapters::event_store::migration::{
-        read_schema_version, EventStoreLocation,
-    };
+    use crate::adapters::event_store::migration::{read_schema_version, EventStoreLocation};
 
     fn location_for(repo: &git2::Repository) -> EventStoreLocation<'_> {
         EventStoreLocation {
@@ -311,13 +309,11 @@ mod tests {
 
         // Verify content
         let c1: serde_json::Value =
-            serde_json::from_str(&read_yak_blob(&repo, "yak-1", ".created.json").unwrap())
-                .unwrap();
+            serde_json::from_str(&read_yak_blob(&repo, "yak-1", ".created.json").unwrap()).unwrap();
         assert_eq!(c1["created_by"]["name"], "Alice");
 
         let c2: serde_json::Value =
-            serde_json::from_str(&read_yak_blob(&repo, "yak-2", ".created.json").unwrap())
-                .unwrap();
+            serde_json::from_str(&read_yak_blob(&repo, "yak-2", ".created.json").unwrap()).unwrap();
         assert_eq!(c2["created_by"]["name"], "Bob");
     }
 }

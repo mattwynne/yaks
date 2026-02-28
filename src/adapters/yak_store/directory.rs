@@ -228,11 +228,9 @@ impl DirectoryStorage {
     }
 
     /// Read created_by and created_at from .created.json in a yak directory.
-    /// Falls back to .metadata.json for backward compatibility with pre-v5 stores.
-    /// Returns (Author::unknown(), Timestamp::zero()) if neither file is present or parseable.
+    /// Returns (Author::unknown(), Timestamp::zero()) if the file is missing or unparseable.
     fn read_metadata(dir: &Path) -> (Author, Timestamp) {
-        let content = fs::read_to_string(dir.join(".created.json"))
-            .or_else(|_| fs::read_to_string(dir.join(".metadata.json")));
+        let content = fs::read_to_string(dir.join(".created.json"));
         if let Ok(content) = content {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 let author = Author {
