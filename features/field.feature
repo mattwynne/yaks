@@ -110,3 +110,23 @@ Feature: Yak fields
       When I try to set the ".name" field of "my yak" to "custom name"
       Then the command should fail
       And the error should contain "Field name '.name' is reserved"
+
+  Rule: --show and piped stdin are mutually exclusive
+
+    @fullstack
+    Example: --show with piped input is rejected
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to show "notes" field of "my yak" with piped input "some content"
+      Then the command should fail
+      And the error should contain "Cannot use --show when piping input"
+
+  Rule: --show and --edit are mutually exclusive
+
+    @fullstack
+    Example: --show with --edit is rejected
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to run yx field "my yak" notes --show --edit
+      Then the command should fail
+      And the error should contain "Cannot use both --show and --edit"

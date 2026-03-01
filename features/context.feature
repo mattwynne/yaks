@@ -102,3 +102,23 @@ Feature: Manage yak context
         """
         my yak
         """
+
+  Rule: --show and piped stdin are mutually exclusive
+
+    @fullstack
+    Example: --show with piped input is rejected
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to show context of "my yak" with piped input "some content"
+      Then the command should fail
+      And the error should contain "Cannot use --show when piping input"
+
+  Rule: --show and --edit are mutually exclusive
+
+    @fullstack
+    Example: --show with --edit is rejected
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to run yx context "my yak" --show --edit
+      Then the command should fail
+      And the error should contain "Cannot use both --show and --edit"
