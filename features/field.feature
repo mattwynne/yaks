@@ -11,8 +11,6 @@ Feature: Yak fields
       And I show the "notes" field of "my yak"
       Then the output should be:
         """
-        my yak
-
         field content
         """
 
@@ -35,8 +33,6 @@ Feature: Yak fields
       And I run yx field "my yak" notes
       Then the output should be:
         """
-        my yak
-
         my notes
         """
 
@@ -73,8 +69,6 @@ Feature: Yak fields
       Then the output should be:
         """
         my yak
-
-        my yak
         """
 
   Rule: The .name field is updated on rename
@@ -88,8 +82,6 @@ Feature: Yak fields
       And I show the ".name" field of "new name"
       Then the output should be:
         """
-        new name
-
         new name
         """
 

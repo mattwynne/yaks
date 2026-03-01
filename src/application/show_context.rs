@@ -19,14 +19,8 @@ impl ShowContext {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
 
-        // Display the header (yak name)
-        app.display.info(yak.name.as_str());
-
-        // Display a blank line if there's content
         if let Some(context) = &yak.context {
             if !context.is_empty() {
-                app.display.info("");
-                // Display the context
                 app.display.info(context);
             }
         }
@@ -64,7 +58,7 @@ mod tests {
     }
 
     #[test]
-    fn shows_blank_separator_and_context_when_context_is_set() {
+    fn shows_context_without_header() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -89,11 +83,11 @@ mod tests {
         app.handle(ShowContext::new("my yak")).unwrap();
         let output = buffer.contents();
 
-        assert_eq!(output, "my yak\n\nsome context\n");
+        assert_eq!(output, "some context\n");
     }
 
     #[test]
-    fn shows_only_name_when_no_context_is_set() {
+    fn shows_nothing_when_no_context_is_set() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         let storage = InMemoryStorage::new();
@@ -116,6 +110,6 @@ mod tests {
         app.handle(ShowContext::new("my yak")).unwrap();
         let output = buffer.contents();
 
-        assert_eq!(output, "my yak\n");
+        assert_eq!(output, "");
     }
 }

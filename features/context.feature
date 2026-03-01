@@ -2,9 +2,9 @@ Feature: Manage yak context
   Adds detailed notes, requirements, or background to yaks.
 
   Context is stored per-yak and can be set from stdin (pipeline mode)
-  or edited interactively ($EDITOR). The --show flag displays the yak
-  name followed by its context. Keep yak names short and use context
-  for detailed requirements, acceptance criteria, and technical notes.
+  or edited interactively ($EDITOR). The --show flag displays the raw
+  context content. Keep yak names short and use context for detailed
+  requirements, acceptance criteria, and technical notes.
 
   Rule: Context can be set from stdin
 
@@ -15,8 +15,6 @@ Feature: Manage yak context
       And I show the context of "my yak"
       Then the output should be:
         """
-        my yak
-
         # Some context
         """
 
@@ -27,8 +25,6 @@ Feature: Manage yak context
       And I show the context of "my yak"
       Then the output should be:
         """
-        my yak
-
         # File context
         """
 
@@ -42,8 +38,6 @@ Feature: Manage yak context
       And I show the context of "my yak"
       Then the output should be:
         """
-        my yak
-
         new
         """
 
@@ -62,13 +56,12 @@ Feature: Manage yak context
     applies to the fullstack (binary) test path.
 
     @fullstack
-    Example: bare context shows the yak name
+    Example: bare context shows nothing when no context is set
       Given I have a clean git repository
       And I add the yak "my yak"
       When I run yx context "my yak"
       Then the output should be:
         """
-        my yak
         """
 
   Rule: --edit launches editor for context
@@ -92,15 +85,14 @@ Feature: Manage yak context
       And I show the context of "my yak"
       Then the output should include "seed content - edited"
 
-  Rule: Show mode displays yak name and context
+  Rule: Show mode displays just the raw context
 
-    Example: Showing a yak with no context shows only the name
+    Example: Showing a yak with no context produces no output
       Given I have a clean git repository
       And I add the yak "my yak"
       When I show the context of "my yak"
       Then the output should be:
         """
-        my yak
         """
 
   Rule: --show and piped stdin are mutually exclusive
