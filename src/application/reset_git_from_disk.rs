@@ -15,22 +15,35 @@ use crate::domain::YakView;
 
 use super::{AddYak, Application, UseCase};
 
-pub struct ResetGitFromDisk;
-
-impl Default for ResetGitFromDisk {
-    fn default() -> Self {
-        Self
-    }
+#[derive(Default)]
+pub struct ResetGitFromDisk {
+    force: bool,
 }
 
 impl ResetGitFromDisk {
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    /// Skip the confirmation prompt (equivalent to --force flag)
+    pub fn with_force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
     }
 }
 
 impl UseCase for ResetGitFromDisk {
     fn execute(&self, app: &mut Application) -> Result<()> {
+        if !self.force {
+            let confirmed = app
+                .input
+                .confirm("This will wipe the git event log and rebuild from disk. Continue?")?;
+            if !confirmed {
+                app.display.info("Aborted.");
+                return Ok(());
+            }
+        }
+
         // 1. Read all yaks from the current disk projection
         let yaks = app.store.list_yaks()?;
         let yak_count = yaks.len();
@@ -266,6 +279,117 @@ mod tests {
         assert!(
             output_text.contains("Reset from disk: 0 yaks"),
             "Expected empty reset message, got: {}",
+            output_text
+        );
+    }
+    #[test]
+    fn reset_git_from_disk_aborts_when_not_confirmed() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, output) = make_test_display();
+        let input = InMemoryInput::new();
+        input.set_confirm(false);
+        let auth = InMemoryAuthentication::new();
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(AddYak::new("test-yak")).unwrap();
+        }
+
+        let events_before = EventStore::get_all_events(&event_store).unwrap().len();
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            // Reset should be a no-op when user declines
+            app.handle(ResetGitFromDisk::new()).unwrap();
+        }
+
+        // Event store should be unchanged
+        let events_after = EventStore::get_all_events(&event_store).unwrap().len();
+        assert_eq!(
+            events_before, events_after,
+            "Events should not change when user declines"
+        );
+
+        // Output should contain abort message
+        let output_text = output.contents();
+        assert!(
+            output_text.contains("Aborted"),
+            "Expected 'Aborted' in output, got: {}",
+            output_text
+        );
+    }
+
+    #[test]
+    fn reset_git_from_disk_with_force_skips_confirmation() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, output) = make_test_display();
+        let input = InMemoryInput::new();
+        input.set_confirm(false); // Would decline, but --force overrides
+        let auth = InMemoryAuthentication::new();
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(AddYak::new("test-yak")).unwrap();
+        }
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            // Force should skip confirmation
+            app.handle(ResetGitFromDisk::new().with_force(true))
+                .unwrap();
+        }
+
+        // Output should contain the reset message, not abort
+        let output_text = output.contents();
+        assert!(
+            output_text.contains("Reset from disk: 1 yaks"),
+            "Expected reset message in output, got: {}",
             output_text
         );
     }

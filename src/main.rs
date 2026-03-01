@@ -173,6 +173,9 @@ enum Commands {
         /// Wipe git history and replay yaks from disk through Application layer
         #[arg(long)]
         git_from_disk: bool,
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
     },
     /// Manage tags on a yak
     #[command(alias = "tags")]
@@ -415,13 +418,14 @@ fn route_command(
         Commands::Reset {
             disk_from_git,
             git_from_disk,
+            force,
         } => {
             if disk_from_git && git_from_disk {
                 anyhow::bail!("Cannot use both --disk-from-git and --git-from-disk");
             }
 
             if git_from_disk {
-                handler.handle(ResetGitFromDisk::new())
+                handler.handle(ResetGitFromDisk::new().with_force(force))
             } else {
                 handler.handle(ResetDiskFromGit::new())
             }
