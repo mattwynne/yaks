@@ -50,3 +50,12 @@ Feature: yx rename command
       When I rename the yak "old name" to "new name"
       And I run yx log
       Then the output should include "FieldUpdated"
+
+  Rule: Whitespace-only names are rejected
+
+    Example: Cannot rename to whitespace-only name
+      Given I have a clean git repository
+      And I add the yak "real yak"
+      When I try to rename the yak "real yak" to "   "
+      Then the command should fail
+      And the error should contain "cannot be empty"

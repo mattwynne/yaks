@@ -209,3 +209,11 @@ Feature: Add yaks
       When I run yx add "my yak" --field priority=high
       And I run yx field "my yak" priority --show
       Then the output should include "high"
+
+  Rule: Whitespace-only names are rejected
+
+    Example: Whitespace-only name is rejected
+      Given I have a clean git repository
+      When I try to add the yak "   "
+      Then the command should fail
+      And the error should contain "cannot be empty"
