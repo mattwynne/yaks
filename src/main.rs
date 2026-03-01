@@ -57,8 +57,8 @@ enum Commands {
         #[arg(
             long,
             default_value = "pretty",
-            help = "Output format: pretty (default), markdown, plain",
-            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots\n  - markdown: Checkbox-style list with indentation\n  - plain: Just yak names, one per line"
+            help = "Output format: pretty (default), markdown/md, plain/raw",
+            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line"
         )]
         format: String,
         /// Filter by completion status (done, not-done)
