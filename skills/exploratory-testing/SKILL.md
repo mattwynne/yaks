@@ -84,24 +84,9 @@ or risk focus.
 Create an isolated environment so exploration never touches the
 project's real `.yaks/` data.
 
-**Note:** Shell variables don't persist between Bash tool calls.
-Create the directory and capture its literal path, then use that
-literal path in all subsequent commands:
-
-```bash
-mktemp -d
-# Output: /tmp/tmp.xYz123AbC  ← capture this literal path
-```
-
-Then use the literal path in every command:
-
-```bash
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx <command>
-```
-
-- `YAK_PATH=<sandbox-path>` redirects storage to the temp directory
-- `YX_SKIP_GIT_CHECKS=1` avoids git setup requirements in temp dirs
-- **Never run bare `yx`** without these env vars during exploration
+Follow the [yx-sandbox skill](../yx-sandbox/SKILL.md) to set up
+and use a temp directory. Use the sandbox prefix on **every** `yx`
+command during exploration.
 
 ### Seed the Environment
 
@@ -193,11 +178,8 @@ Concrete next steps:
 
 ### Clean Up
 
-Remove the sandbox using the literal path:
-
-```bash
-rm -rf /tmp/tmp.xYz123AbC
-```
+Remove the sandbox as described in the
+[yx-sandbox skill](../yx-sandbox/SKILL.md).
 
 ## Quick Reference
 
@@ -211,12 +193,11 @@ rm -rf /tmp/tmp.xYz123AbC
 
 | Mistake | Fix |
 |---------|-----|
-| Running `yx` without `YAK_PATH=<sandbox>` | Every command needs `YAK_PATH=<sandbox-path> YX_SKIP_GIT_CHECKS=1` prefix |
 | Exploring without a charter | Always agree on target and heuristics first |
 | Only testing happy paths | Heuristics exist to push beyond the obvious |
 | Logging only failures | Record successes too - they confirm expected behaviour |
 | Exploring everything at once | Pick 2-4 heuristics per session, stay focused |
-| Forgetting to clean up the sandbox | `rm -rf <sandbox-path>` at the end |
+
 | Skipping exit code checks | `echo $?` after commands that should fail |
 | Not seeding enough data | Adapt seed data to what the charter needs |
 

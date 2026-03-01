@@ -17,10 +17,12 @@ Follow these steps:
 
 3. Mark it as wip: `yx start "$@"`
 
-4. Remember this yak as the current focus for the session. When
+4. Rename this session to the yak's name: `/session-name <yak name>`
+
+5. Remember this yak as the current focus for the session. When
    I use /yx-add or /yx-go, default to this as the parent.
 
-5. Assess readiness of incomplete children:
+6. Assess readiness of incomplete children:
    - For each incomplete child, run `yx show --json "<child name>"`
      to get its context
    - Categorise them:
