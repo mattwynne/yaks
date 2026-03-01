@@ -1110,7 +1110,7 @@ impl TestWorld for FullStackWorld {
     }
 
     fn list_yaks_json(&mut self) -> Result<()> {
-        self.run_yx(&["list", "--json"])
+        self.run_yx(&["list", "--format", "json"])
     }
 
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {

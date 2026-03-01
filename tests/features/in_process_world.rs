@@ -328,7 +328,7 @@ impl TestWorld for InProcessWorld {
     }
 
     fn list_yaks_json(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new("pretty", None).with_json(true)))
+        self.execute(|app| app.handle(ListYaks::new("json", None)))
     }
 
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {

@@ -34,7 +34,7 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
     // Commands that take yak names as arguments
     let commands_with_yak_args = vec![
         "add", "done", "finish", "start", "wip", "remove", "rm", "move", "mv", "rename", "context",
-        "state", "field",
+        "state", "field", "show",
     ];
 
     // Flags for each command
@@ -45,6 +45,7 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
             "context" => vec!["--show"],
             "field" => vec!["--show"],
             "list" | "ls" => vec!["--format", "--only"],
+            "show" => vec!["--format"],
             _ => vec![],
         }
     };

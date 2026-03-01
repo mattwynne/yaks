@@ -57,16 +57,13 @@ enum Commands {
         #[arg(
             long,
             default_value = "pretty",
-            help = "Output format: pretty (default), markdown/md, plain/raw",
-            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line"
+            help = "Output format: pretty (default), markdown/md, plain/raw, json",
+            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line\n  - json: Full yak tree as JSON array (for agents/scripts)"
         )]
         format: String,
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
-        /// Output as JSON (for agent/script consumption)
-        #[arg(long)]
-        json: bool,
     },
     /// Mark yak as done
     #[command(alias = "finish")]
@@ -125,9 +122,13 @@ enum Commands {
     Show {
         /// The yak name (space-separated words)
         name: Vec<String>,
-        /// Output as JSON (for agent/script consumption)
-        #[arg(long)]
-        json: bool,
+        #[arg(
+            long,
+            default_value = "pretty",
+            help = "Output format: pretty (default), json",
+            long_help = "Output format:\n  - pretty: Human-readable display with tree structure\n  - json: Full yak details as JSON (for agents/scripts)"
+        )]
+        format: String,
     },
     /// Show or edit yak context
     Context {
@@ -364,9 +365,7 @@ fn route_command(
             }
             handler.handle(use_case)
         }
-        Commands::List { format, only, json } => {
-            handler.handle(ListYaks::new(&format, only.as_deref()).with_json(json))
-        }
+        Commands::List { format, only } => handler.handle(ListYaks::new(&format, only.as_deref())),
         Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
             handler.handle(DoneYak::new(&name_str, recursive))
@@ -394,9 +393,9 @@ fn route_command(
             }
         }
         Commands::Rename { from, to } => handler.handle(RenameYak::new(&from, &to)),
-        Commands::Show { name, json } => {
+        Commands::Show { name, format } => {
             let name_str = name.join(" ");
-            handler.handle(ShowYak::new(&name_str).with_json(json))
+            handler.handle(ShowYak::new(&name_str, &format))
         }
         Commands::Context { name, show, edit } => {
             route_context(handler, &name.join(" "), show, edit, &stdin)

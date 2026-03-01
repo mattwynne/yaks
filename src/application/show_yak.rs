@@ -21,27 +21,31 @@ fn title_case(s: &str) -> String {
 
 pub struct ShowYak {
     name: String,
-    json: bool,
+    format: String,
 }
 
 impl ShowYak {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, format: &str) -> Self {
         Self {
             name: name.to_string(),
-            json: false,
+            format: format.to_string(),
         }
     }
 
-    pub fn with_json(mut self, json: bool) -> Self {
-        self.json = json;
-        self
-    }
-
     pub fn execute(&self, app: &mut Application) -> Result<()> {
+        let valid_formats = ["pretty", "json"];
+        if !valid_formats.contains(&self.format.as_str()) {
+            anyhow::bail!(
+                "Unknown format '{}'. Valid formats: {}",
+                self.format,
+                valid_formats.join(", ")
+            );
+        }
+
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
 
-        if self.json {
+        if self.format == "json" {
             let children: Vec<serde_json::Value> = yak
                 .children
                 .iter()
@@ -216,7 +220,7 @@ mod tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
@@ -264,7 +268,7 @@ mod tests {
         app.handle(AddYak::new("root yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("root yak")).unwrap();
+        app.handle(ShowYak::new("root yak", "pretty")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
         // First line should be top border, not a breadcrumb
@@ -300,7 +304,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("child")).unwrap();
+        app.handle(ShowYak::new("child", "pretty")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
         // First line: top border of box
@@ -345,7 +349,7 @@ mod tests {
         app.handle(EditContext::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("Here is some context about this yak."),
@@ -381,7 +385,7 @@ mod tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("This yak has no context yet"),
@@ -418,7 +422,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("parent")).unwrap();
+        app.handle(ShowYak::new("parent", "pretty")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
@@ -472,7 +476,7 @@ mod tests {
         app.handle(AddYak::new("lonely")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("lonely")).unwrap();
+        app.handle(ShowYak::new("lonely", "pretty")).unwrap();
         let output = buffer.contents();
         // No children in box — box should only have 3 lines (┌, │, └)
         let lines: Vec<&str> = output.lines().collect();
@@ -511,7 +515,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
@@ -576,7 +580,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         // Should have a ruled header with field name
         assert!(
@@ -615,7 +619,7 @@ mod tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         assert!(
             !output.contains("── "),
@@ -647,7 +651,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         // Single-line field goes in box, not in ruled section
         assert!(
@@ -689,8 +693,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("parent yak").with_json(true))
-            .unwrap();
+        app.handle(ShowYak::new("parent yak", "json")).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -726,7 +729,7 @@ mod tests {
             &auth,
         );
 
-        let result = app.handle(ShowYak::new("nonexistent"));
+        let result = app.handle(ShowYak::new("nonexistent", "pretty"));
         assert!(result.is_err());
     }
 }
@@ -778,7 +781,7 @@ mod tag_tests {
         .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("@v1.0"),
@@ -811,7 +814,7 @@ mod tag_tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         assert!(
             !output.contains("@"),
@@ -845,7 +848,7 @@ mod tag_tests {
         .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak").with_json(true)).unwrap();
+        app.handle(ShowYak::new("my yak", "json")).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -886,7 +889,7 @@ mod tag_tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak").with_json(true)).unwrap();
+        app.handle(ShowYak::new("my yak", "json")).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -924,7 +927,7 @@ mod tag_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ShowYak::new("my yak")).unwrap();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
         let output = buffer.contents();
         // "Tags:" would appear if tags were treated as a regular field in the box
         assert!(
