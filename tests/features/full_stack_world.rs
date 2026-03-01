@@ -1136,6 +1136,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["move", name])
     }
 
+    fn try_move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.run_yx_unchecked(&["move", name, "--under", parent])
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.run_yx_with_stdin(&["field", name, field], content)
     }

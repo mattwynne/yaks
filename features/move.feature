@@ -126,3 +126,20 @@ Feature: Move yaks in hierarchy
       When I move the yak "child" under "parent"
       And I run yx log
       Then the output should include "Moved"
+
+  Rule: Moving a yak under itself or its own descendant is rejected
+
+    Example: Cannot move a yak under itself
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to move the yak "my yak" under "my yak"
+      Then the command should fail
+      And the error should contain "under itself"
+
+    Example: Cannot move a yak under its own child
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      When I try to move the yak "parent" under "child"
+      Then the command should fail
+      And the error should contain "descendant"

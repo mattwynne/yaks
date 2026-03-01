@@ -402,6 +402,10 @@ impl TestWorld for InProcessWorld {
         Ok(())
     }
 
+    fn try_move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(MoveYak::under(name, parent)))
+    }
+
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(WriteField::new(name, field)))
