@@ -64,3 +64,14 @@ Feature: yx compact - Compact the event stream
       Then it should succeed
       When I run yx log
       Then the output should not include "Compacted"
+
+  @wip
+  Rule: Compacted event shows narrative summary
+
+    Example: Compacting two yaks shows the count
+      Given I add the yak "make the tea"
+      And I add the yak "buy biscuits"
+      When I run yx compact --yes
+      Then it should succeed
+      When I run yx log
+      Then the output should include "compacted the event stream (2 yaks)"

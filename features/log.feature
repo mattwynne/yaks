@@ -42,3 +42,45 @@ Feature: Yak log
       And line 2 of the output should include "Author:"
       And line 3 of the output should include "Date:"
       And line 5 of the output should include "Added"
+
+  @wip
+  Rule: Log entries use narrative format
+
+    Each entry reads as a natural English sentence with the
+    author as subject, followed by metadata on subsequent lines,
+    separated by horizontal rules.
+
+    Example: Added event shows narrative with author and yak name
+      Given I have a clean git repository
+      And I add the yak "Fix the Bug"
+      When I run yx log
+      Then it should succeed
+      And line 1 of the output should include "added Fix the Bug"
+      And line 3 of the output should include "event:"
+      And line 3 of the output should include "sha:"
+      And the output should include "────"
+
+  @wip
+  Rule: State changes use human-friendly verbs
+
+    Example: Starting a yak says "started"
+      Given I have a clean git repository
+      And I add the yak "Fix the Bug"
+      When I set the state of "Fix the Bug" to "wip"
+      And I run yx log
+      Then the output should include "started Fix the Bug"
+
+    Example: Finishing a yak says "finished"
+      Given I have a clean git repository
+      And I add the yak "Fix the Bug"
+      When I set the state of "Fix the Bug" to "done"
+      And I run yx log
+      Then the output should include "finished Fix the Bug"
+
+    Example: Resetting a yak says "reset to todo"
+      Given I have a clean git repository
+      And I add the yak "Fix the Bug"
+      And I set the state of "Fix the Bug" to "wip"
+      When I set the state of "Fix the Bug" to "todo"
+      And I run yx log
+      Then the output should include "reset Fix the Bug to todo"
