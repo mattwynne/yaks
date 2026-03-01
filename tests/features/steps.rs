@@ -150,6 +150,10 @@ fn impl_list_yaks_format_filter(
     world.list_yaks_with_format_and_filter(&format, &only)
 }
 
+fn impl_list_yaks_json(world: &mut dyn TestWorld) -> Result<()> {
+    world.list_yaks_json()
+}
+
 fn impl_yak_count(world: &mut dyn TestWorld, expected: usize) -> Result<()> {
     check_yak_count(world, expected)
 }
@@ -371,6 +375,9 @@ both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format$"#)
 
 both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+)"$"#)
     fn when_list_yaks_format_filter_fs / when_list_yaks_format_filter_ip (format: String, only: String) -> impl_list_yaks_format_filter);
+
+both_worlds!(when(expr = "I list the yaks as json")
+    fn when_list_yaks_json_fs / when_list_yaks_json_ip () -> impl_list_yaks_json);
 
 both_worlds!(when(regex = r#"^I add the yak "([^"]+)"$"#)
     fn when_add_yak_fs / when_add_yak_ip (yak_name: String) -> impl_add_yak);

@@ -1072,6 +1072,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["list", "--format", format, "--only", only])
     }
 
+    fn list_yaks_json(&mut self) -> Result<()> {
+        self.run_yx(&["list", "--json"])
+    }
+
     fn get_output(&self) -> String {
         self.output.clone()
     }

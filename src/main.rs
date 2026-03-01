@@ -64,6 +64,9 @@ enum Commands {
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
+        /// Output as JSON (for agent/script consumption)
+        #[arg(long)]
+        json: bool,
     },
     /// Mark yak as done
     #[command(alias = "finish")]
@@ -338,7 +341,9 @@ fn route_command(
             }
             handler.handle(use_case)
         }
-        Commands::List { format, only } => handler.handle(ListYaks::new(&format, only.as_deref())),
+        Commands::List { format, only, json } => {
+            handler.handle(ListYaks::new(&format, only.as_deref()).with_json(json))
+        }
         Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
             handler.handle(DoneYak::new(&name_str, recursive))
