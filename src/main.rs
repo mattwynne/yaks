@@ -116,9 +116,9 @@ enum Commands {
     },
     /// Rename a yak (change name without moving)
     Rename {
-        /// Current yak name
+        /// Current yak name (quote multi-word names)
         from: String,
-        /// New name
+        /// New name (quote multi-word names)
         to: String,
     },
     /// Show yak details
