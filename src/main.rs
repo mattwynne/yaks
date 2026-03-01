@@ -263,9 +263,19 @@ struct StdinState {
 fn route_context(
     handler: &mut impl CommandHandler,
     name: &str,
+    show: bool,
     edit: bool,
     stdin: &StdinState,
 ) -> Result<()> {
+    if show && edit {
+        anyhow::bail!("Cannot use both --show and --edit");
+    }
+    if show && stdin.content.is_some() {
+        anyhow::bail!("Cannot use --show when piping input (stdin would be ignored)");
+    }
+    if show {
+        return handler.handle(ShowContext::new(name));
+    }
     if edit {
         let mut use_case = EditContext::new(name);
         if let Some(ref content) = stdin.content {
@@ -285,9 +295,19 @@ fn route_field(
     handler: &mut impl CommandHandler,
     name: &str,
     field: &str,
+    show: bool,
     edit: bool,
     stdin: &StdinState,
 ) -> Result<()> {
+    if show && edit {
+        anyhow::bail!("Cannot use both --show and --edit");
+    }
+    if show && stdin.content.is_some() {
+        anyhow::bail!("Cannot use --show when piping input (stdin would be ignored)");
+    }
+    if show {
+        return handler.handle(ShowField::new(name, field));
+    }
     if edit {
         let mut use_case = EditField::new(name, field);
         if let Some(ref content) = stdin.content {
@@ -375,11 +395,9 @@ fn route_command(
             let name_str = name.join(" ");
             handler.handle(ShowYak::new(&name_str).with_json(json))
         }
-        Commands::Context {
-            name,
-            show: _,
-            edit,
-        } => route_context(handler, &name.join(" "), edit, &stdin),
+        Commands::Context { name, show, edit } => {
+            route_context(handler, &name.join(" "), show, edit, &stdin)
+        }
         Commands::State {
             name,
             state,
@@ -391,9 +409,9 @@ fn route_command(
         Commands::Field {
             name,
             field,
-            show: _,
+            show,
             edit,
-        } => route_field(handler, &name.join(" "), &field, edit, &stdin),
+        } => route_field(handler, &name.join(" "), &field, show, edit, &stdin),
         Commands::Reset {
             disk_from_git,
             git_from_disk,

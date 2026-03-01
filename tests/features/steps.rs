@@ -934,6 +934,25 @@ async fn try_set_field_empty_stdin(
     world.run_yx_with_empty_stdin(&["field", &name, &field])
 }
 
+#[when(regex = r#"^I try to show context of "(.+)" with piped input "(.+)"$"#)]
+async fn try_show_context_with_piped_input(
+    world: &mut FullStackWorld,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.run_yx_with_stdin_unchecked(&["context", "--show", &name], &content)
+}
+
+#[when(regex = r#"^I try to show "(.+)" field of "(.+)" with piped input "(.+)"$"#)]
+async fn try_show_field_with_piped_input(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.run_yx_with_stdin_unchecked(&["field", &name, &field, "--show"], &content)
+}
+
 #[when(regex = r#"^I edit the "(.+)" field of "(.+)" with editor that appends "(.+)"$"#)]
 async fn edit_field_with_editor_append(
     world: &mut FullStackWorld,
