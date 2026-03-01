@@ -177,7 +177,6 @@ Feature: Add yaks
       When I show the context of "my yak"
       Then the output should be:
         """
-        my yak
         """
 
   Rule: --edit launches editor for initial context

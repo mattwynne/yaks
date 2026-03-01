@@ -25,15 +25,10 @@ impl ShowField {
         // Find yak (handles fuzzy matching)
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
-        // Get yak to display name
-        let yak = app.store.get_yak(&id)?;
-
         // Read field content
         let content = app.store.read_field(&id, &self.field)?;
 
-        // Display yak name and field content
-        app.display.success(yak.name.as_str());
-        app.display.info("");
+        // Display just the field content
         app.display.info(&content);
 
         Ok(())

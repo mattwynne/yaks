@@ -77,7 +77,7 @@ mod tests {
         app.handle(ShowContext::new("my yak")).unwrap();
         let output = buffer.contents();
 
-        assert_eq!(output, "my yak\n\npiped content\n");
+        assert_eq!(output, "piped content\n");
     }
 
     #[test]
@@ -106,6 +106,6 @@ mod tests {
         app.handle(ShowContext::new("my yak")).unwrap();
         let output = buffer.contents();
 
-        assert_eq!(output, "my yak\n\nnew\n");
+        assert_eq!(output, "new\n");
     }
 }
