@@ -1,0 +1,29 @@
+Feature: yx log design improvements
+
+  Rule: Each event type formats as a narrative sentence
+    Example: Added at root → "Matt Wynne added Fix the Bug"
+    Example: Added nested → "Matt Wynne added sync under things"
+    Example: State changed to wip → "Matt Wynne started sync"
+    Example: State changed to done → "Matt Wynne finished sync"
+    Example: State changed to todo → "Matt Wynne reset sync to todo"
+    Example: Context updated → "Matt Wynne updated context on sync"
+    Example: Tags updated → "Matt Wynne tagged sync with @foo, @bar"
+    Example: Renamed → "Matt Wynne renamed old name to new name"
+    Example: Moved under parent → "Matt Wynne moved child under parent"
+    Example: Moved to root → "Matt Wynne moved child to root"
+    Example: Custom field updated → "Matt Wynne updated plan on sync"
+    Example: Removed → "Matt Wynne removed old yak"
+    Example: Compacted → "Matt Wynne compacted the event stream (12 yaks)"
+
+  Rule: Timestamps switch from relative to absolute after 7 days
+    Example: 3 hours old → "3 hours ago" (via library)
+    Example: 6 days old → "6 days ago" (via library)
+    Example: 7 days old → "2026-02-21 14:30"
+    Example: 3 months old → "2025-11-28 14:30"
+
+  # Design choices (not behavioural rules):
+  # - Yak names and attributes highlighted with colour/bold, not quotes
+  # - Metadata (event id, sha, relative time) in dim/grey
+  # - Horizontal rule between entries
+  # - Narrative formatting is a method on the event (compiler-enforced)
+  # - Use a timeago library for relative timestamps
