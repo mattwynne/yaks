@@ -154,6 +154,14 @@ fn impl_list_yaks_json(world: &mut dyn TestWorld) -> Result<()> {
     world.list_yaks_json()
 }
 
+fn impl_try_list_yaks_format(world: &mut dyn TestWorld, format: String) -> Result<()> {
+    world.try_list_yaks_with_format(&format)
+}
+
+fn impl_try_list_yaks_filter(world: &mut dyn TestWorld, only: String) -> Result<()> {
+    world.try_list_yaks_with_filter(&only)
+}
+
 fn impl_yak_count(world: &mut dyn TestWorld, expected: usize) -> Result<()> {
     check_yak_count(world, expected)
 }
@@ -378,6 +386,12 @@ both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+
 
 both_worlds!(when(expr = "I list the yaks as json")
     fn when_list_yaks_json_fs / when_list_yaks_json_ip () -> impl_list_yaks_json);
+
+both_worlds!(when(regex = r#"^I try to list the yaks in "(.+)" format$"#)
+    fn when_try_list_yaks_format_fs / when_try_list_yaks_format_ip (format: String) -> impl_try_list_yaks_format);
+
+both_worlds!(when(regex = r#"^I try to list the yaks filtering by "(.+)"$"#)
+    fn when_try_list_yaks_filter_fs / when_try_list_yaks_filter_ip (only: String) -> impl_try_list_yaks_filter);
 
 both_worlds!(when(regex = r#"^I add the yak "([^"]+)"$"#)
     fn when_add_yak_fs / when_add_yak_ip (yak_name: String) -> impl_add_yak);
@@ -1506,12 +1520,41 @@ async fn repo_yak_should_have_state(
     yak: String,
     state: String,
 ) -> Result<()> {
-    world.run_yx_in_repo(&repo, &["ls", "--format", "plain", "--only", &state])?;
+    world.run_yx_in_repo(&repo, &["ls", "--json"])?;
     let output = world.get_output();
-    if !output.contains(&yak) {
-        anyhow::bail!("Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}", yak, repo, state, output);
+    let json: serde_json::Value = serde_json::from_str(&output)
+        .context(format!("Failed to parse JSON output: {}", output))?;
+    fn find_yak(arr: &[serde_json::Value], name: &str) -> Option<String> {
+        for item in arr {
+            if item["name"].as_str() == Some(name) {
+                return item["state"].as_str().map(|s| s.to_string());
+            }
+            if let Some(children) = item["children"].as_array() {
+                if let Some(state) = find_yak(children, name) {
+                    return Some(state);
+                }
+            }
+        }
+        None
     }
-    Ok(())
+    let arr = json.as_array().context("Expected JSON array")?;
+    let actual_state = find_yak(arr, &yak);
+    match actual_state {
+        Some(ref s) if s == &state => Ok(()),
+        Some(ref s) => anyhow::bail!(
+            "Expected yak '{}' in repo '{}' to have state '{}', but it has state '{}'",
+            yak,
+            repo,
+            state,
+            s
+        ),
+        None => anyhow::bail!(
+            "Expected yak '{}' in repo '{}', but it was not found in output:\n{}",
+            yak,
+            repo,
+            output
+        ),
+    }
 }
 
 #[then(regex = r#"^([\w-]+) yak "(.+)" should have state "(.+)"$"#)]
@@ -1522,13 +1565,42 @@ async fn repo_yak_should_have_state_in_process(
     state: String,
 ) -> Result<()> {
     world.execute_in_repo(&repo, |app| {
-        app.handle(ListYaks::new("plain", Some(&state)))
+        app.handle(ListYaks::new("pretty", None).with_json(true))
     })?;
     let output = world.get_repo_output(&repo)?;
-    if !output.contains(&yak) {
-        anyhow::bail!("Expected yak '{}' in repo '{}' to have state '{}', but it was not in filtered output:\n{}", yak, repo, state, output);
+    let json: serde_json::Value = serde_json::from_str(&output)
+        .context(format!("Failed to parse JSON output: {}", output))?;
+    fn find_yak(arr: &[serde_json::Value], name: &str) -> Option<String> {
+        for item in arr {
+            if item["name"].as_str() == Some(name) {
+                return item["state"].as_str().map(|s| s.to_string());
+            }
+            if let Some(children) = item["children"].as_array() {
+                if let Some(state) = find_yak(children, name) {
+                    return Some(state);
+                }
+            }
+        }
+        None
     }
-    Ok(())
+    let arr = json.as_array().context("Expected JSON array")?;
+    let actual_state = find_yak(arr, &yak);
+    match actual_state {
+        Some(ref s) if s == &state => Ok(()),
+        Some(ref s) => anyhow::bail!(
+            "Expected yak '{}' in repo '{}' to have state '{}', but it has state '{}'",
+            yak,
+            repo,
+            state,
+            s
+        ),
+        None => anyhow::bail!(
+            "Expected yak '{}' in repo '{}', but it was not found in output:\n{}",
+            yak,
+            repo,
+            output
+        ),
+    }
 }
 
 #[then(regex = r#"^([\w-]+) yak "(.+)" should have context "(.+)"$"#)]
