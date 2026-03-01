@@ -888,6 +888,11 @@ async fn try_run_yx_raw_full_stack(world: &mut FullStackWorld, args: String) -> 
     world.run_raw(&arg_vec)
 }
 
+#[when(expr = "I invoke yx with no subcommand")]
+async fn run_yx_no_args(world: &mut FullStackWorld) -> Result<()> {
+    world.run_raw(&[])
+}
+
 #[when(regex = r#"^I add the yak "(.+)" with context "(.+)" from stdin$"#)]
 async fn add_yak_with_stdin_full_stack(
     world: &mut FullStackWorld,

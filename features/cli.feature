@@ -16,3 +16,11 @@ Feature: yx CLI basics
       When I run yx woop
       Then the command should fail
       And the error should contain "error:"
+
+  Rule: Running yx without a subcommand shows usage and exits non-zero
+
+    @fullstack
+    Example: No subcommand exits with code 2
+      When I invoke yx with no subcommand
+      Then the command should fail
+      And the error should contain "Usage"
