@@ -1807,3 +1807,31 @@ pub fn shell_split(s: &str) -> Vec<String> {
     }
     result
 }
+
+// ============================================================================
+// NO_COLOR and TTY detection steps (full-stack only)
+// ============================================================================
+
+#[when(expr = "I list the yaks with NO_COLOR set")]
+async fn list_yaks_with_no_color(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_with_no_color(&["list"])
+}
+
+#[when(expr = "I list the yaks piped through cat")]
+async fn list_yaks_piped_through_cat(world: &mut FullStackWorld) -> Result<()> {
+    // When run via Command::new().output(), stdout is a pipe (not a TTY),
+    // so is_terminal() returns false and color is suppressed automatically.
+    world.run_raw(&["list"])
+}
+
+#[then(expr = "the output should not contain escape codes")]
+async fn output_should_not_contain_escape_codes(world: &mut FullStackWorld) -> Result<()> {
+    let output = world.get_output();
+    if output.contains("\x1b[") {
+        anyhow::bail!(
+            "Expected no ANSI escape codes in output, but found them:\n{:?}",
+            output
+        );
+    }
+    Ok(())
+}
