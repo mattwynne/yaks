@@ -87,6 +87,9 @@ pub trait TestWorld {
     /// Try to move a yak with no flags (should error)
     fn try_move_yak_no_flags(&mut self, name: &str) -> Result<()>;
 
+    /// Try to move a yak under a parent (captures error without bailing)
+    fn try_move_yak_under(&mut self, name: &str, parent: &str) -> Result<()>;
+
     /// Set a yak's field from content (simulates stdin piping)
     fn set_field(&mut self, name: &str, field: &str, content: &str) -> Result<()>;
 

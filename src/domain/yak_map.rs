@@ -493,6 +493,32 @@ impl YakMap {
             self.ensure_exists(pid)?;
         }
 
+        // Prevent moving a yak under itself
+        if let Some(ref pid) = new_parent_id {
+            if id == *pid {
+                anyhow::bail!(
+                    "Cannot move '{}' under itself",
+                    self.yaks.get(&id).unwrap().name
+                );
+            }
+        }
+
+        // Prevent moving a yak under its own descendant (cycle detection)
+        if let Some(ref pid) = new_parent_id {
+            let mut current = Some(pid.clone());
+            while let Some(ref cid) = current {
+                if *cid == id {
+                    let target_name = &self.yaks.get(pid).unwrap().name;
+                    anyhow::bail!(
+                        "Cannot move '{}' under its own descendant '{}'",
+                        self.yaks.get(&id).unwrap().name,
+                        target_name
+                    );
+                }
+                current = self.yaks.get(cid).and_then(|y| y.parent_id.clone());
+            }
+        }
+
         let old_parent_id = self.yaks.get(&id).unwrap().parent_id.clone();
 
         // No-op if already at the desired position
@@ -1597,6 +1623,59 @@ mod tests {
         assert_eq!(map.yaks.get(&parent_id).unwrap().parent_id, Some(dest_id));
         // child is still under parent
         assert_eq!(map.yaks.get(&child_id).unwrap().parent_id, Some(parent_id));
+    }
+
+    #[test]
+    fn test_move_yak_under_itself_returns_error() {
+        let mut map = YakMap::new();
+        let id = map.add_yak("yak", None, None, None, None, vec![]).unwrap();
+        let result = map.move_yak_to(id.clone(), Some(id));
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("under itself"),
+            "Expected 'under itself' in: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_move_yak_under_own_descendant_returns_error() {
+        let mut map = YakMap::new();
+        let parent_id = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child_id = map
+            .add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+            .unwrap();
+        let result = map.move_yak_to(parent_id, Some(child_id));
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("descendant"),
+            "Expected 'descendant' in: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_move_yak_under_deep_descendant_returns_error() {
+        let mut map = YakMap::new();
+        let a = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b = map
+            .add_yak("b", Some(a.clone()), None, None, None, vec![])
+            .unwrap();
+        let c = map
+            .add_yak("c", Some(b.clone()), None, None, None, vec![])
+            .unwrap();
+        let result = map.move_yak_to(a, Some(c));
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("descendant"),
+            "Expected 'descendant' in: {}",
+            err
+        );
     }
 
     // Tests for prune

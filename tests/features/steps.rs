@@ -442,6 +442,13 @@ both_worlds!(when(regex = r#"^I try to move the yak "(.+)" under "(.+)" to root$
 both_worlds!(when(regex = r#"^I try to move the yak "(.+)" with no flags$"#)
     fn when_try_move_no_flags_fs / when_try_move_no_flags_ip (name: String) -> impl_try_move_no_flags);
 
+fn impl_try_move_under(world: &mut dyn TestWorld, name: String, parent: String) -> Result<()> {
+    world.try_move_yak_under(&name, &parent)
+}
+
+both_worlds!(when(regex = r#"^I try to move the yak "(.+)" under "(.+)"$"#)
+    fn when_try_move_under_fs / when_try_move_under_ip (name: String, parent: String) -> impl_try_move_under);
+
 both_worlds!(when(regex = r#"^I rename the yak "(.+)" to "(.+)"$"#)
     fn when_rename_yak_fs / when_rename_yak_ip (from: String, to: String) -> impl_rename_yak);
 
