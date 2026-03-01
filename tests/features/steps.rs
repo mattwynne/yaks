@@ -1903,3 +1903,40 @@ async fn output_should_not_contain_escape_codes(world: &mut FullStackWorld) -> R
     }
     Ok(())
 }
+
+// ============================================================================
+// Ordering assertion steps (full-stack only)
+// ============================================================================
+
+#[then(regex = r#"^"([^"]+)" appears before "([^"]+)" in the output$"#)]
+async fn then_appears_before(
+    world: &mut FullStackWorld,
+    first: String,
+    second: String,
+) -> Result<()> {
+    let output = world.get_output();
+    let output_no_ansi = strip_ansi_codes(&output);
+    let first_pos = output_no_ansi.find(&first);
+    let second_pos = output_no_ansi.find(&second);
+    match (first_pos, second_pos) {
+        (Some(f), Some(s)) if f < s => Ok(()),
+        (Some(f), Some(s)) => anyhow::bail!(
+            "Expected '{}' (pos {}) to appear before '{}' (pos {}) in output:\n{}",
+            first,
+            f,
+            second,
+            s,
+            output_no_ansi
+        ),
+        (None, _) => anyhow::bail!(
+            "Expected '{}' in output, but it was not found:\n{}",
+            first,
+            output_no_ansi
+        ),
+        (_, None) => anyhow::bail!(
+            "Expected '{}' in output, but it was not found:\n{}",
+            second,
+            output_no_ansi
+        ),
+    }
+}
