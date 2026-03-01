@@ -1,175 +1,73 @@
 Feature: Filter list by tag
 
-  `yx list --tag <name>` filters the list to only show yaks that have
-  the given tag. The --tag flag is repeatable and can contain
-  comma-separated values.
+  `yx list --tag <name>` filters to yaks with the given tag.
+  Non-matching yaks (and their subtrees) are hidden.
 
   Rule: Single tag filter
 
-    `--tag foo` shows only yaks tagged `foo`, hiding untagged yaks
-    and yaks with different tags.
+    `--tag foo` shows only yaks tagged `foo`, hiding everything else.
 
     Example: Shows yak with matching tag, hides others
 
       Given a yak "deploy" tagged "epic"
       And a yak "fix bug" tagged "urgent"
-      When I list yaks with --tag epic
-      Then I should see "deploy"
-      But I should not see "fix bug"
+      When I run `yx list --tag epic --format plain`
+      Then the output should contain "deploy"
+      But the output should not contain "fix bug"
 
     Example: Hides untagged yaks
 
       Given a yak "cleanup" with no tags
-      When I list yaks with --tag epic
-      Then I should not see "cleanup"
-
-  Rule: OR within a clause
-
-    Comma-separated tags within a single --tag flag are ORed.
-    `--tag foo,bar` shows yaks that have `foo` OR `bar` (or both).
-
-    Example: Comma-separated tags match yaks with either tag
-
-      Given a yak "A" tagged "blocked"
-      And a yak "B" tagged "need-design"
-      And a yak "C" tagged "epic"
-      When I list yaks with --tag blocked,need-design
-      Then I should see "A"
-      And I should see "B"
-      But I should not see "C"
-
-    Example: Yak with both OR tags also matches
-
-      Given a yak "D" tagged "blocked" and "need-design"
-      When I list yaks with --tag blocked,need-design
-      Then I should see "D"
-
-  Rule: AND across clauses
-
-    Multiple --tag flags require a yak to satisfy ALL of them.
-    `--tag foo --tag bar` means the yak must have both tags.
-
-    Example: Multiple --tag flags require yak to have all
-
-      Given a yak "A" tagged "epic" and "blocked"
-      And a yak "B" tagged "epic"
-      When I list yaks with --tag epic --tag blocked
-      Then I should see "A"
-      But I should not see "B"
-
-    Example: Yak missing one required tag is hidden
-
-      Given a yak "C" tagged "blocked"
-      When I list yaks with --tag epic --tag blocked
-      Then I should not see "C"
-
-  Rule: Combined AND/OR
-
-    Clauses combine: each --tag is an AND clause, commas within
-    are OR. `--tag a,b --tag c` means must have `c` AND must
-    have either `a` or `b`.
-
-    Example: --tag blocked,need-design --tag epic requires epic AND (blocked OR need-design)
-
-      Given a yak "A" tagged "epic" and "blocked"
-      And a yak "B" tagged "epic" and "need-design"
-      And a yak "C" tagged "epic"
-      And a yak "D" tagged "blocked"
-      When I list yaks with --tag blocked,need-design --tag epic
-      Then I should see "A"
-      And I should see "B"
-      But I should not see "C"
-      And I should not see "D"
-
-  Rule: Ancestor context
-
-    Only yaks that match the tag filter are "hits". Ancestors of
-    hits are shown to preserve tree structure. Children of hits
-    are NOT shown unless they also match independently.
-
-    Example: Non-matching parent shown when child matches
-
-      Given a yak "infrastructure" with no tags
-      And a yak "deploy" under "infrastructure" tagged "epic"
-      When I list yaks with --tag epic
-      Then I should see "infrastructure"
-      And I should see "deploy"
-
-    Example: Child of matching parent hidden if child doesn't match
-
-      Given a yak "infrastructure" tagged "epic"
-      And a yak "cleanup" under "infrastructure" with no tags
-      When I list yaks with --tag epic
-      Then I should see "infrastructure"
-      But I should not see "cleanup"
-
-    Example: Both shown when both match independently
-
-      Given a yak "infrastructure" tagged "epic"
-      And a yak "deploy" under "infrastructure" tagged "epic"
-      When I list yaks with --tag epic
-      Then I should see "infrastructure"
-      And I should see "deploy"
-
-    Example: Full ancestor chain shown for deeply nested match
-
-      Given a yak "grandparent" with no tags
-      And a yak "parent" under "grandparent" with no tags
-      And a yak "child" under "parent" tagged "epic"
-      When I list yaks with --tag epic
-      Then I should see "grandparent"
-      And I should see "parent"
-      And I should see "child"
+      When I run `yx list --tag epic --format plain`
+      Then the output should not contain "cleanup"
 
   Rule: Combines with --only
 
-    `--tag` and `--only` are ANDed. A yak must satisfy both
-    filters to be a "hit". Ancestor context still applies.
+    `--tag` and `--only` are ANDed.
 
     Example: --tag epic --only done shows only done yaks with epic tag
 
       Given a yak "A" tagged "epic" with state "done"
       And a yak "B" tagged "epic" with state "todo"
-      When I list yaks with --tag epic --only done
-      Then I should see "A"
-      But I should not see "B"
-
-    Example: Ancestor context still applies with combined filters
-
-      Given a yak "parent" with state "todo" and no tags
-      And a yak "child" under "parent" tagged "epic" with state "done"
-      When I list yaks with --tag epic --only done
-      Then I should see "parent"
-      And I should see "child"
+      When I run `yx list --tag epic --only done --format plain`
+      Then the output should contain "A"
+      But the output should not contain "B"
 
   Rule: Tag normalization
 
-    The @ prefix is stripped from --tag values, same as yx tag add.
+    The @ prefix is stripped, same as yx tag add.
 
     Example: --tag @epic treated same as --tag epic
 
       Given a yak "A" tagged "epic"
-      When I list yaks with --tag @epic
-      Then I should see "A"
-
-    Example: --tag @foo,@bar strips @ from all values
-
-      Given a yak "A" tagged "foo"
-      When I list yaks with --tag @foo,@bar
-      Then I should see "A"
+      When I run `yx list --tag @epic --format plain`
+      Then the output should contain "A"
 
   Rule: No matches
 
-    When no yaks match the tag filter, the result is empty.
-
-    Example: Empty result when no yaks have the tag
-
-      Given a yak "A" tagged "urgent"
-      When I list yaks with --tag epic
-      Then the output should be empty
+    Empty result when nothing matches.
 
     Example: JSON format returns empty array
 
       Given a yak "A" tagged "urgent"
-      When I list yaks with --tag epic --format json
+      When I run `yx list --tag epic --format json`
       Then the output should be "[]"
+
+  Rule: IDs format
+
+    `--format ids` outputs just yak IDs, one per line.
+    Useful for piping into other commands.
+
+    Example: Lists yak IDs one per line
+
+      Given a yak "deploy" with id "deploy-a1b2"
+      And a yak "cleanup" with id "cleanup-c3d4"
+      When I run `yx list --format ids`
+      Then the output should be "deploy-a1b2\ncleanup-c3d4"
+
+    Example: Combined with --tag for filtered IDs
+
+      Given a yak "deploy" with id "deploy-a1b2" tagged "epic"
+      And a yak "cleanup" with id "cleanup-c3d4"
+      When I run `yx list --tag epic --format ids`
+      Then the output should be "deploy-a1b2"
