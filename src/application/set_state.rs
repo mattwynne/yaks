@@ -136,7 +136,7 @@ mod tests {
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my yak").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
         assert!(buffer.contents().contains("Set 'my yak' state to wip"));
     }
 
@@ -162,7 +162,7 @@ mod tests {
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "Fix the bug").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
         assert!(buffer.contents().contains("Set 'bug' state to wip"));
     }
 
@@ -243,9 +243,9 @@ mod tests {
         let all_yaks = ReadYakStore::list_yaks(&storage).unwrap();
         let child = all_yaks.iter().find(|y| y.name == "child").unwrap();
         let grandchild = all_yaks.iter().find(|y| y.name == "grandchild").unwrap();
-        assert_eq!(parent.state, "done");
-        assert_eq!(child.state, "done");
-        assert_eq!(grandchild.state, "done");
+        assert_eq!(parent.state, crate::domain::YakState::Done);
+        assert_eq!(child.state, crate::domain::YakState::Done);
+        assert_eq!(grandchild.state, crate::domain::YakState::Done);
         assert!(buffer.contents().contains("Set 'parent' state to done"));
     }
 

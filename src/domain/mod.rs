@@ -12,6 +12,7 @@ pub mod tag;
 pub mod yak;
 pub mod yak_map;
 pub mod yak_snapshot;
+pub mod yak_state;
 
 pub use event::YakEvent;
 pub use event_metadata::{Author, EventMetadata, Timestamp};
@@ -21,9 +22,10 @@ pub use field::{
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use tag::{format_tag, normalize_tag};
-pub use yak::{validate_state, validate_yak_name, YakView};
+pub use yak::{validate_yak_name, YakView};
 pub use yak_map::YakMap;
 pub use yak_snapshot::YakSnapshot;
+pub use yak_state::YakState;
 
 // Re-exports used only in tests
 #[cfg(test)]

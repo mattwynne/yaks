@@ -264,7 +264,7 @@ macro_rules! event_store_tests {
                 assert_eq!(snapshots.len(), 2, "Should have 2 snapshots");
                 let foo = snapshots.iter().find(|s| s.id.as_str() == "foo-a1b2");
                 assert!(foo.is_some(), "Should have snapshot for foo");
-                assert_eq!(foo.unwrap().state, "wip");
+                assert_eq!(foo.unwrap().state, crate::domain::YakState::Wip);
 
                 let bar = snapshots.iter().find(|s| s.id.as_str() == "bar-c3d4");
                 assert!(bar.is_some(), "Should have snapshot for bar");

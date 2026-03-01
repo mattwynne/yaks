@@ -301,7 +301,7 @@ mod tests {
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
     }
 
     #[test]

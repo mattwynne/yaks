@@ -230,7 +230,7 @@ pub(super) fn build_tree_from_event(
                 for snap in snapshots {
                     let yak_tree_oid = YakSubtreeBuilder::new(repo)
                         .name(snap.name.as_str())
-                        .state(&snap.state)
+                        .state(&snap.state.to_string())
                         .context(snap.context.as_deref().unwrap_or(""))
                         .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
                         .metadata(&snap.created_by, snap.created_at)
@@ -255,6 +255,7 @@ pub(super) fn read_snapshots_from_tree(
     use crate::domain::field::RESERVED_FIELDS;
     use crate::domain::slug::{Name, YakId};
     use crate::domain::yak_snapshot::YakSnapshot;
+    use crate::domain::YakState;
     use std::collections::{HashMap, HashSet};
 
     struct YakData {
@@ -385,13 +386,14 @@ pub(super) fn read_snapshots_from_tree(
         };
 
         // State
-        let state = if let Some(state_entry) = subtree.get_name(".state") {
+        let state: YakState = if let Some(state_entry) = subtree.get_name(".state") {
             let state_blob = repo.find_blob(state_entry.id())?;
             std::str::from_utf8(state_blob.content())?
                 .trim()
-                .to_string()
+                .parse()
+                .unwrap_or(YakState::Todo)
         } else {
-            "todo".to_string()
+            YakState::Todo
         };
 
         // Context

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::event_metadata::{Author, Timestamp};
 use super::slug::{Name, YakId};
+use super::yak_state::YakState;
 
 /// A point-in-time snapshot of a yak's full state.
 /// Used inside `Compacted` events to carry the complete state
@@ -11,7 +12,7 @@ pub struct YakSnapshot {
     pub id: YakId,
     pub name: Name,
     pub parent_id: Option<YakId>,
-    pub state: String,
+    pub state: YakState,
     pub context: Option<String>,
     pub fields: HashMap<String, String>,
     pub created_by: Author,
@@ -24,7 +25,7 @@ impl From<&super::yak::YakView> for YakSnapshot {
             id: yak.id.clone(),
             name: yak.name.clone(),
             parent_id: yak.parent_id.clone(),
-            state: yak.state.clone(),
+            state: yak.state,
             context: yak.context.clone(),
             fields: yak.fields.clone(),
             created_by: yak.created_by.clone(),

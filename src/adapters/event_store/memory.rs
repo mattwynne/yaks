@@ -24,7 +24,7 @@ fn build_snapshots_from_events(
                         id: e.id.clone(),
                         name: e.name.clone(),
                         parent_id: e.parent_id.clone(),
-                        state: "todo".to_string(),
+                        state: crate::domain::YakState::Todo,
                         context: None,
                         fields: HashMap::new(),
                         created_by: m.author.clone(),
@@ -43,7 +43,9 @@ fn build_snapshots_from_events(
             YakEvent::FieldUpdated(e, _) => {
                 if let Some(yak) = yaks.get_mut(e.id.as_str()) {
                     match e.field_name.as_str() {
-                        ".state" => yak.state = e.content.clone(),
+                        ".state" => {
+                            yak.state = e.content.parse().unwrap_or(crate::domain::YakState::Todo)
+                        }
                         ".context.md" => yak.context = Some(e.content.clone()),
                         ".name" => yak.name = Name::from(e.content.as_str()),
                         _ => {
@@ -233,7 +235,7 @@ mod tests {
         if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
             assert_eq!(snapshots.len(), 1);
             assert_eq!(snapshots[0].id, YakId::from("test-a1b2"));
-            assert_eq!(snapshots[0].state, "wip");
+            assert_eq!(snapshots[0].state, crate::domain::YakState::Wip);
         }
     }
 

@@ -50,7 +50,7 @@ impl UseCase for ShowLog {
                 for snap in snapshots {
                     app.display
                         .info(&format!("        Added: \"{}\" \"{}\"", snap.name, snap.id));
-                    if snap.state != "todo" {
+                    if snap.state != crate::domain::YakState::Todo {
                         app.display
                             .info(&format!("        FieldUpdated: \"{}\" \"state\"", snap.id));
                     }

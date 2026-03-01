@@ -1,7 +1,7 @@
 // ListYaks use case - displays all yaks
 
 use crate::domain::slug::{Name, YakId};
-use crate::domain::YakView;
+use crate::domain::{YakState, YakView};
 // DisplayPort accessed via app.display
 use anyhow::Result;
 use std::collections::HashMap;
@@ -188,11 +188,19 @@ impl ListYaks {
     /// Sort children at this level: done first, then not-done, both alphabetically
     fn sort_children(children: &mut [YakNode]) {
         children.sort_by(|a, b| {
-            let a_state = a.yak.as_ref().map(|y| y.state.as_str()).unwrap_or("todo");
-            let b_state = b.yak.as_ref().map(|y| y.state.as_str()).unwrap_or("todo");
+            let a_done = a
+                .yak
+                .as_ref()
+                .map(|y| y.state == YakState::Done)
+                .unwrap_or(false);
+            let b_done = b
+                .yak
+                .as_ref()
+                .map(|y| y.state == YakState::Done)
+                .unwrap_or(false);
 
             // Sort: done items first (they're grayed out), then by name
-            match (a_state == "done", b_state == "done") {
+            match (a_done, b_done) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => a.name.cmp(&b.name),
@@ -252,11 +260,12 @@ impl ListYaks {
         prefix: &TreePrefix,
         is_last: bool,
     ) {
-        let state = node
+        let state_str = node
             .yak
             .as_ref()
-            .map(|y| y.state.as_str())
-            .unwrap_or("todo");
+            .map(|y| y.state.to_string())
+            .unwrap_or_else(|| "todo".to_string());
+        let state = state_str.as_str();
 
         let tags: Vec<String> = node
             .yak
@@ -294,7 +303,7 @@ fn node_to_json_value(node: &YakNode) -> serde_json::Value {
     let id = yak.map(|y| y.id.as_str().to_string()).unwrap_or_default();
     let name = node.name.as_str().to_string();
     let state = yak
-        .map(|y| y.state.clone())
+        .map(|y| y.state.to_string())
         .unwrap_or_else(|| "todo".to_string());
     let context = yak.and_then(|y| y.context.clone());
     let parent_id = yak
@@ -562,7 +571,7 @@ mod tests {
                 id: YakId::from(format!("{}-xxxx", name)),
                 name: Name::from(name),
                 parent_id: None,
-                state: state.to_string(),
+                state: state.parse::<YakState>().unwrap(),
                 context: None,
                 fields: HashMap::new(),
                 tags: vec![],

@@ -265,7 +265,7 @@ mod tests {
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
     }
 
     #[test]
@@ -308,7 +308,7 @@ mod tests {
         assert!(ReadYakStore::get_yak(&storage, &YakId::from("test")).is_ok());
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "todo");
+        assert_eq!(yak.state, crate::domain::YakState::Todo);
         assert_eq!(yak.context, Some("context".to_string()));
     }
 
@@ -396,6 +396,6 @@ mod tests {
         // Verify parent is also wip
         let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
         let parent = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
-        assert_eq!(parent.state, "wip");
+        assert_eq!(parent.state, crate::domain::YakState::Wip);
     }
 }

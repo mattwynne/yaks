@@ -4,7 +4,9 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD};
+use crate::domain::{
+    YakState, YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD,
+};
 use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -436,10 +438,11 @@ impl ReadYakStore for DirectoryStorage {
             .ok()
             .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
-        let state = fs::read_to_string(dir.join(STATE_FIELD))
+        let state: YakState = fs::read_to_string(dir.join(STATE_FIELD))
             .unwrap_or_else(|_| "todo".to_string())
             .trim()
-            .to_string();
+            .parse()
+            .unwrap_or(YakState::Todo);
 
         let fields = self.read_custom_fields(&dir);
         let tags: Vec<String> = fs::read_to_string(dir.join(TAGS_FIELD))
@@ -508,10 +511,11 @@ impl ReadYakStore for DirectoryStorage {
                 .ok()
                 .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
-            let state = fs::read_to_string(path.join(STATE_FIELD))
+            let state: YakState = fs::read_to_string(path.join(STATE_FIELD))
                 .unwrap_or_else(|_| "todo".to_string())
                 .trim()
-                .to_string();
+                .parse()
+                .unwrap_or(YakState::Todo);
 
             let fields = self.read_custom_fields(path);
             let tags: Vec<String> = fs::read_to_string(path.join(TAGS_FIELD))
@@ -632,7 +636,7 @@ mod tests {
 
         assert!(storage.yak_dir("test").exists());
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
-        assert_eq!(yak.state, "todo");
+        assert_eq!(yak.state, crate::domain::YakState::Todo);
     }
 
     #[test]
@@ -694,7 +698,7 @@ mod tests {
             .unwrap();
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
     }
 
     #[test]
@@ -725,7 +729,7 @@ mod tests {
 
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.name, Name::from("test"));
-        assert_eq!(yak.state, "todo");
+        assert_eq!(yak.state, crate::domain::YakState::Todo);
         assert_eq!(yak.context, Some("context".to_string()));
     }
 
@@ -815,7 +819,7 @@ mod tests {
 
         // Verify
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
     }
 
     #[test]

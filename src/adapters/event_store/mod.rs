@@ -246,7 +246,7 @@ mod merge_event_streams_tests {
             id: YakId::from(id),
             name: Name::from(name),
             parent_id: None,
-            state: "todo".to_string(),
+            state: crate::domain::YakState::Todo,
             context: None,
             fields: HashMap::new(),
             created_by: Author {

@@ -143,7 +143,7 @@ macro_rules! yak_store_tests {
                 .create_yak(&Name::from("test-yak"), &YakId::from(""), None)
                 .unwrap();
             let yak = ReadYakStore::get_yak(&store, &YakId::from("test-yak")).unwrap();
-            assert_eq!(yak.state, "todo");
+            assert_eq!(yak.state, crate::domain::YakState::Todo);
             assert_eq!(yak.context, None);
             assert!(!yak.is_done());
         }
@@ -290,7 +290,7 @@ macro_rules! yak_store_tests {
                 .unwrap();
             let yak = ReadYakStore::get_yak(&store, &YakId::from("test-yak")).unwrap();
             assert!(yak.is_done());
-            assert_eq!(yak.state, "done");
+            assert_eq!(yak.state, crate::domain::YakState::Done);
         }
 
         #[test]

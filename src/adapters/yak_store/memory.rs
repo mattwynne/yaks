@@ -4,7 +4,7 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakState, YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -234,10 +234,10 @@ impl ReadYakStore for InMemoryStorage {
             );
 
         // Read state field, default to "todo" if not present
-        let state = fields
+        let state: YakState = fields
             .get(STATE_FIELD)
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "todo".to_string());
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(YakState::Todo);
 
         // Extract tags directly from fields (before custom_fields filtering,
         // since .tags is a reserved field and would be excluded)
@@ -320,10 +320,10 @@ impl ReadYakStore for InMemoryStorage {
                 }
             });
 
-            let state = fields
+            let state: YakState = fields
                 .get(STATE_FIELD)
-                .map(|s| s.trim().to_string())
-                .unwrap_or_else(|| "todo".to_string());
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or(YakState::Todo);
 
             // Extract tags directly from fields (before custom_fields filtering,
             // since .tags is a reserved field and would be excluded)

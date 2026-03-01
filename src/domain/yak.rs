@@ -4,20 +4,7 @@ use std::collections::HashMap;
 
 use super::event_metadata::{Author, Timestamp};
 use super::slug::{Name, YakId};
-
-const VALID_STATES: &[&str] = &["todo", "wip", "done"];
-
-pub fn validate_state(state: &str) -> Result<(), String> {
-    if VALID_STATES.contains(&state) {
-        Ok(())
-    } else {
-        Err(format!(
-            "Invalid state '{}'. Valid states are: {}",
-            state,
-            VALID_STATES.join(", ")
-        ))
-    }
-}
+use super::yak_state::YakState;
 
 /// Read-model projection of a yak.
 ///
@@ -29,7 +16,7 @@ pub struct YakView {
     pub id: YakId,
     pub name: Name,
     pub parent_id: Option<YakId>,
-    pub state: String,
+    pub state: YakState,
     pub context: Option<String>,
     pub fields: HashMap<String, String>,
     pub tags: Vec<String>,
@@ -40,7 +27,7 @@ pub struct YakView {
 
 impl YakView {
     pub fn is_done(&self) -> bool {
-        self.state == "done"
+        self.state == YakState::Done
     }
 }
 
@@ -70,7 +57,7 @@ mod tests {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,
-            state: "todo".to_string(),
+            state: YakState::Todo,
             context: None,
             fields: HashMap::new(),
             tags: vec![],
@@ -84,7 +71,7 @@ mod tests {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,
-            state: "done".to_string(),
+            state: YakState::Done,
             context: None,
             fields: HashMap::new(),
             tags: vec![],

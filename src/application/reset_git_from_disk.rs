@@ -105,8 +105,9 @@ fn replay_yak(
         } else {
             None
         });
-    if yak.state != "todo" {
-        use_case = use_case.with_state(Some(&yak.state));
+    if yak.state != crate::domain::YakState::Todo {
+        let state_str = yak.state.to_string();
+        use_case = use_case.with_state(Some(&state_str));
     }
     if let Some(pid) = parent_id {
         use_case = use_case.with_parent(Some(pid));
@@ -254,7 +255,7 @@ mod tests {
         // State should be preserved
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "wip-yak").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
-        assert_eq!(yak.state, "wip");
+        assert_eq!(yak.state, crate::domain::YakState::Wip);
     }
 
     #[test]

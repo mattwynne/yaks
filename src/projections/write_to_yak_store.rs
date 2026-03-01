@@ -91,7 +91,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             store.clear_all()?;
             for snap in snapshots {
                 store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
-                store.write_field(&snap.id, STATE_FIELD, &snap.state)?;
+                store.write_field(&snap.id, STATE_FIELD, &snap.state.to_string())?;
                 store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
                 if let Some(ref ctx) = snap.context {
                     if !ctx.is_empty() {
@@ -154,7 +154,7 @@ mod tests {
                 id: YakId::from("tea-a1b2"),
                 name: Name::from("make the tea"),
                 parent_id: None,
-                state: "wip".to_string(),
+                state: crate::domain::YakState::Wip,
                 context: Some("use the good teapot".to_string()),
                 fields: HashMap::new(),
                 created_by: Author {
@@ -167,7 +167,7 @@ mod tests {
                 id: YakId::from("biscuits-c3d4"),
                 name: Name::from("buy biscuits"),
                 parent_id: Some(YakId::from("tea-a1b2")),
-                state: "todo".to_string(),
+                state: crate::domain::YakState::Todo,
                 context: None,
                 fields: HashMap::new(),
                 created_by: Author {
@@ -192,7 +192,7 @@ mod tests {
             .iter()
             .find(|y| y.id == YakId::from("tea-a1b2"))
             .unwrap();
-        assert_eq!(tea.state, "wip");
+        assert_eq!(tea.state, crate::domain::YakState::Wip);
 
         let biscuits = yaks
             .iter()
@@ -279,7 +279,7 @@ mod tests {
             id: YakId::from("yak-a1b2"),
             name: Name::from("my yak"),
             parent_id: None,
-            state: "todo".to_string(),
+            state: crate::domain::YakState::Todo,
             context: None,
             fields,
             created_by: Author {

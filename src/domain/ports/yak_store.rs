@@ -77,7 +77,7 @@ mod tests {
                 id: YakId::from("test"),
                 name: Name::from("test"),
                 parent_id: None,
-                state: "todo".to_string(),
+                state: crate::domain::YakState::Todo,
                 context: None,
                 fields: HashMap::new(),
                 tags: vec![],

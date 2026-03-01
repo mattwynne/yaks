@@ -96,12 +96,12 @@ impl GitEventStore {
             ));
 
             // State (skip default "todo")
-            if snap.state != "todo" {
+            if snap.state != crate::domain::YakState::Todo {
                 events.push(YakEvent::FieldUpdated(
                     crate::domain::events::FieldUpdatedEvent {
                         id: snap.id.clone(),
                         field_name: ".state".to_string(),
-                        content: snap.state.clone(),
+                        content: snap.state.to_string(),
                     },
                     crate::domain::event_metadata::EventMetadata::default_legacy(),
                 ));

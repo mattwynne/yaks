@@ -54,7 +54,7 @@ impl ShowYak {
                     serde_json::json!({
                         "id": c.id.as_str(),
                         "name": c.name.as_str(),
-                        "state": c.state,
+                        "state": c.state.to_string(),
                     })
                 })
                 .collect();
@@ -70,7 +70,7 @@ impl ShowYak {
             let json = serde_json::json!({
                 "id": id.as_str(),
                 "name": yak.name.as_str(),
-                "state": yak.state,
+                "state": yak.state.to_string(),
                 "parent_id": yak.parent_id.as_ref().map(|p| p.as_str()),
                 "context": yak.context,
                 "fields": fields,
@@ -98,7 +98,7 @@ impl ShowYak {
                 .children
                 .iter()
                 .filter_map(|id| app.store.get_yak(id).ok())
-                .map(|c| (c.name.clone(), c.state.clone()))
+                .map(|c| (c.name.clone(), c.state.to_string()))
                 .collect();
             kids.sort_by(|a, b| match (a.1 == "done", b.1 == "done") {
                 (true, false) => std::cmp::Ordering::Less,
@@ -126,10 +126,11 @@ impl ShowYak {
         let tags: Vec<String> = yak.tags.iter().map(|t| format_tag(t)).collect();
 
         // Header box with breadcrumb, name, state, date, author, children, short fields, and tags
+        let state_str = yak.state.to_string();
         app.display.display_header_box(
             &ancestors,
             &yak.name,
-            &yak.state,
+            &state_str,
             &yak.created_at,
             &yak.created_by,
             &box_children,
