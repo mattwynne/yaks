@@ -20,7 +20,17 @@ impl StartYak {
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         SetState::new(&self.name, "wip")
             .with_recursive(self.recursive)
-            .execute(app)
+            .with_silent(true)
+            .execute(app)?;
+
+        if self.recursive {
+            app.display
+                .success(&format!("Started '{}' and descendants", self.name));
+        } else {
+            app.display.success(&format!("Started '{}'", self.name));
+        }
+
+        Ok(())
     }
 }
 

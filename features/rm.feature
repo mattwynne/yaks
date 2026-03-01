@@ -16,13 +16,13 @@ Feature: Remove yaks
         Write docs
         """
 
-  Rule: Successful removal produces no output
+  Rule: Successful removal confirms what was removed
 
-    Example: Silent success
+    Example: Removal shows confirmation
       Given I have a clean git repository
       And I add the yak "Fix the bug"
       When I remove the yak "Fix the bug"
-      Then the output should be empty
+      Then the output should include "Removed 'Fix the bug'"
 
   Rule: Removing a parent yak without --recursive fails
 

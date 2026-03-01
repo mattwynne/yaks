@@ -43,7 +43,11 @@ impl RemoveYak {
                 yak_map.remove_yak(id)?;
             }
             Ok(())
-        })
+        })?;
+
+        app.display.success(&format!("Removed '{}'", self.name));
+
+        Ok(())
     }
 
     /// Recursively collect all descendant IDs (breadth-first, parents before children).

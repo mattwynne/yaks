@@ -23,7 +23,12 @@ impl RenameYak {
 
         let id = app.store.fuzzy_find_yak_id(&self.from)?;
 
-        app.with_yak_map(|yak_map| yak_map.rename_yak(id, self.to.clone()))
+        app.with_yak_map(|yak_map| yak_map.rename_yak(id, self.to.clone()))?;
+
+        app.display
+            .success(&format!("Renamed '{}' to '{}'", self.from, self.to));
+
+        Ok(())
     }
 }
 
