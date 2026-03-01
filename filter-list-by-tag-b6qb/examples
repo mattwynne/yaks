@@ -1,0 +1,35 @@
+Feature: Filter list by tag
+
+  Rule: Single tag filter
+    Example: Shows yak with matching tag, hides others
+    Example: Hides untagged yaks
+
+  Rule: OR within a clause
+    Example: Comma-separated tags match yaks with either tag
+    Example: Yak with both tags also matches
+
+  Rule: AND across clauses
+    Example: Multiple --tag flags require yak to have all
+    Example: Yak missing one required tag is hidden
+
+  Rule: Combined AND/OR
+    Example: --tag blocked,need-design --tag epic requires epic AND (blocked OR need-design)
+    Example: Yak with epic but neither blocked nor need-design is hidden
+
+  Rule: Ancestor context
+    Example: Non-matching parent shown when child matches
+    Example: Child of matching parent hidden if child doesn't match
+    Example: Both shown when both match independently
+    Example: Full ancestor chain shown for deeply nested match
+
+  Rule: Combines with --only
+    Example: --tag epic --only done shows only done yaks with epic tag
+    Example: Ancestor context still applies with combined filters
+
+  Rule: Tag normalization
+    Example: --tag @epic treated same as --tag epic
+    Example: --tag @foo,@bar strips @ from all values
+
+  Rule: No matches
+    Example: Empty result when no yaks have the tag
+    Example: JSON format returns empty array
