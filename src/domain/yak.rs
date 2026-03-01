@@ -48,7 +48,7 @@ impl YakView {
 /// Most special characters (including `/`) are allowed because
 /// directory names use slugs.
 pub fn validate_yak_name(name: &str) -> Result<(), String> {
-    if name.is_empty() {
+    if name.is_empty() || name.trim().is_empty() {
         return Err("Yak name cannot be empty".to_string());
     }
 
@@ -126,5 +126,19 @@ mod tests {
         assert!(validate_yak_name("test<name").is_ok());
         assert!(validate_yak_name("test>name").is_ok());
         assert!(validate_yak_name("test\"name").is_ok());
+    }
+
+    #[test]
+    fn test_validate_yak_name_whitespace_only() {
+        assert!(validate_yak_name("   ").is_err());
+        assert!(validate_yak_name("\t").is_err());
+        assert!(validate_yak_name("\n").is_err());
+        assert!(validate_yak_name("  \t\n  ").is_err());
+    }
+
+    #[test]
+    fn test_validate_yak_name_with_leading_trailing_whitespace_ok() {
+        // Names with whitespace around real content should be fine
+        assert!(validate_yak_name("  hello  ").is_ok());
     }
 }
