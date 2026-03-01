@@ -61,11 +61,7 @@ impl ShowYak {
                 .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
                 .collect();
 
-            let tags: Vec<&str> = yak
-                .fields
-                .get("tags")
-                .map(|t| t.lines().filter(|l| !l.is_empty()).collect())
-                .unwrap_or_default();
+            let tags: Vec<&str> = yak.tags.iter().map(|s| s.as_str()).collect();
 
             let json = serde_json::json!({
                 "id": id.as_str(),
@@ -114,9 +110,6 @@ impl ShowYak {
         let mut field_names: Vec<&str> = yak.fields.keys().map(|k| k.as_str()).collect();
         field_names.sort();
         for name in &field_names {
-            if *name == "tags" {
-                continue;
-            } // Skip tags — displayed separately
             let value = yak.fields[*name].as_str().trim();
             if value.contains('\n') {
                 long_fields.push((name, value));
@@ -126,16 +119,7 @@ impl ShowYak {
         }
 
         // Extract tags for display
-        let tags: Vec<String> = yak
-            .fields
-            .get("tags")
-            .map(|t| {
-                t.lines()
-                    .filter(|l| !l.is_empty())
-                    .map(format_tag)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let tags: Vec<String> = yak.tags.iter().map(|t| format_tag(t)).collect();
 
         // Header box with breadcrumb, name, state, date, author, children, short fields, and tags
         app.display.display_header_box(

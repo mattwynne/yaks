@@ -114,6 +114,13 @@ fn replay_yak(
     for (key, value) in &yak.fields {
         use_case = use_case.with_field(key, value);
     }
+    if !yak.tags.is_empty() {
+        let tag_content = yak.tags.join(
+            "
+",
+        );
+        use_case = use_case.with_field("tags", &tag_content);
+    }
     app.handle(use_case)?;
 
     for child_id in &yak.children {
