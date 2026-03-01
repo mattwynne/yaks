@@ -1076,6 +1076,14 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["list", "--json"])
     }
 
+    fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {
+        self.run_yx_unchecked(&["list", "--format", format])
+    }
+
+    fn try_list_yaks_with_filter(&mut self, only: &str) -> Result<()> {
+        self.run_yx_unchecked(&["list", "--only", only])
+    }
+
     fn get_output(&self) -> String {
         self.output.clone()
     }

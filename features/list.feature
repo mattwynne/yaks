@@ -251,3 +251,19 @@ Feature: List yaks
       And I mark the yak "my yak" as done
       When I list the yaks as json
       Then the output should include "done"
+
+  Rule: Invalid format and filter values are rejected
+
+    Example: Unknown format is rejected
+      Given I have a clean git repository
+      When I try to list the yaks in "foobar" format
+      Then the command should fail
+      And the error should contain "Unknown format"
+      And the error should contain "pretty"
+
+    Example: Unknown filter is rejected
+      Given I have a clean git repository
+      When I try to list the yaks filtering by "foobar"
+      Then the command should fail
+      And the error should contain "Unknown filter"
+      And the error should contain "done"

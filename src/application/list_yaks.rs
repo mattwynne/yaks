@@ -70,6 +70,24 @@ impl ListYaks {
             other => other,
         };
 
+        // Validate format
+        if !["pretty", "markdown", "plain"].contains(&normalized_format) {
+            anyhow::bail!(
+                "Unknown format '{}'. Valid formats are: pretty, markdown, plain (aliases: md, raw)",
+                format
+            );
+        }
+
+        // Validate filter
+        if let Some(filter) = only {
+            if !["done", "not-done"].contains(&filter) {
+                anyhow::bail!(
+                    "Unknown filter '{}'. Valid filters are: done, not-done",
+                    filter
+                );
+            }
+        }
+
         if yaks.is_empty() {
             if self.json {
                 app.display.info("[]");
@@ -686,6 +704,101 @@ mod tests {
             "Grandchild under non-last parent should have space + │ continuation, got: {:?}",
             leaf_line
         );
+    }
+
+    #[test]
+    fn invalid_format_returns_error() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        let result = app.handle(ListYaks::new("foobar", None));
+        assert!(result.is_err(), "Expected error for invalid format");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Unknown format"),
+            "Expected 'Unknown format' in error, got: {}",
+            err
+        );
+        assert!(
+            err.contains("pretty"),
+            "Expected valid formats listed in error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn invalid_only_filter_returns_error() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        let result = app.handle(ListYaks::new("pretty", Some("foobar")));
+        assert!(result.is_err(), "Expected error for invalid filter");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Unknown filter"),
+            "Expected 'Unknown filter' in error, got: {}",
+            err
+        );
+        assert!(
+            err.contains("done"),
+            "Expected valid filters listed in error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn valid_formats_accepted() {
+        for format in &["pretty", "markdown", "plain", "md", "raw"] {
+            let mut event_store = InMemoryEventStore::new();
+            let mut event_bus = EventBus::new();
+            let storage = InMemoryStorage::new();
+            event_bus.register(Box::new(storage.clone()));
+            let (display, _buffer) = make_test_display();
+            let input = InMemoryInput::new();
+            let auth = InMemoryAuthentication::new();
+            let mut app = make_app(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                &auth,
+            );
+
+            let result = app.handle(ListYaks::new(format, None));
+            assert!(
+                result.is_ok(),
+                "Format '{}' should be accepted, got error: {:?}",
+                format,
+                result.unwrap_err()
+            );
+        }
     }
 }
 

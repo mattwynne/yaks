@@ -30,6 +30,12 @@ pub trait TestWorld {
     /// List yaks with --json flag
     fn list_yaks_json(&mut self) -> Result<()>;
 
+    /// Try to list yaks with a specific format - captures result without bailing on failure
+    fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()>;
+
+    /// Try to list yaks with a specific filter - captures result without bailing on failure
+    fn try_list_yaks_with_filter(&mut self, only: &str) -> Result<()>;
+
     /// Get the output from the last command
     fn get_output(&self) -> String;
 

@@ -331,6 +331,16 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(ListYaks::new("pretty", None).with_json(true)))
     }
 
+    fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {
+        let format = format.to_string();
+        self.try_execute(move |app| app.handle(ListYaks::new(&format, None)))
+    }
+
+    fn try_list_yaks_with_filter(&mut self, only: &str) -> Result<()> {
+        let only = only.to_string();
+        self.try_execute(move |app| app.handle(ListYaks::new("pretty", Some(&only))))
+    }
+
     fn set_context(&mut self, name: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(EditContext::new(name)))
