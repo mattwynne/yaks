@@ -207,7 +207,7 @@ Feature: List yaks
 
   Rule: JSON output for agent/script consumption
 
-    The --json flag outputs the full yak tree as a JSON array.
+    The --format json option outputs the full yak tree as a JSON array.
     Each yak includes id, name, state, context, parent_id, tags,
     fields, and children (nested recursively).
 

@@ -37,14 +37,14 @@ Feature: Show tags on yaks
       And I run yx list
       Then the output should include "@v1.0"
 
-  Rule: Tags appear in yx show --json output
+  Rule: Tags appear in yx show --format json output
 
     @fullstack
     Example: JSON includes tags array
       Given I have a clean git repository
       And I add the yak "my yak"
       When I tag "my yak" with "v1.0" and "needs-review"
-      And I run yx show --json "my yak"
+      And I run yx show --format json "my yak"
       Then the output should include "tags"
       And the output should include "v1.0"
       And the output should include "needs-review"

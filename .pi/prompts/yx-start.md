@@ -7,7 +7,7 @@ Follow these steps:
 
 1. Get the yak's full details:
    ```
-   yx show --json "$@"
+   yx show --format json "$@"
    ```
    This gives you id, name, state, context, fields, and children
    in one call.
@@ -23,7 +23,7 @@ Follow these steps:
    I use /yx-add or /yx-go, default to this as the parent.
 
 6. Assess readiness of incomplete children:
-   - For each incomplete child, run `yx show --json "<child name>"`
+   - For each incomplete child, run `yx show --format json "<child name>"`
      to get its context
    - Categorise them:
      - **Ready to dispatch**: has clear context and acceptance

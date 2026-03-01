@@ -7,7 +7,7 @@ Follow these steps:
 
 1. Get the yak's full details:
    ```
-   yx show --json "$@"
+   yx show --format json "$@"
    ```
 
 2. If the context is empty or insufficient for a subagent to work

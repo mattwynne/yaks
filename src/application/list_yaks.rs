@@ -41,7 +41,6 @@ use crate::domain::tag::format_tag;
 pub struct ListYaks {
     format: String,
     only: Option<String>,
-    json: bool,
 }
 
 impl ListYaks {
@@ -49,13 +48,7 @@ impl ListYaks {
         Self {
             format: format.to_string(),
             only: only.map(|s| s.to_string()),
-            json: false,
         }
-    }
-
-    pub fn with_json(mut self, json: bool) -> Self {
-        self.json = json;
-        self
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
@@ -71,9 +64,9 @@ impl ListYaks {
         };
 
         // Validate format
-        if !["pretty", "markdown", "plain"].contains(&normalized_format) {
+        if !["pretty", "markdown", "plain", "json"].contains(&normalized_format) {
             anyhow::bail!(
-                "Unknown format '{}'. Valid formats are: pretty, markdown, plain (aliases: md, raw)",
+                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, json (aliases: md, raw)",
                 format
             );
         }
@@ -89,7 +82,7 @@ impl ListYaks {
         }
 
         if yaks.is_empty() {
-            if self.json {
+            if normalized_format == "json" {
                 app.display.info("[]");
                 return Ok(());
             }
@@ -104,7 +97,7 @@ impl ListYaks {
         let tree = self.build_tree(app, yaks);
 
         // JSON output: serialize the full tree and return
-        if self.json {
+        if normalized_format == "json" {
             let json_array: Vec<serde_json::Value> = tree.iter().map(node_to_json_value).collect();
             let json_str = serde_json::to_string_pretty(&json_array)
                 .map_err(|e| anyhow::anyhow!("Failed to serialize JSON: {}", e))?;
@@ -768,7 +761,7 @@ mod tests {
 
     #[test]
     fn valid_formats_accepted() {
-        for format in &["pretty", "markdown", "plain", "md", "raw"] {
+        for format in &["pretty", "markdown", "plain", "md", "raw", "json"] {
             let mut event_store = InMemoryEventStore::new();
             let mut event_bus = EventBus::new();
             let storage = InMemoryStorage::new();
@@ -955,8 +948,7 @@ mod json_tests {
             &auth,
         );
 
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-            .unwrap();
+        app.handle(ListYaks::new("json", None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -985,8 +977,7 @@ mod json_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-            .unwrap();
+        app.handle(ListYaks::new("json", None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1029,8 +1020,7 @@ mod json_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-            .unwrap();
+        app.handle(ListYaks::new("json", None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1078,8 +1068,7 @@ mod json_tests {
         .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-            .unwrap();
+        app.handle(ListYaks::new("json", None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1119,8 +1108,7 @@ mod json_tests {
         app.handle(SetState::new("wip yak", "wip")).unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-            .unwrap();
+        app.handle(ListYaks::new("json", None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));

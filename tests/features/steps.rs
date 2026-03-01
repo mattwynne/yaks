@@ -1570,7 +1570,7 @@ async fn repo_yak_should_have_state(
     yak: String,
     state: String,
 ) -> Result<()> {
-    world.run_yx_in_repo(&repo, &["ls", "--json"])?;
+    world.run_yx_in_repo(&repo, &["ls", "--format", "json"])?;
     let output = world.get_output();
     let json: serde_json::Value = serde_json::from_str(&output)
         .context(format!("Failed to parse JSON output: {}", output))?;
@@ -1614,9 +1614,7 @@ async fn repo_yak_should_have_state_in_process(
     yak: String,
     state: String,
 ) -> Result<()> {
-    world.execute_in_repo(&repo, |app| {
-        app.handle(ListYaks::new("pretty", None).with_json(true))
-    })?;
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("json", None)))?;
     let output = world.get_repo_output(&repo)?;
     let json: serde_json::Value = serde_json::from_str(&output)
         .context(format!("Failed to parse JSON output: {}", output))?;

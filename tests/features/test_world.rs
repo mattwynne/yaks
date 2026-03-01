@@ -27,7 +27,7 @@ pub trait TestWorld {
     /// List yaks with a specific format and filter
     fn list_yaks_with_format_and_filter(&mut self, format: &str, only: &str) -> Result<()>;
 
-    /// List yaks with --json flag
+    /// List yaks with --format json
     fn list_yaks_json(&mut self) -> Result<()>;
 
     /// Try to list yaks with a specific format - captures result without bailing on failure
