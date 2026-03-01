@@ -150,6 +150,19 @@ fn impl_list_yaks_format_filter(
     world.list_yaks_with_format_and_filter(&format, &only)
 }
 
+fn impl_list_yaks_format_tag(world: &mut dyn TestWorld, format: String, tag: String) -> Result<()> {
+    world.list_yaks_with_format_and_tag(&format, &tag)
+}
+
+fn impl_list_yaks_format_tag_and_only(
+    world: &mut dyn TestWorld,
+    format: String,
+    tag: String,
+    only: String,
+) -> Result<()> {
+    world.list_yaks_with_format_tag_and_filter(&format, &tag, &only)
+}
+
 fn impl_list_yaks_json(world: &mut dyn TestWorld) -> Result<()> {
     world.list_yaks_json()
 }
@@ -373,6 +386,12 @@ both_worlds!(given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)
 both_worlds!(given(regex = r#"^I mark the yak "(.+)" as done$"#)
     fn given_done_yak_fs / given_done_yak_ip (yak_name: String) -> impl_done_yak);
 
+both_worlds!(given(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)
+    fn given_tag_yak_fs / given_tag_yak_ip (name: String, tag: String) -> impl_tag_yak);
+
+both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)
+    fn given_add_yak_with_id_fs / given_add_yak_with_id_ip (yak_name: String, id: String) -> impl_add_yak_with_id);
+
 // -- When steps --
 
 both_worlds!(when(expr = "I list the yaks")
@@ -383,6 +402,12 @@ both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format$"#)
 
 both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format filtering by "(.+)"$"#)
     fn when_list_yaks_format_filter_fs / when_list_yaks_format_filter_ip (format: String, only: String) -> impl_list_yaks_format_filter);
+
+both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format filtering by tag "([^"]+)"$"#)
+    fn when_list_yaks_format_tag_fs / when_list_yaks_format_tag_ip (format: String, tag: String) -> impl_list_yaks_format_tag);
+
+both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format filtering by tag "([^"]+)" and only "([^"]+)"$"#)
+    fn when_list_yaks_format_tag_only_fs / when_list_yaks_format_tag_only_ip (format: String, tag: String, only: String) -> impl_list_yaks_format_tag_and_only);
 
 both_worlds!(when(expr = "I list the yaks as json")
     fn when_list_yaks_json_fs / when_list_yaks_json_ip () -> impl_list_yaks_json);
@@ -1461,7 +1486,7 @@ async fn repos_have_same_yaks_in_process(
         .trim()
         .to_string();
     for repo in [&repo_a, &repo_b] {
-        world.execute_in_repo(repo, |app| app.handle(ListYaks::new("pretty", None)))?;
+        world.execute_in_repo(repo, |app| app.handle(ListYaks::new("pretty", None, None)))?;
         let output = world.get_repo_output(repo)?.trim().to_string();
         if output != expected {
             anyhow::bail!(
@@ -1512,7 +1537,7 @@ async fn repo_should_have_yaks_in_process(
         .expect("step requires a docstring")
         .trim()
         .to_string();
-    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("pretty", None)))?;
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("pretty", None, None)))?;
     let output = world.get_repo_output(&repo)?.trim().to_string();
     if output != expected {
         anyhow::bail!(
@@ -1550,7 +1575,9 @@ async fn repo_should_not_have_yak_in_process(
     repo: String,
     yak: String,
 ) -> Result<()> {
-    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("markdown", None)))?;
+    world.execute_in_repo(&repo, |app| {
+        app.handle(ListYaks::new("markdown", None, None))
+    })?;
     let output = world.get_repo_output(&repo)?;
     if output.contains(&yak) {
         anyhow::bail!(
@@ -1614,7 +1641,7 @@ async fn repo_yak_should_have_state_in_process(
     yak: String,
     state: String,
 ) -> Result<()> {
-    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("json", None)))?;
+    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("json", None, None)))?;
     let output = world.get_repo_output(&repo)?;
     let json: serde_json::Value = serde_json::from_str(&output)
         .context(format!("Failed to parse JSON output: {}", output))?;

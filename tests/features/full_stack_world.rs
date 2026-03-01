@@ -1113,6 +1113,19 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["list", "--format", "json"])
     }
 
+    fn list_yaks_with_format_and_tag(&mut self, format: &str, tag: &str) -> Result<()> {
+        self.run_yx(&["list", "--format", format, "--tag", tag])
+    }
+
+    fn list_yaks_with_format_tag_and_filter(
+        &mut self,
+        format: &str,
+        tag: &str,
+        only: &str,
+    ) -> Result<()> {
+        self.run_yx(&["list", "--format", format, "--tag", tag, "--only", only])
+    }
+
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {
         self.run_yx_unchecked(&["list", "--format", format])
     }

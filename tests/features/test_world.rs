@@ -30,6 +30,17 @@ pub trait TestWorld {
     /// List yaks with --format json
     fn list_yaks_json(&mut self) -> Result<()>;
 
+    /// List yaks with a specific format and tag filter
+    fn list_yaks_with_format_and_tag(&mut self, format: &str, tag: &str) -> Result<()>;
+
+    /// List yaks with format, tag, and only filter combined
+    fn list_yaks_with_format_tag_and_filter(
+        &mut self,
+        format: &str,
+        tag: &str,
+        only: &str,
+    ) -> Result<()>;
+
     /// Try to list yaks with a specific format - captures result without bailing on failure
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()>;
 

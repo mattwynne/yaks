@@ -316,29 +316,42 @@ impl TestWorld for InProcessWorld {
     }
 
     fn list_yaks(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new("pretty", None)))
+        self.execute(|app| app.handle(ListYaks::new("pretty", None, None)))
     }
 
     fn list_yaks_with_format(&mut self, format: &str) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new(format, None)))
+        self.execute(|app| app.handle(ListYaks::new(format, None, None)))
     }
 
     fn list_yaks_with_format_and_filter(&mut self, format: &str, only: &str) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new(format, Some(only))))
+        self.execute(|app| app.handle(ListYaks::new(format, Some(only), None)))
     }
 
     fn list_yaks_json(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new("json", None)))
+        self.execute(|app| app.handle(ListYaks::new("json", None, None)))
+    }
+
+    fn list_yaks_with_format_and_tag(&mut self, format: &str, tag: &str) -> Result<()> {
+        self.execute(|app| app.handle(ListYaks::new(format, None, Some(tag))))
+    }
+
+    fn list_yaks_with_format_tag_and_filter(
+        &mut self,
+        format: &str,
+        tag: &str,
+        only: &str,
+    ) -> Result<()> {
+        self.execute(|app| app.handle(ListYaks::new(format, Some(only), Some(tag))))
     }
 
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {
         let format = format.to_string();
-        self.try_execute(move |app| app.handle(ListYaks::new(&format, None)))
+        self.try_execute(move |app| app.handle(ListYaks::new(&format, None, None)))
     }
 
     fn try_list_yaks_with_filter(&mut self, only: &str) -> Result<()> {
         let only = only.to_string();
-        self.try_execute(move |app| app.handle(ListYaks::new("pretty", Some(&only))))
+        self.try_execute(move |app| app.handle(ListYaks::new("pretty", Some(&only), None)))
     }
 
     fn set_context(&mut self, name: &str, content: &str) -> Result<()> {

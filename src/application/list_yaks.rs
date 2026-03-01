@@ -36,25 +36,27 @@ impl TreePrefix {
 }
 
 use super::{Application, UseCase};
-use crate::domain::tag::format_tag;
+use crate::domain::tag::{format_tag, normalize_tag};
 
 pub struct ListYaks {
     format: String,
     only: Option<String>,
+    tag: Option<String>,
 }
 
 impl ListYaks {
-    pub fn new(format: &str, only: Option<&str>) -> Self {
+    pub fn new(format: &str, only: Option<&str>, tag: Option<&str>) -> Self {
         Self {
             format: format.to_string(),
             only: only.map(|s| s.to_string()),
+            tag: tag.map(|t| normalize_tag(t).unwrap_or_else(|_| t.to_string())),
         }
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         let format = self.format.as_str();
         let only = self.only.as_deref();
-        let yaks = app.store.list_yaks()?;
+        let mut yaks = app.store.list_yaks()?;
 
         // Normalize format (treat "md" and "raw" as aliases)
         let normalized_format = match format {
@@ -64,9 +66,9 @@ impl ListYaks {
         };
 
         // Validate format
-        if !["pretty", "markdown", "plain", "json"].contains(&normalized_format) {
+        if !["pretty", "markdown", "plain", "json", "ids"].contains(&normalized_format) {
             anyhow::bail!(
-                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, json (aliases: md, raw)",
+                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, json, ids (aliases: md, raw)",
                 format
             );
         }
@@ -79,6 +81,19 @@ impl ListYaks {
                     filter
                 );
             }
+        }
+
+        // Apply tag filter
+        if let Some(ref tag) = self.tag {
+            yaks.retain(|y| y.tags.contains(tag));
+        }
+
+        // Handle ids format early (before tree building)
+        if normalized_format == "ids" {
+            for yak in &yaks {
+                app.display.info(yak.id.as_str());
+            }
+            return Ok(());
         }
 
         if yaks.is_empty() {
@@ -394,7 +409,8 @@ mod tests {
         buffer.clear();
 
         // Markdown format: should emit the "no yaks" message
-        app.handle(ListYaks::new("markdown", Some("done"))).unwrap();
+        app.handle(ListYaks::new("markdown", Some("done"), None))
+            .unwrap();
         let output = buffer.contents();
         let markdown_lines: Vec<&str> = output.lines().collect();
         assert!(
@@ -408,7 +424,8 @@ mod tests {
         buffer.clear();
 
         // Pretty format: should NOT emit the "no yaks" message
-        app.handle(ListYaks::new("pretty", Some("done"))).unwrap();
+        app.handle(ListYaks::new("pretty", Some("done"), None))
+            .unwrap();
         let output = buffer.contents();
         let pretty_lines: Vec<&str> = output.lines().collect();
         assert!(
@@ -445,7 +462,7 @@ mod tests {
         app.handle(SetState::new("beta", "done")).unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None)).unwrap();
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
         let output = buffer.contents();
         let messages: Vec<&str> = output.lines().collect();
 
@@ -492,7 +509,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None)).unwrap();
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
         let output = buffer.contents();
         let messages: Vec<&str> = output.lines().collect();
 
@@ -583,7 +600,7 @@ mod tests {
     // Line 182: not-done filter must exclude done yaks (not fall through to _ => true)
     #[test]
     fn not_done_filter_excludes_done_yaks() {
-        let list = ListYaks::new("plain", Some("not-done"));
+        let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("finished", "done");
         assert!(
             !list.should_display_node(&node, Some("not-done")),
@@ -595,7 +612,7 @@ mod tests {
     // Catches both the `!` deletion and `||` to `&&` mutants
     #[test]
     fn not_done_filter_includes_not_done_yaks() {
-        let list = ListYaks::new("plain", Some("not-done"));
+        let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("pending", "todo");
         assert!(
             list.should_display_node(&node, Some("not-done")),
@@ -625,7 +642,7 @@ mod tests {
         // No yaks added - list is empty
 
         // Markdown should show the message
-        app.handle(ListYaks::new("markdown", None)).unwrap();
+        app.handle(ListYaks::new("markdown", None, None)).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("You have no yaks"),
@@ -636,7 +653,7 @@ mod tests {
         buffer.clear();
 
         // Plain should NOT show the message
-        app.handle(ListYaks::new("plain", None)).unwrap();
+        app.handle(ListYaks::new("plain", None, None)).unwrap();
         let output = buffer.contents();
         assert!(
             !output.contains("You have no yaks"),
@@ -674,7 +691,7 @@ mod tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None)).unwrap();
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
         let output = buffer.contents();
         let messages: Vec<&str> = output.lines().collect();
 
@@ -711,7 +728,7 @@ mod tests {
             &auth,
         );
 
-        let result = app.handle(ListYaks::new("foobar", None));
+        let result = app.handle(ListYaks::new("foobar", None, None));
         assert!(result.is_err(), "Expected error for invalid format");
         let err = result.unwrap_err().to_string();
         assert!(
@@ -744,7 +761,7 @@ mod tests {
             &auth,
         );
 
-        let result = app.handle(ListYaks::new("pretty", Some("foobar")));
+        let result = app.handle(ListYaks::new("pretty", Some("foobar"), None));
         assert!(result.is_err(), "Expected error for invalid filter");
         let err = result.unwrap_err().to_string();
         assert!(
@@ -761,7 +778,7 @@ mod tests {
 
     #[test]
     fn valid_formats_accepted() {
-        for format in &["pretty", "markdown", "plain", "md", "raw", "json"] {
+        for format in &["pretty", "markdown", "plain", "md", "raw", "json", "ids"] {
             let mut event_store = InMemoryEventStore::new();
             let mut event_bus = EventBus::new();
             let storage = InMemoryStorage::new();
@@ -778,7 +795,7 @@ mod tests {
                 &auth,
             );
 
-            let result = app.handle(ListYaks::new(format, None));
+            let result = app.handle(ListYaks::new(format, None, None));
             assert!(
                 result.is_ok(),
                 "Format '{}' should be accepted, got error: {:?}",
@@ -833,7 +850,7 @@ mod tag_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None)).unwrap();
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("@v1.0"),
@@ -867,7 +884,7 @@ mod tag_tests {
         .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("markdown", None)).unwrap();
+        app.handle(ListYaks::new("markdown", None, None)).unwrap();
         let output = buffer.contents();
         assert!(
             output.contains("@v1.0"),
@@ -900,7 +917,7 @@ mod tag_tests {
         app.handle(AddYak::new("my yak")).unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("pretty", None)).unwrap();
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
         let output = buffer.contents();
         assert!(
             !output.contains("@"),
@@ -948,7 +965,7 @@ mod json_tests {
             &auth,
         );
 
-        app.handle(ListYaks::new("json", None)).unwrap();
+        app.handle(ListYaks::new("json", None, None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -977,7 +994,7 @@ mod json_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("json", None)).unwrap();
+        app.handle(ListYaks::new("json", None, None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1020,7 +1037,7 @@ mod json_tests {
             .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("json", None)).unwrap();
+        app.handle(ListYaks::new("json", None, None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1068,7 +1085,7 @@ mod json_tests {
         .unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("json", None)).unwrap();
+        app.handle(ListYaks::new("json", None, None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
@@ -1108,7 +1125,7 @@ mod json_tests {
         app.handle(SetState::new("wip yak", "wip")).unwrap();
         buffer.clear();
 
-        app.handle(ListYaks::new("json", None)).unwrap();
+        app.handle(ListYaks::new("json", None, None)).unwrap();
         let output = buffer.contents();
         let json: serde_json::Value = serde_json::from_str(&output)
             .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));

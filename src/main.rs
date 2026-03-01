@@ -57,13 +57,16 @@ enum Commands {
         #[arg(
             long,
             default_value = "pretty",
-            help = "Output format: pretty (default), markdown/md, plain/raw, json",
-            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line\n  - json: Full yak tree as JSON array (for agents/scripts)"
+            help = "Output format: pretty (default), markdown/md, plain/raw, json, ids",
+            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line\n  - json: Full yak tree as JSON array (for agents/scripts)\n  - ids: Just yak IDs, one per line (for piping)"
         )]
         format: String,
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
+        /// Filter by tag name (exact match, @ prefix stripped)
+        #[arg(long)]
+        tag: Option<String>,
     },
     /// Mark yak as done
     #[command(alias = "finish")]
@@ -365,7 +368,9 @@ fn route_command(
             }
             handler.handle(use_case)
         }
-        Commands::List { format, only } => handler.handle(ListYaks::new(&format, only.as_deref())),
+        Commands::List { format, only, tag } => {
+            handler.handle(ListYaks::new(&format, only.as_deref(), tag.as_deref()))
+        }
         Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
             handler.handle(DoneYak::new(&name_str, recursive))
