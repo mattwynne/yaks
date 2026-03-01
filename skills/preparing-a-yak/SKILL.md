@@ -104,13 +104,24 @@ semantics.
 Use `/example-mapping` to discover rules, examples, and
 questions.
 
+**Example mapping is for behavioural rules — things that need
+`if` statements in the code.** Not every acceptance criterion
+is a rule. Design choices (colours, layout, formatting
+constants) belong in the spec as criteria, not in the example
+map. Only map rules where different inputs produce different
+behaviour through branching logic.
+
 **CRITICAL: Go one rule at a time, not all at once.**
 
 The process:
 
-1. **Identify all the rules** from the spec. List them as a
-   short numbered checklist (rule name only, one line each) so
-   the user can see the full scope.
+1. **Identify the behavioural rules** from the spec. These are
+   the rules where different inputs lead to different outputs
+   — things that need branching logic. List them as a short
+   numbered checklist (rule name only, one line each) so the
+   user can see the full scope. Explicitly note which acceptance
+   criteria are *not* rules (design choices) so the user can
+   see you've considered them.
 
 2. **Present one rule at a time.** For each rule:
    - State the rule clearly
