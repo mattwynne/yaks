@@ -1,44 +1,18 @@
 # Implementation Plan
 
-## File Structure
-- Modify: `src/main.rs` — add `--tag` CLI arg (repeatable) to List command, pass to ListYaks
-- Modify: `src/application/list_yaks.rs` — add tag filter logic, update tree display to show ancestors of matches
-- Create: `features/filter_by_tag.feature` — Cucumber scenarios for the rules
-- Modify: `src/domain/tag.rs` — reuse normalize_tag for parsing --tag values
+## Files
+- Modify: `src/main.rs` — add `--tag` arg to List command, pass to ListYaks
+- Modify: `src/application/list_yaks.rs` — filter yaks before tree building, add "ids" format
+- Create: `features/filter_by_tag.feature` — Cucumber scenarios
 
 ## Design
-A `TagFilter` is a Vec of clauses (AND). Each clause is a Vec<String> (OR).
-Parsing: split each --tag value by comma, normalize each tag name (strip @).
-A yak matches if for every clause, it has at least one tag in that clause.
-
-Tree display: two-pass approach:
-1. First pass: mark which yaks match the tag filter (+ only filter)
-2. Second pass: mark ancestors of matching yaks as "show for context"
-3. Display: show matched yaks and context-only ancestors, skip the rest
+Dead simple: filter the flat `yaks` vec early in execute(), before build_tree.
+- Parse --tag value: strip @ prefix using normalize_tag
+- Filter: `yaks.retain(|y| y.tags.contains(&tag))`
+- Add "ids" format: just print yak IDs one per line (before tree building, like json)
 
 ## Tasks
-1. Add TagFilter struct and matching logic to list_yaks.rs
-   - Parse Vec<String> of "--tag" values into clauses
-   - Normalize tags (strip @, split commas)
-   - Match function: yak tags vs filter clauses
-   - Unit tests for matching logic
-
-2. Wire --tag CLI arg through main.rs → ListYaks
-   - Add `tag: Vec<String>` arg to List command
-   - Pass to ListYaks::new
-   - ListYaks stores the filter
-
-3. Implement filtered tree display
-   - After building tree, compute match set (yak IDs that match tag + only filters)
-   - Compute ancestor set (walk up from each match)
-   - In display_tree, skip nodes not in match set or ancestor set
-   - For plain format: only output matching yaks (no ancestors)
-
-4. Write Cucumber scenarios in features/filter_by_tag.feature
-   - One scenario per example from the example map
-   - Use existing step definitions
-
-5. Verify all tests pass
-
-## Dependencies
-Task 1 is independent. Tasks 2-3 depend on 1. Task 4 can be written alongside.
+1. Add --tag arg to CLI and ListYaks, filter yaks vec before tree building
+2. Add --format ids output (flat list of yak IDs)
+3. Write Cucumber scenarios
+4. Verify all tests pass
