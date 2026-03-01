@@ -152,3 +152,20 @@ Feature: yx reset - Rebuild yaks from git tree
       When I reset the yaks from disk to git
       And I run yx log
       Then the output should not include "unknown"
+
+  Rule: reset --git-from-disk requires confirmation
+
+    Example: Declining confirmation aborts reset
+      Given I add the yak "my yak"
+      When I try to reset from disk
+      Then the output should include "Aborted"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] my yak
+        """
+
+    Example: --force skips confirmation
+      Given I add the yak "my yak"
+      When I reset from disk with --force
+      Then the output should include "Reset from disk"

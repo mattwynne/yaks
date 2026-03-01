@@ -1123,10 +1123,29 @@ async fn reset_yaks_full_stack(world: &mut FullStackWorld) -> Result<()> {
 
 #[when(expr = "I reset the yaks from disk to git")]
 async fn reset_yaks_git_from_disk(world: &mut FullStackWorld) -> Result<()> {
-    world.run_raw(&["reset", "--git-from-disk"])?;
+    world.run_raw(&["reset", "--git-from-disk", "--force"])?;
     if world.get_exit_code() != 0 {
         anyhow::bail!(
             "yx reset --git-from-disk failed:\nstdout: {}\nstderr: {}",
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
+#[when(expr = "I try to reset from disk")]
+async fn try_reset_from_disk(world: &mut FullStackWorld) -> Result<()> {
+    world.run_raw(&["reset", "--git-from-disk"])?;
+    Ok(())
+}
+
+#[when(expr = "I reset from disk with --force")]
+async fn reset_from_disk_with_force(world: &mut FullStackWorld) -> Result<()> {
+    world.run_raw(&["reset", "--git-from-disk", "--force"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "yx reset --git-from-disk --force failed:\nstdout: {}\nstderr: {}",
             world.get_output(),
             world.get_error()
         );
