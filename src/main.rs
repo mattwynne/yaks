@@ -437,8 +437,10 @@ fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
     if args.len() == 1 {
-        Cli::command().print_help()?;
-        return Ok(());
+        let mut cmd = Cli::command();
+        let help = cmd.render_help();
+        eprintln!("{help}");
+        std::process::exit(2);
     }
 
     let cli = Cli::parse();
