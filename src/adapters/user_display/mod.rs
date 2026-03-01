@@ -2,7 +2,7 @@
 
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::Name;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
 
 pub struct ConsoleDisplayOptions {
@@ -27,9 +27,10 @@ impl ConsoleDisplay {
         let width = terminal_size::terminal_size()
             .map(|(w, _)| w.0 as usize)
             .unwrap_or(80);
+        let color = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
         Self::new(
             Box::new(std::io::stdout()),
-            ConsoleDisplayOptions { color: true, width },
+            ConsoleDisplayOptions { color, width },
         )
     }
 }
