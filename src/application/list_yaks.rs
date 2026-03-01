@@ -804,6 +804,55 @@ mod tests {
             );
         }
     }
+
+    // Line 141: pretty format bottom margin requires BOTH pretty format AND has_output.
+    // When a filter excludes all yaks, has_output stays false, so no trailing blank line.
+    // This kills the mutant: replace `&&` with `||` on the bottom-margin condition.
+    #[test]
+    fn pretty_format_no_trailing_blank_when_filter_excludes_all() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &auth,
+        );
+
+        // Add a yak in "todo" state
+        app.handle(AddYak::new("todo yak")).unwrap();
+        buffer.clear();
+
+        // List with pretty format, filtering by "done" — no nodes match
+        app.handle(ListYaks::new("pretty", Some("done"), None))
+            .unwrap();
+        let output = buffer.contents();
+
+        // With correct code (&&): only top margin blank line is emitted,
+        // because has_output is false so bottom margin is skipped.
+        // With mutant (||): both top AND bottom margin blank lines are emitted.
+        // So we assert the output is exactly one blank line (the top margin only).
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(
+            lines.len(),
+            1,
+            "Expected only the top-margin blank line when filter excludes all yaks, got {} lines: {:?}",
+            lines.len(),
+            lines
+        );
+        assert_eq!(
+            lines[0], "",
+            "Expected the single line to be the top-margin blank, got: {:?}",
+            lines[0]
+        );
+    }
 }
 
 #[cfg(test)]
