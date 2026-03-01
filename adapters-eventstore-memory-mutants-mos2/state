@@ -1,0 +1,8 @@
+adapters-event_store-migration mutants
+adapters-yak_store-directory mutants
+adapters-yak_store-memory mutants
+application-app mutants
+application-show_log mutants
+application-show_yak mutants
+domain-yak_map mutants
+projections-write_to_yak_store mutants
