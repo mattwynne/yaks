@@ -239,18 +239,10 @@ impl ReadYakStore for InMemoryStorage {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "todo".to_string());
 
-        // Collect custom fields (non-reserved, excluding internal _parent_id)
-        let mut custom_fields: HashMap<String, String> = fields
-            .iter()
-            .filter(|(k, _)| {
-                !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
-            })
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
-        // Extract tags from custom fields into dedicated Vec
-        let tags: Vec<String> = custom_fields
-            .remove("tags")
+        // Extract tags directly from fields (before custom_fields filtering,
+        // since .tags is a reserved field and would be excluded)
+        let tags: Vec<String> = fields
+            .get(".tags")
             .map(|t| {
                 t.lines()
                     .filter(|l| !l.is_empty())
@@ -258,6 +250,15 @@ impl ReadYakStore for InMemoryStorage {
                     .collect()
             })
             .unwrap_or_default();
+
+        // Collect custom fields (non-reserved, excluding internal _parent_id)
+        let custom_fields: HashMap<String, String> = fields
+            .iter()
+            .filter(|(k, _)| {
+                !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         // Find children by parent_id
         let children = Self::find_children_from_yaks(&yaks, &key);
@@ -324,18 +325,10 @@ impl ReadYakStore for InMemoryStorage {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "todo".to_string());
 
-            // Collect custom fields (non-reserved, excluding internal _parent_id)
-            let mut custom_fields: HashMap<String, String> = fields
-                .iter()
-                .filter(|(k, _)| {
-                    !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
-                })
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-
-            // Extract tags from custom fields into dedicated Vec
-            let tags: Vec<String> = custom_fields
-                .remove("tags")
+            // Extract tags directly from fields (before custom_fields filtering,
+            // since .tags is a reserved field and would be excluded)
+            let tags: Vec<String> = fields
+                .get(".tags")
                 .map(|t| {
                     t.lines()
                         .filter(|l| !l.is_empty())
@@ -343,6 +336,15 @@ impl ReadYakStore for InMemoryStorage {
                         .collect()
                 })
                 .unwrap_or_default();
+
+            // Collect custom fields (non-reserved, excluding internal _parent_id)
+            let custom_fields: HashMap<String, String> = fields
+                .iter()
+                .filter(|(k, _)| {
+                    !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
+                })
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
 
             // Find children by parent_id
             let children = Self::find_children_from_yaks(&yaks, key);

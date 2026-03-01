@@ -119,7 +119,7 @@ fn replay_yak(
             "
 ",
         );
-        use_case = use_case.with_field("tags", &tag_content);
+        use_case = use_case.with_field(crate::domain::field::TAGS_FIELD, &tag_content);
     }
     app.handle(use_case)?;
 

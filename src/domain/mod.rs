@@ -17,7 +17,7 @@ pub use event::YakEvent;
 pub use event_metadata::{Author, EventMetadata, Timestamp};
 pub use field::{
     validate_field_name, validate_field_name_format, CONTEXT_FIELD, CREATED_FIELD, ID_FIELD,
-    NAME_FIELD, STATE_FIELD,
+    NAME_FIELD, STATE_FIELD, TAGS_FIELD,
 };
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use tag::{format_tag, normalize_tag};

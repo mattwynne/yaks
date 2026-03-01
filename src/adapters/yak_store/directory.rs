@@ -4,7 +4,7 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD};
 use crate::infrastructure::check_yaks_gitignored;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -441,9 +441,9 @@ impl ReadYakStore for DirectoryStorage {
             .trim()
             .to_string();
 
-        let mut fields = self.read_custom_fields(&dir);
-        let tags: Vec<String> = fields
-            .remove("tags")
+        let fields = self.read_custom_fields(&dir);
+        let tags: Vec<String> = fs::read_to_string(dir.join(TAGS_FIELD))
+            .ok()
             .map(|t| {
                 t.lines()
                     .filter(|l| !l.is_empty())
@@ -513,9 +513,9 @@ impl ReadYakStore for DirectoryStorage {
                 .trim()
                 .to_string();
 
-            let mut fields = self.read_custom_fields(path);
-            let tags: Vec<String> = fields
-                .remove("tags")
+            let fields = self.read_custom_fields(path);
+            let tags: Vec<String> = fs::read_to_string(path.join(TAGS_FIELD))
+                .ok()
                 .map(|t| {
                     t.lines()
                         .filter(|l| !l.is_empty())

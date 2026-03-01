@@ -9,6 +9,7 @@ pub const NAME_FIELD: &str = ".name";
 pub const ID_FIELD: &str = ".id";
 pub const CREATED_FIELD: &str = ".created.json";
 pub const PARENT_ID_FIELD: &str = ".parent_id";
+pub const TAGS_FIELD: &str = ".tags";
 
 /// All reserved field names
 pub const RESERVED_FIELDS: &[&str] = &[
@@ -18,6 +19,7 @@ pub const RESERVED_FIELDS: &[&str] = &[
     ID_FIELD,
     CREATED_FIELD,
     PARENT_ID_FIELD,
+    TAGS_FIELD,
 ];
 
 /// Validate a field name format (for reading).
@@ -108,6 +110,13 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_field_name_reserved_tags() {
+        let result = validate_field_name(".tags");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("reserved"));
+    }
+
+    #[test]
     fn test_validate_field_name_format_allows_reserved() {
         // Format validation allows reserved names (for reading)
         assert!(validate_field_name_format(".name").is_ok());
@@ -146,5 +155,6 @@ mod dot_prefix_tests {
         assert!(validate_field_name("context.md").is_ok());
         assert!(validate_field_name("id").is_ok());
         assert!(validate_field_name("parent_id").is_ok());
+        assert!(validate_field_name("tags").is_ok());
     }
 }

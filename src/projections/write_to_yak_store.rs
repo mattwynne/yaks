@@ -25,6 +25,16 @@ impl<T: WriteYakStore> EventListener for T {
     }
 }
 
+/// Map legacy field names to their current dot-prefixed equivalents.
+/// Old events may have been written with bare names before the convention
+/// was established (e.g. "tags" instead of ".tags").
+fn migrate_field_name(field_name: &str) -> &str {
+    match field_name {
+        "tags" => ".tags",
+        _ => field_name,
+    }
+}
+
 fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> {
     match event {
         YakEvent::Added(
@@ -69,10 +79,11 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             },
             _,
         ) => {
-            if field_name == NAME_FIELD {
+            let actual_name = migrate_field_name(field_name);
+            if actual_name == NAME_FIELD {
                 store.rename_yak(id, &Name::from(content.as_str()))?;
             } else {
-                store.write_field(id, field_name, content)?;
+                store.write_field(id, actual_name, content)?;
             }
         }
 
@@ -96,7 +107,8 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 });
                 store.write_field(&snap.id, CREATED_FIELD, &metadata_json.to_string())?;
                 for (field_name, content) in &snap.fields {
-                    store.write_field(&snap.id, field_name, content)?;
+                    let actual_name = migrate_field_name(field_name);
+                    store.write_field(&snap.id, actual_name, content)?;
                 }
             }
         }
@@ -220,5 +232,68 @@ mod tests {
         );
 
         listener.on_event(&event).unwrap(); // no yak to remove
+    }
+
+    #[test]
+    fn legacy_tags_field_name_is_migrated_to_dot_tags() {
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
+
+        // Add a yak
+        listener
+            .on_event(&added_event("my yak", "my-yak-a1b2"))
+            .unwrap();
+
+        // Simulate a legacy event with bare "tags" field name
+        let legacy_event = YakEvent::FieldUpdated(
+            FieldUpdatedEvent {
+                id: YakId::from("my-yak-a1b2"),
+                field_name: "tags".to_string(),
+                content: "v1\nurgent".to_string(),
+            },
+            EventMetadata::default_legacy(),
+        );
+        listener.on_event(&legacy_event).unwrap();
+
+        // Tags should be accessible via the yak view
+        let yak = storage.get_yak(&YakId::from("my-yak-a1b2")).unwrap();
+        assert_eq!(yak.tags, vec!["v1".to_string(), "urgent".to_string()]);
+        // Should NOT appear as a custom field named "tags"
+        assert!(!yak.fields.contains_key("tags"));
+    }
+
+    #[test]
+    fn compacted_event_migrates_legacy_tags_field() {
+        use crate::domain::event_metadata::{Author, Timestamp};
+        use crate::domain::yak_snapshot::YakSnapshot;
+        use std::collections::HashMap;
+
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
+
+        // Snapshot with legacy "tags" field name in fields map
+        let mut fields = HashMap::new();
+        fields.insert("tags".to_string(), "v1\nv2".to_string());
+
+        let snapshots = vec![YakSnapshot {
+            id: YakId::from("yak-a1b2"),
+            name: Name::from("my yak"),
+            parent_id: None,
+            state: "todo".to_string(),
+            context: None,
+            fields,
+            created_by: Author {
+                name: "alice".into(),
+                email: "alice@example.com".into(),
+            },
+            created_at: Timestamp(1000),
+        }];
+
+        let compacted = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        listener.on_event(&compacted).unwrap();
+
+        let yak = storage.get_yak(&YakId::from("yak-a1b2")).unwrap();
+        assert_eq!(yak.tags, vec!["v1".to_string(), "v2".to_string()]);
+        assert!(!yak.fields.contains_key("tags"));
     }
 }

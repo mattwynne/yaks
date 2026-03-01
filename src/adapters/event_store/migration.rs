@@ -7,9 +7,10 @@ use super::migrate_v2_to_v3::MigrateV2ToV3;
 use super::migrate_v3_to_v4::MigrateV3ToV4;
 use super::migrate_v4_to_v5::MigrateV4ToV5;
 use super::migrate_v5_to_v6::MigrateV5ToV6;
+use super::migrate_v6_to_v7::MigrateV6ToV7;
 
 /// The schema version this build of yx expects.
-pub const CURRENT_SCHEMA_VERSION: u32 = 6;
+pub const CURRENT_SCHEMA_VERSION: u32 = 7;
 
 /// A reference to a specific event store location in a git repository.
 /// Bundles the repo and ref name to avoid threading them separately.
@@ -49,6 +50,7 @@ impl Migrator {
                 Box::new(MigrateV3ToV4),
                 Box::new(MigrateV4ToV5),
                 Box::new(MigrateV5ToV6),
+                Box::new(MigrateV6ToV7),
             ],
         )
     }
