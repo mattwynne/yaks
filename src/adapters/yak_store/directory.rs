@@ -441,7 +441,16 @@ impl ReadYakStore for DirectoryStorage {
             .trim()
             .to_string();
 
-        let fields = self.read_custom_fields(&dir);
+        let mut fields = self.read_custom_fields(&dir);
+        let tags: Vec<String> = fields
+            .remove("tags")
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .collect()
+            })
+            .unwrap_or_default();
         let children = self.read_children(&dir);
         let parent_id = self.read_parent_id(&dir);
         let (created_by, created_at) = Self::read_metadata(&dir);
@@ -453,6 +462,7 @@ impl ReadYakStore for DirectoryStorage {
             state,
             context,
             fields,
+            tags,
             children,
             created_by,
             created_at,
@@ -503,7 +513,16 @@ impl ReadYakStore for DirectoryStorage {
                 .trim()
                 .to_string();
 
-            let fields = self.read_custom_fields(path);
+            let mut fields = self.read_custom_fields(path);
+            let tags: Vec<String> = fields
+                .remove("tags")
+                .map(|t| {
+                    t.lines()
+                        .filter(|l| !l.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
             let children = self.read_children(path);
             let parent_id = self.read_parent_id(path);
             let (created_by, created_at) = Self::read_metadata(path);
@@ -515,6 +534,7 @@ impl ReadYakStore for DirectoryStorage {
                 state,
                 context,
                 fields,
+                tags,
                 children,
                 created_by,
                 created_at,

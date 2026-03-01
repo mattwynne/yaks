@@ -240,13 +240,24 @@ impl ReadYakStore for InMemoryStorage {
             .unwrap_or_else(|| "todo".to_string());
 
         // Collect custom fields (non-reserved, excluding internal _parent_id)
-        let custom_fields: HashMap<String, String> = fields
+        let mut custom_fields: HashMap<String, String> = fields
             .iter()
             .filter(|(k, _)| {
                 !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+
+        // Extract tags from custom fields into dedicated Vec
+        let tags: Vec<String> = custom_fields
+            .remove("tags")
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         // Find children by parent_id
         let children = Self::find_children_from_yaks(&yaks, &key);
@@ -282,6 +293,7 @@ impl ReadYakStore for InMemoryStorage {
             state,
             context,
             fields: custom_fields,
+            tags,
             children,
             created_by,
             created_at,
@@ -313,13 +325,24 @@ impl ReadYakStore for InMemoryStorage {
                 .unwrap_or_else(|| "todo".to_string());
 
             // Collect custom fields (non-reserved, excluding internal _parent_id)
-            let custom_fields: HashMap<String, String> = fields
+            let mut custom_fields: HashMap<String, String> = fields
                 .iter()
                 .filter(|(k, _)| {
                     !RESERVED_FIELDS.contains(&k.as_str()) && k.as_str() != PARENT_ID_FIELD
                 })
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
+
+            // Extract tags from custom fields into dedicated Vec
+            let tags: Vec<String> = custom_fields
+                .remove("tags")
+                .map(|t| {
+                    t.lines()
+                        .filter(|l| !l.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
 
             // Find children by parent_id
             let children = Self::find_children_from_yaks(&yaks, key);
@@ -355,6 +378,7 @@ impl ReadYakStore for InMemoryStorage {
                 state,
                 context,
                 fields: custom_fields,
+                tags,
                 children,
                 created_by,
                 created_at,

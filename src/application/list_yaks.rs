@@ -253,13 +253,7 @@ impl ListYaks {
         let tags: Vec<String> = node
             .yak
             .as_ref()
-            .and_then(|y| y.fields.get("tags"))
-            .map(|t| {
-                t.lines()
-                    .filter(|l| !l.is_empty())
-                    .map(format_tag)
-                    .collect()
-            })
+            .map(|y| y.tags.iter().map(|t| format_tag(t)).collect())
             .unwrap_or_default();
 
         match format {
@@ -300,8 +294,7 @@ fn node_to_json_value(node: &YakNode) -> serde_json::Value {
         .map(|p| serde_json::Value::String(p.as_str().to_string()));
 
     let tags: Vec<&str> = yak
-        .and_then(|y| y.fields.get("tags"))
-        .map(|t| t.lines().filter(|l| !l.is_empty()).collect())
+        .map(|y| y.tags.iter().map(|s| s.as_str()).collect())
         .unwrap_or_default();
 
     let fields: serde_json::Map<String, serde_json::Value> = yak
@@ -562,6 +555,7 @@ mod tests {
                 state: state.to_string(),
                 context: None,
                 fields: HashMap::new(),
+                tags: vec![],
                 children: vec![],
                 created_by: Author::unknown(),
                 created_at: Timestamp::zero(),

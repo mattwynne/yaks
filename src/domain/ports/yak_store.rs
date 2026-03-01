@@ -80,6 +80,7 @@ mod tests {
                 state: "todo".to_string(),
                 context: None,
                 fields: HashMap::new(),
+                tags: vec![],
                 children: vec![],
                 created_by: Author::unknown(),
                 created_at: Timestamp::zero(),
