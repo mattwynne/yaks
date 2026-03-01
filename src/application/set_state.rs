@@ -10,6 +10,7 @@ pub struct SetState {
     name: String,
     state: String,
     recursive: bool,
+    silent: bool,
 }
 
 impl SetState {
@@ -18,11 +19,17 @@ impl SetState {
             name: name.to_string(),
             state: state.to_string(),
             recursive: false,
+            silent: false,
         }
     }
 
     pub fn with_recursive(mut self, recursive: bool) -> Self {
         self.recursive = recursive;
+        self
+    }
+
+    pub fn with_silent(mut self, silent: bool) -> Self {
+        self.silent = silent;
         self
     }
 
@@ -47,7 +54,14 @@ impl SetState {
                 yak_map.update_state(id, state.clone())?;
             }
             Ok(())
-        })
+        })?;
+
+        if !self.silent {
+            app.display
+                .success(&format!("Set '{}' state to {}", self.name, self.state));
+        }
+
+        Ok(())
     }
 
     /// Recursively collect all descendant IDs (breadth-first, parents before children).
@@ -85,14 +99,24 @@ mod tests {
     use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
 
-    fn setup() -> (InMemoryStorage, ConsoleDisplay, InMemoryInput) {
-        let (display, _) = make_test_display();
-        (InMemoryStorage::new(), display, InMemoryInput::new())
+    fn setup() -> (
+        InMemoryStorage,
+        ConsoleDisplay,
+        crate::adapters::TestBuffer,
+        InMemoryInput,
+    ) {
+        let (display, buffer) = make_test_display();
+        (
+            InMemoryStorage::new(),
+            display,
+            buffer,
+            InMemoryInput::new(),
+        )
     }
 
     #[test]
     fn sets_state_with_exact_name() {
-        let (storage, display, input) = setup();
+        let (storage, display, buffer, input) = setup();
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
@@ -113,11 +137,12 @@ mod tests {
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "my yak").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "wip");
+        assert!(buffer.contents().contains("Set 'my yak' state to wip"));
     }
 
     #[test]
     fn resolves_fuzzy_name() {
-        let (storage, display, input) = setup();
+        let (storage, display, buffer, input) = setup();
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
@@ -138,11 +163,12 @@ mod tests {
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "Fix the bug").unwrap();
         let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
         assert_eq!(yak.state, "wip");
+        assert!(buffer.contents().contains("Set 'bug' state to wip"));
     }
 
     #[test]
     fn errors_on_ambiguous_fuzzy_name() {
-        let (storage, display, input) = setup();
+        let (storage, display, _buffer, input) = setup();
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
@@ -167,7 +193,7 @@ mod tests {
 
     #[test]
     fn sets_state_recursively() {
-        let (storage, display, input) = setup();
+        let (storage, display, buffer, input) = setup();
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));
@@ -220,11 +246,12 @@ mod tests {
         assert_eq!(parent.state, "done");
         assert_eq!(child.state, "done");
         assert_eq!(grandchild.state, "done");
+        assert!(buffer.contents().contains("Set 'parent' state to done"));
     }
 
     #[test]
     fn errors_on_not_found() {
-        let (storage, display, input) = setup();
+        let (storage, display, _buffer, input) = setup();
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
         event_bus.register(Box::new(storage.clone()));

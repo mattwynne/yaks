@@ -36,7 +36,11 @@ impl AddTag {
         }
 
         let content = tag_set.join("\n");
-        app.with_yak_map(|yak_map| yak_map.update_field(id.clone(), "tags".to_string(), content))
+        app.with_yak_map(|yak_map| yak_map.update_field(id.clone(), "tags".to_string(), content))?;
+
+        app.display.success(&format!("Tagged '{}'", self.name));
+
+        Ok(())
     }
 }
 

@@ -20,7 +20,18 @@ impl DoneYak {
     pub fn execute(&self, app: &mut Application) -> Result<()> {
         SetState::new(&self.name, "done")
             .with_recursive(self.recursive)
-            .execute(app)
+            .with_silent(true)
+            .execute(app)?;
+
+        if self.recursive {
+            app.display
+                .success(&format!("Marked '{}' and descendants as done", self.name));
+        } else {
+            app.display
+                .success(&format!("Marked '{}' as done", self.name));
+        }
+
+        Ok(())
     }
 }
 

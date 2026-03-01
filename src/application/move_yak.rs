@@ -35,12 +35,20 @@ impl MoveYak {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         match &self.target {
-            MoveTarget::ToRoot => app.with_yak_map(|yak_map| yak_map.move_yak_to(id, None)),
+            MoveTarget::ToRoot => {
+                app.with_yak_map(|yak_map| yak_map.move_yak_to(id, None))?;
+                app.display
+                    .success(&format!("Moved '{}' to root", self.name));
+            }
             MoveTarget::Under(parent_name) => {
                 let parent_id = app.store.fuzzy_find_yak_id(parent_name)?;
-                app.with_yak_map(|yak_map| yak_map.move_yak_to(id, Some(parent_id)))
+                app.with_yak_map(|yak_map| yak_map.move_yak_to(id, Some(parent_id)))?;
+                app.display
+                    .success(&format!("Moved '{}' under '{}'", self.name, parent_name));
             }
         }
+
+        Ok(())
     }
 }
 
