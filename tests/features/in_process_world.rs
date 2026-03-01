@@ -327,6 +327,10 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(ListYaks::new(format, Some(only))))
     }
 
+    fn list_yaks_json(&mut self) -> Result<()> {
+        self.execute(|app| app.handle(ListYaks::new("pretty", None).with_json(true)))
+    }
+
     fn set_context(&mut self, name: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(EditContext::new(name)))

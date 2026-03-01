@@ -204,3 +204,50 @@ Feature: List yaks
       Given I have a clean git repository
       When I list the yaks in "plain" format
       Then the output should be empty
+
+  Rule: JSON output for agent/script consumption
+
+    The --json flag outputs the full yak tree as a JSON array.
+    Each yak includes id, name, state, context, parent_id, tags,
+    fields, and children (nested recursively).
+
+    Example: Empty list returns empty JSON array
+      Given I have a clean git repository
+      When I list the yaks as json
+      Then the output should be:
+        """
+        []
+        """
+
+    Example: Single yak outputs JSON with correct fields
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      When I set the context of "Fix the bug" to "It crashes on startup"
+      And I list the yaks as json
+      Then the output should include "Fix the bug"
+      And the output should include "todo"
+      And the output should include "It crashes on startup"
+      And the output should include "children"
+      And the output should include "tags"
+
+    Example: Nested yaks appear as recursive children in JSON
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      When I list the yaks as json
+      Then the output should include "parent"
+      And the output should include "child"
+
+    Example: JSON includes tags
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I tag "my yak" with "v1"
+      And I list the yaks as json
+      Then the output should include "v1"
+
+    Example: JSON reflects yak state
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      And I mark the yak "my yak" as done
+      When I list the yaks as json
+      Then the output should include "done"
