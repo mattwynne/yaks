@@ -1,77 +1,67 @@
 # Implementation Plan
 
-## File Structure
+## Tasks (ordered for TDD — acceptance test first)
 
-### Modified
-- `src/domain/event_format.rs` — add `format_narrative()` to EventFormat trait
-- `src/domain/events/added.rs` — implement narrative for Added
-- `src/domain/events/removed.rs` — implement narrative for Removed
-- `src/domain/events/moved.rs` — implement narrative for Moved
-- `src/domain/events/field_updated.rs` — implement narrative for FieldUpdated
-- `src/domain/event.rs` — add `format_narrative()` on YakEvent delegating to inner types, handle Compacted
-- `src/domain/event_metadata.rs` — add `commit_sha: Option<String>` field
-- `src/adapters/event_store/git.rs` — populate commit_sha from commit.id()
-- `src/application/show_log.rs` — rewrite to use new format
-- `src/domain/ports/user_display.rs` — update log_entry signature
-- `src/adapters/user_display/mod.rs` — implement new 3-line format with dim/bold/rules
-- `features/log.feature` — update acceptance tests for new format
-- `Cargo.toml` — add chrono-humanize (or similar) for relative timestamps
+### 1. Write @wip acceptance test for new log format
+- Update features/log.feature with a new @wip rule for the narrative format
+- Scenario: add a yak, run yx log, assert new 3-line format:
+  - Line 1: narrative with author and yak name ("added")
+  - Line 2: relative or absolute timestamp
+  - Line 3: "event:" and "sha:"
+  - Entries separated by ──── rule
+- Update compact.feature log assertions for summary line
+- These fail immediately — that's the point
 
-### New
-- (none — all changes are to existing files)
-
-## Tasks
-
-### 1. Add commit_sha to EventMetadata
+### 2. Add commit_sha to EventMetadata
 - Add `commit_sha: Option<String>` to EventMetadata
-- Populate it in git.rs `get_all_events()` from `commit.id().to_string()`
-- Unit test: event metadata from git store includes sha
+- Populate in git.rs get_all_events() from commit.id()
+- Unit test: metadata includes sha
 
-### 2. Add format_narrative() to EventFormat trait
-- Add `fn format_narrative(&self, author: &str) -> String` to EventFormat
-- Compiler will force implementation on all event types
-- Implement for each:
-  - AddedEvent: "author added name" / "author added name under parent"
-  - RemovedEvent: "author removed id"
-  - MovedEvent: "author moved id under parent" / "author moved id to root"
-  - FieldUpdatedEvent: smart formatting based on field_name
-    (.state → started/finished/reset, .context.md → updated context,
-     .tags → tagged with, name → renamed, other → updated field on)
-- Add format_narrative() on YakEvent, delegating to inner types.
-  Compacted → "author compacted the event stream (N yaks)"
-- Unit tests for each event type's narrative
+### 3. Add format_narrative() to EventFormat trait
+- Add `fn format_narrative(&self, author: &str) -> String` to EventFormat trait
+- Compiler forces implementation on all event types:
+  - Added: "author added name" / "author added name under parent"
+  - Removed: "author removed name"
+  - Moved: "author moved name under parent" / "author moved name to root"
+  - FieldUpdated: smart per-field (started/finished/reset/updated context/tagged/renamed/updated field)
+  - Compacted: "author compacted the event stream (N yaks)"
+- Unit tests for each variant
 
-### 3. Add relative timestamp formatting
-- Add chrono-humanize dependency (or similar)
-- Create helper fn: if ≤7 days → humanized relative, else → absolute
-- Unit test the 7-day cutoff
+### 4. Add relative timestamp formatting
+- Add chrono-humanize (or similar) dependency
+- Create helper: relative string from timestamp, lean on library defaults
+- Unit test it exists and returns something sensible
 
-### 4. Rewrite log_entry display
-- Update UserDisplay::log_entry signature to accept structured data
-  (narrative, relative_time, event_id, commit_sha)
+### 5. Rewrite display and use case
+- Update UserDisplay::log_entry to accept structured data
 - Implement 3-line format:
-  Line 1: narrative (bold yak names when color enabled)
+  Line 1: narrative (yak names bold/coloured)
   Line 2: timestamp (dim)
   Line 3: event: id  sha: short_sha (dim)
-  Then: ──────── rule
-- Handle no-color: same lines without ANSI codes
+  Followed by: ──── rule
+- No-color: same lines without ANSI
+- Update show_log.rs to wire narrative, timestamp, sha
+- Compacted: single summary line
 
-### 5. Update show_log use case
-- Wire up: build narrative from event, format timestamp, pass sha
-- Compacted: single summary line instead of expanded snapshots
+### 6. Make acceptance tests pass
+- Remove @wip tag once green
+- Verify all other tests still pass: dev check
 
-### 6. Update acceptance tests
-- Rewrite features/log.feature for new format:
-  - Line 1 includes yak name (narrative)
-  - Line 2 includes "ago" or date
-  - Line 3 includes "event:" and "sha:"
-  - Entries separated by rule character
-- Update compact.feature log assertions
-- Update any other features that assert on log format
+## File Map
+- features/log.feature — rewrite assertions
+- features/compact.feature — update log assertions
+- src/domain/event_metadata.rs — add commit_sha
+- src/domain/event_format.rs — add format_narrative to trait
+- src/domain/events/{added,removed,moved,field_updated}.rs — implement narrative
+- src/domain/event.rs — delegate format_narrative, handle Compacted
+- src/adapters/event_store/git.rs — populate commit_sha
+- src/application/show_log.rs — rewrite use case
+- src/domain/ports/user_display.rs — update log_entry signature
+- src/adapters/user_display/mod.rs — new 3-line format
+- Cargo.toml — add timeago library
 
 ## Dependencies
-- Task 1 and 2 are independent, can be done in parallel
-- Task 3 is independent
-- Task 4 depends on 2 and 3
-- Task 5 depends on 1, 2, 3, 4
-- Task 6 depends on 5
+- Task 1 (acceptance test) is first, stands alone
+- Tasks 2, 3, 4 are independent of each other
+- Task 5 depends on 2, 3, 4
+- Task 6 depends on all above
