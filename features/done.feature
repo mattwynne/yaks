@@ -1,7 +1,7 @@
 Feature: Mark yaks as done
   Marks yaks as completed, changing their state to "done".
   Done yaks stay visible in listings for context. Use prune to
-  remove them. The --undo flag reopens a completed yak.
+  remove them. Use `yx state <name> todo` to reopen a completed yak.
 
   Rule: A yak can be marked as done
     Changes the yak's state to "done" and it appears grayed out in listings.
