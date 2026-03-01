@@ -77,7 +77,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             let dim_tags = if tag_suffix.is_empty() {
                 String::new()
             } else {
-                format!("\x1b[90m{}\x1b[0m", tag_suffix)
+                format!("\x1b[38;5;67m{}\x1b[0m", tag_suffix)
             };
             match state {
                 "wip" => writeln!(
@@ -155,8 +155,13 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             Some(format!("  {path} >   "))
         };
 
+        let tags_suffix = if tags.is_empty() {
+            String::new()
+        } else {
+            format!(" · {}", tags.join(" "))
+        };
         let header_content = format!(
-            "  {indicator} {name} · {state} · {date} · {}  ",
+            "  {indicator} {name} · {state} · {date} · {}{tags_suffix}  ",
             created_by.name
         );
         let header_width = header_content.chars().count();
@@ -190,17 +195,9 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             })
             .collect();
 
-        // Build tags line (if any)
-        let tags_line: Option<String> = if tags.is_empty() {
-            None
-        } else {
-            Some(format!("  {}  ", tags.join(" ")))
-        };
-
         // Inner width = max of all lines and terminal width - 2
         let max_content_width = std::iter::once(header_width)
             .chain(breadcrumb.iter().map(|b| b.chars().count()))
-            .chain(tags_line.iter().map(|t| t.chars().count()))
             .chain(child_lines.iter().map(|l| l.chars().count()))
             .chain(field_lines.iter().map(|l| l.chars().count()))
             .max()
@@ -253,7 +250,15 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
         // Name line
         if color {
-            let meta = format!("\x1b[90m · {state} · {date} · {}  \x1b[0m", created_by.name);
+            let colored_tags = if tags.is_empty() {
+                String::new()
+            } else {
+                format!("\x1b[90m ·\x1b[0m \x1b[38;5;67m{}\x1b[0m", tags.join(" "))
+            };
+            let meta = format!(
+                "\x1b[90m · {state} · {date} · {}\x1b[0m{colored_tags}  ",
+                created_by.name
+            );
             let styled_header = match state {
                 "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{meta}"),
                 "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{meta}"),
@@ -264,15 +269,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             write_box_line(&mut out, &header_content, header_width, false);
         }
 
-        // Tags line (after name, before children)
-        if let Some(ref tl) = tags_line {
-            if color {
-                let styled_tags = format!("  \x1b[90m{}\x1b[0m  ", tags.join(" "));
-                write_box_line(&mut out, &styled_tags, tl.chars().count(), true);
-            } else {
-                write_box_line(&mut out, tl, tl.chars().count(), false);
-            }
-        }
+        // Tags are now shown inline in the header line
 
         // Children
         for (i, (cname, cstate)) in children.iter().enumerate() {
