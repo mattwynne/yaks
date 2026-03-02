@@ -34,7 +34,7 @@ impl UseCase for ShowLog {
                 .unwrap_or_else(|_| id.to_string())
         };
 
-        for event in events.iter() {
+        for event in events.iter().rev() {
             let meta = event.metadata();
             let narrative = event.format_narrative(&meta.author.name, &resolve_name);
             let timestamp = format_relative(meta.timestamp.as_epoch_secs());
@@ -172,9 +172,9 @@ mod tests {
             lines.len(),
             lines
         );
-        // First event
+        // First event (newest - second yak added last)
         assert!(
-            lines[0].contains("added first yak"),
+            lines[0].contains("added second yak"),
             "Line 1: {:?}",
             lines[0]
         );
@@ -184,9 +184,9 @@ mod tests {
             "Line 4 should be rule: {:?}",
             lines[3]
         );
-        // Second event
+        // Second event (oldest - first yak added first)
         assert!(
-            lines[4].contains("added second yak"),
+            lines[4].contains("added first yak"),
             "Line 5: {:?}",
             lines[4]
         );

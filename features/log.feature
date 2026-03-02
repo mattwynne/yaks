@@ -11,16 +11,16 @@ Feature: Yak log
       Then it should succeed
       And the output should include "test yak"
 
-  Rule: Log displays events in chronological order
+  Rule: Log displays events newest-first
 
-    Example: Events appear oldest-first
+    Example: Events appear newest-first
       Given I have a clean git repository
       And I add the yak "first yak"
       And I add the yak "second yak"
       When I run yx log
       Then it should succeed
-      And line 1 of the output should include "first yak"
-      And line 5 of the output should include "second yak"
+      And line 1 of the output should include "second yak"
+      And line 5 of the output should include "first yak"
 
   Rule: Log entries use narrative format
 
