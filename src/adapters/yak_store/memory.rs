@@ -454,6 +454,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_create_yak_stores_id_field() {
+        let storage = InMemoryStorage::new();
+        storage
+            .create_yak(&Name::from("my yak"), &YakId::from("my-yak-a1b2"), None)
+            .unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("my-yak-a1b2")).unwrap();
+        assert_eq!(yak.id, YakId::from("my-yak-a1b2"));
+    }
+
+    #[test]
     fn test_create_yak_with_parent_id() {
         let storage = InMemoryStorage::new();
         storage
