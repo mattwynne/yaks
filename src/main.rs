@@ -453,7 +453,10 @@ fn route_command(
         },
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync => handler.handle(SyncYaks::new()),
-        Commands::Log => handler.handle(ShowLog::new()),
+        Commands::Log => {
+            pager::Pager::with_pager("less -R").setup();
+            handler.handle(ShowLog::new())
+        }
         Commands::Completions { words } => handler.handle(GenerateCompletions::new(words)),
     }
 }

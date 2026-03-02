@@ -38,6 +38,7 @@ uuid = { version = "1", features = ["v7"] }
 termimad = "0.34"
 terminal_size = "0.4"
 chrono-humanize = "0.2.3"
+pager = "0.16"
 
 [dev-dependencies]
 tempfile = "3.15"
