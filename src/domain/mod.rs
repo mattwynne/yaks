@@ -6,6 +6,7 @@ pub mod event_format;
 pub mod event_metadata;
 pub mod events;
 pub mod field;
+pub mod narrative;
 pub mod ports;
 pub mod slug;
 pub mod tag;

@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::narrative::{highlight, plain, NarrativeSpan};
 use crate::domain::slug::YakId;
 
 /// Note: `content` is NOT serialized in the commit message because it
@@ -22,7 +23,11 @@ impl EventFormat for FieldUpdatedEvent {
         format!("\"{}\" \"{}\"", self.id, self.field_name)
     }
 
-    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+    fn format_narrative(
+        &self,
+        author: &str,
+        resolve_name: &dyn Fn(&str) -> String,
+    ) -> Vec<NarrativeSpan> {
         let name = resolve_name(self.id.as_ref());
         // Strip leading dot from field names (e.g. ".state" → "state")
         let field = self
@@ -32,22 +37,44 @@ impl EventFormat for FieldUpdatedEvent {
         match field {
             "state" => {
                 if self.content == "wip" {
-                    format!("{} started {}", author, name)
+                    vec![highlight(author), plain(" started "), highlight(&name)]
                 } else if self.content == "done" {
-                    format!("{} finished {}", author, name)
+                    vec![highlight(author), plain(" finished "), highlight(&name)]
                 } else if self.content == "todo" {
-                    format!("{} reset {} to todo", author, name)
+                    vec![
+                        highlight(author),
+                        plain(" reset "),
+                        highlight(&name),
+                        plain(" to todo"),
+                    ]
                 } else if self.content.is_empty() {
                     // Content not available (read from git)
-                    format!("{} changed state of {}", author, name)
+                    vec![
+                        highlight(author),
+                        plain(" changed state of "),
+                        highlight(&name),
+                    ]
                 } else {
-                    format!("{} changed state of {} to {}", author, name, self.content)
+                    vec![
+                        highlight(author),
+                        plain(" changed state of "),
+                        highlight(&name),
+                        plain(&format!(" to {}", self.content)),
+                    ]
                 }
             }
-            "context.md" => format!("{} updated context on {}", author, name),
-            "tags" => format!("{} tagged {}", author, name),
-            "name" => format!("{} renamed {}", author, name),
-            _ => format!("{} updated {} on {}", author, field, name),
+            "context.md" => vec![
+                highlight(author),
+                plain(" updated context on "),
+                highlight(&name),
+            ],
+            "tags" => vec![highlight(author), plain(" tagged "), highlight(&name)],
+            "name" => vec![highlight(author), plain(" renamed "), highlight(&name)],
+            _ => vec![
+                highlight(author),
+                plain(&format!(" updated {} on ", field)),
+                highlight(&name),
+            ],
         }
     }
 
@@ -68,6 +95,7 @@ impl EventFormat for FieldUpdatedEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::narrative::to_plain_text;
 
     #[test]
     fn format_excludes_content() {
@@ -97,66 +125,61 @@ mod tests {
 
     #[test]
     fn narrative_started() {
+        let spans =
+            field_event(".state", "wip").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt started sync-a1b2");
         assert_eq!(
-            field_event(".state", "wip").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt started sync-a1b2"
+            spans,
+            vec![
+                highlight("Matt"),
+                plain(" started "),
+                highlight("sync-a1b2"),
+            ]
         );
     }
 
     #[test]
     fn narrative_finished() {
-        assert_eq!(
-            field_event(".state", "done").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt finished sync-a1b2"
-        );
+        let spans =
+            field_event(".state", "done").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt finished sync-a1b2");
     }
 
     #[test]
     fn narrative_reset_to_todo() {
-        assert_eq!(
-            field_event(".state", "todo").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt reset sync-a1b2 to todo"
-        );
+        let spans =
+            field_event(".state", "todo").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt reset sync-a1b2 to todo");
     }
 
     #[test]
     fn narrative_state_no_content() {
-        assert_eq!(
-            field_event(".state", "").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt changed state of sync-a1b2"
-        );
+        let spans = field_event(".state", "").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt changed state of sync-a1b2");
     }
 
     #[test]
     fn narrative_context() {
-        assert_eq!(
-            field_event(".context.md", "stuff")
-                .format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt updated context on sync-a1b2"
-        );
+        let spans = field_event(".context.md", "stuff")
+            .format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt updated context on sync-a1b2");
     }
 
     #[test]
     fn narrative_tags() {
-        assert_eq!(
-            field_event(".tags", "").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt tagged sync-a1b2"
-        );
+        let spans = field_event(".tags", "").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt tagged sync-a1b2");
     }
 
     #[test]
     fn narrative_renamed() {
-        assert_eq!(
-            field_event("name", "").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt renamed sync-a1b2"
-        );
+        let spans = field_event("name", "").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt renamed sync-a1b2");
     }
 
     #[test]
     fn narrative_custom_field() {
-        assert_eq!(
-            field_event("plan", "").format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt updated plan on sync-a1b2"
-        );
+        let spans = field_event("plan", "").format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt updated plan on sync-a1b2");
     }
 }

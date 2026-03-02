@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::narrative::{highlight, plain, NarrativeSpan};
 use crate::domain::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,14 +22,29 @@ impl EventFormat for MovedEvent {
         }
     }
 
-    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+    fn format_narrative(
+        &self,
+        author: &str,
+        resolve_name: &dyn Fn(&str) -> String,
+    ) -> Vec<NarrativeSpan> {
         let name = resolve_name(self.id.as_ref());
         match &self.new_parent {
             Some(parent) => {
                 let parent_name = resolve_name(parent.as_ref());
-                format!("{} moved {} under {}", author, name, parent_name)
+                vec![
+                    highlight(author),
+                    plain(" moved "),
+                    highlight(&name),
+                    plain(" under "),
+                    highlight(&parent_name),
+                ]
             }
-            None => format!("{} moved {} to root", author, name),
+            None => vec![
+                highlight(author),
+                plain(" moved "),
+                highlight(&name),
+                plain(" to root"),
+            ],
         }
     }
 
@@ -50,6 +66,7 @@ impl EventFormat for MovedEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::narrative::to_plain_text;
 
     #[test]
     fn roundtrip_with_parent() {
@@ -79,9 +96,20 @@ mod tests {
             id: YakId::from("child-a1b2"),
             new_parent: Some(YakId::from("parent-c3d4")),
         };
+        let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
         assert_eq!(
-            event.format_narrative("Matt", &|id: &str| id.to_string()),
+            to_plain_text(&spans),
             "Matt moved child-a1b2 under parent-c3d4"
+        );
+        assert_eq!(
+            spans,
+            vec![
+                highlight("Matt"),
+                plain(" moved "),
+                highlight("child-a1b2"),
+                plain(" under "),
+                highlight("parent-c3d4"),
+            ]
         );
     }
 
@@ -91,9 +119,16 @@ mod tests {
             id: YakId::from("child-a1b2"),
             new_parent: None,
         };
+        let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt moved child-a1b2 to root");
         assert_eq!(
-            event.format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt moved child-a1b2 to root"
+            spans,
+            vec![
+                highlight("Matt"),
+                plain(" moved "),
+                highlight("child-a1b2"),
+                plain(" to root"),
+            ]
         );
     }
 }

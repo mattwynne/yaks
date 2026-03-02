@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::event_format::{parse_quoted_values, EventFormat};
+use crate::domain::narrative::{highlight, plain, NarrativeSpan};
 use crate::domain::slug::{Name, YakId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,13 +23,27 @@ impl EventFormat for AddedEvent {
         }
     }
 
-    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+    fn format_narrative(
+        &self,
+        author: &str,
+        resolve_name: &dyn Fn(&str) -> String,
+    ) -> Vec<NarrativeSpan> {
         match &self.parent_id {
             Some(parent) => {
                 let parent_name = resolve_name(parent.as_ref());
-                format!("{} added {} under {}", author, self.name, parent_name)
+                vec![
+                    highlight(author),
+                    plain(" added "),
+                    highlight(self.name.as_ref()),
+                    plain(" under "),
+                    highlight(&parent_name),
+                ]
             }
-            None => format!("{} added {}", author, self.name),
+            None => vec![
+                highlight(author),
+                plain(" added "),
+                highlight(self.name.as_ref()),
+            ],
         }
     }
 
@@ -57,6 +72,7 @@ impl EventFormat for AddedEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::narrative::to_plain_text;
 
     #[test]
     fn roundtrip() {
@@ -127,9 +143,15 @@ mod tests {
             id: YakId::from("fix-the-bug-a1b2"),
             parent_id: None,
         };
+        let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt added Fix the Bug");
         assert_eq!(
-            event.format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt added Fix the Bug"
+            spans,
+            vec![
+                highlight("Matt"),
+                plain(" added "),
+                highlight("Fix the Bug"),
+            ]
         );
     }
 
@@ -140,9 +162,17 @@ mod tests {
             id: YakId::from("sync-a1b2"),
             parent_id: Some(YakId::from("things-c3d4")),
         };
+        let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
+        assert_eq!(to_plain_text(&spans), "Matt added sync under things-c3d4");
         assert_eq!(
-            event.format_narrative("Matt", &|id: &str| id.to_string()),
-            "Matt added sync under things-c3d4"
+            spans,
+            vec![
+                highlight("Matt"),
+                plain(" added "),
+                highlight("sync"),
+                plain(" under "),
+                highlight("things-c3d4"),
+            ]
         );
     }
 }

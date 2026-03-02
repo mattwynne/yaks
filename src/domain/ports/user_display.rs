@@ -1,6 +1,7 @@
 // Display port trait - abstraction for displaying results to user
 
 use crate::domain::event_metadata::{Author, Timestamp};
+use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
 
 pub trait DisplayPort {
@@ -55,6 +56,12 @@ pub trait DisplayPort {
     /// Display metadata line for yx show (state, created date, author)
     fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author);
 
-    /// Display a log entry with narrative, timestamp, event ID, and optional commit SHA
-    fn log_entry(&self, narrative: &str, timestamp: &str, event_id: &str, commit_sha: Option<&str>);
+    /// Display a log entry with narrative spans, timestamp, event ID, and optional commit SHA
+    fn log_entry(
+        &self,
+        narrative: &[NarrativeSpan],
+        timestamp: &str,
+        event_id: &str,
+        commit_sha: Option<&str>,
+    );
 }

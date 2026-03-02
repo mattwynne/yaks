@@ -1,5 +1,7 @@
 use anyhow::Result;
 
+use super::narrative::NarrativeSpan;
+
 /// Trait for serializing/deserializing individual event types
 pub trait EventFormat {
     /// Tag name for this event (e.g., "Added", "StateUpdated")
@@ -12,7 +14,12 @@ pub trait EventFormat {
         Self: Sized;
     /// Format as a human-readable narrative sentence with the author as subject.
     /// The `resolve_name` function maps yak IDs to display names.
-    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String;
+    /// Returns a sequence of spans for rich display (plain text vs highlighted).
+    fn format_narrative(
+        &self,
+        author: &str,
+        resolve_name: &dyn Fn(&str) -> String,
+    ) -> Vec<NarrativeSpan>;
 }
 
 /// Parse space-separated quoted values: `"foo" "bar"` -> `["foo", "bar"]`

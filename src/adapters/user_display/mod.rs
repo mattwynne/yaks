@@ -2,6 +2,7 @@ pub mod relative_time;
 // CLI adapter - implementation using clap
 
 use crate::domain::event_metadata::{Author, Timestamp};
+use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
 use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
@@ -33,6 +34,21 @@ impl ConsoleDisplay {
             Box::new(std::io::stdout()),
             ConsoleDisplayOptions { color, width },
         )
+    }
+
+    /// Render narrative spans to a string, with optional ANSI bold for highlights.
+    fn render_narrative(&self, narrative: &[NarrativeSpan]) -> String {
+        if self.options.color {
+            narrative
+                .iter()
+                .map(|span| match span {
+                    NarrativeSpan::Plain(t) => t.clone(),
+                    NarrativeSpan::Highlight(t) => format!("\x1b[1m{t}\x1b[0m"),
+                })
+                .collect()
+        } else {
+            crate::domain::narrative::to_plain_text(narrative)
+        }
     }
 }
 
@@ -390,7 +406,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
     fn log_entry(
         &self,
-        narrative: &str,
+        narrative: &[NarrativeSpan],
         timestamp: &str,
         event_id: &str,
         commit_sha: Option<&str>,
@@ -402,13 +418,14 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             Some(sha) => format!("  sha: {sha}"),
             None => String::new(),
         };
+        let rendered = self.render_narrative(narrative);
         if self.options.color {
-            writeln!(out, "{narrative}").unwrap();
+            writeln!(out, "{rendered}").unwrap();
             writeln!(out, "\x1b[2m{timestamp}\x1b[0m").unwrap();
             writeln!(out, "\x1b[2mevent: {event_id}{sha_part}\x1b[0m").unwrap();
             writeln!(out, "\x1b[2m{rule}\x1b[0m").unwrap();
         } else {
-            writeln!(out, "{narrative}").unwrap();
+            writeln!(out, "{rendered}").unwrap();
             writeln!(out, "{timestamp}").unwrap();
             writeln!(out, "event: {event_id}{sha_part}").unwrap();
             writeln!(out, "{rule}").unwrap();
@@ -465,6 +482,7 @@ pub use test_buffer::TestBuffer;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::narrative::{highlight, plain};
     use crate::domain::ports::DisplayPort;
 
     fn make_display(color: bool) -> (ConsoleDisplay, TestBuffer) {
@@ -712,6 +730,42 @@ mod tests {
         display.display_metadata_line("todo", &timestamp, &author);
         let output = buffer.contents();
         assert_eq!(output, "State: todo · Created: 2025-02-19 by Matt Wynne\n");
+    }
+
+    #[test]
+    fn log_entry_no_color_renders_plain_text() {
+        let (display, buffer) = make_display(false);
+        let narrative = vec![highlight("Matt"), plain(" added "), highlight("my yak")];
+        display.log_entry(&narrative, "just now", "abc123", None);
+        let output = buffer.contents();
+        assert!(
+            output.contains("Matt added my yak"),
+            "Expected plain narrative in: {output}"
+        );
+        assert!(
+            !output.contains("\x1b["),
+            "unexpected ANSI codes in: {output}"
+        );
+    }
+
+    #[test]
+    fn log_entry_with_color_renders_bold_highlights() {
+        let (display, buffer) = make_display(true);
+        let narrative = vec![highlight("Matt"), plain(" added "), highlight("my yak")];
+        display.log_entry(&narrative, "just now", "abc123", None);
+        let output = buffer.contents();
+        assert!(
+            output.contains("\x1b[1mMatt\x1b[0m"),
+            "Expected bold author in: {output}"
+        );
+        assert!(
+            output.contains("\x1b[1mmy yak\x1b[0m"),
+            "Expected bold yak name in: {output}"
+        );
+        assert!(
+            output.contains(" added "),
+            "Expected plain 'added' in: {output}"
+        );
     }
 }
 

@@ -5,6 +5,7 @@ use anyhow::Result;
 use super::event_format::{parse_quoted_values, EventFormat};
 use super::event_metadata::EventMetadata;
 use super::events::*;
+use super::narrative::{highlight, plain, NarrativeSpan};
 use super::slug::YakId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +38,11 @@ impl YakEvent {
         }
     }
 
-    pub fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+    pub fn format_narrative(
+        &self,
+        author: &str,
+        resolve_name: &dyn Fn(&str) -> String,
+    ) -> Vec<NarrativeSpan> {
         match self {
             Self::Added(e, _) => e.format_narrative(author, resolve_name),
             Self::Removed(e, _) => e.format_narrative(author, resolve_name),
@@ -45,7 +50,10 @@ impl YakEvent {
             Self::FieldUpdated(e, _) => e.format_narrative(author, resolve_name),
             Self::Compacted(snapshots, _) => {
                 let count = snapshots.len();
-                format!("{} compacted the event stream ({} yaks)", author, count)
+                vec![
+                    highlight(author),
+                    plain(&format!(" compacted the event stream ({} yaks)", count)),
+                ]
             }
         }
     }
@@ -136,6 +144,7 @@ impl YakEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::narrative::to_plain_text;
     use crate::domain::slug::{Name, YakId};
 
     #[test]
@@ -287,8 +296,9 @@ mod tests {
             },
         ];
         let event = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
         assert_eq!(
-            event.format_narrative("Matt", &|id: &str| id.to_string()),
+            to_plain_text(&spans),
             "Matt compacted the event stream (2 yaks)"
         );
     }
