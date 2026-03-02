@@ -83,9 +83,7 @@ impl Migrator {
 
         if current == self.expected_version {
             return Ok(false);
-        }
-
-        if current > self.expected_version {
+        } else if current > self.expected_version {
             bail!(
                 "Schema version {} is newer than this version of yx supports ({}). \
                  Please update yx.",
