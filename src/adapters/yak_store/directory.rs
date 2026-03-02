@@ -1291,4 +1291,145 @@ mod tests {
         assert_eq!(json["created_by"]["email"], "test@test.com");
         assert_eq!(json["created_at"], 1708300800);
     }
+
+    #[test]
+    fn test_rescue_children_saves_child_yaks_but_not_plain_directories() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // Add parent yak
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Add child yak nested under parent
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Create a plain (non-yak) subdirectory inside the parent
+        let plain_dir = storage.base_path.join("parent").join("not-a-yak");
+        std::fs::create_dir_all(&plain_dir).unwrap();
+        std::fs::write(plain_dir.join("notes.txt"), "just a plain dir").unwrap();
+
+        // Delete the parent — should rescue the child but not the plain dir
+        WriteYakStore::delete_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
+
+        // Parent directory should be gone
+        assert!(
+            !storage.base_path.join("parent").exists(),
+            "Parent directory should be removed after deletion"
+        );
+
+        // Child yak should be rescued to root level
+        let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
+        assert_eq!(child.name, Name::from("child"));
+
+        // The plain non-yak directory should NOT exist at root level
+        assert!(
+            !storage.base_path.join("not-a-yak").exists(),
+            "Plain (non-yak) directories should not be rescued"
+        );
+    }
+
+    #[test]
+    fn test_rescue_children_moves_child_to_root_when_target_does_not_exist() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // Add parent yak
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Add child yak nested under parent
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-c3d4"),
+                    parent_id: Some(YakId::from("parent-a1b2")),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Verify child is nested before deletion
+        assert!(
+            storage.base_path.join("parent").join("child").exists(),
+            "Child should be nested under parent before deletion"
+        );
+        assert!(
+            !storage.base_path.join("child").exists(),
+            "Child should NOT exist at root before parent deletion"
+        );
+
+        // Delete parent — child should be rescued to root
+        WriteYakStore::delete_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
+
+        // Child should now be at root level
+        assert!(
+            storage.base_path.join("child").exists(),
+            "Child should be rescued to root after parent deletion"
+        );
+        let child = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
+        assert_eq!(child.name, Name::from("child"));
+    }
+
+    #[test]
+    fn test_clear_all_removes_yak_directories() {
+        let (mut storage, _temp) = setup_test_storage();
+
+        // Create two yaks
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak one"),
+                    id: YakId::from("yak-one-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        storage
+            .on_event(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak two"),
+                    id: YakId::from("yak-two-c3d4"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        assert_eq!(ReadYakStore::list_yaks(&storage).unwrap().len(), 2);
+
+        // Call clear_all through the WriteYakStore trait (not storage.clear())
+        WriteYakStore::clear_all(&storage).unwrap();
+
+        assert_eq!(
+            ReadYakStore::list_yaks(&storage).unwrap().len(),
+            0,
+            "clear_all should remove all yaks"
+        );
+    }
 }
