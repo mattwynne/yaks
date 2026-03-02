@@ -193,6 +193,11 @@ mod tests {
             .find(|y| y.id == YakId::from("tea-a1b2"))
             .unwrap();
         assert_eq!(tea.state, crate::domain::YakState::Wip);
+        assert_eq!(
+            tea.context,
+            Some("use the good teapot".to_string()),
+            "Context should be preserved through compaction"
+        );
 
         let biscuits = yaks
             .iter()
