@@ -41,6 +41,17 @@ test.
 - No mutation results exist yet (run `dev mutate` first)
 - The mutant is in generated or trivial code (skip it)
 
+## Pacing
+
+**Don't ask which mutant to triage next — just pick one and
+go.** After presenting a verdict and acting on it, immediately
+move to the next untriaged mutant. Keep momentum. The user
+will interrupt if they want to change direction.
+
+Prefer domain-layer mutants over adapter-layer, and
+single-mutant files over multi-mutant files (quick wins
+build momentum).
+
 ## Inputs
 
 The skill expects one of:
