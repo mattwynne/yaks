@@ -396,7 +396,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         commit_sha: Option<&str>,
     ) {
         let mut out = self.output.lock().unwrap();
-        let rule = "────────────────────────────────────────";
+        let rule: String = "─".repeat(self.options.width);
         let sha_part = match commit_sha {
             Some(sha) if sha.len() >= 7 => format!("  sha: {}", &sha[..7]),
             Some(sha) => format!("  sha: {sha}"),
