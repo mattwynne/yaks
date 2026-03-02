@@ -332,6 +332,65 @@ mod merge_event_streams_tests {
 
         assert_eq!(event_ids, vec!["evt-compact", "evt-bob"]);
     }
+
+    #[test]
+    fn multiple_orphans_preserve_order_after_compacted() {
+        // Alice has: shared yak A, then compacted (snapshot contains A)
+        // Bob has: shared yak A, orphan B at T=70, orphan C at T=80
+        // Both orphans pre-date compaction (T=100) and are NOT in the snapshot
+        // After merge, both must appear AFTER Compacted in their original order
+        let shared = make_added("alpha", "alpha-a1b2", 50, "evt-shared");
+        let orphan1 = make_added("beta", "beta-c3d4", 70, "evt-orphan1");
+        let orphan2 = make_added("gamma", "gamma-e5f6", 80, "evt-orphan2");
+        let compacted = make_compacted(vec![snapshot("alpha", "alpha-a1b2")], 100, "evt-compact");
+
+        let alice_events = vec![shared.clone(), compacted.clone()];
+        let bob_events = vec![shared.clone(), orphan1.clone(), orphan2.clone()];
+
+        let result = merge_event_streams(&alice_events, &bob_events);
+
+        let event_ids: Vec<&str> = result
+            .events
+            .iter()
+            .map(|e| e.metadata().event_id.as_deref().unwrap())
+            .collect();
+
+        // Both orphans must come AFTER compacted
+        let compact_pos = event_ids
+            .iter()
+            .position(|id| *id == "evt-compact")
+            .unwrap();
+        let orphan1_pos = event_ids
+            .iter()
+            .position(|id| *id == "evt-orphan1")
+            .unwrap();
+        let orphan2_pos = event_ids
+            .iter()
+            .position(|id| *id == "evt-orphan2")
+            .unwrap();
+        assert!(
+            orphan1_pos > compact_pos,
+            "Orphan1 (pos {}) must come after Compacted (pos {}). Order: {:?}",
+            orphan1_pos,
+            compact_pos,
+            event_ids
+        );
+        assert!(
+            orphan2_pos > compact_pos,
+            "Orphan2 (pos {}) must come after Compacted (pos {}). Order: {:?}",
+            orphan2_pos,
+            compact_pos,
+            event_ids
+        );
+        // Orphans must preserve their relative order (T=70 before T=80)
+        assert!(
+            orphan1_pos < orphan2_pos,
+            "Orphan1 (T=70, pos {}) must come before Orphan2 (T=80, pos {}). Order: {:?}",
+            orphan1_pos,
+            orphan2_pos,
+            event_ids
+        );
+    }
 }
 
 #[cfg(test)]
