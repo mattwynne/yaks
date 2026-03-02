@@ -142,6 +142,13 @@ mod tests {
     }
 
     #[test]
+    fn version_numbers_are_correct() {
+        let m = MigrateV4ToV5;
+        assert_eq!(m.source_version(), 4);
+        assert_eq!(m.target_version(), 5);
+    }
+
+    #[test]
     fn renames_metadata_json_to_created_json() {
         let (_tmp, repo) = setup_test_repo();
         create_v4_tree_with_metadata(&repo, "my-yak-a1b2");

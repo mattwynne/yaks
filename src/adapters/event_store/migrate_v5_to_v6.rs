@@ -123,6 +123,13 @@ mod tests {
         }
     }
 
+    #[test]
+    fn version_numbers_are_correct() {
+        let m = MigrateV5ToV6;
+        assert_eq!(m.source_version(), 5);
+        assert_eq!(m.target_version(), 6);
+    }
+
     /// Create a v5 tree with a yak that has bare-name fields
     fn create_v5_tree(repo: &git2::Repository, yak_id: &str) {
         let state_blob = repo.blob(b"wip").unwrap();
