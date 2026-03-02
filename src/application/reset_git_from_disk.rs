@@ -401,4 +401,137 @@ mod tests {
             output_text
         );
     }
+
+    #[test]
+    fn reset_git_from_disk_preserves_author_and_timestamp() {
+        use crate::domain::event_metadata::{Author, Timestamp};
+        use crate::domain::ports::EventStore;
+
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        let custom_author = Author {
+            name: "Jane Doe".to_string(),
+            email: "jane@example.com".to_string(),
+        };
+        let custom_timestamp = Timestamp(1700000000);
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(
+                AddYak::new("authored-yak")
+                    .with_author(Some(custom_author.clone()))
+                    .with_timestamp(Some(custom_timestamp)),
+            )
+            .unwrap();
+        }
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(ResetGitFromDisk::new()).unwrap();
+        }
+
+        // Verify author and timestamp are preserved by checking the replayed events
+        let events = EventStore::get_all_events(&event_store).unwrap();
+        assert!(
+            !events.is_empty(),
+            "Expected at least one event after reset"
+        );
+        let first_event = &events[0];
+        assert_eq!(
+            first_event.metadata().author,
+            custom_author,
+            "Author should be preserved after reset-from-disk"
+        );
+        assert_eq!(
+            first_event.metadata().timestamp,
+            custom_timestamp,
+            "Timestamp should be preserved after reset-from-disk"
+        );
+    }
+
+    #[test]
+    fn reset_git_from_disk_preserves_tags() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(AddYak::new("tagged-yak")).unwrap();
+            app.handle(crate::application::AddTag::new(
+                "tagged-yak",
+                vec!["urgent".to_string(), "backend".to_string()],
+            ))
+            .unwrap();
+        }
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            app.handle(ResetGitFromDisk::new()).unwrap();
+        }
+
+        // Verify tags are preserved
+        let id = ReadYakStore::fuzzy_find_yak_id(&storage, "tagged-yak").unwrap();
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert!(
+            yak.tags.contains(&"urgent".to_string()),
+            "Expected 'urgent' tag, got: {:?}",
+            yak.tags
+        );
+        assert!(
+            yak.tags.contains(&"backend".to_string()),
+            "Expected 'backend' tag, got: {:?}",
+            yak.tags
+        );
+    }
 }
