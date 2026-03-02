@@ -14,6 +14,7 @@
     tmux
     vhs
     bashInteractive  # needed for completion smoke test (nix bash lacks readline)
+    rust-code-analysis  # code metrics (cyclomatic complexity, LOC, etc.)
   ] ++ lib.optionals pkgs.stdenv.isDarwin [
     libiconv
   ];
