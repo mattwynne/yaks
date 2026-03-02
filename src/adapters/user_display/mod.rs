@@ -422,7 +422,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         if self.options.color {
             writeln!(out, "{rendered}").unwrap();
             writeln!(out, "\x1b[2m{timestamp}\x1b[0m").unwrap();
-            writeln!(out, "\x1b[2mevent: {event_id}{sha_part}\x1b[0m").unwrap();
+            writeln!(out, "\x1b[2;90mevent: {event_id}{sha_part}\x1b[0m").unwrap();
             writeln!(out, "\x1b[2m{rule}\x1b[0m").unwrap();
         } else {
             writeln!(out, "{rendered}").unwrap();
