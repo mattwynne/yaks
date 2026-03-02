@@ -138,6 +138,33 @@ lint() {
   return $exit_code
 }
 
+# @cmd Run code complexity analysis (rust-code-analysis)
+# @alias cx
+complexity() {
+  local metrics_output
+  metrics_output=$(rust-code-analysis-cli --metrics -p src/ --output-format json 2>&1)
+  local metrics_exit=$?
+  if [ $metrics_exit -ne 0 ]; then
+    echo "❌ Code metrics failed (exit code $metrics_exit)"
+    echo "$metrics_output"
+    return 1
+  fi
+  local file_count
+  file_count=$(echo "$metrics_output" | wc -l | tr -d ' ')
+  echo "Files analyzed: $file_count"
+  echo ""
+  echo "Top 5 most complex functions (cyclomatic):"
+  echo "$metrics_output" \
+    | jq -rs '
+      [.[] | .name as $file | .spaces[]? | recurse(.spaces[]?) | select(.kind == "function") |
+        {name: .name, file: $file, cyclomatic: .metrics.cyclomatic.sum, cognitive: .metrics.cognitive.sum, sloc: .metrics.loc.sloc}
+      ] | sort_by(-.cyclomatic) | .[0:5][] |
+      "  \(.file)::\(.name): cyclomatic=\(.cyclomatic) cognitive=\(.cognitive) sloc=\(.sloc)"
+    '
+  echo ""
+  echo "✓ Code metrics collected (no thresholds enforced)"
+}
+
 # @cmd Check for unused Cucumber step definitions
 # @alias ds
 dead-steps() {
@@ -394,29 +421,12 @@ check() {
   fi
 
   echo ""
-  echo "Running code metrics..."
-  local metrics_output
-  metrics_output=$(rust-code-analysis-cli --metrics -p src/ --output-format json 2>&1)
-  local metrics_exit=$?
-  if [ $metrics_exit -ne 0 ]; then
-    echo "❌ Code metrics failed (exit code $metrics_exit)"
-    echo "$metrics_output"
+  echo "Running code complexity analysis..."
+  if ! complexity; then
+    echo "❌ Code complexity analysis failed"
     return 1
   fi
-  local file_count
-  file_count=$(echo "$metrics_output" | wc -l | tr -d ' ')
-  echo "  Files analyzed: $file_count"
-  echo ""
-  echo "  Top 5 most complex functions (cyclomatic):"
-  echo "$metrics_output" \
-    | jq -rs '
-      [.[] | .name as $file | .spaces[]? | recurse(.spaces[]?) | select(.kind == "function") |
-        {name: .name, file: $file, cyclomatic: .metrics.cyclomatic.sum, cognitive: .metrics.cognitive.sum, sloc: .metrics.loc.sloc}
-      ] | sort_by(-.cyclomatic) | .[0:5][] |
-      "    \(.file)::\(.name): cyclomatic=\(.cyclomatic) cognitive=\(.cognitive) sloc=\(.sloc)"
-    '
-  echo ""
-  echo "  ✓ Code metrics collected (no thresholds enforced)"
+
   echo ""
   echo "Running security audit..."
   if command -v cargo-audit >/dev/null 2>&1; then
