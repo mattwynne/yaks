@@ -37,6 +37,19 @@ impl YakEvent {
         }
     }
 
+    pub fn format_narrative(&self, author: &str) -> String {
+        match self {
+            Self::Added(e, _) => e.format_narrative(author),
+            Self::Removed(e, _) => e.format_narrative(author),
+            Self::Moved(e, _) => e.format_narrative(author),
+            Self::FieldUpdated(e, _) => e.format_narrative(author),
+            Self::Compacted(snapshots, _) => {
+                let count = snapshots.len();
+                format!("{} compacted the event stream ({} yaks)", author, count)
+            }
+        }
+    }
+
     pub fn format_message(&self) -> String {
         match self {
             Self::Added(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
@@ -238,6 +251,46 @@ mod tests {
     fn format_message_compacted() {
         let event = YakEvent::Compacted(vec![], EventMetadata::default_legacy());
         assert_eq!(event.format_message(), "Compacted");
+    }
+
+    #[test]
+    fn narrative_compacted_with_count() {
+        use crate::domain::event_metadata::{Author, Timestamp};
+        use crate::domain::slug::Name;
+        use crate::domain::yak_snapshot::YakSnapshot;
+        use crate::domain::yak_state::YakState;
+        use std::collections::HashMap;
+        let author = Author {
+            name: "test".to_string(),
+            email: "test@test.com".to_string(),
+        };
+        let snapshots = vec![
+            YakSnapshot {
+                name: Name::from("yak one"),
+                id: YakId::from("yak-one-a1b2"),
+                state: YakState::Todo,
+                context: None,
+                parent_id: None,
+                fields: HashMap::new(),
+                created_by: author.clone(),
+                created_at: Timestamp(0),
+            },
+            YakSnapshot {
+                name: Name::from("yak two"),
+                id: YakId::from("yak-two-c3d4"),
+                state: YakState::Todo,
+                context: None,
+                parent_id: None,
+                fields: HashMap::new(),
+                created_by: author,
+                created_at: Timestamp(0),
+            },
+        ];
+        let event = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        assert_eq!(
+            event.format_narrative("Matt"),
+            "Matt compacted the event stream (2 yaks)"
+        );
     }
 
     #[test]

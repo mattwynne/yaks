@@ -21,6 +21,13 @@ impl EventFormat for MovedEvent {
         }
     }
 
+    fn format_narrative(&self, author: &str) -> String {
+        match &self.new_parent {
+            Some(parent) => format!("{} moved {} under {}", author, self.id, parent),
+            None => format!("{} moved {} to root", author, self.id),
+        }
+    }
+
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "Moved event requires an id");
@@ -60,5 +67,29 @@ mod tests {
         let data = event.format_data();
         let parsed = MovedEvent::parse_data(&data).unwrap();
         assert_eq!(event, parsed);
+    }
+
+    #[test]
+    fn narrative_under_parent() {
+        let event = MovedEvent {
+            id: YakId::from("child-a1b2"),
+            new_parent: Some(YakId::from("parent-c3d4")),
+        };
+        assert_eq!(
+            event.format_narrative("Matt"),
+            "Matt moved child-a1b2 under parent-c3d4"
+        );
+    }
+
+    #[test]
+    fn narrative_to_root() {
+        let event = MovedEvent {
+            id: YakId::from("child-a1b2"),
+            new_parent: None,
+        };
+        assert_eq!(
+            event.format_narrative("Matt"),
+            "Matt moved child-a1b2 to root"
+        );
     }
 }

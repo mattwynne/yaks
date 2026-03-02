@@ -22,6 +22,13 @@ impl EventFormat for AddedEvent {
         }
     }
 
+    fn format_narrative(&self, author: &str) -> String {
+        match &self.parent_id {
+            Some(parent) => format!("{} added {} under {}", author, self.name, parent),
+            None => format!("{} added {}", author, self.name),
+        }
+    }
+
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "Added event requires a name");
@@ -108,5 +115,28 @@ mod tests {
         assert_eq!(parsed.name, Name::from("test yak"));
         assert_eq!(parsed.id, YakId::from("test-yak-a1b2"));
         assert_eq!(parsed.parent_id, None);
+    }
+
+    #[test]
+    fn narrative_root() {
+        let event = AddedEvent {
+            name: Name::from("Fix the Bug"),
+            id: YakId::from("fix-the-bug-a1b2"),
+            parent_id: None,
+        };
+        assert_eq!(event.format_narrative("Matt"), "Matt added Fix the Bug");
+    }
+
+    #[test]
+    fn narrative_nested() {
+        let event = AddedEvent {
+            name: Name::from("sync"),
+            id: YakId::from("sync-a1b2"),
+            parent_id: Some(YakId::from("things-c3d4")),
+        };
+        assert_eq!(
+            event.format_narrative("Matt"),
+            "Matt added sync under things-c3d4"
+        );
     }
 }

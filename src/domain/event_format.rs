@@ -10,6 +10,8 @@ pub trait EventFormat {
     fn parse_data(data: &str) -> Result<Self>
     where
         Self: Sized;
+    /// Format as a human-readable narrative sentence with the author as subject.
+    fn format_narrative(&self, author: &str) -> String;
 }
 
 /// Parse space-separated quoted values: `"foo" "bar"` -> `["foo", "bar"]`

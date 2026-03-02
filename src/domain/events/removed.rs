@@ -17,6 +17,10 @@ impl EventFormat for RemovedEvent {
         format!("\"{}\"", self.id)
     }
 
+    fn format_narrative(&self, author: &str) -> String {
+        format!("{} removed {}", author, self.id)
+    }
+
     fn parse_data(data: &str) -> Result<Self> {
         let values = parse_quoted_values(data)?;
         anyhow::ensure!(!values.is_empty(), "Removed event requires an id");
@@ -38,5 +42,13 @@ mod tests {
         let data = event.format_data();
         let parsed = RemovedEvent::parse_data(&data).unwrap();
         assert_eq!(event, parsed);
+    }
+
+    #[test]
+    fn narrative() {
+        let event = RemovedEvent {
+            id: YakId::from("old-yak-a1b2"),
+        };
+        assert_eq!(event.format_narrative("Matt"), "Matt removed old-yak-a1b2");
     }
 }
