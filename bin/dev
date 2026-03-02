@@ -786,35 +786,61 @@ merge() {
     return 1
   fi
 
-  # Check on the branch first — main stays clean
-  echo "Switching to $branch to run checks..."
-  git checkout "$branch"
-
-  echo ""
-  if ! check; then
-    echo ""
-    echo "❌ dev check failed on $branch — fix before merging"
-    git checkout main
-    return 1
-  fi
-
-  echo ""
-  echo "Rebasing $branch onto main..."
-  git checkout main
-  if ! git rebase main "$branch" --no-verify; then
-    echo "❌ Rebase failed — resolve conflicts, then run again"
-    return 1
-  fi
-
-  # Fast-forward main
-  git checkout main
-  git merge --ff-only "$branch" --no-verify
-
-  # Clean up branch and any associated worktree
+  # Find the worktree for this branch (if any)
   local worktree
   worktree=$(git worktree list --porcelain \
     | grep -B2 "branch refs/heads/$branch" \
     | grep "^worktree " | sed 's/^worktree //')
+
+  # Run checks in the worktree if it exists, otherwise in a temp worktree.
+  # NEVER switch the main repo away from main.
+  if [ -n "$worktree" ]; then
+    echo "Running checks in worktree: $worktree"
+    if ! (cd "$worktree" && check); then
+      echo ""
+      echo "❌ dev check failed on $branch — fix before merging"
+      return 1
+    fi
+
+    echo ""
+    echo "Rebasing $branch onto main..."
+    if ! (cd "$worktree" && git rebase main --no-verify); then
+      echo "❌ Rebase failed — resolve conflicts in $worktree, then run again"
+      return 1
+    fi
+  else
+    # No worktree — create a temporary one for checks and rebase.
+    # mktemp gives us a unique name; we remove the dir so git worktree
+    # can create it (it insists the path not exist yet).
+    local tmp_worktree
+    tmp_worktree=$(mktemp -d "${TMPDIR:-/tmp}/yx-merge-XXXXXX")
+    rmdir "$tmp_worktree"
+    echo "Creating temporary worktree at $tmp_worktree..."
+    git worktree add "$tmp_worktree" "$branch"
+
+    echo "Running checks in temporary worktree..."
+    if ! (cd "$tmp_worktree" && check); then
+      echo ""
+      echo "❌ dev check failed on $branch — fix before merging"
+      git worktree remove "$tmp_worktree"
+      return 1
+    fi
+
+    echo ""
+    echo "Rebasing $branch onto main..."
+    if ! (cd "$tmp_worktree" && git rebase main --no-verify); then
+      echo "❌ Rebase failed — resolve conflicts, then run again"
+      git worktree remove "$tmp_worktree"
+      return 1
+    fi
+
+    git worktree remove "$tmp_worktree"
+  fi
+
+  # Fast-forward main (we never left main)
+  git merge --ff-only "$branch" --no-verify
+
+  # Clean up worktree and branch
   if [ -n "$worktree" ]; then
     echo "Removing worktree: $worktree"
     git worktree remove "$worktree"
