@@ -161,6 +161,9 @@ Examples:
 - Replacing `>` with `>=` when the boundary value never occurs
 - Changing arithmetic on a value that's always zero
 - Reordering commutative operations
+- Replacing `>` with `>=` when a preceding `==` check already
+  handles the boundary (fix: use `else if` to make the
+  mutual exclusion explicit)
 
 **Be sceptical of this classification.** Most "equivalent"
 mutants are actually design weaknesses in disguise — the
@@ -321,3 +324,7 @@ better for the next one.
 | Writing tests that test the implementation, not the behaviour | Name the business rule, not the code line |
 | Skipping the domain intent step | Understanding *why* the code exists is the whole point |
 | Presenting analysis without a clear verdict | Always end with the Triage Verdict block — findings, recommendation, questions |
+| Trusting stale line numbers from `missed.txt` | The file may have changed since the mutation run — always verify the actual code at the reported line |
+| Assuming a test covers a mutant without checking | Read the test carefully — a test that sets state to "wip" doesn't help if the mutant is about "done" |
+| Testing with only one instance when the mutant is about iteration | `+ offset` vs `- offset` is invisible with one item — always test with 2+ items for loop/index mutants |
+| Forgetting that test mode matters | `cargo mutants` uses in-process Cucumber mode — fullstack-only scenarios won't catch mutants |
