@@ -21,10 +21,14 @@ impl EventFormat for MovedEvent {
         }
     }
 
-    fn format_narrative(&self, author: &str) -> String {
+    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+        let name = resolve_name(self.id.as_ref());
         match &self.new_parent {
-            Some(parent) => format!("{} moved {} under {}", author, self.id, parent),
-            None => format!("{} moved {} to root", author, self.id),
+            Some(parent) => {
+                let parent_name = resolve_name(parent.as_ref());
+                format!("{} moved {} under {}", author, name, parent_name)
+            }
+            None => format!("{} moved {} to root", author, name),
         }
     }
 
@@ -76,7 +80,7 @@ mod tests {
             new_parent: Some(YakId::from("parent-c3d4")),
         };
         assert_eq!(
-            event.format_narrative("Matt"),
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
             "Matt moved child-a1b2 under parent-c3d4"
         );
     }
@@ -88,7 +92,7 @@ mod tests {
             new_parent: None,
         };
         assert_eq!(
-            event.format_narrative("Matt"),
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
             "Matt moved child-a1b2 to root"
         );
     }

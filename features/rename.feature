@@ -49,7 +49,7 @@ Feature: yx rename command
       And I add the yak "old name"
       When I rename the yak "old name" to "new name"
       And I run yx log
-      Then the output should include "FieldUpdated"
+      Then the output should include "renamed"
 
   Rule: Whitespace-only names are rejected
 

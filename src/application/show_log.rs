@@ -1,10 +1,9 @@
 // ShowLog use case - displays the event log
 
 use anyhow::Result;
-use chrono::DateTime;
 
 use super::{Application, UseCase};
-use crate::domain::YakEvent;
+use crate::adapters::user_display::relative_time::format_relative;
 
 pub struct ShowLog;
 
@@ -27,51 +26,23 @@ impl UseCase for ShowLog {
             .ok_or_else(|| anyhow::anyhow!("Event reader not configured"))?;
         let events = reader.get_all_events()?;
 
-        for (entry_count, event) in events.iter().enumerate() {
-            if entry_count > 0 {
-                app.display.info("");
-            }
+        let resolve_name = |id: &str| -> String {
+            use crate::domain::slug::YakId;
+            app.store
+                .get_yak(&YakId::from(id))
+                .map(|y| y.name.to_string())
+                .unwrap_or_else(|_| id.to_string())
+        };
 
+        for event in events.iter() {
             let meta = event.metadata();
+            let narrative = event.format_narrative(&meta.author.name, &resolve_name);
+            let timestamp = format_relative(meta.timestamp.as_epoch_secs());
             let event_id = meta.event_id.as_deref().unwrap_or("-");
-            let datetime =
-                DateTime::from_timestamp(meta.timestamp.as_epoch_secs(), 0).unwrap_or_default();
-            let formatted_time = datetime.format("%Y-%m-%d %H:%M").to_string();
+            let commit_sha = meta.commit_sha.as_deref();
 
-            app.display.log_entry(
-                event_id,
-                &meta.author.name,
-                &meta.author.email,
-                &formatted_time,
-                &event.format_message(),
-            );
-
-            if let YakEvent::Compacted(snapshots, _) = event {
-                for snap in snapshots {
-                    app.display
-                        .info(&format!("        Added: \"{}\" \"{}\"", snap.name, snap.id));
-                    if snap.state != crate::domain::YakState::Todo {
-                        app.display
-                            .info(&format!("        FieldUpdated: \"{}\" \"state\"", snap.id));
-                    }
-                    if let Some(context) = &snap.context {
-                        if !context.is_empty() {
-                            app.display.info(&format!(
-                                "        FieldUpdated: \"{}\" \"context.md\"",
-                                snap.id
-                            ));
-                        }
-                    }
-                    let mut field_names: Vec<&String> = snap.fields.keys().collect();
-                    field_names.sort();
-                    for field_name in field_names {
-                        app.display.info(&format!(
-                            "        FieldUpdated: \"{}\" \"{}\"",
-                            snap.id, field_name
-                        ));
-                    }
-                }
-            }
+            app.display
+                .log_entry(&narrative, &timestamp, event_id, commit_sha);
         }
         Ok(())
     }
@@ -115,21 +86,17 @@ mod tests {
         app.handle(ShowLog::new()).unwrap();
 
         let output = buffer.contents();
-        let lines: Vec<&str> = output.lines().collect();
         assert!(
-            lines[0].starts_with("event "),
-            "Expected first line to start with 'event ', got: {:?}",
-            lines[0]
+            output.contains("added test yak"),
+            "Expected narrative 'added test yak' in output: {output:?}"
         );
         assert!(
-            lines.iter().any(|m| m.contains("test@test.com")),
-            "Expected log to contain author email 'test@test.com', got: {:?}",
-            lines
+            output.contains("event:"),
+            "Expected 'event:' metadata line in output: {output:?}"
         );
         assert!(
-            lines.iter().any(|m| m.contains("Added")),
-            "Expected log to contain 'Added' event message, got: {:?}",
-            lines
+            output.contains("────"),
+            "Expected horizontal rule in output: {output:?}"
         );
     }
 
@@ -164,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn test_show_log_uses_git_log_style_format() {
+    fn test_show_log_uses_narrative_format() {
         let mut event_store = InMemoryEventStore::new();
         let reader = event_store.clone();
         let mut event_bus = EventBus::new();
@@ -196,31 +163,37 @@ mod tests {
         let output = buffer.contents();
         let lines: Vec<&str> = output.lines().collect();
 
-        // Each event is 5 lines: event, Author, Date, blank, message
-        // Between events there's a blank separator line
-        // So 2 events = 5 + 1 + 5 = 11 lines
+        // Each event is 4 lines: narrative, timestamp, event: id, rule
+        // 2 events = 4 + 4 = 8 lines
         assert_eq!(
             lines.len(),
-            11,
-            "Expected 11 lines for 2 events, got {}. Lines: {:?}",
+            8,
+            "Expected 8 lines for 2 events, got {}. Lines: {:?}",
             lines.len(),
             lines
         );
-        assert!(lines[0].starts_with("event "), "Line 1: {:?}", lines[0]);
-        assert!(lines[1].starts_with("Author: "), "Line 2: {:?}", lines[1]);
-        assert!(lines[2].starts_with("Date:   "), "Line 3: {:?}", lines[2]);
-        assert!(lines[3].is_empty(), "Line 4 should be blank");
+        // First event
         assert!(
-            lines[4].starts_with("    "),
-            "Line 5 should be indented: {:?}",
+            lines[0].contains("added first yak"),
+            "Line 1: {:?}",
+            lines[0]
+        );
+        assert!(lines[2].starts_with("event: "), "Line 3: {:?}", lines[2]);
+        assert!(
+            lines[3].contains("────"),
+            "Line 4 should be rule: {:?}",
+            lines[3]
+        );
+        // Second event
+        assert!(
+            lines[4].contains("added second yak"),
+            "Line 5: {:?}",
             lines[4]
         );
-        assert!(lines[5].is_empty(), "Line 6 should be separator");
-        assert!(lines[6].starts_with("event "), "Line 7: {:?}", lines[6]);
     }
 
     #[test]
-    fn test_show_log_compacted_shows_all_snapshot_fields() {
+    fn test_show_log_compacted_shows_single_narrative() {
         let mut event_store = InMemoryEventStore::new();
         let reader = event_store.clone();
         let mut event_bus = EventBus::new();
@@ -255,35 +228,20 @@ mod tests {
         app.handle(ShowLog::new()).unwrap();
 
         let output = buffer.contents();
-        let lines: Vec<&str> = output.lines().collect();
 
-        // Find the Compacted section and check its sub-lines
-        let compacted_idx = lines
-            .iter()
-            .position(|l| l.contains("Compacted"))
-            .expect("Expected a Compacted line in output");
-        let compacted_lines: Vec<&&str> = lines[compacted_idx..].iter().collect();
-
+        // Should show narrative, not expanded snapshots
         assert!(
-            compacted_lines
-                .iter()
-                .any(|l| l.contains("FieldUpdated") && l.contains("state")),
-            "Expected FieldUpdated for state in Compacted section, got: {:?}",
-            compacted_lines
+            output.contains("compacted the event stream"),
+            "Expected compacted narrative in output: {output:?}"
+        );
+        // Should NOT show expanded snapshot details
+        assert!(
+            !output.contains("FieldUpdated"),
+            "Should not contain FieldUpdated expansion: {output:?}"
         );
         assert!(
-            compacted_lines
-                .iter()
-                .any(|l| l.contains("FieldUpdated") && l.contains("context.md")),
-            "Expected FieldUpdated for context.md in Compacted section, got: {:?}",
-            compacted_lines
-        );
-        assert!(
-            compacted_lines
-                .iter()
-                .any(|l| l.contains("FieldUpdated") && l.contains("plan")),
-            "Expected FieldUpdated for custom field 'plan' in Compacted section, got: {:?}",
-            compacted_lines
+            !output.contains("        Added:"),
+            "Should not contain indented Added: {output:?}"
         );
     }
 }

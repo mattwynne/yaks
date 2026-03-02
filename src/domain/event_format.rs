@@ -11,7 +11,8 @@ pub trait EventFormat {
     where
         Self: Sized;
     /// Format as a human-readable narrative sentence with the author as subject.
-    fn format_narrative(&self, author: &str) -> String;
+    /// The `resolve_name` function maps yak IDs to display names.
+    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String;
 }
 
 /// Parse space-separated quoted values: `"foo" "bar"` -> `["foo", "bar"]`

@@ -29,18 +29,24 @@ Feature: yx compact - Compact the event stream
           - [wip] buy biscuits
         """
 
-  Rule: Log shows snapshot events nested under Compacted marker
+  Rule: Compacted event shows narrative summary
 
-    Example: Snapshot events appear indented under the Compacted event
+    Example: Snapshot events appear as a single narrative
       Given I add the yak "make the tea"
       When I set the state of "make the tea" to "wip"
       And I run yx compact --yes
       Then it should succeed
       When I run yx log
-      Then the output should include "Compacted"
-      And the output should include "        Added:"
-      And the output should include "        FieldUpdated:"
+      Then the output should include "compacted the event stream"
       And the output should not include "event -"
+
+    Example: Compacting two yaks shows the count
+      Given I add the yak "make the tea"
+      And I add the yak "buy biscuits"
+      When I run yx compact --yes
+      Then it should succeed
+      When I run yx log
+      Then the output should include "compacted the event stream (2 yaks)"
 
   Rule: New events work after compaction
 
@@ -64,14 +70,3 @@ Feature: yx compact - Compact the event stream
       Then it should succeed
       When I run yx log
       Then the output should not include "Compacted"
-
-  @wip
-  Rule: Compacted event shows narrative summary
-
-    Example: Compacting two yaks shows the count
-      Given I add the yak "make the tea"
-      And I add the yak "buy biscuits"
-      When I run yx compact --yes
-      Then it should succeed
-      When I run yx log
-      Then the output should include "compacted the event stream (2 yaks)"

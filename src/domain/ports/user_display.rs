@@ -55,13 +55,6 @@ pub trait DisplayPort {
     /// Display metadata line for yx show (state, created date, author)
     fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author);
 
-    /// Display a log entry with event ID, author, timestamp, and message
-    fn log_entry(
-        &self,
-        event_id: &str,
-        author_name: &str,
-        author_email: &str,
-        timestamp: &str,
-        message: &str,
-    );
+    /// Display a log entry with narrative, timestamp, event ID, and optional commit SHA
+    fn log_entry(&self, narrative: &str, timestamp: &str, event_id: &str, commit_sha: Option<&str>);
 }

@@ -22,9 +22,12 @@ impl EventFormat for AddedEvent {
         }
     }
 
-    fn format_narrative(&self, author: &str) -> String {
+    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
         match &self.parent_id {
-            Some(parent) => format!("{} added {} under {}", author, self.name, parent),
+            Some(parent) => {
+                let parent_name = resolve_name(parent.as_ref());
+                format!("{} added {} under {}", author, self.name, parent_name)
+            }
             None => format!("{} added {}", author, self.name),
         }
     }
@@ -124,7 +127,10 @@ mod tests {
             id: YakId::from("fix-the-bug-a1b2"),
             parent_id: None,
         };
-        assert_eq!(event.format_narrative("Matt"), "Matt added Fix the Bug");
+        assert_eq!(
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
+            "Matt added Fix the Bug"
+        );
     }
 
     #[test]
@@ -135,7 +141,7 @@ mod tests {
             parent_id: Some(YakId::from("things-c3d4")),
         };
         assert_eq!(
-            event.format_narrative("Matt"),
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
             "Matt added sync under things-c3d4"
         );
     }

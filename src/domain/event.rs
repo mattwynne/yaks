@@ -37,12 +37,12 @@ impl YakEvent {
         }
     }
 
-    pub fn format_narrative(&self, author: &str) -> String {
+    pub fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
         match self {
-            Self::Added(e, _) => e.format_narrative(author),
-            Self::Removed(e, _) => e.format_narrative(author),
-            Self::Moved(e, _) => e.format_narrative(author),
-            Self::FieldUpdated(e, _) => e.format_narrative(author),
+            Self::Added(e, _) => e.format_narrative(author, resolve_name),
+            Self::Removed(e, _) => e.format_narrative(author, resolve_name),
+            Self::Moved(e, _) => e.format_narrative(author, resolve_name),
+            Self::FieldUpdated(e, _) => e.format_narrative(author, resolve_name),
             Self::Compacted(snapshots, _) => {
                 let count = snapshots.len();
                 format!("{} compacted the event stream ({} yaks)", author, count)
@@ -288,7 +288,7 @@ mod tests {
         ];
         let event = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
         assert_eq!(
-            event.format_narrative("Matt"),
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
             "Matt compacted the event stream (2 yaks)"
         );
     }

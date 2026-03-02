@@ -258,6 +258,7 @@ impl EventStore for GitEventStore {
                     full_message,
                     &commit.id().to_string(),
                 ));
+                metadata.commit_sha = Some(commit.id().to_string());
                 compaction_metadata = Some(metadata);
                 compaction_tree = Some(commit.tree()?);
                 break;
@@ -279,6 +280,7 @@ impl EventStore for GitEventStore {
                         full_message,
                         &commit.id().to_string(),
                     ));
+                    metadata.commit_sha = Some(commit.id().to_string());
 
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).

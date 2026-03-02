@@ -40,6 +40,7 @@ pub struct EventMetadata {
     pub author: Author,
     pub timestamp: Timestamp,
     pub event_id: Option<String>,
+    pub commit_sha: Option<String>,
 }
 
 impl EventMetadata {
@@ -48,6 +49,7 @@ impl EventMetadata {
             author,
             timestamp,
             event_id: None,
+            commit_sha: None,
         }
     }
 
@@ -56,6 +58,7 @@ impl EventMetadata {
             author: Author::unknown(),
             timestamp: Timestamp::zero(),
             event_id: None,
+            commit_sha: None,
         }
     }
 }

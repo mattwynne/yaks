@@ -125,7 +125,7 @@ Feature: Move yaks in hierarchy
       And I add the yak "parent"
       When I move the yak "child" under "parent"
       And I run yx log
-      Then the output should include "Moved"
+      Then the output should include "moved"
 
   Rule: Moving a yak under itself or its own descendant is rejected
 

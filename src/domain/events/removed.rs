@@ -17,8 +17,9 @@ impl EventFormat for RemovedEvent {
         format!("\"{}\"", self.id)
     }
 
-    fn format_narrative(&self, author: &str) -> String {
-        format!("{} removed {}", author, self.id)
+    fn format_narrative(&self, author: &str, resolve_name: &dyn Fn(&str) -> String) -> String {
+        let name = resolve_name(self.id.as_ref());
+        format!("{} removed {}", author, name)
     }
 
     fn parse_data(data: &str) -> Result<Self> {
@@ -49,6 +50,9 @@ mod tests {
         let event = RemovedEvent {
             id: YakId::from("old-yak-a1b2"),
         };
-        assert_eq!(event.format_narrative("Matt"), "Matt removed old-yak-a1b2");
+        assert_eq!(
+            event.format_narrative("Matt", &|id: &str| id.to_string()),
+            "Matt removed old-yak-a1b2"
+        );
     }
 }
