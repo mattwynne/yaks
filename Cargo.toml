@@ -27,7 +27,7 @@ required-features = ["test-support"]
 clap = { version = "4.5", features = ["derive", "env"] }
 anyhow = "1.0"
 thiserror = "1.0"
-git2 = "0.19"
+git2 = "0.20"
 tempfile = "3.15"
 walkdir = "2.5"
 libc = "0.2.180"
