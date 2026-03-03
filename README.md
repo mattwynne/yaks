@@ -1,45 +1,104 @@
 # Yaks - An iterative, emergent, non-linear TODO list for humans and robots
 
 > It is in the doing of the work that we discover the work that we must do
-> 
+>
 > -- Woody Zuill, https://agilemaxims.com
 
-Yaks is command-line tool for managing a _Yak Map_ - a TODO list of nested goals - designed for teams of humans and robots working on software projects together.
+Yaks is a command-line tool for managing a shared TODO list as a tree
+of nested goals. It's designed for teams — humans and AI agents
+working together on the same codebase.
+
+Everyone on the team works from the same yak map. Changes sync
+through git with zero merge conflicts, so you never have to
+coordinate who's updating the plan.
 
 ![demo](demo.gif)
 
-Yaks uses a hidden git ref to sync your yaks, allowing you to share the latest state of the work across branches and clones of your repo.
+## Principles
+
+**Simple.** Everything is a yak. No epics, stories, tasks, bugs, or
+chores. No priority fields, no assignees, no estimations. Three
+states: todo, wip, done. If you need more, add a custom field. You
+probably don't need more.
+
+**Collaborative.** Yaks uses event sourcing on a hidden git ref.
+Changes from any branch, clone, or worktree merge automatically —
+no conflicts, no coordination, no extra infrastructure. If you can
+`git push`, you can share yaks.
+
+**Delightful.** Every command completes in under 100ms. Multi-word
+names without quotes. Fuzzy matching so you don't need exact names.
+A pretty tree view. Tab completion. Small things that add up.
 
 ## Usage
 
-
 ```bash
-yx add Fix the bug          # Add a new yak
-yx context Fix the bug      # Add context/notes
-yx show Fix the bug         # Show yak details
-yx ls                       # Show all yaks
-yx done Fix the bug         # Mark as complete
-yx rm Fix the bug           # Remove a yak
-yx prune                    # Remove all done yaks
+yx add Fix the bug                     # Add a new yak
+yx add Buy milk --under Fix the bug    # Nest under a parent
+yx context Fix the bug                 # Add context/notes
+yx show Fix the bug                    # Show yak details
+yx ls                                  # Show the tree
+yx state Fix the bug wip               # Mark as work-in-progress
+yx done Fix the bug                    # Mark as complete
+yx sync                                # Sync with teammates
+yx rm Fix the bug                      # Remove a yak
+yx prune                               # Remove all done yaks
 ```
 
 ## Why "Yaks"?
 
-A Yak Map is basically the same as a [Mikado Graph](https://mikadomethod.info) or a [Discovery Tree](https://www.fastagile.io/method/product-mapping-and-discovery-trees). But I like calling it a Yak Map, because yak shaving is what we do all day in software.
+The name comes from [yak shaving](https://en.wiktionary.org/wiki/yak_shaving)
+— when you set out to do task A but discover you need B first, which
+requires C. A Yak Map captures this emergent structure as a tree.
+
+It's the same idea as a
+[Mikado Graph](https://mikadomethod.info) or a
+[Discovery Tree](https://www.fastagile.io/method/product-mapping-and-discovery-trees),
+but I like calling it a Yak Map, because yak shaving is what we do
+all day in software.
 
 ![image](https://github.com/user-attachments/assets/1e935831-7807-4127-a698-3fdb50615080)
 
-## Isn't this just like Beads?
+## For AI coding agents
 
-I've been using Yak Maps for several years working on teams of humans. We just used to cobble something together in Miro or whatever. [Beads](https://github.com/steveyegge/beads) was the first tool I've seen that supports this kind of acyclic graph for managing work, and I've found it hugely inspiring in this robot-driven era.
+Add instructions to your `CLAUDE.md` or `AGENTS.md` telling your
+agent to use `yx` commands. No MCP server, no plugins, no special
+integration — just a CLI.
 
-But beads has some shortcomings, for me:
+```bash
+yx ls --format json          # Discover work
+yx state "fix the bug" wip   # Claim a yak
+echo "notes" | yx field "fix the bug" progress  # Store notes
+yx done "fix the bug"        # Complete work
+yx sync                      # Sync with teammates
+```
 
-* I like my software simple. I want my tools to do one thing well, and have minimal code and feeatures. Beads, for me, is over-featured and complicated.
+Multiple agents can update the yak map simultaneously.
+The event-sourced CRDT merge means their changes never conflict —
+they just interleave.
 
-* Yaks all the way down. There are no classifications of task here: epics, stories, tasks and whatnot. Everything is a yak.
+## How is this different from Beads?
 
-* No more committing your plan to git. Yaks uses a hidden git ref to sync changes, so with `yx sync` anyone with a clone of the repo and a connection to `origin` can be working off the same list at the same time.
+[Beads](https://github.com/steveyegge/beads) is a powerful issue
+tracker built for AI agents. It has 81 fields per task, 19
+dependency types, a SQL database, and workflow templates. If you
+want a comprehensive system for orchestrating agents, it's
+impressive.
+
+Yaks takes the opposite approach. It's a sharp, simple tool that
+trusts teams to self-organise:
+
+- **One concept**: everything is a yak, nested under other yaks
+- **Conflict-free sync**: event-sourced CRDT merge means multiple
+  people and agents can update the yak map simultaneously without
+  coordination
+- **Zero infrastructure**: no database server, no config files,
+  no lock files — just git
+
+Yaks grew out of years of practice with XP, mob programming, and
+collaborative planning on human teams. Beads grew out of the
+single-user-multi-agent workflow. Different roots, different
+trade-offs.
 
 ## Installation
 
@@ -49,48 +108,14 @@ But beads has some shortcomings, for me:
 curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | bash
 ```
 
-The installer downloads the latest release, validates the checksum and installs the binary in `/usr/local/bin`. It also installs shell completions so you can tab-complete yak names.
+The installer downloads the latest release, validates the checksum
+and installs the binary in `/usr/local/bin`. It also installs shell
+completions so you can tab-complete yak names.
 
-### Development Setup
+## Contributing
 
-Uses direnv and devenv to set up the development environment.
-
-```bash
-git clone https://github.com/mattwynne/yaks.git
-cd yaks
-direnv allow
-dev setup  # Install git hooks
-```
-
-Before committing, always run:
-
-```bash
-dev check  # Runs tests and linting
-```
-
-Git hooks will prevent commits, merges, and pushes without recent verification.
-
-### Testing
-
-```bash
-dev check               # Run all checks (tests + lint + audit)
-cargo test --features test-support  # Cucumber + unit tests
-shellspec               # ShellSpec tests (tmux, git, installer)
-```
-
-### Mutation Testing
-
-```bash
-dev mutate-diff         # Fast: only your changes (~seconds)
-dev mutate              # Full run (~7 min)
-dev mutate-sync         # Sync results to yak tracker
-```
-
-Mutation testing validates that your tests actually catch
-regressions. Use `dev mutate-diff` during development for
-fast feedback. Missed mutants are tracked as yaks under
-"fix missed mutants" — run `dev mutate-sync` after a full
-run to update them.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup,
+testing, and mutation testing instructions.
 
 ## License
 
