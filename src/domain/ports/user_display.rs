@@ -3,6 +3,7 @@
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
+use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 
 pub trait DisplayPort {
     /// Get the display width
@@ -64,4 +65,24 @@ pub trait DisplayPort {
         event_id: &str,
         commit_sha: Option<&str>,
     );
+
+    /// Display a complete yak detail view (for yx show)
+    fn show_yak(&self, _view: &YakDetailView) {
+        unimplemented!("DisplayPort::show_yak not yet implemented for this adapter")
+    }
+
+    /// Display a complete yak tree/list view (for yx ls)
+    fn show_list(&self, _view: &YakTreeView) {
+        unimplemented!("DisplayPort::show_list not yet implemented for this adapter")
+    }
+
+    /// Display log entries (for yx log)
+    fn show_log(&self, _entries: &[LogEntryView]) {
+        unimplemented!("DisplayPort::show_log not yet implemented for this adapter")
+    }
+
+    /// Display a user-facing message (hint, success, info, warning)
+    fn message(&self, _msg: &Message) {
+        unimplemented!("DisplayPort::message not yet implemented for this adapter")
+    }
 }
