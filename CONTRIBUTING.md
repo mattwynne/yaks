@@ -28,6 +28,19 @@ cargo test --features test-support  # Cucumber + unit tests
 shellspec               # ShellSpec tests (tmux, git, installer)
 ```
 
+## Code Complexity
+
+```bash
+dev complexity          # Run code complexity analysis
+```
+
+Uses [rust-code-analysis](https://github.com/nickel-org/rust-code-analysis)
+to measure cyclomatic complexity, cognitive complexity, and SLOC across
+all Rust source files. Reports the top 5 most complex functions.
+
+This also runs automatically as part of `dev check`. Currently it's
+visibility-only — no thresholds enforced yet.
+
 ## Mutation Testing
 
 ```bash
