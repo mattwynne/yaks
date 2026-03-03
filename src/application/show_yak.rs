@@ -34,7 +34,7 @@ impl ShowYak {
     }
 
     pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let valid_formats = ["pretty", "json"];
+        let valid_formats = ["pretty"];
         if !valid_formats.contains(&self.format.as_str()) {
             anyhow::bail!(
                 "Unknown format '{}'. Valid formats: {}",
@@ -45,43 +45,6 @@ impl ShowYak {
 
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
-
-        if self.format == "json" {
-            let children: Vec<serde_json::Value> = yak
-                .children
-                .iter()
-                .filter_map(|cid| app.store.get_yak(cid).ok())
-                .map(|c| {
-                    serde_json::json!({
-                        "id": c.id.as_str(),
-                        "name": c.name.as_str(),
-                        "state": c.state.to_string(),
-                    })
-                })
-                .collect();
-
-            let fields: serde_json::Map<String, serde_json::Value> = yak
-                .fields
-                .iter()
-                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
-                .collect();
-
-            let tags: Vec<&str> = yak.tags.iter().map(|s| s.as_str()).collect();
-
-            let json = serde_json::json!({
-                "id": id.as_str(),
-                "name": yak.name.as_str(),
-                "state": yak.state.to_string(),
-                "parent_id": yak.parent_id.as_ref().map(|p| p.as_str()),
-                "context": yak.context,
-                "fields": fields,
-                "children": children,
-                "tags": tags,
-            });
-
-            app.display.info(&serde_json::to_string_pretty(&json)?);
-            return Ok(());
-        }
 
         // Breadcrumb: walk parent chain to collect ancestor names (root-first)
         let mut ancestors = Vec::new();
@@ -650,53 +613,6 @@ mod tests {
     }
 
     #[test]
-    fn json_output_includes_all_fields() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(
-            AddYak::new("parent yak")
-                .with_context(Some("some notes"))
-                .with_state(Some("wip"))
-                .with_field("plan", "step 1"),
-        )
-        .unwrap();
-        app.handle(AddYak::new("child").with_parent(Some("parent yak")))
-            .unwrap();
-        buffer.clear();
-
-        app.handle(ShowYak::new("parent yak", "json")).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        assert_eq!(json["name"], "parent yak");
-        assert_eq!(json["state"], "wip");
-        assert_eq!(json["context"], "some notes");
-        assert_eq!(json["parent_id"], serde_json::Value::Null);
-        assert_eq!(json["fields"]["plan"], "step 1");
-
-        let children = json["children"].as_array().unwrap();
-        assert_eq!(children.len(), 1);
-        assert_eq!(children[0]["name"], "child");
-        assert_eq!(children[0]["state"], "todo");
-        assert!(children[0]["id"].as_str().unwrap().starts_with("child-"));
-    }
-
-    #[test]
     fn error_when_yak_not_found() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
@@ -804,88 +720,6 @@ mod tag_tests {
         assert!(
             !output.contains("@"),
             "Expected no @ in output when yak has no tags, got:\n{output}"
-        );
-    }
-
-    #[test]
-    fn json_output_includes_tags_array() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("my yak")).unwrap();
-        app.handle(AddTag::new(
-            "my yak",
-            vec!["v1.0".to_string(), "needs-review".to_string()],
-        ))
-        .unwrap();
-        buffer.clear();
-
-        app.handle(ShowYak::new("my yak", "json")).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        let tags = json["tags"]
-            .as_array()
-            .expect("Expected tags array in JSON");
-        assert!(
-            tags.contains(&serde_json::json!("v1.0")),
-            "Expected v1.0 in tags: {:?}",
-            tags
-        );
-        assert!(
-            tags.contains(&serde_json::json!("needs-review")),
-            "Expected needs-review in tags: {:?}",
-            tags
-        );
-    }
-
-    #[test]
-    fn json_output_has_empty_tags_when_no_tags() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("my yak")).unwrap();
-        buffer.clear();
-
-        app.handle(ShowYak::new("my yak", "json")).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        let tags = json["tags"]
-            .as_array()
-            .expect("Expected tags array in JSON");
-        assert!(
-            tags.is_empty(),
-            "Expected empty tags array, got: {:?}",
-            tags
         );
     }
 

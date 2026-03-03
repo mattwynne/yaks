@@ -67,9 +67,9 @@ impl ListYaks {
         };
 
         // Validate format
-        if !["pretty", "markdown", "plain", "json", "ids"].contains(&normalized_format) {
+        if !["pretty", "markdown", "plain", "ids"].contains(&normalized_format) {
             anyhow::bail!(
-                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, json, ids (aliases: md, raw)",
+                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, ids (aliases: md, raw)",
                 format
             );
         }
@@ -98,40 +98,27 @@ impl ListYaks {
             return Ok(());
         }
 
-        if yaks.is_empty() {
-            if normalized_format == "json" {
-                app.display.message(&Message::Info("[]".into()));
-                return Ok(());
-            }
-            if normalized_format == "markdown" {
-                app.display
-                    .message(&Message::Info("You have no yaks. Are you done?".into()));
-            }
-            return Ok(());
-        }
-
-        // Build hierarchy tree
-        let tree = self.build_tree(app, yaks);
-
-        // JSON output
-        if normalized_format == "json" {
-            let json_array: Vec<serde_json::Value> = tree.iter().map(node_to_json_value).collect();
-            let json_str = serde_json::to_string_pretty(&json_array)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize JSON: {}", e))?;
-            app.display.message(&Message::Info(json_str));
-            return Ok(());
-        }
+        // Build hierarchy tree (even if empty)
+        let tree = if yaks.is_empty() {
+            vec![]
+        } else {
+            self.build_tree(app, yaks)
+        };
 
         // Build YakTreeView from internal tree
         let view_nodes = self.build_view_tree(&tree, only, &TreePrefix::new());
-        // is_empty should only be true when there are truly no yaks (not when filter excludes all)
-        // We already handled the truly empty case above, so here is_empty is always false
-        let is_empty = false;
+
+        // For markdown format when empty, show a message instead of the list
+        if tree.is_empty() && normalized_format == "markdown" {
+            app.display
+                .message(&Message::Info("You have no yaks. Are you done?".into()));
+            return Ok(());
+        }
 
         let view = YakTreeView {
             nodes: view_nodes,
             format: normalized_format.to_string(),
-            is_empty,
+            is_empty: false,
         };
 
         app.display.show_list(&view);
@@ -232,6 +219,19 @@ impl ListYaks {
                     .map(|y| y.id.as_str().to_string())
                     .unwrap_or_default();
 
+                let context = node.yak.as_ref().and_then(|y| y.context.clone());
+
+                let parent_id = node
+                    .yak
+                    .as_ref()
+                    .and_then(|y| y.parent_id.as_ref().map(|p| p.as_str().to_string()));
+
+                let fields = node
+                    .yak
+                    .as_ref()
+                    .map(|y| y.fields.clone())
+                    .unwrap_or_default();
+
                 // Compute tree drawing strings
                 let (connector, node_prefix) = if prefix.lines.is_empty() {
                     (String::new(), String::new())
@@ -253,6 +253,9 @@ impl ListYaks {
                     full_path: node.full_path.clone(),
                     id,
                     state: state_str,
+                    context,
+                    parent_id,
+                    fields,
                     tags,
                     depth: prefix.lines.len(),
                     connector,
@@ -279,47 +282,6 @@ impl ListYaks {
             _ => true,
         }
     }
-}
-
-/// Recursively convert a YakNode tree to a serde_json::Value
-fn node_to_json_value(node: &YakNode) -> serde_json::Value {
-    let yak = node.yak.as_ref();
-
-    let id = yak.map(|y| y.id.as_str().to_string()).unwrap_or_default();
-    let name = node.name.as_str().to_string();
-    let state = yak
-        .map(|y| y.state.to_string())
-        .unwrap_or_else(|| "todo".to_string());
-    let context = yak.and_then(|y| y.context.clone());
-    let parent_id = yak
-        .and_then(|y| y.parent_id.as_ref())
-        .map(|p| serde_json::Value::String(p.as_str().to_string()));
-
-    let tags: Vec<&str> = yak
-        .map(|y| y.tags.iter().map(|s| s.as_str()).collect())
-        .unwrap_or_default();
-
-    let fields: serde_json::Map<String, serde_json::Value> = yak
-        .map(|y| {
-            y.fields
-                .iter()
-                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let children: Vec<serde_json::Value> = node.children.iter().map(node_to_json_value).collect();
-
-    serde_json::json!({
-        "id": id,
-        "name": name,
-        "state": state,
-        "context": context,
-        "parent_id": parent_id,
-        "tags": tags,
-        "fields": fields,
-        "children": children,
-    })
 }
 
 impl UseCase for ListYaks {
@@ -772,7 +734,7 @@ mod tests {
 
     #[test]
     fn valid_formats_accepted() {
-        for format in &["pretty", "markdown", "plain", "md", "raw", "json", "ids"] {
+        for format in &["pretty", "markdown", "plain", "md", "raw", "ids"] {
             let mut event_store = InMemoryEventStore::new();
             let mut event_bus = EventBus::new();
             let storage = InMemoryStorage::new();
@@ -966,213 +928,5 @@ mod tag_tests {
             !output.contains("@"),
             "Expected no @ in pretty list when no tags, got:\n{output}"
         );
-    }
-}
-
-#[cfg(test)]
-mod json_tests {
-    use crate::adapters::user_display::ConsoleDisplay;
-    use crate::adapters::{
-        make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
-        InMemoryStorage,
-    };
-    use crate::application::{AddTag, AddYak, Application, ListYaks, SetState};
-    use crate::infrastructure::EventBus;
-
-    fn make_app<'a>(
-        event_store: &'a mut InMemoryEventStore,
-        event_bus: &'a mut EventBus,
-        storage: &'a InMemoryStorage,
-        display: &'a ConsoleDisplay,
-        input: &'a InMemoryInput,
-        auth: &'a InMemoryAuthentication,
-    ) -> Application<'a> {
-        Application::new(event_store, event_bus, storage, display, input, None, auth)
-    }
-
-    #[test]
-    fn json_empty_list_returns_empty_array() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(ListYaks::new("json", None, None)).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-        assert_eq!(json, serde_json::json!([]), "Expected empty JSON array");
-    }
-
-    #[test]
-    fn json_single_yak_has_correct_structure() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("my yak").with_context(Some("some context")))
-            .unwrap();
-        buffer.clear();
-
-        app.handle(ListYaks::new("json", None, None)).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        let arr = json.as_array().unwrap();
-        assert_eq!(arr.len(), 1);
-
-        let yak = &arr[0];
-        assert_eq!(yak["name"], "my yak");
-        assert_eq!(yak["state"], "todo");
-        assert_eq!(yak["context"], "some context");
-        assert!(yak["id"].as_str().unwrap().contains("my-yak"));
-        assert_eq!(yak["parent_id"], serde_json::Value::Null);
-        assert_eq!(yak["tags"], serde_json::json!([]));
-        assert!(yak["children"].as_array().unwrap().is_empty());
-    }
-
-    #[test]
-    fn json_nested_yaks_are_recursive() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("parent")).unwrap();
-        app.handle(AddYak::new("child").with_parent(Some("parent")))
-            .unwrap();
-        app.handle(AddYak::new("grandchild").with_parent(Some("child")))
-            .unwrap();
-        buffer.clear();
-
-        app.handle(ListYaks::new("json", None, None)).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        // Root level should have one yak
-        let arr = json.as_array().unwrap();
-        assert_eq!(arr.len(), 1);
-        assert_eq!(arr[0]["name"], "parent");
-
-        // Parent has one child
-        let children = arr[0]["children"].as_array().unwrap();
-        assert_eq!(children.len(), 1);
-        assert_eq!(children[0]["name"], "child");
-
-        // Child has one grandchild
-        let grandchildren = children[0]["children"].as_array().unwrap();
-        assert_eq!(grandchildren.len(), 1);
-        assert_eq!(grandchildren[0]["name"], "grandchild");
-        assert!(grandchildren[0]["children"].as_array().unwrap().is_empty());
-    }
-
-    #[test]
-    fn json_includes_tags() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("tagged yak")).unwrap();
-        app.handle(AddTag::new(
-            "tagged yak",
-            vec!["v1".to_string(), "needs-review".to_string()],
-        ))
-        .unwrap();
-        buffer.clear();
-
-        app.handle(ListYaks::new("json", None, None)).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        let tags = json[0]["tags"].as_array().unwrap();
-        assert!(
-            tags.contains(&serde_json::json!("v1")),
-            "Expected v1 in tags: {:?}",
-            tags
-        );
-        assert!(
-            tags.contains(&serde_json::json!("needs-review")),
-            "Expected needs-review in tags: {:?}",
-            tags
-        );
-    }
-
-    #[test]
-    fn json_includes_state() {
-        let mut event_store = InMemoryEventStore::new();
-        let mut event_bus = EventBus::new();
-        let storage = InMemoryStorage::new();
-        event_bus.register(Box::new(storage.clone()));
-        let (display, buffer) = make_test_display();
-        let input = InMemoryInput::new();
-        let auth = InMemoryAuthentication::new();
-        let mut app = make_app(
-            &mut event_store,
-            &mut event_bus,
-            &storage,
-            &display,
-            &input,
-            &auth,
-        );
-
-        app.handle(AddYak::new("wip yak")).unwrap();
-        app.handle(SetState::new("wip yak", "wip")).unwrap();
-        buffer.clear();
-
-        app.handle(ListYaks::new("json", None, None)).unwrap();
-        let output = buffer.contents();
-        let json: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("Invalid JSON: {e}\nOutput:\n{output}"));
-
-        assert_eq!(json[0]["state"], "wip");
     }
 }

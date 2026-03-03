@@ -5,6 +5,7 @@ use cucumber::World as CucumberWorld;
 use std::collections::HashMap;
 
 use super::test_world::TestWorld;
+use yx::adapters::json_display::JsonDisplay;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::{
     make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput, InMemoryStorage,
@@ -16,7 +17,7 @@ use yx::application::{
     WriteField,
 };
 use yx::domain::normalize_tag;
-use yx::domain::ports::EventStore;
+use yx::domain::ports::{EventStore, ReadYakStore};
 use yx::infrastructure::EventBus;
 
 /// A named user instance for multi-repo sync scenarios.
@@ -203,6 +204,18 @@ impl InProcessWorld {
         result
     }
 
+    /// Get a yak's state by name from storage
+    pub fn get_yak_state_in_repo(&self, repo_name: &str, yak_name: &str) -> Result<String> {
+        let user = self
+            .repos
+            .get(repo_name)
+            .context(format!("No repo named '{}'", repo_name))?;
+
+        let id = user.storage.fuzzy_find_yak_id(yak_name)?;
+        let yak = user.storage.get_yak(&id)?;
+        Ok(yak.state.to_string())
+    }
+
     /// Sync a named user's event store with origin
     pub fn sync_repo(&mut self, repo_name: &str) -> Result<()> {
         let origin = self.origin.as_ref().context("No origin configured")?;
@@ -328,11 +341,62 @@ impl TestWorld for InProcessWorld {
     }
 
     fn list_yaks_json(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new("json", None, None)))
+        // Use JsonDisplay for JSON output
+        self.buffer.clear();
+        self.error.clear();
+
+        let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+        let mut app = Application::new(
+            &mut self.event_store,
+            &mut self.event_bus,
+            &self.storage,
+            &json_display,
+            &self.input,
+            None,
+            &self.auth,
+        );
+
+        // Call ListYaks with "pretty" format - JsonDisplay will handle JSON serialization
+        let result = app.handle(ListYaks::new("pretty", None, None));
+
+        self.exit_code = if result.is_ok() { 0 } else { 1 };
+        self.error = match &result {
+            Ok(()) => String::new(),
+            Err(e) => e.to_string(),
+        };
+
+        result
     }
 
     fn list_yaks_with_format_and_tag(&mut self, format: &str, tag: &str) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new(format, None, Some(tag))))
+        if format == "json" {
+            // Use JsonDisplay for JSON output
+            self.buffer.clear();
+            self.error.clear();
+
+            let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+            let mut app = Application::new(
+                &mut self.event_store,
+                &mut self.event_bus,
+                &self.storage,
+                &json_display,
+                &self.input,
+                None,
+                &self.auth,
+            );
+
+            let result = app.handle(ListYaks::new("pretty", None, Some(tag)));
+
+            self.exit_code = if result.is_ok() { 0 } else { 1 };
+            self.error = match &result {
+                Ok(()) => String::new(),
+                Err(e) => e.to_string(),
+            };
+
+            result
+        } else {
+            self.execute(|app| app.handle(ListYaks::new(format, None, Some(tag))))
+        }
     }
 
     fn list_yaks_with_format_tag_and_filter(
@@ -341,7 +405,34 @@ impl TestWorld for InProcessWorld {
         tag: &str,
         only: &str,
     ) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new(format, Some(only), Some(tag))))
+        if format == "json" {
+            // Use JsonDisplay for JSON output
+            self.buffer.clear();
+            self.error.clear();
+
+            let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+            let mut app = Application::new(
+                &mut self.event_store,
+                &mut self.event_bus,
+                &self.storage,
+                &json_display,
+                &self.input,
+                None,
+                &self.auth,
+            );
+
+            let result = app.handle(ListYaks::new("pretty", Some(only), Some(tag)));
+
+            self.exit_code = if result.is_ok() { 0 } else { 1 };
+            self.error = match &result {
+                Ok(()) => String::new(),
+                Err(e) => e.to_string(),
+            };
+
+            result
+        } else {
+            self.execute(|app| app.handle(ListYaks::new(format, Some(only), Some(tag))))
+        }
     }
 
     fn try_list_yaks_with_format(&mut self, format: &str) -> Result<()> {

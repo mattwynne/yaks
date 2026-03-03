@@ -1641,40 +1641,17 @@ async fn repo_yak_should_have_state_in_process(
     yak: String,
     state: String,
 ) -> Result<()> {
-    world.execute_in_repo(&repo, |app| app.handle(ListYaks::new("json", None, None)))?;
-    let output = world.get_repo_output(&repo)?;
-    let json: serde_json::Value = serde_json::from_str(&output)
-        .context(format!("Failed to parse JSON output: {}", output))?;
-    fn find_yak(arr: &[serde_json::Value], name: &str) -> Option<String> {
-        for item in arr {
-            if item["name"].as_str() == Some(name) {
-                return item["state"].as_str().map(|s| s.to_string());
-            }
-            if let Some(children) = item["children"].as_array() {
-                if let Some(state) = find_yak(children, name) {
-                    return Some(state);
-                }
-            }
-        }
-        None
-    }
-    let arr = json.as_array().context("Expected JSON array")?;
-    let actual_state = find_yak(arr, &yak);
-    match actual_state {
-        Some(ref s) if s == &state => Ok(()),
-        Some(ref s) => anyhow::bail!(
+    let actual_state = world.get_yak_state_in_repo(&repo, &yak)?;
+    if actual_state == state {
+        Ok(())
+    } else {
+        anyhow::bail!(
             "Expected yak '{}' in repo '{}' to have state '{}', but it has state '{}'",
             yak,
             repo,
             state,
-            s
-        ),
-        None => anyhow::bail!(
-            "Expected yak '{}' in repo '{}', but it was not found in output:\n{}",
-            yak,
-            repo,
-            output
-        ),
+            actual_state
+        )
     }
 }
 

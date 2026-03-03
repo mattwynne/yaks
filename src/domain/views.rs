@@ -48,7 +48,10 @@ pub struct YakTreeNode {
     pub full_path: String,
     pub id: String,
     pub state: String,
-    /// Formatted tag strings
+    pub context: Option<String>,
+    pub parent_id: Option<String>,
+    pub fields: std::collections::HashMap<String, String>,
+    /// Formatted tag strings (with @ prefix for display, without for JSON)
     pub tags: Vec<String>,
     pub depth: usize,
     /// Tree drawing connector like "├─ " or "╰─ " (for pretty format)

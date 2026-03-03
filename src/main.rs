@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
+use yx::adapters::json_display::JsonDisplay;
 use yx::adapters::tui_display::TuiDisplay;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
@@ -408,7 +409,8 @@ fn route_command(
             handler, name, under, state, context, edit, id, fields, &stdin,
         ),
         Commands::List { format, only, tag } => {
-            handler.handle(ListYaks::new(&format, only.as_deref(), tag.as_deref()))
+            let use_format = if format == "json" { "pretty" } else { &format };
+            handler.handle(ListYaks::new(use_format, only.as_deref(), tag.as_deref()))
         }
         Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
@@ -439,7 +441,12 @@ fn route_command(
         Commands::Rename { from, to } => handler.handle(RenameYak::new(&from, &to)),
         Commands::Show { name, format } => {
             let name_str = name.join(" ");
-            handler.handle(ShowYak::new(&name_str, &format))
+            if format == "json" {
+                // JsonDisplay adapter handles JSON - just use "pretty" view building
+                handler.handle(ShowYak::new(&name_str, "pretty"))
+            } else {
+                handler.handle(ShowYak::new(&name_str, &format))
+            }
         }
         Commands::Context { name, show, edit } => {
             route_context(handler, &name.join(" "), show, edit, &stdin)
@@ -561,11 +568,19 @@ fn main() -> Result<()> {
     }
 
     // Initialize other adapters
-    // Route display: TTY without NO_COLOR -> TuiDisplay (ratatui),
-    // otherwise -> ConsoleDisplay (plain text / ANSI)
+    // Check if command requests JSON format
+    let wants_json = match &cli.command {
+        Commands::Show { format, .. } => format == "json",
+        Commands::List { format, .. } => format == "json",
+        _ => false,
+    };
+
+    // Route display adapter
     let is_tty = std::io::stdout().is_terminal();
     let no_color = std::env::var_os("NO_COLOR").is_some();
-    let display: Box<dyn yx::domain::ports::DisplayPort> = if is_tty && !no_color {
+    let display: Box<dyn yx::domain::ports::DisplayPort> = if wants_json {
+        Box::new(JsonDisplay::new())
+    } else if is_tty && !no_color {
         Box::new(TuiDisplay::stdout())
     } else {
         Box::new(ConsoleDisplay::stdout())
