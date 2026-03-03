@@ -683,8 +683,15 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             match view.format.as_str() {
                 "ids" => self.info(""), // empty output for ids
                 "json" => self.info("[]"),
-                _ => self.info("You have no yaks. Are you done?"),
+                "markdown" => self.info("You have no yaks. Are you done?"),
+                _ => {} // pretty and plain show nothing when empty
             }
+            return;
+        }
+
+        // If nodes is empty (filtered out all) and markdown format, show message
+        if view.nodes.is_empty() && view.format == "markdown" {
+            self.info("You have no yaks. Are you done?");
             return;
         }
 
@@ -694,7 +701,8 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
         self.render_tree_nodes(&view.nodes, &view.format);
 
-        if view.format == "pretty" {
+        // Bottom margin only if there were nodes to display
+        if view.format == "pretty" && !view.nodes.is_empty() {
             self.info("");
         }
     }

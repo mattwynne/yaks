@@ -1,6 +1,7 @@
 // ListYaks use case - displays all yaks
 
 use crate::domain::slug::{Name, YakId};
+use crate::domain::views::{Message, YakTreeNode, YakTreeView};
 use crate::domain::{YakState, YakView};
 // DisplayPort accessed via app.display
 use anyhow::Result;
@@ -58,7 +59,7 @@ impl ListYaks {
         let only = self.only.as_deref();
         let mut yaks = app.store.list_yaks()?;
 
-        // Normalize format (treat "md" and "raw" as aliases)
+        // Normalize format
         let normalized_format = match format {
             "md" => "markdown",
             "raw" => "plain",
@@ -91,19 +92,20 @@ impl ListYaks {
         // Handle ids format early (before tree building)
         if normalized_format == "ids" {
             for yak in &yaks {
-                app.display.info(yak.id.as_str());
+                app.display
+                    .message(&Message::Info(yak.id.as_str().to_string()));
             }
             return Ok(());
         }
 
         if yaks.is_empty() {
             if normalized_format == "json" {
-                app.display.info("[]");
+                app.display.message(&Message::Info("[]".into()));
                 return Ok(());
             }
-            // Only show message in markdown format
             if normalized_format == "markdown" {
-                app.display.info("You have no yaks. Are you done?");
+                app.display
+                    .message(&Message::Info("You have no yaks. Are you done?".into()));
             }
             return Ok(());
         }
@@ -111,42 +113,28 @@ impl ListYaks {
         // Build hierarchy tree
         let tree = self.build_tree(app, yaks);
 
-        // JSON output: serialize the full tree and return
+        // JSON output
         if normalized_format == "json" {
             let json_array: Vec<serde_json::Value> = tree.iter().map(node_to_json_value).collect();
             let json_str = serde_json::to_string_pretty(&json_array)
                 .map_err(|e| anyhow::anyhow!("Failed to serialize JSON: {}", e))?;
-            app.display.info(&json_str);
+            app.display.message(&Message::Info(json_str));
             return Ok(());
         }
 
-        // Pretty format: top margin
-        if normalized_format == "pretty" {
-            app.display.info("");
-        }
+        // Build YakTreeView from internal tree
+        let view_nodes = self.build_view_tree(&tree, only, &TreePrefix::new());
+        // is_empty should only be true when there are truly no yaks (not when filter excludes all)
+        // We already handled the truly empty case above, so here is_empty is always false
+        let is_empty = false;
 
-        // Display tree with filtering
-        let mut has_output = false;
-        let root_prefix = TreePrefix::new();
-        self.display_tree(
-            app,
-            &tree,
-            normalized_format,
-            only,
-            &root_prefix,
-            &mut has_output,
-        );
+        let view = YakTreeView {
+            nodes: view_nodes,
+            format: normalized_format.to_string(),
+            is_empty,
+        };
 
-        // Pretty format: bottom margin
-        if normalized_format == "pretty" && has_output {
-            app.display.info("");
-        }
-
-        // If filtered and nothing to show
-        if !has_output && normalized_format == "markdown" {
-            app.display.info("You have no yaks. Are you done?");
-        }
-
+        app.display.show_list(&view);
         Ok(())
     }
 
@@ -213,31 +201,72 @@ impl ListYaks {
         }
     }
 
-    /// Display tree recursively
-    fn display_tree(
+    /// Convert internal tree to view model tree, applying filters
+    fn build_view_tree(
         &self,
-        app: &Application,
         nodes: &[YakNode],
-        format: &str,
         only: Option<&str>,
         prefix: &TreePrefix,
-        has_output: &mut bool,
-    ) {
+    ) -> Vec<YakTreeNode> {
+        let mut result = Vec::new();
         for (i, node) in nodes.iter().enumerate() {
             let is_last = i == nodes.len() - 1;
-
-            // Check if node should be displayed based on filter
             let should_display = self.should_display_node(node, only);
 
             if should_display {
-                *has_output = true;
-                self.display_node(app, node, format, prefix, is_last);
-            }
+                let state_str = node
+                    .yak
+                    .as_ref()
+                    .map(|y| y.state.to_string())
+                    .unwrap_or_else(|| "todo".to_string());
 
-            // Recurse to children with updated prefix
-            let child_prefix = prefix.for_child(is_last);
-            self.display_tree(app, &node.children, format, only, &child_prefix, has_output);
+                let tags: Vec<String> = node
+                    .yak
+                    .as_ref()
+                    .map(|y| y.tags.iter().map(|t| format_tag(t)).collect())
+                    .unwrap_or_default();
+
+                let id = node
+                    .yak
+                    .as_ref()
+                    .map(|y| y.id.as_str().to_string())
+                    .unwrap_or_default();
+
+                // Compute tree drawing strings
+                let (connector, node_prefix) = if prefix.lines.is_empty() {
+                    (String::new(), String::new())
+                } else {
+                    let ancestor_continuations = &prefix.lines[1..];
+                    let conn = if is_last {
+                        "╰─ ".to_string()
+                    } else {
+                        "├─ ".to_string()
+                    };
+                    (conn, ancestor_continuations.join(""))
+                };
+
+                let child_prefix = prefix.for_child(is_last);
+                let children = self.build_view_tree(&node.children, only, &child_prefix);
+
+                result.push(YakTreeNode {
+                    name: node.name.to_string(),
+                    full_path: node.full_path.clone(),
+                    id,
+                    state: state_str,
+                    tags,
+                    depth: prefix.lines.len(),
+                    connector,
+                    prefix: node_prefix,
+                    children,
+                });
+            } else {
+                // Even if this node is filtered out, recurse into children
+                let child_prefix = prefix.for_child(is_last);
+                let mut child_nodes = self.build_view_tree(&node.children, only, &child_prefix);
+                result.append(&mut child_nodes);
+            }
         }
+        result
     }
 
     /// Check if node matches the filter
@@ -248,50 +277,6 @@ impl ListYaks {
                 !node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false) || node.yak.is_none()
             }
             _ => true,
-        }
-    }
-
-    /// Display a single node
-    fn display_node(
-        &self,
-        app: &Application,
-        node: &YakNode,
-        format: &str,
-        prefix: &TreePrefix,
-        is_last: bool,
-    ) {
-        let state_str = node
-            .yak
-            .as_ref()
-            .map(|y| y.state.to_string())
-            .unwrap_or_else(|| "todo".to_string());
-        let state = state_str.as_str();
-
-        let tags: Vec<String> = node
-            .yak
-            .as_ref()
-            .map(|y| y.tags.iter().map(|t| format_tag(t)).collect())
-            .unwrap_or_default();
-
-        match format {
-            "plain" => app.display.info(&node.full_path),
-            "pretty" => {
-                let tree_prefix = if prefix.lines.is_empty() {
-                    String::new()
-                } else {
-                    let ancestor_continuations = &prefix.lines[1..];
-                    let connector = if is_last { "╰─ " } else { "├─ " };
-                    format!("{}{}", ancestor_continuations.join(""), connector)
-                };
-                let node_prefix = format!(" {}", tree_prefix);
-                app.display
-                    .display_yak_pretty(&node_prefix, &node.name, state, &tags);
-            }
-            _ => {
-                let depth = prefix.lines.len();
-                app.display
-                    .display_yak_markdown(depth, &node.name, state, &tags);
-            }
         }
     }
 }
