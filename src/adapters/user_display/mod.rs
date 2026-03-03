@@ -113,7 +113,7 @@ fn write_dim_line(
 
 // Private helper methods (used by high-level DisplayPort methods)
 impl ConsoleDisplay {
-    fn display_hint(&self, message: &str) {
+    pub fn display_hint(&self, message: &str) {
         let mut out = self.output.lock().unwrap();
         if self.options.color {
             for line in message.lines() {
@@ -131,7 +131,7 @@ impl ConsoleDisplay {
         writeln!(out, "{message}").unwrap();
     }
 
-    fn info(&self, message: &str) {
+    pub fn info(&self, message: &str) {
         let mut out = self.output.lock().unwrap();
         writeln!(out, "{message}").unwrap();
     }
@@ -191,7 +191,7 @@ impl ConsoleDisplay {
         .unwrap();
     }
 
-    fn display_section_rule(&self, label: &str) {
+    pub fn display_section_rule(&self, label: &str) {
         let mut out = self.output.lock().unwrap();
         let header = format!("── {label} ");
         let padding = self.options.width.saturating_sub(header.chars().count());
@@ -203,7 +203,7 @@ impl ConsoleDisplay {
         }
     }
 
-    fn display_closing_rule(&self) {
+    pub fn display_closing_rule(&self) {
         let mut out = self.output.lock().unwrap();
         let line = "─".repeat(self.options.width);
         if self.options.color {
@@ -213,7 +213,7 @@ impl ConsoleDisplay {
         }
     }
 
-    fn display_context(&self, context: &str) {
+    pub fn display_context(&self, context: &str) {
         let mut out = self.output.lock().unwrap();
         if self.options.color {
             let mut skin = termimad::MadSkin::default();

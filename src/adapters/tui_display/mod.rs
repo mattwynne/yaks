@@ -9,11 +9,8 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::Terminal;
+use ratatui::{Terminal, TerminalOptions, Viewport};
 use std::io;
-
-#[cfg(test)]
-use ratatui::{TerminalOptions, Viewport};
 
 pub struct TuiDisplay {
     width: usize,
@@ -258,6 +255,137 @@ impl TuiDisplay {
         let paragraph = Paragraph::new(lines).block(block);
         ratatui::widgets::Widget::render(paragraph, area, buf);
     }
+
+    /// Render the header box from a YakDetailView into a ratatui Buffer
+    fn render_show_header_box(
+        &self,
+        view: &YakDetailView,
+        area: Rect,
+        buf: &mut ratatui::buffer::Buffer,
+    ) {
+        fn indicator_for(state: &str) -> &'static str {
+            match state {
+                "wip" | "done" => "●",
+                _ => "○",
+            }
+        }
+
+        fn state_color(state: &str) -> Color {
+            match state {
+                "wip" => Color::Green,
+                "done" => Color::DarkGray,
+                _ => Color::Reset,
+            }
+        }
+
+        let state = view.state.as_str();
+        let indicator = indicator_for(state);
+        let mut lines: Vec<Line> = Vec::new();
+
+        // Breadcrumb
+        if !view.breadcrumb.is_empty() {
+            let path = view.breadcrumb.join(" > ");
+            lines.push(Line::from(Span::styled(
+                format!(" {path} >"),
+                Style::default().add_modifier(Modifier::DIM),
+            )));
+        }
+
+        // Header line
+        let mut header_spans: Vec<Span> = Vec::new();
+        header_spans.push(Span::raw(" "));
+        header_spans.push(Span::styled(
+            indicator,
+            Style::default().fg(state_color(state)),
+        ));
+        header_spans.push(Span::raw(" "));
+
+        match state {
+            "done" => header_spans.push(Span::styled(
+                &view.name,
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::CROSSED_OUT),
+            )),
+            _ => header_spans.push(Span::styled(
+                &view.name,
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+        }
+
+        header_spans.push(Span::styled(
+            format!(" · {} · {} · {}", state, view.created_at, view.created_by),
+            Style::default().fg(Color::DarkGray),
+        ));
+
+        if !view.tags.is_empty() {
+            header_spans.push(Span::styled(" · ", Style::default().fg(Color::DarkGray)));
+            header_spans.push(Span::styled(
+                view.tags.join(" "),
+                Style::default().fg(Color::Rgb(95, 135, 175)),
+            ));
+        }
+
+        lines.push(Line::from(header_spans));
+
+        // Children
+        for (i, child) in view.children.iter().enumerate() {
+            let connector = if i == view.children.len() - 1 {
+                "╰─"
+            } else {
+                "├─"
+            };
+            let ci = indicator_for(&child.state);
+            let mut spans: Vec<Span> = Vec::new();
+            spans.push(Span::raw(format!(" {connector} ")));
+            spans.push(Span::styled(
+                ci,
+                Style::default().fg(state_color(&child.state)),
+            ));
+            spans.push(Span::raw(" "));
+            match child.state.as_str() {
+                "done" => spans.push(Span::styled(
+                    &child.name,
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::CROSSED_OUT),
+                )),
+                "wip" => spans.push(Span::styled(
+                    &child.name,
+                    Style::default().add_modifier(Modifier::BOLD),
+                )),
+                _ => spans.push(Span::raw(&child.name)),
+            }
+            lines.push(Line::from(spans));
+        }
+
+        // Fields
+        if !view.short_fields.is_empty() {
+            let divider_width = area.width.saturating_sub(2) as usize;
+            lines.push(Line::from(Span::styled(
+                "─".repeat(divider_width),
+                Style::default().add_modifier(Modifier::DIM),
+            )));
+
+            let max_label = view
+                .short_fields
+                .iter()
+                .map(|(k, _)| k.chars().count())
+                .max()
+                .unwrap_or(0);
+            for (k, v) in &view.short_fields {
+                let pad = max_label - k.chars().count();
+                lines.push(Line::from(format!(" {}{}: {}", " ".repeat(pad), k, v)));
+            }
+        }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().add_modifier(Modifier::DIM));
+
+        let paragraph = Paragraph::new(lines).block(block);
+        ratatui::widgets::Widget::render(paragraph, area, buf);
+    }
 }
 
 impl crate::domain::ports::DisplayPort for TuiDisplay {
@@ -266,8 +394,63 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
     }
 
     fn show_yak(&self, view: &YakDetailView) {
-        // For now, delegate to the fallback ConsoleDisplay which has show_yak implemented
-        self.fallback.show_yak(view);
+        use ratatui::backend::CrosstermBackend;
+
+        // Calculate header box height from view model
+        let has_breadcrumb = !view.breadcrumb.is_empty();
+        let mut height: u16 = 3; // top + header + bottom
+        if has_breadcrumb {
+            height += 1;
+        }
+        height += view.children.len() as u16;
+        if !view.short_fields.is_empty() {
+            height += 1 + view.short_fields.len() as u16;
+        }
+
+        // Render header box with ratatui
+        let backend = CrosstermBackend::new(io::stdout());
+        if let Ok(mut terminal) = Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Inline(height),
+            },
+        ) {
+            let _ = terminal.draw(|frame| {
+                let area = frame.area();
+                self.render_show_header_box(view, area, frame.buffer_mut());
+            });
+            let _ = terminal.show_cursor();
+        }
+        println!();
+
+        // Context (or hint) — delegate to fallback for now
+        // (termimad markdown rendering is complex to replicate in ratatui)
+        if view.has_context {
+            self.fallback.info("");
+            self.fallback
+                .display_context(view.context.as_ref().unwrap());
+        } else {
+            self.fallback.info("");
+            self.fallback.display_hint(&format!(
+                "This yak has no context yet. Add some with:\n\n  echo \"Here's the problem...\" | yx context {}",
+                view.name
+            ));
+        }
+
+        // Long fields
+        for (name, value) in &view.long_fields {
+            self.fallback.info("");
+            self.fallback.display_section_rule(name);
+            let indented: String = value
+                .lines()
+                .map(|l| format!("  {l}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.fallback.info(&indented);
+        }
+
+        self.fallback.info("");
+        self.fallback.display_closing_rule();
     }
 
     fn show_list(&self, view: &YakTreeView) {
