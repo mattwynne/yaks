@@ -52,6 +52,60 @@ impl ConsoleDisplay {
     }
 }
 
+/// Helper for rendering styled yak items (name + indicator) consistently
+fn style_yak_item(name: &str, state: &str, color: bool) -> String {
+    let indicator = match state {
+        "wip" | "done" => "●",
+        _ => "○",
+    };
+    if color {
+        match state {
+            "wip" => format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
+            "done" => format!("\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
+            _ => format!("○ \x1b[1m{name}\x1b[0m"),
+        }
+    } else {
+        format!("{indicator} {name}")
+    }
+}
+
+/// Helper to write a padded line inside the box
+fn write_box_line(
+    out: &mut Box<dyn Write + Send>,
+    content: &str,
+    visible_width: usize,
+    inner_width: usize,
+    color: bool,
+) {
+    let pad = inner_width - visible_width;
+    if color {
+        writeln!(
+            out,
+            "\x1b[2m│\x1b[0m{content}{}\x1b[2m│\x1b[0m",
+            " ".repeat(pad)
+        )
+        .unwrap();
+    } else {
+        writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
+    }
+}
+
+/// Helper to write a dimmed line inside the box
+fn write_dim_line(
+    out: &mut Box<dyn Write + Send>,
+    content: &str,
+    visible_width: usize,
+    inner_width: usize,
+    color: bool,
+) {
+    let pad = inner_width - visible_width;
+    if color {
+        writeln!(out, "\x1b[2m│{content}{}│\x1b[0m", " ".repeat(pad)).unwrap();
+    } else {
+        writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
+    }
+}
+
 impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     fn width(&self) -> usize {
         self.options.width
@@ -149,14 +203,10 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
     ) {
         let mut out = self.output.lock().unwrap();
 
-        fn indicator_for(state: &str) -> &'static str {
-            match state {
-                "wip" | "done" => "●",
-                _ => "○",
-            }
-        }
-
-        let indicator = indicator_for(state);
+        let indicator = match state {
+            "wip" | "done" => "●",
+            _ => "○",
+        };
         let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
             .map(|dt| dt.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| "unknown".to_string());
@@ -194,7 +244,10 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                 } else {
                     "├─"
                 };
-                let ci = indicator_for(cstate);
+                let ci = match cstate.as_str() {
+                    "wip" | "done" => "●",
+                    _ => "○",
+                };
                 format!("  {connector} {ci} {cname}  ")
             })
             .collect();
@@ -225,33 +278,6 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         let top = format!("┌{}┐", "─".repeat(inner_width));
         let divider = format!("├{}┤", "─".repeat(inner_width));
         let bottom = format!("└{}┘", "─".repeat(inner_width));
-
-        // Helper to write a padded line inside the box
-        let write_box_line =
-            |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
-                let pad = inner_width - visible_width;
-                if color {
-                    writeln!(
-                        out,
-                        "\x1b[2m│\x1b[0m{content}{}\x1b[2m│\x1b[0m",
-                        " ".repeat(pad)
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
-                }
-            };
-
-        let write_dim_line =
-            |out: &mut Box<dyn Write + Send>, content: &str, visible_width: usize, color: bool| {
-                let pad = inner_width - visible_width;
-                if color {
-                    writeln!(out, "\x1b[2m│{content}{}│\x1b[0m", " ".repeat(pad)).unwrap();
-                } else {
-                    writeln!(out, "│{content}{}│", " ".repeat(pad)).unwrap();
-                }
-            };
-
         let color = self.options.color;
 
         // Top border
@@ -263,7 +289,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
         // Breadcrumb (dimmed)
         if let Some(ref bc) = breadcrumb {
-            write_dim_line(&mut out, bc, bc.chars().count(), color);
+            write_dim_line(&mut out, bc, bc.chars().count(), inner_width, color);
         }
 
         // Name line
@@ -277,14 +303,10 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                 "\x1b[90m · {state} · {date} · {}\x1b[0m{colored_tags}  ",
                 created_by.name
             );
-            let styled_header = match state {
-                "wip" => format!("  \x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{meta}"),
-                "done" => format!("  \x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{meta}"),
-                _ => format!("  ○ \x1b[1m{name}\x1b[0m{meta}"),
-            };
-            write_box_line(&mut out, &styled_header, header_width, true);
+            let styled_header = format!("  {}{meta}", style_yak_item(name.as_ref(), state, true));
+            write_box_line(&mut out, &styled_header, header_width, inner_width, true);
         } else {
-            write_box_line(&mut out, &header_content, header_width, false);
+            write_box_line(&mut out, &header_content, header_width, inner_width, false);
         }
 
         // Tags are now shown inline in the header line
@@ -297,15 +319,15 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                 "├─"
             };
             if color {
-                let styled_child = match cstate.as_str() {
-                    "wip" => format!("  {connector} \x1b[32m●\x1b[0m \x1b[1m{cname}\x1b[0m  "),
-                    "done" => format!("  {connector} \x1b[90m●\x1b[0m \x1b[90;9m{cname}\x1b[0m  "),
-                    _ => format!("  {connector} ○ {cname}  "),
-                };
+                let styled_child = format!(
+                    "  {connector} {}  ",
+                    style_yak_item(cname.as_ref(), cstate, true)
+                );
                 write_box_line(
                     &mut out,
                     &styled_child,
                     child_lines[i].chars().count(),
+                    inner_width,
                     true,
                 );
             } else {
@@ -313,6 +335,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                     &mut out,
                     &child_lines[i],
                     child_lines[i].chars().count(),
+                    inner_width,
                     false,
                 );
             }
@@ -326,7 +349,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                 writeln!(out, "{divider}").unwrap();
             }
             for line in &field_lines {
-                write_box_line(&mut out, line, line.chars().count(), color);
+                write_box_line(&mut out, line, line.chars().count(), inner_width, color);
             }
         }
 

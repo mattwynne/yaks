@@ -142,7 +142,7 @@ lint() {
 # @alias cx
 complexity() {
   # Thresholds — tighten these over time as code is refactored
-  local max_cognitive=60
+  local max_cognitive=42
   local max_cyclomatic=40
 
   local metrics_output
