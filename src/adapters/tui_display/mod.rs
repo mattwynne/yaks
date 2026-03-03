@@ -3,7 +3,7 @@
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
-use ratatui::backend::CrosstermBackend;
+use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -27,9 +27,61 @@ impl TuiDisplay {
         Self { width }
     }
 
+    fn header_box_height(
+        ancestors: &[Name],
+        children: &[(Name, String)],
+        fields: &[(String, String)],
+    ) -> u16 {
+        // 2 for top/bottom border
+        // 1 for header line
+        // 1 for breadcrumb if ancestors present
+        // children count
+        // 1 for divider + field count if fields present
+        let mut height: u16 = 2 + 1; // borders + header
+        if !ancestors.is_empty() {
+            height += 1;
+        }
+        height += children.len() as u16;
+        if !fields.is_empty() {
+            height += 1 + fields.len() as u16; // divider + fields
+        }
+        height
+    }
+
+    /// Draw the header box through a Terminal, handling draw + cursor
+    /// cleanup. Generic over backend so tests can use TestBackend.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_header_box<B: Backend>(
+        &self,
+        terminal: &mut Terminal<B>,
+        ancestors: &[Name],
+        name: &Name,
+        state: &str,
+        created_at: &Timestamp,
+        created_by: &Author,
+        children: &[(Name, String)],
+        fields: &[(String, String)],
+        tags: &[String],
+    ) {
+        let _ = terminal.draw(|frame| {
+            let area = frame.area();
+            self.render_header_box(
+                ancestors,
+                name,
+                state,
+                created_at,
+                created_by,
+                children,
+                fields,
+                tags,
+                area,
+                frame.buffer_mut(),
+            );
+        });
+        let _ = terminal.show_cursor();
+    }
+
     /// Render the header box into a ratatui Buffer for the given area.
-    /// This is the core rendering logic, extracted so tests can call it
-    /// directly with a test buffer.
     #[allow(clippy::too_many_arguments)]
     fn render_header_box(
         &self,
@@ -205,20 +257,7 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
         fields: &[(String, String)],
         tags: &[String],
     ) {
-        // Calculate needed height:
-        // 2 for top/bottom border
-        // 1 for header line
-        // 1 for breadcrumb if ancestors present
-        // children count
-        // 1 for divider + field count if fields present
-        let mut height: u16 = 2 + 1; // borders + header
-        if !ancestors.is_empty() {
-            height += 1;
-        }
-        height += children.len() as u16;
-        if !fields.is_empty() {
-            height += 1 + fields.len() as u16; // divider + fields
-        }
+        let height = Self::header_box_height(ancestors, children, fields);
 
         let backend = CrosstermBackend::new(io::stdout());
         let Ok(mut terminal) = Terminal::with_options(
@@ -230,23 +269,17 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
             return;
         };
 
-        let _ = terminal.draw(|frame| {
-            let area = frame.area();
-            self.render_header_box(
-                ancestors,
-                name,
-                state,
-                created_at,
-                created_by,
-                children,
-                fields,
-                tags,
-                area,
-                frame.buffer_mut(),
-            );
-        });
-
-        let _ = terminal.show_cursor();
+        self.draw_header_box(
+            &mut terminal,
+            ancestors,
+            name,
+            state,
+            created_at,
+            created_by,
+            children,
+            fields,
+            tags,
+        );
         println!();
     }
 
@@ -372,359 +405,230 @@ mod tests {
     use super::*;
     use crate::domain::event_metadata::{Author, Timestamp};
     use crate::domain::slug::Name;
-    use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
+    use ratatui::backend::TestBackend;
 
-    fn make_tui_display(width: usize) -> TuiDisplay {
-        TuiDisplay::new(width)
+    /// Create a TestBackend terminal sized for the given header box
+    /// inputs, then call draw_header_box through it. Returns the
+    /// terminal so tests can inspect the buffer.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_test_header_box(
+        width: u16,
+        ancestors: &[Name],
+        name: &Name,
+        state: &str,
+        created_at: &Timestamp,
+        created_by: &Author,
+        children: &[(Name, String)],
+        fields: &[(String, String)],
+        tags: &[String],
+    ) -> Terminal<TestBackend> {
+        let height = TuiDisplay::header_box_height(ancestors, children, fields);
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Fixed(Rect::new(0, 0, width, height)),
+            },
+        )
+        .unwrap();
+        let display = TuiDisplay::new(width as usize);
+        display.draw_header_box(
+            &mut terminal,
+            ancestors,
+            name,
+            state,
+            created_at,
+            created_by,
+            children,
+            fields,
+            tags,
+        );
+        terminal
+    }
+
+    fn ts() -> Timestamp {
+        Timestamp(1739923200)
+    }
+
+    fn author() -> Author {
+        Author {
+            name: "Matt Wynne".to_string(),
+            email: "matt@example.com".to_string(),
+        }
     }
 
     #[test]
     fn header_box_renders_box_drawing_borders() {
-        let display = make_tui_display(60);
-        let name = Name::from("my yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt Wynne".to_string(),
-            email: "matt@example.com".to_string(),
-        };
-
-        let area = Rect::new(0, 0, 60, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("my yak"),
             "wip",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
+        let output = buffer_to_string(terminal.backend().buffer());
         let lines: Vec<&str> = output.lines().collect();
 
-        // Top border
-        assert!(
-            lines[0].starts_with('┌'),
-            "Expected top-left corner, got: {:?}",
-            lines[0]
-        );
-        assert!(
-            lines[0].ends_with('┐'),
-            "Expected top-right corner, got: {:?}",
-            lines[0]
-        );
-
-        // Header content
-        assert!(
-            lines[1].contains("● my yak"),
-            "Expected indicator + name, got: {:?}",
-            lines[1]
-        );
-        assert!(
-            lines[1].contains("wip"),
-            "Expected state, got: {:?}",
-            lines[1]
-        );
-        assert!(
-            lines[1].contains("2025-02-19"),
-            "Expected date, got: {:?}",
-            lines[1]
-        );
-        assert!(
-            lines[1].contains("Matt Wynne"),
-            "Expected author, got: {:?}",
-            lines[1]
-        );
-
-        // Bottom border
-        assert!(
-            lines[2].starts_with('└'),
-            "Expected bottom-left corner, got: {:?}",
-            lines[2]
-        );
-        assert!(
-            lines[2].ends_with('┘'),
-            "Expected bottom-right corner, got: {:?}",
-            lines[2]
-        );
+        assert!(lines[0].starts_with('┌'), "got: {:?}", lines[0]);
+        assert!(lines[0].ends_with('┐'), "got: {:?}", lines[0]);
+        assert!(lines[1].contains("● my yak"), "got: {:?}", lines[1]);
+        assert!(lines[1].contains("wip"), "got: {:?}", lines[1]);
+        assert!(lines[1].contains("2025-02-19"), "got: {:?}", lines[1]);
+        assert!(lines[1].contains("Matt Wynne"), "got: {:?}", lines[1]);
+        assert!(lines[2].starts_with('└'), "got: {:?}", lines[2]);
+        assert!(lines[2].ends_with('┘'), "got: {:?}", lines[2]);
     }
 
     #[test]
     fn header_box_shows_breadcrumb_for_ancestors() {
-        let display = make_tui_display(60);
-        let name = Name::from("child yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
         let ancestors = vec![Name::from("parent")];
-
-        // Need extra row for breadcrumb
-        let area = Rect::new(0, 0, 60, 4);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &ancestors,
-            &name,
+            &Name::from("child yak"),
             "todo",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(
-            output.contains("parent >"),
-            "Expected breadcrumb, got:\n{output}"
-        );
-        assert!(
-            output.contains("child yak"),
-            "Expected name, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("parent >"), "got:\n{output}");
+        assert!(output.contains("child yak"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_shows_children() {
-        let display = make_tui_display(60);
-        let name = Name::from("parent yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
         let children = vec![
             (Name::from("child one"), "todo".to_string()),
             (Name::from("child two"), "wip".to_string()),
         ];
-
-        let area = Rect::new(0, 0, 60, 5);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("parent yak"),
             "todo",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &children,
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(
-            output.contains("├─"),
-            "Expected tree connector, got:\n{output}"
-        );
-        assert!(
-            output.contains("╰─"),
-            "Expected last-child connector, got:\n{output}"
-        );
-        assert!(
-            output.contains("child one"),
-            "Expected first child, got:\n{output}"
-        );
-        assert!(
-            output.contains("child two"),
-            "Expected second child, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("├─"), "got:\n{output}");
+        assert!(output.contains("╰─"), "got:\n{output}");
+        assert!(output.contains("child one"), "got:\n{output}");
+        assert!(output.contains("child two"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_shows_fields() {
-        let display = make_tui_display(60);
-        let name = Name::from("my yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
         let fields = vec![
             ("worktree".to_string(), "/tmp/wt".to_string()),
             ("branch".to_string(), "feat-x".to_string()),
         ];
-
-        // borders(2) + header(1) + divider(1) + fields(2) = 6
-        let area = Rect::new(0, 0, 60, 6);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("my yak"),
             "wip",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &fields,
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(
-            output.contains("worktree: /tmp/wt"),
-            "Expected worktree field, got:\n{output}"
-        );
-        assert!(
-            output.contains("branch: feat-x"),
-            "Expected branch field, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("worktree: /tmp/wt"), "got:\n{output}");
+        assert!(output.contains("branch: feat-x"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_shows_tags() {
-        let display = make_tui_display(80);
-        let name = Name::from("tagged yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
         let tags = vec!["@bug".to_string(), "@urgent".to_string()];
-
-        let area = Rect::new(0, 0, 80, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            80,
             &[],
-            &name,
+            &Name::from("tagged yak"),
             "todo",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &tags,
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(output.contains("@bug"), "Expected @bug tag, got:\n{output}");
-        assert!(
-            output.contains("@urgent"),
-            "Expected @urgent tag, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("@bug"), "got:\n{output}");
+        assert!(output.contains("@urgent"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_done_state_uses_filled_indicator() {
-        let display = make_tui_display(60);
-        let name = Name::from("done yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
-
-        let area = Rect::new(0, 0, 60, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("done yak"),
             "done",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(
-            output.contains("● done yak"),
-            "Expected filled indicator for done state, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("● done yak"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_todo_state_uses_open_indicator() {
-        let display = make_tui_display(60);
-        let name = Name::from("todo yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
-
-        let area = Rect::new(0, 0, 60, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("todo yak"),
             "todo",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        let output = buffer_to_string(&buf);
-        assert!(
-            output.contains("○ todo yak"),
-            "Expected open indicator for todo state, got:\n{output}"
-        );
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(output.contains("○ todo yak"), "got:\n{output}");
     }
 
     #[test]
     fn header_box_bold_style_on_wip_name() {
-        let display = make_tui_display(60);
-        let name = Name::from("wip yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
-
-        let area = Rect::new(0, 0, 60, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("wip yak"),
             "wip",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        // Check that the 'w' in "wip yak" has BOLD modifier
-        // The name starts after "│ ● " which is 4 cells from the left
-        // Find the name cell
+        let buf = terminal.backend().buffer();
         let mut found_bold = false;
-        for x in 0..area.width {
+        for x in 0..buf.area.width {
             let cell = &buf[(x, 1)];
-            if cell.symbol() == "w" {
-                // Check the next cells form "wip yak"
-                let next = &buf[(x + 1, 1)];
-                if next.symbol() == "i" {
-                    found_bold = cell.modifier.contains(Modifier::BOLD);
-                    break;
-                }
+            if cell.symbol() == "w" && buf[(x + 1, 1)].symbol() == "i" {
+                found_bold = cell.modifier.contains(Modifier::BOLD);
+                break;
             }
         }
         assert!(found_bold, "Expected BOLD modifier on wip yak name");
@@ -732,53 +636,57 @@ mod tests {
 
     #[test]
     fn header_box_dim_style_on_done_name() {
-        let display = make_tui_display(60);
-        let name = Name::from("done yak");
-        let timestamp = Timestamp(1739923200);
-        let author = Author {
-            name: "Matt".to_string(),
-            email: "m@e.com".to_string(),
-        };
-
-        let area = Rect::new(0, 0, 60, 3);
-        let mut buf = Buffer::empty(area);
-
-        display.render_header_box(
+        let terminal = draw_test_header_box(
+            60,
             &[],
-            &name,
+            &Name::from("done yak"),
             "done",
-            &timestamp,
-            &author,
+            &ts(),
+            &author(),
             &[],
             &[],
             &[],
-            area,
-            &mut buf,
         );
 
-        // Check that the 'd' in "done yak" (the name) has CROSSED_OUT
+        let buf = terminal.backend().buffer();
         let mut found_strikethrough = false;
-        for x in 0..area.width {
+        for x in 0..buf.area.width {
             let cell = &buf[(x, 1)];
-            if cell.symbol() == "d" {
-                let next = &buf[(x + 1, 1)];
-                if next.symbol() == "o" {
-                    // Check for the name "done yak", not the state "done"
-                    let next2 = &buf[(x + 2, 1)];
-                    let next3 = &buf[(x + 3, 1)];
-                    if next2.symbol() == "n" && next3.symbol() == "e" {
-                        // Could be the name or the state; check if CROSSED_OUT
-                        if cell.modifier.contains(Modifier::CROSSED_OUT) {
-                            found_strikethrough = true;
-                            break;
-                        }
-                    }
-                }
+            if cell.symbol() == "d"
+                && buf[(x + 1, 1)].symbol() == "o"
+                && cell.modifier.contains(Modifier::CROSSED_OUT)
+            {
+                found_strikethrough = true;
+                break;
             }
         }
         assert!(
             found_strikethrough,
             "Expected CROSSED_OUT modifier on done yak name"
+        );
+    }
+
+    #[test]
+    fn header_box_height_no_ancestors_no_children_no_fields() {
+        assert_eq!(TuiDisplay::header_box_height(&[], &[], &[]), 3);
+    }
+
+    #[test]
+    fn header_box_height_with_ancestors() {
+        let ancestors = vec![Name::from("parent")];
+        assert_eq!(TuiDisplay::header_box_height(&ancestors, &[], &[]), 4);
+    }
+
+    #[test]
+    fn header_box_height_with_children_and_fields() {
+        let children = vec![
+            (Name::from("a"), "todo".to_string()),
+            (Name::from("b"), "wip".to_string()),
+        ];
+        let fields = vec![("key".to_string(), "val".to_string())];
+        assert_eq!(
+            TuiDisplay::header_box_height(&[], &children, &fields),
+            3 + 2 + 1 + 1 // base + children + divider + field
         );
     }
 }
