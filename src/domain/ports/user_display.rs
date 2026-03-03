@@ -17,4 +17,9 @@ pub trait DisplayPort {
 
     /// Display a user-facing message (hint, success, info, warning)
     fn message(&self, msg: &Message);
+
+    /// Display a progress indicator (spinner with message).
+    /// Called repeatedly during long operations.
+    /// Default impl does nothing (non-TUI adapters don't need spinners).
+    fn progress(&self, _message: &str) {}
 }

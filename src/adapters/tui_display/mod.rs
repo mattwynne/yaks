@@ -464,6 +464,21 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
     fn message(&self, msg: &Message) {
         self.fallback.message(msg);
     }
+
+    fn progress(&self, message: &str) {
+        use std::io::Write;
+        // Simple approach: overwrite the current line with a spinner frame
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let idx = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| (d.as_millis() / 80) as usize % frames.len())
+            .unwrap_or(0);
+        let frame = frames[idx];
+
+        // Use carriage return to overwrite the line
+        print!("\r\x1b[2K\x1b[33m{frame}\x1b[0m {message}");
+        let _ = io::stdout().flush();
+    }
 }
 
 /// Extract text content from a ratatui Buffer, trimming trailing
