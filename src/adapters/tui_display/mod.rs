@@ -40,6 +40,17 @@ impl TuiDisplay {
         }
     }
 
+    pub fn with_writer(writer: Box<dyn std::io::Write + Send>) -> Self {
+        use crate::adapters::user_display::ConsoleDisplayOptions;
+        let width = terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .unwrap_or(80);
+        Self {
+            width,
+            fallback: ConsoleDisplay::new(writer, ConsoleDisplayOptions { color: true, width }),
+        }
+    }
+
     #[allow(dead_code)]
     fn header_box_height(
         ancestors: &[Name],

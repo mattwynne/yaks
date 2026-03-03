@@ -26,7 +26,6 @@ impl JsonDisplay {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
     pub fn with_writer(writer: Box<dyn Write + Send>) -> Self {
         Self {
             writer: Mutex::new(writer),

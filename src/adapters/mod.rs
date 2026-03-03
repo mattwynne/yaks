@@ -1,6 +1,7 @@
 // Adapters - implementations of port traits for specific technologies
 
 pub mod authentication;
+pub mod broken_pipe_guard;
 pub mod event_store;
 pub mod json_display;
 pub mod spinner;

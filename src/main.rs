@@ -3,6 +3,7 @@ use clap::{CommandFactory, Parser};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
+use yx::adapters::broken_pipe_guard::BrokenPipeGuard;
 use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::json_display::JsonDisplay;
@@ -578,12 +579,26 @@ fn main() -> Result<()> {
     // Route display adapter
     let is_tty = std::io::stdout().is_terminal();
     let no_color = std::env::var_os("NO_COLOR").is_some();
+
+    // Wrap stdout with BrokenPipeGuard to prevent crashes when piped to pagers that quit early
+    let guarded_stdout = Box::new(BrokenPipeGuard::new(std::io::stdout()));
+
     let display: Box<dyn yx::domain::ports::DisplayPort> = if wants_json {
-        Box::new(JsonDisplay::new())
+        Box::new(JsonDisplay::with_writer(guarded_stdout))
     } else if is_tty && !no_color {
-        Box::new(TuiDisplay::stdout())
+        Box::new(TuiDisplay::with_writer(guarded_stdout))
     } else {
-        Box::new(ConsoleDisplay::stdout())
+        use yx::adapters::user_display::ConsoleDisplayOptions;
+        let width = terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .unwrap_or(80);
+        Box::new(ConsoleDisplay::new(
+            guarded_stdout,
+            ConsoleDisplayOptions {
+                color: false,
+                width,
+            },
+        ))
     };
     let input = ConsoleInput;
 
