@@ -3,6 +3,7 @@
 pub mod authentication;
 pub mod event_store;
 pub mod json_display;
+pub mod spinner;
 pub mod tui_display;
 pub mod user_display;
 pub mod user_input;

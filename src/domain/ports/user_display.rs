@@ -18,8 +18,20 @@ pub trait DisplayPort {
     /// Display a user-facing message (hint, success, info, warning)
     fn message(&self, msg: &Message);
 
-    /// Display a progress indicator (spinner with message).
-    /// Called repeatedly during long operations.
-    /// Default impl does nothing (non-TUI adapters don't need spinners).
-    fn progress(&self, _message: &str) {}
+    /// Start a progress spinner with the given message.
+    /// Returns a handle that stops the spinner when dropped.
+    /// Default impl returns a no-op handle.
+    fn start_progress(&self, _message: &str) -> Box<dyn ProgressHandle> {
+        Box::new(NoOpProgressHandle)
+    }
+}
+
+/// Handle to a running progress indicator. Stops on drop.
+pub trait ProgressHandle {}
+
+/// No-op progress handle for adapters that don't support spinners.
+struct NoOpProgressHandle;
+impl ProgressHandle for NoOpProgressHandle {}
+impl Drop for NoOpProgressHandle {
+    fn drop(&mut self) {}
 }

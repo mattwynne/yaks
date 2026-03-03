@@ -12,6 +12,7 @@ pub use event_listener::EventListener;
 pub use event_store::EventStore;
 pub use event_store::EventStoreReader;
 pub use user_display::DisplayPort;
+pub use user_display::ProgressHandle;
 pub use user_input::InputPort;
 pub use yak_store::ReadYakStore;
 pub use yak_store::WriteYakStore;

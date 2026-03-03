@@ -465,19 +465,12 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
         self.fallback.message(msg);
     }
 
-    fn progress(&self, message: &str) {
-        use std::io::Write;
-        // Simple approach: overwrite the current line with a spinner frame
-        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let idx = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| (d.as_millis() / 80) as usize % frames.len())
-            .unwrap_or(0);
-        let frame = frames[idx];
-
-        // Use carriage return to overwrite the line
-        print!("\r\x1b[2K\x1b[33m{frame}\x1b[0m {message}");
-        let _ = io::stdout().flush();
+    fn start_progress(&self, message: &str) -> Box<dyn crate::domain::ports::ProgressHandle> {
+        let handle = crate::adapters::spinner::SpinnerHandle::start(
+            message.to_string(),
+            Box::new(io::stdout()),
+        );
+        Box::new(handle)
     }
 }
 

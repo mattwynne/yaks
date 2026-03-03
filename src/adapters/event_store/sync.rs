@@ -51,8 +51,9 @@ pub(super) fn sync_with_remote(
         .to_path_buf();
 
     // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
-    output.progress("Fetching from origin...");
+    let _spinner = output.start_progress("Fetching from origin...");
     fetch_peer_ref(&repo_path)?;
+    drop(_spinner);
 
     // 2. Check peer schema version and migrate if needed
     let peer_location = super::migration::EventStoreLocation {
@@ -79,7 +80,7 @@ pub(super) fn sync_with_remote(
     super::migration::Migrator::for_current_version().ensure_schema(&peer_location)?;
 
     // 3. Get local and peer events
-    output.progress("Merging events...");
+    let _spinner = output.start_progress("Merging events...");
     let local_events = EventStore::get_all_events(store)?;
     let peer = GitEventStore::with_ref_name(&repo_path, "refs/notes/yaks-peer")?;
     let peer_events = EventStore::get_all_events(&peer)?;
@@ -110,10 +111,7 @@ pub(super) fn sync_with_remote(
                 .is_some_and(|id| !local_ids.contains(id))
     });
 
-    // Clear progress line
-    use std::io::Write;
-    print!("\r\x1b[2K");
-    let _ = std::io::stdout().flush();
+    drop(_spinner);
 
     output.message(&Message::Info(format!(
         "Pulled {} events, pushed {} events",
@@ -128,7 +126,7 @@ pub(super) fn sync_with_remote(
     }
 
     // 3. Push refs/notes/yaks back to origin
-    output.progress("Pushing to origin...");
+    let _spinner = output.start_progress("Pushing to origin...");
     if store.repo().refname_to_id(store.ref_name()).is_ok() {
         let push_output = std::process::Command::new("git")
             .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
@@ -140,6 +138,8 @@ pub(super) fn sync_with_remote(
             anyhow::bail!("Failed to push to origin: {}", stderr.trim());
         }
     }
+
+    drop(_spinner);
 
     // 4. Clean up the temporary peer ref
     let _ = store
