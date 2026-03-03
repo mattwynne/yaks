@@ -1,5 +1,6 @@
 // Use case: Mark a yak as done (sugar for SetState with state="done")
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, SetState, UseCase};
@@ -24,11 +25,13 @@ impl DoneYak {
             .execute(app)?;
 
         if self.recursive {
-            app.display
-                .success(&format!("Marked '{}' and descendants as done", self.name));
+            app.display.message(&Message::Success(format!(
+                "Marked '{}' and descendants as done",
+                self.name
+            )));
         } else {
             app.display
-                .success(&format!("Marked '{}' as done", self.name));
+                .message(&Message::Success(format!("Marked '{}' as done", self.name)));
         }
 
         Ok(())

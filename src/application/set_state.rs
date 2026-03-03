@@ -1,8 +1,8 @@
 // Use case: Set a yak's state
 
-use anyhow::Result;
-
 use crate::domain::slug::YakId;
+use crate::domain::views::Message;
+use anyhow::Result;
 
 use super::{Application, UseCase};
 
@@ -57,8 +57,10 @@ impl SetState {
         })?;
 
         if !self.silent {
-            app.display
-                .success(&format!("Set '{}' state to {}", self.name, self.state));
+            app.display.message(&Message::Success(format!(
+                "Set '{}' state to {}",
+                self.name, self.state
+            )));
         }
 
         Ok(())

@@ -1,6 +1,7 @@
 // Use case: Rename a yak (change name without moving)
 
 use crate::domain::validate_yak_name;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -25,8 +26,10 @@ impl RenameYak {
 
         app.with_yak_map(|yak_map| yak_map.rename_yak(id, self.to.clone()))?;
 
-        app.display
-            .success(&format!("Renamed '{}' to '{}'", self.from, self.to));
+        app.display.message(&Message::Success(format!(
+            "Renamed '{}' to '{}'",
+            self.from, self.to
+        )));
 
         Ok(())
     }

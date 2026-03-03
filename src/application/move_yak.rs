@@ -1,5 +1,6 @@
 // Use case: Move a yak in the hierarchy
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -38,13 +39,15 @@ impl MoveYak {
             MoveTarget::ToRoot => {
                 app.with_yak_map(|yak_map| yak_map.move_yak_to(id, None))?;
                 app.display
-                    .success(&format!("Moved '{}' to root", self.name));
+                    .message(&Message::Success(format!("Moved '{}' to root", self.name)));
             }
             MoveTarget::Under(parent_name) => {
                 let parent_id = app.store.fuzzy_find_yak_id(parent_name)?;
                 app.with_yak_map(|yak_map| yak_map.move_yak_to(id, Some(parent_id)))?;
-                app.display
-                    .success(&format!("Moved '{}' under '{}'", self.name, parent_name));
+                app.display.message(&Message::Success(format!(
+                    "Moved '{}' under '{}'",
+                    self.name, parent_name
+                )));
             }
         }
 

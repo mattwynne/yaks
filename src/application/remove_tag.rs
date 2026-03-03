@@ -1,6 +1,7 @@
 // Use case: Remove tags from a yak
 
 use crate::domain::field::TAGS_FIELD;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -35,8 +36,10 @@ impl RemoveTag {
             yak_map.update_field(id.clone(), TAGS_FIELD.to_string(), content)
         })?;
 
-        app.display
-            .success(&format!("Removed tag from '{}'", self.name));
+        app.display.message(&Message::Success(format!(
+            "Removed tag from '{}'",
+            self.name
+        )));
 
         Ok(())
     }

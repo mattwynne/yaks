@@ -2,16 +2,18 @@
 
 use crate::adapters::user_display::ConsoleDisplay;
 use crate::domain::event_metadata::{Author, Timestamp};
-use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
 use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
-use ratatui::backend::{Backend, CrosstermBackend};
+use ratatui::backend::Backend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::{Terminal, TerminalOptions, Viewport};
+use ratatui::Terminal;
 use std::io;
+
+#[cfg(test)]
+use ratatui::{TerminalOptions, Viewport};
 
 pub struct TuiDisplay {
     width: usize,
@@ -41,6 +43,7 @@ impl TuiDisplay {
         }
     }
 
+    #[allow(dead_code)]
     fn header_box_height(
         ancestors: &[Name],
         children: &[(Name, String)],
@@ -64,6 +67,7 @@ impl TuiDisplay {
 
     /// Draw the header box through a Terminal, handling draw + cursor
     /// cleanup. Generic over backend so tests can use TestBackend.
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     fn draw_header_box<B: Backend>(
         &self,
@@ -96,6 +100,7 @@ impl TuiDisplay {
     }
 
     /// Render the header box into a ratatui Buffer for the given area.
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     fn render_header_box(
         &self,
@@ -258,101 +263,6 @@ impl TuiDisplay {
 impl crate::domain::ports::DisplayPort for TuiDisplay {
     fn width(&self) -> usize {
         self.width
-    }
-
-    fn display_header_box(
-        &self,
-        ancestors: &[Name],
-        name: &Name,
-        state: &str,
-        created_at: &Timestamp,
-        created_by: &Author,
-        children: &[(Name, String)],
-        fields: &[(String, String)],
-        tags: &[String],
-    ) {
-        let height = Self::header_box_height(ancestors, children, fields);
-
-        let backend = CrosstermBackend::new(io::stdout());
-        let Ok(mut terminal) = Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(height),
-            },
-        ) else {
-            return;
-        };
-
-        self.draw_header_box(
-            &mut terminal,
-            ancestors,
-            name,
-            state,
-            created_at,
-            created_by,
-            children,
-            fields,
-            tags,
-        );
-        println!();
-    }
-
-    // --- Methods not yet converted to ratatui delegate to ConsoleDisplay ---
-
-    fn display_hint(&self, message: &str) {
-        self.fallback.display_hint(message);
-    }
-
-    fn success(&self, message: &str) {
-        self.fallback.success(message);
-    }
-
-    fn info(&self, message: &str) {
-        self.fallback.info(message);
-    }
-
-    fn warn(&self, message: &str) {
-        self.fallback.warn(message);
-    }
-
-    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str, tags: &[String]) {
-        self.fallback.display_yak_pretty(prefix, name, state, tags);
-    }
-
-    fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str, tags: &[String]) {
-        self.fallback.display_yak_markdown(depth, name, state, tags);
-    }
-
-    fn display_breadcrumb(&self, ancestors: &[Name]) {
-        self.fallback.display_breadcrumb(ancestors);
-    }
-
-    fn display_section_rule(&self, label: &str) {
-        self.fallback.display_section_rule(label);
-    }
-
-    fn display_closing_rule(&self) {
-        self.fallback.display_closing_rule();
-    }
-
-    fn display_context(&self, context: &str) {
-        self.fallback.display_context(context);
-    }
-
-    fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author) {
-        self.fallback
-            .display_metadata_line(state, created_at, created_by);
-    }
-
-    fn log_entry(
-        &self,
-        narrative: &[NarrativeSpan],
-        timestamp: &str,
-        event_id: &str,
-        commit_sha: Option<&str>,
-    ) {
-        self.fallback
-            .log_entry(narrative, timestamp, event_id, commit_sha);
     }
 
     fn show_yak(&self, view: &YakDetailView) {

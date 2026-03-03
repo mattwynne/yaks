@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::slug::Name;
+use crate::domain::views::Message;
 use crate::domain::YakEvent;
 
 #[allow(clippy::cognitive_complexity)]
@@ -179,10 +180,10 @@ impl EventStore for InMemoryEventStore {
         *self.events.lock().unwrap() = merge.events.clone();
         *peer_events_arc.lock().unwrap() = merge.events;
 
-        output.info(&format!(
+        output.message(&Message::Info(format!(
             "Pulled {} events, pushed {} events",
             merge.pulled, merge.pushed
-        ));
+        )));
 
         Ok(())
     }

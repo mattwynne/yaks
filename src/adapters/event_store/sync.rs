@@ -7,6 +7,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use crate::domain::ports::{DisplayPort, EventStore};
+use crate::domain::views::Message;
 use crate::domain::YakEvent;
 
 use super::git::GitEventStore;
@@ -107,16 +108,16 @@ pub(super) fn sync_with_remote(
                 .is_some_and(|id| !local_ids.contains(id))
     });
 
-    output.info(&format!(
+    output.message(&Message::Info(format!(
         "Pulled {} events, pushed {} events",
         merge.pulled, merge.pushed
-    ));
+    )));
 
     if let Some(ce) = received_compaction {
-        output.info(&format!(
+        output.message(&Message::Info(format!(
             "Received compaction from {}",
             ce.metadata().author.name
-        ));
+        )));
     }
 
     // 3. Push refs/notes/yaks back to origin
