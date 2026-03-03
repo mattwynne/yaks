@@ -246,27 +246,78 @@ pub(super) fn build_tree_from_event(
     }
 }
 
-/// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
-#[allow(clippy::cognitive_complexity)]
-pub(super) fn read_snapshots_from_tree(
-    repo: &Repository,
-    tree: &git2::Tree,
-) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
-    use crate::domain::field::RESERVED_FIELDS;
-    use crate::domain::slug::{Name, YakId};
-    use crate::domain::yak_snapshot::YakSnapshot;
-    use crate::domain::YakState;
-    use std::collections::{HashMap, HashSet};
-
-    struct YakData {
-        id: String,
-        name_str: String,
-        subtree_id: git2::Oid,
-        parent_id_str: Option<String>,
+/// Read a blob entry from a subtree as a trimmed string.
+fn read_blob_str(repo: &Repository, subtree: &git2::Tree, name: &str) -> Result<Option<String>> {
+    match subtree.get_name(name) {
+        Some(entry) => {
+            let blob = repo.find_blob(entry.id())?;
+            Ok(Some(
+                std::str::from_utf8(blob.content())?.trim().to_string(),
+            ))
+        }
+        None => Ok(None),
     }
+}
 
-    let mut yak_data: Vec<YakData> = Vec::new();
+/// Parse `.created.json` metadata from a yak subtree, returning defaults on any error.
+fn read_created_metadata(repo: &Repository, subtree: &git2::Tree) -> (Author, Timestamp) {
+    let parsed = (|| -> Option<(Author, Timestamp)> {
+        let entry = subtree.get_name(".created.json")?;
+        let blob = repo.find_blob(entry.id()).ok()?;
+        let content = std::str::from_utf8(blob.content()).ok()?;
+        let json: serde_json::Value = serde_json::from_str(content).ok()?;
+        Some((
+            Author {
+                name: json["created_by"]["name"]
+                    .as_str()
+                    .unwrap_or("unknown")
+                    .to_string(),
+                email: json["created_by"]["email"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
+            },
+            Timestamp(json["created_at"].as_i64().unwrap_or(0)),
+        ))
+    })();
+    parsed.unwrap_or_else(|| (Author::unknown(), Timestamp::zero()))
+}
 
+/// Read custom (non-reserved) fields from a yak subtree.
+fn read_custom_fields(
+    repo: &Repository,
+    subtree: &git2::Tree,
+) -> Result<std::collections::HashMap<String, String>> {
+    use crate::domain::field::RESERVED_FIELDS;
+    let mut fields = std::collections::HashMap::new();
+    for entry in subtree.iter() {
+        if entry.kind() != Some(git2::ObjectType::Blob) {
+            continue;
+        }
+        let name = match entry.name() {
+            Some(n) => n,
+            None => continue,
+        };
+        if RESERVED_FIELDS.contains(&name) {
+            continue;
+        }
+        let blob = repo.find_blob(entry.id())?;
+        let content = std::str::from_utf8(blob.content())?;
+        fields.insert(name.to_string(), content.to_string());
+    }
+    Ok(fields)
+}
+
+struct YakData {
+    id: String,
+    name_str: String,
+    subtree_id: git2::Oid,
+    parent_id_str: Option<String>,
+}
+
+/// Collect raw yak data from the root tree entries.
+fn collect_yak_entries(repo: &Repository, tree: &git2::Tree) -> Result<Vec<YakData>> {
+    let mut yak_data = Vec::new();
     for entry in tree.iter() {
         if entry.kind() != Some(git2::ObjectType::Tree) {
             continue;
@@ -275,29 +326,15 @@ pub(super) fn read_snapshots_from_tree(
             Some(n) => n.to_string(),
             None => continue,
         };
-
         let subtree = repo.find_tree(entry.id())?;
-
         let is_yak =
             subtree.get_name(".state").is_some() || subtree.get_name(".context.md").is_some();
         if !is_yak {
             continue;
         }
-
-        let name_str = if let Some(name_entry) = subtree.get_name(".name") {
-            let name_blob = repo.find_blob(name_entry.id())?;
-            std::str::from_utf8(name_blob.content())?.trim().to_string()
-        } else {
-            entry_name.clone()
-        };
-
-        let parent_id_str = if let Some(pid_entry) = subtree.get_name(".parent_id") {
-            let pid_blob = repo.find_blob(pid_entry.id())?;
-            Some(std::str::from_utf8(pid_blob.content())?.trim().to_string())
-        } else {
-            None
-        };
-
+        let name_str =
+            read_blob_str(repo, &subtree, ".name")?.unwrap_or_else(|| entry_name.clone());
+        let parent_id_str = read_blob_str(repo, &subtree, ".parent_id")?;
         yak_data.push(YakData {
             id: entry_name,
             name_str,
@@ -305,8 +342,12 @@ pub(super) fn read_snapshots_from_tree(
             parent_id_str,
         });
     }
+    Ok(yak_data)
+}
 
-    // Topological sort: parents before children
+/// Topological sort: emit parents before children, append orphans at end.
+fn topological_sort(yak_data: Vec<YakData>) -> Vec<YakData> {
+    use std::collections::HashSet;
     let mut emitted: HashSet<String> = HashSet::new();
     let mut remaining = yak_data;
     let mut ordered: Vec<YakData> = Vec::new();
@@ -334,98 +375,33 @@ pub(super) fn read_snapshots_from_tree(
             break;
         }
     }
+    ordered
+}
+
+/// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
+pub(super) fn read_snapshots_from_tree(
+    repo: &Repository,
+    tree: &git2::Tree,
+) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
+    use crate::domain::slug::{Name, YakId};
+    use crate::domain::yak_snapshot::YakSnapshot;
+    use crate::domain::YakState;
+
+    let yak_data = collect_yak_entries(repo, tree)?;
+    let ordered = topological_sort(yak_data);
 
     let mut snapshots = Vec::new();
-
     for data in &ordered {
         let subtree = repo.find_tree(data.subtree_id)?;
+        let (created_by, created_at) = read_created_metadata(repo, &subtree);
 
-        // Read .created.json if present
-        let meta_oid = subtree.get_name(".created.json").map(|e| e.id());
-        let (created_by, created_at) = if let Some(meta_id) = meta_oid {
-            if let Ok(meta_blob) = repo.find_blob(meta_id) {
-                if let Ok(content) = std::str::from_utf8(meta_blob.content()) {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-                        use crate::domain::event_metadata::{Author, Timestamp};
-                        (
-                            Author {
-                                name: json["created_by"]["name"]
-                                    .as_str()
-                                    .unwrap_or("unknown")
-                                    .to_string(),
-                                email: json["created_by"]["email"]
-                                    .as_str()
-                                    .unwrap_or("")
-                                    .to_string(),
-                            },
-                            Timestamp(json["created_at"].as_i64().unwrap_or(0)),
-                        )
-                    } else {
-                        (
-                            crate::domain::event_metadata::Author::unknown(),
-                            crate::domain::event_metadata::Timestamp::zero(),
-                        )
-                    }
-                } else {
-                    (
-                        crate::domain::event_metadata::Author::unknown(),
-                        crate::domain::event_metadata::Timestamp::zero(),
-                    )
-                }
-            } else {
-                (
-                    crate::domain::event_metadata::Author::unknown(),
-                    crate::domain::event_metadata::Timestamp::zero(),
-                )
-            }
-        } else {
-            (
-                crate::domain::event_metadata::Author::unknown(),
-                crate::domain::event_metadata::Timestamp::zero(),
-            )
-        };
+        let state: YakState = read_blob_str(repo, &subtree, ".state")?
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(YakState::Todo);
 
-        // State
-        let state: YakState = if let Some(state_entry) = subtree.get_name(".state") {
-            let state_blob = repo.find_blob(state_entry.id())?;
-            std::str::from_utf8(state_blob.content())?
-                .trim()
-                .parse()
-                .unwrap_or(YakState::Todo)
-        } else {
-            YakState::Todo
-        };
+        let context = read_blob_str(repo, &subtree, ".context.md")?.filter(|s| !s.is_empty());
 
-        // Context
-        let context = if let Some(context_entry) = subtree.get_name(".context.md") {
-            let context_blob = repo.find_blob(context_entry.id())?;
-            let content = std::str::from_utf8(context_blob.content())?;
-            if content.is_empty() {
-                None
-            } else {
-                Some(content.to_string())
-            }
-        } else {
-            None
-        };
-
-        // Custom fields
-        let mut fields = HashMap::new();
-        for field_entry in subtree.iter() {
-            if field_entry.kind() != Some(git2::ObjectType::Blob) {
-                continue;
-            }
-            let field_name = match field_entry.name() {
-                Some(n) => n,
-                None => continue,
-            };
-            if RESERVED_FIELDS.contains(&field_name) {
-                continue;
-            }
-            let field_blob = repo.find_blob(field_entry.id())?;
-            let content = std::str::from_utf8(field_blob.content())?;
-            fields.insert(field_name.to_string(), content.to_string());
-        }
+        let fields = read_custom_fields(repo, &subtree)?;
 
         snapshots.push(YakSnapshot {
             id: YakId::from(data.id.as_str()),

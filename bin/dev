@@ -141,6 +141,10 @@ lint() {
 # @cmd Run code complexity analysis (rust-code-analysis)
 # @alias cx
 complexity() {
+  # Thresholds — tighten these over time as code is refactored
+  local max_cognitive=60
+  local max_cyclomatic=40
+
   local metrics_output
   metrics_output=$(rust-code-analysis-cli --metrics -p src/ --output-format json 2>&1)
   local metrics_exit=$?
@@ -153,6 +157,20 @@ complexity() {
   file_count=$(echo "$metrics_output" | wc -l | tr -d ' ')
   echo "Files analyzed: $file_count"
   echo ""
+  echo "Complexity thresholds: cognitive ≤ $max_cognitive, cyclomatic ≤ $max_cyclomatic"
+  echo ""
+
+  # Find all functions exceeding thresholds
+  local violations
+  violations=$(echo "$metrics_output" \
+    | jq -rs --argjson max_cog "$max_cognitive" --argjson max_cyc "$max_cyclomatic" '
+      [.[] | .name as $file | .spaces[]? | recurse(.spaces[]?) | select(.kind == "function") |
+        {name: .name, file: $file, cyclomatic: .metrics.cyclomatic.sum, cognitive: .metrics.cognitive.sum, sloc: .metrics.loc.sloc}
+      ] | map(select(.cognitive > $max_cog or .cyclomatic > $max_cyc))
+      | sort_by(-.cognitive) | .[] |
+      "  ❌ \(.file)::\(.name): cognitive=\(.cognitive) cyclomatic=\(.cyclomatic) sloc=\(.sloc)"
+    ')
+
   echo "Top 5 most complex functions (cyclomatic):"
   echo "$metrics_output" \
     | jq -rs '
@@ -162,7 +180,18 @@ complexity() {
       "  \(.file)::\(.name): cyclomatic=\(.cyclomatic) cognitive=\(.cognitive) sloc=\(.sloc)"
     '
   echo ""
-  echo "✓ Code metrics collected (no thresholds enforced)"
+
+  if [ -n "$violations" ]; then
+    echo "Functions exceeding thresholds:"
+    echo "$violations"
+    echo ""
+    local count
+    count=$(echo "$violations" | wc -l | tr -d ' ')
+    echo "❌ $count function(s) exceed complexity thresholds"
+    return 1
+  fi
+
+  echo "✓ All functions within complexity thresholds"
 }
 
 # @cmd Check for unused Cucumber step definitions
