@@ -1,9 +1,11 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
+use yx::adapters::tui_display::TuiDisplay;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
@@ -559,7 +561,15 @@ fn main() -> Result<()> {
     }
 
     // Initialize other adapters
-    let display = ConsoleDisplay::stdout();
+    // Route display: TTY without NO_COLOR -> TuiDisplay (ratatui),
+    // otherwise -> ConsoleDisplay (plain text / ANSI)
+    let is_tty = std::io::stdout().is_terminal();
+    let no_color = std::env::var_os("NO_COLOR").is_some();
+    let display: Box<dyn yx::domain::ports::DisplayPort> = if is_tty && !no_color {
+        Box::new(TuiDisplay::stdout())
+    } else {
+        Box::new(ConsoleDisplay::stdout())
+    };
     let input = ConsoleInput;
 
     let git_event_reader = if let Some(ref root) = repo_root {
@@ -581,7 +591,7 @@ fn main() -> Result<()> {
         event_store.as_mut(),
         &mut event_bus,
         &storage,
-        &display,
+        display.as_ref(),
         &input,
         git_event_reader
             .as_ref()
