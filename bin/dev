@@ -143,7 +143,7 @@ lint() {
 complexity() {
   # Thresholds — tighten these over time as code is refactored
   local max_cognitive=42
-  local max_cyclomatic=40
+  local max_cyclomatic=34
 
   local metrics_output
   metrics_output=$(rust-code-analysis-cli --metrics -p src/ --output-format json 2>&1)

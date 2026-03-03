@@ -330,6 +330,64 @@ fn route_field(
     }
 }
 
+/// Handle tag actions (add, remove, list)
+fn handle_tag_command(handler: &mut impl CommandHandler, action: TagAction) -> Result<()> {
+    match action {
+        TagAction::Add { name, tags } => {
+            let normalized: Vec<String> = tags
+                .iter()
+                .map(|t| normalize_tag(t))
+                .collect::<Result<_>>()?;
+            handler.handle(AddTag::new(&name, normalized))
+        }
+        TagAction::Rm { name, tags } => {
+            let normalized: Vec<String> = tags
+                .iter()
+                .map(|t| normalize_tag(t))
+                .collect::<Result<_>>()?;
+            handler.handle(RemoveTag::new(&name, normalized))
+        }
+        TagAction::List { name } => handler.handle(ListTags::new(&name)),
+    }
+}
+
+/// Handle the Add command with its complex context resolution logic
+#[allow(clippy::too_many_arguments)]
+fn handle_add_command(
+    handler: &mut impl CommandHandler,
+    name: Vec<String>,
+    under: Option<String>,
+    state: Option<String>,
+    context: Option<String>,
+    edit: bool,
+    id: Option<String>,
+    fields: Vec<(String, String)>,
+    stdin: &StdinState,
+) -> Result<()> {
+    let name_str = name.join(" ");
+    let has_explicit_context = context.is_some();
+    // Resolve context: --context flag > --edit (editor) > piped stdin
+    let resolved_context = if has_explicit_context {
+        context
+    } else if edit {
+        // Editor mode — pass no context, let the use case open editor
+        None
+    } else {
+        // Try stdin content
+        stdin.content.clone().filter(|c| !c.trim().is_empty())
+    };
+    let mut use_case = AddYak::new(&name_str)
+        .with_parent(under.as_deref())
+        .with_state(state.as_deref())
+        .with_context(resolved_context.as_deref())
+        .with_id(id.as_deref())
+        .with_edit(edit && !has_explicit_context);
+    for (key, value) in &fields {
+        use_case = use_case.with_field(key, value);
+    }
+    handler.handle(use_case)
+}
+
 fn route_command(
     cmd: Commands,
     handler: &mut impl CommandHandler,
@@ -344,30 +402,9 @@ fn route_command(
             edit,
             id,
             fields,
-        } => {
-            let name_str = name.join(" ");
-            let has_explicit_context = context.is_some();
-            // Resolve context: --context flag > --edit (editor) > piped stdin
-            let resolved_context = if has_explicit_context {
-                context
-            } else if edit {
-                // Editor mode — pass no context, let the use case open editor
-                None
-            } else {
-                // Try stdin content
-                stdin.content.clone().filter(|c| !c.trim().is_empty())
-            };
-            let mut use_case = AddYak::new(&name_str)
-                .with_parent(under.as_deref())
-                .with_state(state.as_deref())
-                .with_context(resolved_context.as_deref())
-                .with_id(id.as_deref())
-                .with_edit(edit && !has_explicit_context);
-            for (key, value) in &fields {
-                use_case = use_case.with_field(key, value);
-            }
-            handler.handle(use_case)
-        }
+        } => handle_add_command(
+            handler, name, under, state, context, edit, id, fields, &stdin,
+        ),
         Commands::List { format, only, tag } => {
             handler.handle(ListYaks::new(&format, only.as_deref(), tag.as_deref()))
         }
@@ -434,23 +471,7 @@ fn route_command(
                 handler.handle(ResetDiskFromGit::new())
             }
         }
-        Commands::Tag { action } => match action {
-            TagAction::Add { name, tags } => {
-                let normalized: Vec<String> = tags
-                    .iter()
-                    .map(|t| normalize_tag(t))
-                    .collect::<Result<_>>()?;
-                handler.handle(AddTag::new(&name, normalized))
-            }
-            TagAction::Rm { name, tags } => {
-                let normalized: Vec<String> = tags
-                    .iter()
-                    .map(|t| normalize_tag(t))
-                    .collect::<Result<_>>()?;
-                handler.handle(RemoveTag::new(&name, normalized))
-            }
-            TagAction::List { name } => handler.handle(ListTags::new(&name)),
-        },
+        Commands::Tag { action } => handle_tag_command(handler, action),
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync => handler.handle(SyncYaks::new()),
         Commands::Log => {
