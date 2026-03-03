@@ -1,6 +1,7 @@
 // Use case: Show a yak field
 
 use crate::domain::validate_field_name_format;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -29,7 +30,7 @@ impl ShowField {
         let content = app.store.read_field(&id, &self.field)?;
 
         // Display just the field content
-        app.display.info(&content);
+        app.display.message(&Message::Info(content));
 
         Ok(())
     }

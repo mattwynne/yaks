@@ -8,6 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use crate::domain::slug::YakId;
@@ -39,7 +40,7 @@ impl UseCase for ResetGitFromDisk {
                 .input
                 .confirm("This will wipe the git event log and rebuild from disk. Continue?")?;
             if !confirmed {
-                app.display.info("Aborted.");
+                app.display.message(&Message::Info("Aborted.".into()));
                 return Ok(());
             }
         }
@@ -71,16 +72,22 @@ impl UseCase for ResetGitFromDisk {
         }
 
         // 5. Report results
+        app.display.message(&Message::Info(format!(
+            "Reset from disk: {} yaks",
+            yak_count
+        )));
+        app.display.message(&Message::Info(String::new()));
         app.display
-            .info(&format!("Reset from disk: {} yaks", yak_count));
-        app.display.info("");
-        app.display.info("To update the remote, run:");
+            .message(&Message::Info("To update the remote, run:".into()));
+        app.display.message(&Message::Info(
+            "  git push origin refs/notes/yaks --force".into(),
+        ));
+        app.display.message(&Message::Info(String::new()));
         app.display
-            .info("  git push origin refs/notes/yaks --force");
-        app.display.info("");
-        app.display.info("Collaborators must then run:");
-        app.display
-            .info("  git fetch origin refs/notes/yaks:refs/notes/yaks --force");
+            .message(&Message::Info("Collaborators must then run:".into()));
+        app.display.message(&Message::Info(
+            "  git fetch origin refs/notes/yaks:refs/notes/yaks --force".into(),
+        ));
         Ok(())
     }
 }

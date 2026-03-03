@@ -1,5 +1,6 @@
 // Use case: Show yak context
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -21,7 +22,7 @@ impl ShowContext {
 
         if let Some(context) = &yak.context {
             if !context.is_empty() {
-                app.display.info(context);
+                app.display.message(&Message::Info(context.clone()));
             }
         }
 

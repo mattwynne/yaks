@@ -1,5 +1,6 @@
 // Use case: Start a yak (sugar for SetState with state="wip")
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, SetState, UseCase};
@@ -24,10 +25,13 @@ impl StartYak {
             .execute(app)?;
 
         if self.recursive {
-            app.display
-                .success(&format!("Started '{}' and descendants", self.name));
+            app.display.message(&Message::Success(format!(
+                "Started '{}' and descendants",
+                self.name
+            )));
         } else {
-            app.display.success(&format!("Started '{}'", self.name));
+            app.display
+                .message(&Message::Success(format!("Started '{}'", self.name)));
         }
 
         Ok(())

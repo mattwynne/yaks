@@ -1,6 +1,7 @@
 // Use case: Add tags to a yak
 
 use crate::domain::field::TAGS_FIELD;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -41,7 +42,8 @@ impl AddTag {
             yak_map.update_field(id.clone(), TAGS_FIELD.to_string(), content)
         })?;
 
-        app.display.success(&format!("Tagged '{}'", self.name));
+        app.display
+            .message(&Message::Success(format!("Tagged '{}'", self.name)));
 
         Ok(())
     }

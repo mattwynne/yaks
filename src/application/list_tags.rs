@@ -2,6 +2,7 @@
 
 use crate::domain::field::TAGS_FIELD;
 use crate::domain::format_tag;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -25,7 +26,7 @@ impl ListTags {
         let tags: Vec<&str> = existing.lines().filter(|l| !l.is_empty()).collect();
 
         for tag in tags {
-            app.display.info(&format_tag(tag));
+            app.display.message(&Message::Info(format_tag(tag)));
         }
 
         Ok(())

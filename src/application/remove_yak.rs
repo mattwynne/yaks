@@ -1,8 +1,8 @@
 // Use case: Remove a yak
 
-use anyhow::Result;
-
 use crate::domain::slug::YakId;
+use crate::domain::views::Message;
+use anyhow::Result;
 
 use super::{Application, UseCase};
 
@@ -45,7 +45,8 @@ impl RemoveYak {
             Ok(())
         })?;
 
-        app.display.success(&format!("Removed '{}'", self.name));
+        app.display
+            .message(&Message::Success(format!("Removed '{}'", self.name)));
 
         Ok(())
     }

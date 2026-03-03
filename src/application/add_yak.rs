@@ -3,6 +3,7 @@
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::YakId;
 use crate::domain::validate_yak_name;
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -140,7 +141,7 @@ impl AddYak {
                 self.fields.clone(),
             )
         })?;
-        app.display.info(id.as_str());
+        app.display.message(&Message::Info(id.as_str().to_string()));
         Ok(())
     }
 }

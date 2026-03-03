@@ -1,5 +1,6 @@
 // Use case: Remove all done yaks
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -28,10 +29,11 @@ impl PruneYaks {
         let pruned = before_count - after_count;
 
         if pruned == 0 {
-            app.display.success("No done yaks to prune");
+            app.display
+                .message(&Message::Success("No done yaks to prune".into()));
         } else {
             app.display
-                .success(&format!("Pruned {} done yak(s)", pruned));
+                .message(&Message::Success(format!("Pruned {} done yak(s)", pruned)));
         }
 
         Ok(())

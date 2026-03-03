@@ -1,5 +1,6 @@
 // CompactEvents use case - compacts the event stream into a snapshot
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -30,7 +31,8 @@ impl UseCase for CompactEvents {
         match app.sync_events() {
             Ok(()) => {}
             Err(e) => {
-                app.display.warn(&format!("sync failed: {}", e));
+                app.display
+                    .message(&Message::Warn(format!("sync failed: {}", e)));
             }
         }
 
@@ -55,7 +57,8 @@ impl UseCase for CompactEvents {
         app.event_bus.rebuild(&all_events)?;
 
         // 5. Report success
-        app.display.info("Compacted event stream.");
+        app.display
+            .message(&Message::Info("Compacted event stream.".into()));
 
         Ok(())
     }

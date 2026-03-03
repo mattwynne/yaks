@@ -1,5 +1,6 @@
 // GenerateCompletions use case - generates shell completion suggestions
 
+use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::completions::complete_with_state;
@@ -31,7 +32,7 @@ impl UseCase for GenerateCompletions {
         let results = complete_with_state(&word_refs, &yaks_with_state);
 
         for result in results {
-            app.display.info(&result);
+            app.display.message(&Message::Info(result));
         }
 
         Ok(())
