@@ -56,7 +56,38 @@ No exceptions:
 
 ## The Approach Pattern
 
-### Core Loop (ONE yak at a time)
+### Phase 1: Scope the Goal (BEFORE creating child yaks)
+
+After creating the top-level goal yak, **have a conversation to agree
+scope before going deeper.** Don't start adding children yet.
+
+1. **Add the goal yak** and show the map
+2. **Summarise your understanding** of the goal back to the human
+3. **Present candidate areas** you've identified (if any), but as
+   a conversation — NOT as yaks yet
+4. **Ask the human to pick** what's in scope for now. Use
+   AskUserQuestion or just ask directly.
+5. **Only after agreement**, start the discovery loop on the
+   agreed scope
+
+This prevents runaway mapping where you create yaks for everything
+you can think of. The human decides what matters now.
+
+**Example:**
+```
+I've created the goal yak. Before I start mapping blockers, let me
+check scope with you.
+
+From the research, I can see several areas where this could apply:
+- Area A (quick win)
+- Area B (medium effort, high impact)
+- Area C (ambitious stretch goal)
+
+Which of these do you want to map out now? We can always add the
+others later.
+```
+
+### Phase 2: Discovery Loop (ONE yak at a time)
 
 ```
 1. Add ONE yak
@@ -68,11 +99,9 @@ No exceptions:
 
 ### Step-by-Step Process
 
-**1. Start with the Goal**
-```bash
-yx add sync
-yx ls              # Always show after adding
-```
+**1. Start with the Agreed Scope**
+
+Only create child yaks for areas the human has agreed to explore.
 
 **2. Approach It (Don't Decompose)**
 
@@ -307,6 +336,22 @@ yx add add ci workflow
 yx add setup local dev lint --under "add ci workflow"
 ```
 
+### Skipping the Scope Conversation
+```bash
+# WRONG: Immediately creating yaks for every idea
+yx add feature A --under goal
+yx add feature B --under goal
+yx add feature C --under goal
+yx add feature D --under goal
+# You never asked the human what they actually want!
+
+# RIGHT: Create goal, discuss scope, then map agreed areas
+yx add goal
+# "I can see areas A, B, C, D. Which should we focus on?"
+# Human: "Let's start with B"
+yx add feature B --under goal
+```
+
 ### Other Red Flags
 
 - Adding multiple yaks without `yx ls` between them (Iron Law!)
@@ -317,6 +362,7 @@ yx add setup local dev lint --under "add ci workflow"
 - Nesting by "feels like subtask" instead of "blocks the parent"
 - Exploring 3+ levels deep before adding context to parents
 - Vague definitions of done ("make it work", "add tests")
+- Creating child yaks without agreeing scope first (scope creep!)
 
 **If you catch yourself doing these, stop and restart with approach-first.**
 
