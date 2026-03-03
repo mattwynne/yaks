@@ -3,7 +3,9 @@ pub mod relative_time;
 
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::narrative::NarrativeSpan;
+use crate::domain::ports::DisplayPort;
 use crate::domain::slug::Name;
+use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeNode, YakTreeView};
 use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
 
@@ -48,6 +50,27 @@ impl ConsoleDisplay {
                 .collect()
         } else {
             crate::domain::narrative::to_plain_text(narrative)
+        }
+    }
+
+    /// Helper to recursively render tree nodes
+    fn render_tree_nodes(&self, nodes: &[YakTreeNode], format: &str) {
+        for node in nodes {
+            match format {
+                "plain" => self.info(&node.full_path),
+                "ids" => self.info(&node.id),
+                "pretty" => {
+                    let node_prefix = format!(" {}{}", node.prefix, node.connector);
+                    let name_ref = Name::from(node.name.as_str());
+                    self.display_yak_pretty(&node_prefix, &name_ref, &node.state, &node.tags);
+                }
+                _ => {
+                    // markdown
+                    let name_ref = Name::from(node.name.as_str());
+                    self.display_yak_markdown(node.depth, &name_ref, &node.state, &node.tags);
+                }
+            }
+            self.render_tree_nodes(&node.children, format);
         }
     }
 }
@@ -452,6 +475,274 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             writeln!(out, "{timestamp}").unwrap();
             writeln!(out, "event: {event_id}{sha_part}").unwrap();
             writeln!(out, "{rule}").unwrap();
+        }
+    }
+
+    fn message(&self, msg: &Message) {
+        match msg {
+            Message::Hint(s) => self.display_hint(s),
+            Message::Success(s) => self.success(s),
+            Message::Info(s) => self.info(s),
+            Message::Warn(s) => self.warn(s),
+        }
+    }
+
+    #[allow(clippy::cognitive_complexity)]
+    fn show_yak(&self, view: &YakDetailView) {
+        // Render header box
+        {
+            let mut out = self.output.lock().unwrap();
+            let color = self.options.color;
+            let state = view.state.as_str();
+            let name = &view.name;
+
+            let indicator = match state {
+                "wip" | "done" => "●",
+                _ => "○",
+            };
+
+            // Breadcrumb line
+            let breadcrumb = if view.breadcrumb.is_empty() {
+                None
+            } else {
+                let path = view.breadcrumb.join(" > ");
+                Some(format!("  {path} >   "))
+            };
+
+            let tags_suffix = if view.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" · {}", view.tags.join(" "))
+            };
+            let header_content = format!(
+                "  {indicator} {name} · {state} · {} · {}{tags_suffix}  ",
+                view.created_at, view.created_by
+            );
+            let header_width = header_content.chars().count();
+
+            // Child lines
+            let child_lines: Vec<String> = view
+                .children
+                .iter()
+                .enumerate()
+                .map(|(i, child)| {
+                    let connector = if i == view.children.len() - 1 {
+                        "╰─"
+                    } else {
+                        "├─"
+                    };
+                    let ci = match child.state.as_str() {
+                        "wip" | "done" => "●",
+                        _ => "○",
+                    };
+                    format!("  {connector} {ci} {}  ", child.name)
+                })
+                .collect();
+
+            // Field lines
+            let max_label_width = view
+                .short_fields
+                .iter()
+                .map(|(k, _)| k.chars().count())
+                .max()
+                .unwrap_or(0);
+            let field_lines: Vec<String> = view
+                .short_fields
+                .iter()
+                .map(|(k, v)| {
+                    let pad = max_label_width - k.chars().count();
+                    format!("  {}{}: {}  ", " ".repeat(pad), k, v)
+                })
+                .collect();
+
+            // Inner width
+            let max_content_width = std::iter::once(header_width)
+                .chain(breadcrumb.iter().map(|b| b.chars().count()))
+                .chain(child_lines.iter().map(|l| l.chars().count()))
+                .chain(field_lines.iter().map(|l| l.chars().count()))
+                .max()
+                .unwrap();
+            let inner_width = (self.options.width.saturating_sub(2)).max(max_content_width);
+
+            let top = format!("┌{}┐", "─".repeat(inner_width));
+            let divider = format!("├{}┤", "─".repeat(inner_width));
+            let bottom = format!("└{}┘", "─".repeat(inner_width));
+
+            // Top border
+            if color {
+                writeln!(out, "\x1b[2m{top}\x1b[0m").unwrap();
+            } else {
+                writeln!(out, "{top}").unwrap();
+            }
+
+            // Breadcrumb
+            if let Some(ref bc) = breadcrumb {
+                write_dim_line(&mut out, bc, bc.chars().count(), inner_width, color);
+            }
+
+            // Name line
+            if color {
+                let colored_tags = if view.tags.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "\x1b[90m ·\x1b[0m \x1b[38;5;67m{}\x1b[0m",
+                        view.tags.join(" ")
+                    )
+                };
+                let meta = format!(
+                    "\x1b[90m · {} · {} · {}\x1b[0m{colored_tags}  ",
+                    state, view.created_at, view.created_by
+                );
+                let styled_header = format!("  {}{meta}", style_yak_item(name, state, true));
+                write_box_line(&mut out, &styled_header, header_width, inner_width, true);
+            } else {
+                write_box_line(&mut out, &header_content, header_width, inner_width, false);
+            }
+
+            // Children
+            for (i, child) in view.children.iter().enumerate() {
+                let connector = if i == view.children.len() - 1 {
+                    "╰─"
+                } else {
+                    "├─"
+                };
+                if color {
+                    let styled = format!(
+                        "  {connector} {}  ",
+                        style_yak_item(&child.name, &child.state, true)
+                    );
+                    write_box_line(
+                        &mut out,
+                        &styled,
+                        child_lines[i].chars().count(),
+                        inner_width,
+                        true,
+                    );
+                } else {
+                    write_box_line(
+                        &mut out,
+                        &child_lines[i],
+                        child_lines[i].chars().count(),
+                        inner_width,
+                        false,
+                    );
+                }
+            }
+
+            // Fields
+            if !view.short_fields.is_empty() {
+                if color {
+                    writeln!(out, "\x1b[2m{divider}\x1b[0m").unwrap();
+                } else {
+                    writeln!(out, "{divider}").unwrap();
+                }
+                for line in &field_lines {
+                    write_box_line(&mut out, line, line.chars().count(), inner_width, color);
+                }
+            }
+
+            // Bottom
+            if color {
+                writeln!(out, "\x1b[2m{bottom}\x1b[0m").unwrap();
+            } else {
+                writeln!(out, "{bottom}").unwrap();
+            }
+        }
+
+        // Context
+        if view.has_context {
+            self.info("");
+            self.display_context(view.context.as_ref().unwrap());
+        } else {
+            self.info("");
+            self.display_hint(&format!(
+                "This yak has no context yet. Add some with:\n\n  echo \"Here's the problem...\" | yx context {}",
+                view.name
+            ));
+        }
+
+        // Long fields
+        for (name, value) in &view.long_fields {
+            self.info("");
+            self.display_section_rule(name);
+            let indented: String = value
+                .lines()
+                .map(|l| format!("  {l}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.info(&indented);
+        }
+
+        self.info("");
+        self.display_closing_rule();
+    }
+
+    fn show_list(&self, view: &YakTreeView) {
+        if view.is_empty {
+            match view.format.as_str() {
+                "ids" => self.info(""), // empty output for ids
+                "json" => self.info("[]"),
+                _ => self.info("You have no yaks. Are you done?"),
+            }
+            return;
+        }
+
+        if view.format == "pretty" {
+            self.info("");
+        }
+
+        self.render_tree_nodes(&view.nodes, &view.format);
+
+        if view.format == "pretty" {
+            self.info("");
+        }
+    }
+
+    fn show_log(&self, entries: &[LogEntryView]) {
+        let mut out = self.output.lock().unwrap();
+        let rule: String = "─".repeat(self.options.width);
+        let color = self.options.color;
+
+        for entry in entries {
+            // Render narrative
+            let rendered: String = if color {
+                entry
+                    .narrative
+                    .iter()
+                    .map(|span| {
+                        if span.bold {
+                            format!("\x1b[1m{}\x1b[0m", span.text)
+                        } else {
+                            span.text.clone()
+                        }
+                    })
+                    .collect()
+            } else {
+                entry
+                    .narrative
+                    .iter()
+                    .map(|span| span.text.clone())
+                    .collect()
+            };
+
+            let sha_part = match &entry.commit_sha {
+                Some(sha) if sha.len() >= 7 => format!("  sha: {}", &sha[..7]),
+                Some(sha) => format!("  sha: {sha}"),
+                None => String::new(),
+            };
+
+            if color {
+                writeln!(out, "{rendered}").unwrap();
+                writeln!(out, "\x1b[2m{}\x1b[0m", entry.relative_time).unwrap();
+                writeln!(out, "\x1b[2;90mevent: {}{sha_part}\x1b[0m", entry.event_id).unwrap();
+                writeln!(out, "\x1b[2m{rule}\x1b[0m").unwrap();
+            } else {
+                writeln!(out, "{rendered}").unwrap();
+                writeln!(out, "{}", entry.relative_time).unwrap();
+                writeln!(out, "event: {}{sha_part}", entry.event_id).unwrap();
+                writeln!(out, "{rule}").unwrap();
+            }
         }
     }
 }
