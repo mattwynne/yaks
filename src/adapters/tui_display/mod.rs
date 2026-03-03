@@ -4,6 +4,7 @@ use crate::adapters::user_display::ConsoleDisplay;
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
+use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -352,6 +353,23 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
     ) {
         self.fallback
             .log_entry(narrative, timestamp, event_id, commit_sha);
+    }
+
+    fn show_yak(&self, view: &YakDetailView) {
+        // For now, delegate to the fallback ConsoleDisplay which has show_yak implemented
+        self.fallback.show_yak(view);
+    }
+
+    fn show_list(&self, view: &YakTreeView) {
+        self.fallback.show_list(view);
+    }
+
+    fn show_log(&self, entries: &[LogEntryView]) {
+        self.fallback.show_log(entries);
+    }
+
+    fn message(&self, msg: &Message) {
+        self.fallback.message(msg);
     }
 }
 
