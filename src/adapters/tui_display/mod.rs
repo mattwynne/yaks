@@ -1,5 +1,6 @@
 // TUI adapter - implementation using ratatui for rich terminal output
 
+use crate::adapters::user_display::ConsoleDisplay;
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::narrative::NarrativeSpan;
 use crate::domain::slug::Name;
@@ -13,18 +14,30 @@ use std::io;
 
 pub struct TuiDisplay {
     width: usize,
+    /// Fallback for methods not yet converted to ratatui.
+    fallback: ConsoleDisplay,
 }
 
 impl TuiDisplay {
     pub fn new(width: usize) -> Self {
-        Self { width }
+        use crate::adapters::user_display::ConsoleDisplayOptions;
+        Self {
+            width,
+            fallback: ConsoleDisplay::new(
+                Box::new(io::stdout()),
+                ConsoleDisplayOptions { color: true, width },
+            ),
+        }
     }
 
     pub fn stdout() -> Self {
         let width = terminal_size::terminal_size()
             .map(|(w, _)| w.0 as usize)
             .unwrap_or(80);
-        Self { width }
+        Self {
+            width,
+            fallback: ConsoleDisplay::stdout(),
+        }
     }
 
     fn header_box_height(
@@ -283,83 +296,51 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
         println!();
     }
 
-    // --- Stub implementations for remaining DisplayPort methods ---
-    // These delegate to simple stdout writes. They don't need ratatui yet.
+    // --- Methods not yet converted to ratatui delegate to ConsoleDisplay ---
 
     fn display_hint(&self, message: &str) {
-        for line in message.lines() {
-            println!("  {line}");
-        }
+        self.fallback.display_hint(message);
     }
 
     fn success(&self, message: &str) {
-        println!("{message}");
+        self.fallback.success(message);
     }
 
     fn info(&self, message: &str) {
-        println!("{message}");
+        self.fallback.info(message);
     }
 
     fn warn(&self, message: &str) {
-        eprintln!("Warning: {message}");
+        self.fallback.warn(message);
     }
 
     fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str, tags: &[String]) {
-        let tag_suffix = if tags.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", tags.join(" "))
-        };
-        let indicator = match state {
-            "wip" | "done" => "●",
-            _ => "○",
-        };
-        println!("{prefix}{indicator} {name}{tag_suffix}");
+        self.fallback.display_yak_pretty(prefix, name, state, tags);
     }
 
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str, tags: &[String]) {
-        let indent = "  ".repeat(depth);
-        let tag_suffix = if tags.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", tags.join(" "))
-        };
-        println!("{indent}- [{state}] {name}{tag_suffix}");
+        self.fallback.display_yak_markdown(depth, name, state, tags);
     }
 
     fn display_breadcrumb(&self, ancestors: &[Name]) {
-        if ancestors.is_empty() {
-            return;
-        }
-        let path = ancestors
-            .iter()
-            .map(|n| n.to_string())
-            .collect::<Vec<_>>()
-            .join(" > ");
-        println!("{path} > ");
+        self.fallback.display_breadcrumb(ancestors);
     }
 
     fn display_section_rule(&self, label: &str) {
-        let header = format!("── {label} ");
-        let padding = self.width.saturating_sub(header.chars().count());
-        println!("{header}{}", "─".repeat(padding));
+        self.fallback.display_section_rule(label);
     }
 
     fn display_closing_rule(&self) {
-        println!("{}", "─".repeat(self.width));
+        self.fallback.display_closing_rule();
     }
 
     fn display_context(&self, context: &str) {
-        for line in context.lines() {
-            println!("  {line}");
-        }
+        self.fallback.display_context(context);
     }
 
     fn display_metadata_line(&self, state: &str, created_at: &Timestamp, created_by: &Author) {
-        let date = chrono::DateTime::from_timestamp(created_at.as_epoch_secs(), 0)
-            .map(|dt| dt.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| "unknown".to_string());
-        println!("State: {state} · Created: {date} by {}", created_by.name);
+        self.fallback
+            .display_metadata_line(state, created_at, created_by);
     }
 
     fn log_entry(
@@ -369,17 +350,8 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
         event_id: &str,
         commit_sha: Option<&str>,
     ) {
-        let rendered = crate::domain::narrative::to_plain_text(narrative);
-        let sha_part = match commit_sha {
-            Some(sha) if sha.len() >= 7 => format!("  sha: {}", &sha[..7]),
-            Some(sha) => format!("  sha: {sha}"),
-            None => String::new(),
-        };
-        let rule: String = "─".repeat(self.width);
-        println!("{rendered}");
-        println!("{timestamp}");
-        println!("event: {event_id}{sha_part}");
-        println!("{rule}");
+        self.fallback
+            .log_entry(narrative, timestamp, event_id, commit_sha);
     }
 }
 
