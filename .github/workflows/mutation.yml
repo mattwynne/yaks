@@ -1,39 +1,13 @@
-name: Mutation Testing
+name: Mutation Testing (Nightly)
 
 on:
-  push:
-  pull_request:
+  schedule:
+    - cron: '0 3 * * *'  # 3am UTC daily
+  workflow_dispatch:       # allow manual trigger
 
 jobs:
-  mutation-check:
+  mutation-full:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: cachix/install-nix-action@v24
-      - uses: cachix/cachix-action@v15
-        with:
-          name: devenv
-      - name: Install devenv
-        run: nix profile install --accept-flake-config github:cachix/devenv/latest
-      - name: Install cargo-mutants
-        run: devenv shell cargo install cargo-mutants
-      - name: Diff-only mutation check
-        run: |
-          git diff origin/main...HEAD > /tmp/pr.diff
-          if [ ! -s /tmp/pr.diff ]; then
-            echo "No changes vs main — skipping."
-            exit 0
-          fi
-          devenv shell env CUCUMBER_MODE=in-process \
-            YX_SKIP_GIT_CHECKS=1 cargo mutants \
-            --in-diff /tmp/pr.diff
-
-  mutation-sync:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
     steps:

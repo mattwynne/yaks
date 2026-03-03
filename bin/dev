@@ -469,6 +469,13 @@ check() {
   fi
 
   echo ""
+  echo "Running mutation tests on changed files..."
+  if ! mutate-diff; then
+    echo "❌ Mutation testing failed"
+    return 1
+  fi
+
+  echo ""
   touch .last-checked
   echo "✅ All checks passed - changes verified"
 }
