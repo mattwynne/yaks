@@ -10,6 +10,7 @@ additional_cargo_test_args = ["--lib", "--test", "cucumber"]
 # Exclude infrastructure that can only be tested at integration level:
 # - ConsoleInput: stdin/pipe detection, editor launching (OS interaction)
 # - ConsoleDisplay: terminal output with colors (side effects only)
+# - TuiDisplay: ratatui terminal output (side effects only)
 # - GitEventStore: git ref operations (needs real git repos)
 # - NoOpEventStore: trivial no-op adapter
 # - git_discovery: git repo detection (needs real git repos)
@@ -17,6 +18,7 @@ additional_cargo_test_args = ["--lib", "--test", "cucumber"]
 exclude_globs = [
   "src/adapters/user_input/console_input.rs",
   "src/adapters/user_display/mod.rs",
+  "src/adapters/tui_display/mod.rs",
   "src/adapters/event_store/git.rs",
   "src/adapters/event_store/noop.rs",
   "src/infrastructure/git_discovery.rs",
