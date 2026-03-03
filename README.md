@@ -1,14 +1,14 @@
-# Yaks - An iterative, emergent, non-linear TODO list for humans and robots
+# Yaks - An iterative, emergent, shared TODO list for humans and robots
 
 > It is in the doing of the work that we discover the work that we must do
 >
 > -- Woody Zuill, https://agilemaxims.com
 
-Yaks is a command-line tool for managing a shared TODO list as a tree
-of nested goals. It's designed for teams — humans and AI agents
-working together on the same codebase.
+`yx` (yaks) is a command-line tool for managing a shared TODO list 
+as a tree of nested goals. It's designed for teams — humans and AI 
+agents working together on the same codebase.
 
-Everyone on the team works from the same yak map. Changes sync
+Everyone on the team works from the same _yak map_. Changes sync
 through git with zero merge conflicts, so you never have to
 coordinate who's updating the plan.
 
@@ -17,18 +17,20 @@ coordinate who's updating the plan.
 ## Principles
 
 **Simple.** Everything is a yak. No epics, stories, tasks, bugs, or
-chores. No priority fields, no assignees, no estimations. Three
-states: todo, wip, done. If you need more, add a custom field. You
-probably don't need more.
+chores. No priority fields, assignees, or estimates. Three
+states: todo, wip, done. Use tags and custom fields to model your
+own workflow.
 
 **Collaborative.** Yaks uses event sourcing on a hidden git ref.
 Changes from any branch, clone, or worktree merge automatically —
 no conflicts, no coordination, no extra infrastructure. If you can
 `git push`, you can share yaks.
 
-**Delightful.** Every command completes in under 100ms. Multi-word
-names without quotes. Fuzzy matching so you don't need exact names.
-A pretty tree view. Tab completion. Small things that add up.
+**Delightful.** We've designed the ergonomics for both humans
+and agents. Robots get fogiving command and argument aliases to allow
+for clumsy assumptions, and JSON output as standard. Humans get a 
+thoughtful, responsive UX with fuzzy name matching, tab completion and
+useful, thought-out views of the map.
 
 ## Usage
 
@@ -62,8 +64,7 @@ all day in software.
 ## For AI coding agents
 
 Add instructions to your `CLAUDE.md` or `AGENTS.md` telling your
-agent to use `yx` commands. No MCP server, no plugins, no special
-integration — just a CLI.
+agent to use `yx` commands.
 
 ```bash
 yx ls --format json          # Discover work
@@ -74,14 +75,13 @@ yx sync                      # Sync with teammates
 ```
 
 Multiple agents can update the yak map simultaneously.
-The event-sourced CRDT merge means their changes never conflict —
-they just interleave.
+The event-sourced CRDT merge means their changes never conflict.
 
 ## How is this different from Beads?
 
 [Beads](https://github.com/steveyegge/beads) is a powerful issue
 tracker built for AI agents. It has 81 fields per task, 19
-dependency types, a SQL database, and workflow templates. If you
+dependency types, a SQL/Dolt database, and workflow templates. If you
 want a comprehensive system for orchestrating agents, it's
 impressive.
 
