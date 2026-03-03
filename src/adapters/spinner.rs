@@ -100,10 +100,7 @@ mod tests {
     #[test]
     fn spinner_writes_frames_to_output() {
         let buf = TestWriter::new();
-        let handle = SpinnerHandle::start(
-            "Loading...".to_string(),
-            Box::new(buf.clone()),
-        );
+        let handle = SpinnerHandle::start("Loading...".to_string(), Box::new(buf.clone()));
 
         // Let it spin for a few frames
         thread::sleep(Duration::from_millis(250));
@@ -125,10 +122,7 @@ mod tests {
     #[test]
     fn spinner_clears_line_on_stop() {
         let buf = TestWriter::new();
-        let handle = SpinnerHandle::start(
-            "Working...".to_string(),
-            Box::new(buf.clone()),
-        );
+        let handle = SpinnerHandle::start("Working...".to_string(), Box::new(buf.clone()));
 
         thread::sleep(Duration::from_millis(100));
         handle.stop();
@@ -144,10 +138,7 @@ mod tests {
     #[test]
     fn spinner_animates_multiple_frames() {
         let buf = TestWriter::new();
-        let handle = SpinnerHandle::start(
-            "Spinning...".to_string(),
-            Box::new(buf.clone()),
-        );
+        let handle = SpinnerHandle::start("Spinning...".to_string(), Box::new(buf.clone()));
 
         // Wait long enough for multiple frames (80ms each)
         thread::sleep(Duration::from_millis(300));
@@ -166,10 +157,7 @@ mod tests {
     fn spinner_stops_on_drop() {
         let buf = TestWriter::new();
         {
-            let _handle = SpinnerHandle::start(
-                "Dropping...".to_string(),
-                Box::new(buf.clone()),
-            );
+            let _handle = SpinnerHandle::start("Dropping...".to_string(), Box::new(buf.clone()));
             thread::sleep(Duration::from_millis(100));
             // handle dropped here
         }
