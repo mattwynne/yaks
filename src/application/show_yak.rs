@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use super::{Application, UseCase};
 use crate::domain::tag::format_tag;
+use crate::domain::views::{YakChildView, YakDetailView};
 
 /// Convert a snake_case field name to Title Case (e.g. "relates_to" → "Relates To")
 fn title_case(s: &str) -> String {
@@ -87,87 +88,70 @@ impl ShowYak {
         let mut current_parent = yak.parent_id.clone();
         while let Some(pid) = current_parent {
             let parent_yak = app.store.get_yak(&pid)?;
-            ancestors.push(parent_yak.name.clone());
+            ancestors.push(parent_yak.name.to_string());
             current_parent = parent_yak.parent_id.clone();
         }
         ancestors.reverse();
 
-        // Collect immediate children for the header box
-        let box_children: Vec<_> = {
+        // Collect immediate children, sorted by done-state then name
+        let children: Vec<YakChildView> = {
             let mut kids: Vec<_> = yak
                 .children
                 .iter()
                 .filter_map(|id| app.store.get_yak(id).ok())
-                .map(|c| (c.name.clone(), c.state.to_string()))
+                .map(|c| YakChildView {
+                    name: c.name.to_string(),
+                    state: c.state.to_string(),
+                })
                 .collect();
-            kids.sort_by(|a, b| match (a.1 == "done", b.1 == "done") {
+            kids.sort_by(|a, b| match (a.state == "done", b.state == "done") {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
-                _ => a.0.cmp(&b.0),
+                _ => a.name.cmp(&b.name),
             });
             kids
         };
 
-        // Classify custom fields: no newlines = short (in box), newlines = long (ruled section)
+        // Classify custom fields
         let mut short_fields: Vec<(String, String)> = Vec::new();
-        let mut long_fields: Vec<(&str, &str)> = Vec::new();
+        let mut long_fields: Vec<(String, String)> = Vec::new();
         let mut field_names: Vec<&str> = yak.fields.keys().map(|k| k.as_str()).collect();
         field_names.sort();
         for name in &field_names {
             let value = yak.fields[*name].as_str().trim();
             if value.contains('\n') {
-                long_fields.push((name, value));
+                long_fields.push((title_case(name), value.to_string()));
             } else {
                 short_fields.push((title_case(name), value.to_string()));
             }
         }
 
-        // Extract tags for display
+        // Tags
         let tags: Vec<String> = yak.tags.iter().map(|t| format_tag(t)).collect();
 
-        // Header box with breadcrumb, name, state, date, author, children, short fields, and tags
-        let state_str = yak.state.to_string();
-        app.display.display_header_box(
-            &ancestors,
-            &yak.name,
-            &state_str,
-            &yak.created_at,
-            &yak.created_by,
-            &box_children,
-            &short_fields,
-            &tags,
-        );
+        // Created date
+        let created_at = chrono::DateTime::from_timestamp(yak.created_at.as_epoch_secs(), 0)
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "unknown".to_string());
 
-        // Context body
+        // Has context?
         let has_context = yak.context.as_ref().is_some_and(|c| !c.trim().is_empty());
-        if has_context {
-            app.display.info("");
-            app.display.display_context(yak.context.as_ref().unwrap());
-        } else {
-            app.display.info("");
-            app.display.display_hint(&format!(
-                "This yak has no context yet. Add some with:\n\n  echo \"Here's the problem...\" | yx context {}",
-                yak.name
-            ));
-        }
 
-        // Long fields in ruled sections
-        if !long_fields.is_empty() {
-            for (name, value) in long_fields.iter() {
-                app.display.info("");
-                app.display.display_section_rule(&title_case(name));
-                let indented: String = value
-                    .lines()
-                    .map(|l| format!("  {l}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                app.display.info(&indented);
-            }
-        }
+        let view = YakDetailView {
+            breadcrumb: ancestors,
+            name: yak.name.to_string(),
+            state: yak.state.to_string(),
+            created_at,
+            created_by: yak.created_by.name.clone(),
+            children,
+            short_fields,
+            long_fields,
+            tags,
+            context: yak.context.clone(),
+            has_context,
+        };
 
-        app.display.info("");
-        app.display.display_closing_rule();
-
+        app.display.show_yak(&view);
         Ok(())
     }
 }
