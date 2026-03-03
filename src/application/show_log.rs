@@ -4,6 +4,8 @@ use anyhow::Result;
 
 use super::{Application, UseCase};
 use crate::adapters::user_display::relative_time::format_relative;
+use crate::domain::narrative::NarrativeSpan;
+use crate::domain::views::{LogEntryView, NarrativeSpanView};
 
 pub struct ShowLog;
 
@@ -34,16 +36,39 @@ impl UseCase for ShowLog {
                 .unwrap_or_else(|_| id.to_string())
         };
 
-        for event in events.iter().rev() {
-            let meta = event.metadata();
-            let narrative = event.format_narrative(&meta.author.name, &resolve_name);
-            let timestamp = format_relative(meta.timestamp.as_epoch_secs());
-            let event_id = meta.event_id.as_deref().unwrap_or("-");
-            let commit_sha = meta.commit_sha.as_deref();
+        let entries: Vec<LogEntryView> = events
+            .iter()
+            .rev()
+            .map(|event| {
+                let meta = event.metadata();
+                let narrative = event.format_narrative(&meta.author.name, &resolve_name);
+                let narrative_spans: Vec<NarrativeSpanView> = narrative
+                    .iter()
+                    .map(|span| match span {
+                        NarrativeSpan::Plain(t) => NarrativeSpanView {
+                            text: t.clone(),
+                            bold: false,
+                        },
+                        NarrativeSpan::Highlight(t) => NarrativeSpanView {
+                            text: t.clone(),
+                            bold: true,
+                        },
+                    })
+                    .collect();
+                let timestamp = format_relative(meta.timestamp.as_epoch_secs());
+                let event_id = meta.event_id.as_deref().unwrap_or("-").to_string();
+                let commit_sha = meta.commit_sha.clone();
 
-            app.display
-                .log_entry(&narrative, &timestamp, event_id, commit_sha);
-        }
+                LogEntryView {
+                    narrative: narrative_spans,
+                    relative_time: timestamp,
+                    event_id,
+                    commit_sha,
+                }
+            })
+            .collect();
+
+        app.display.show_log(&entries);
         Ok(())
     }
 }
