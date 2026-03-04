@@ -37,7 +37,7 @@ enum Commands {
         /// The yak name (space-separated words)
         name: Vec<String>,
         /// Nest under this parent yak
-        #[arg(long, aliases = ["below", "in", "into", "blocks"])]
+        #[arg(long, value_name = "PARENT", visible_aliases = ["below", "in", "into", "to", "blocks"])]
         under: Option<String>,
         /// Initial state (todo, wip, done)
         #[arg(long)]
@@ -109,7 +109,8 @@ enum Commands {
         /// Move under this parent yak
         #[arg(
             long,
-            aliases = ["below", "in", "into", "blocks"],
+            value_name = "PARENT",
+            visible_aliases = ["below", "in", "into", "to", "blocks"],
             conflicts_with = "to_root",
             required_unless_present = "to_root"
         )]
