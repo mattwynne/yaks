@@ -36,12 +36,29 @@
           };
         in
         {
-          # Package as zip for installer
-          default = pkgs.stdenv.mkDerivation {
+          # Installable package: `nix profile install`, `nix run`, etc.
+          default = pkgs.symlinkJoin {
+            name = "yx-${yx-binary.version}";
+            paths = [ yx-binary ];
+            postBuild = ''
+              # Install shell completions
+              install -Dm644 ${./.}/completions/yx.bash $out/share/bash-completion/completions/yx
+              install -Dm644 ${./.}/completions/yx.zsh  $out/share/zsh/site-functions/_yx
+            '';
+            meta = with pkgs.lib; {
+              description = "A non-linear TODO list for humans and robots";
+              homepage = "https://github.com/mattwynne/yaks";
+              license = licenses.mit;
+              platforms = platforms.unix;
+              mainProgram = "yx";
+            };
+          };
+
+          # Zip bundle for the install.sh release flow
+          release-zip = pkgs.stdenv.mkDerivation {
             pname = "yaks-release";
             version = "0.1.0";
 
-            # Don't include src - we only need specific files
             dontUnpack = true;
 
             nativeBuildInputs = [ pkgs.zip ];
@@ -50,11 +67,9 @@
               mkdir -p release-bundle/bin
               mkdir -p release-bundle/completions
 
-              # Copy the Rust binary from rustPlatform build
               cp -L ${yx-binary}/bin/yx release-bundle/bin/yx
               chmod +x release-bundle/bin/yx
 
-              # Copy completions from source tree
               cp -r ${./.}/completions/* release-bundle/completions/
 
               cd release-bundle
@@ -75,8 +90,8 @@
             };
           };
 
-          # Also expose the binary directly
-          yaks-binary = yx-binary;
+          # Just the Rust binary
+          yx-binary = yx-binary;
         });
 
       devShells = forAllSystems (system:
