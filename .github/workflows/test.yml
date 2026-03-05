@@ -13,18 +13,16 @@ jobs:
       - uses: cachix/cachix-action@v15
         with:
           name: devenv
-      - name: Install devenv
-        run: nix profile install --accept-flake-config github:cachix/devenv/latest
       - name: Build release for installer test
         run: |
-          devenv shell bin/dev release
+          nix develop --impure --command bin/dev release
           mkdir -p result-linux
           cp result/yx.zip result-linux/yx-linux.zip
       - name: Run tests
         run: |
           # Run shellspec - it may exit with code 102 due to reporter bug in 0.28.1
           # but all tests actually pass (see output for "0 failures")
-          devenv shell shellspec || exit_code=$?
+          nix develop --impure --command shellspec || exit_code=$?
           if [ "${exit_code:-0}" -eq 102 ]; then
             echo "Shellspec reporter bug detected (exit 102), but tests passed"
             exit 0

@@ -18,22 +18,20 @@ jobs:
       - uses: cachix/cachix-action@v15
         with:
           name: devenv
-      - name: Install devenv
-        run: nix profile install --accept-flake-config github:cachix/devenv/latest
       - name: Install cargo-mutants
-        run: devenv shell cargo install cargo-mutants
+        run: nix develop --impure --command cargo install cargo-mutants
       - name: Build yx
-        run: devenv shell cargo build --release
+        run: nix develop --impure --command cargo build --release
       - name: Pull existing yaks
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          devenv shell bin/yx sync
+          nix develop --impure --command bin/yx sync
       - name: Run full mutation tests
         run: |
-          devenv shell env CUCUMBER_MODE=in-process \
+          nix develop --impure --command env CUCUMBER_MODE=in-process \
             YX_SKIP_GIT_CHECKS=1 cargo mutants --in-place || true
       - name: Sync results to yaks
-        run: devenv shell bin/dev mutate-sync
+        run: nix develop --impure --command bin/dev mutate-sync
       - name: Push yak changes
-        run: devenv shell bin/yx sync
+        run: nix develop --impure --command bin/yx sync

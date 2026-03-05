@@ -13,7 +13,5 @@ jobs:
       - uses: cachix/cachix-action@v15
         with:
           name: devenv
-      - name: Install devenv
-        run: nix profile install --accept-flake-config github:cachix/devenv/latest
       - name: Run shellcheck
-        run: devenv shell bin/dev lint
+        run: nix develop --impure --command bin/dev lint
