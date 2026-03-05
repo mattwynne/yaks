@@ -136,49 +136,31 @@ impl GitEventStore {
 
         Ok(events)
     }
-}
 
-impl EventStore for GitEventStore {
-    fn append(&mut self, event: &YakEvent) -> Result<()> {
-        let event = super::ensure_event_id(event.clone());
-        let event_id = event.metadata().event_id.clone().unwrap();
+    /// Build a tree for the event, ensuring .schema-version is stamped.
+    fn build_versioned_tree(&self, event: &YakEvent) -> Result<git2::Tree<'_>> {
+        let current_tree = self.get_current_tree()?;
+        let tree_oid = tree::build_tree_from_event(&self.repo, event, current_tree.as_ref())?;
+        let built_tree = self.repo.find_tree(tree_oid)?;
 
-        // Idempotent: skip if we already have a commit with this event_id
-        if commit::has_event_id(&self.repo, &self.ref_name, &event_id)? {
-            return Ok(());
+        if built_tree.get_name(".schema-version").is_some() {
+            return Ok(built_tree);
         }
 
-        let current_tree = self.get_current_tree()?;
+        use super::migration::CURRENT_SCHEMA_VERSION;
+        let version_blob = self
+            .repo
+            .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+        let mut builder = self.repo.treebuilder(Some(&built_tree))?;
+        builder.insert(".schema-version", version_blob, 0o100644)?;
+        let stamped_oid = builder.write()?;
+        Ok(self.repo.find_tree(stamped_oid)?)
+    }
 
-        let tree_oid = tree::build_tree_from_event(&self.repo, &event, current_tree.as_ref())?;
-
-        // Ensure .schema-version is stamped on every commit's tree.
-        // This is critical for sync: peer refs must be identifiable by version.
-        let tree = {
-            let built_tree = self.repo.find_tree(tree_oid)?;
-            if built_tree.get_name(".schema-version").is_some() {
-                built_tree
-            } else {
-                use super::migration::CURRENT_SCHEMA_VERSION;
-                let version_blob = self
-                    .repo
-                    .blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
-                let mut builder = self.repo.treebuilder(Some(&built_tree))?;
-                builder.insert(".schema-version", version_blob, 0o100644)?;
-                let stamped_oid = builder.write()?;
-                self.repo.find_tree(stamped_oid)?
-            }
-        };
-
-        // Commit message includes the event_id as a trailer for
-        // stable cross-repo identity during sync.
-        let event_line = event.format_message();
-        let message = format!("{}\n\nEvent-Id: {}", event_line, event_id);
-
-        let parent = self.get_latest_commit()?;
-        let parents: Vec<&git2::Commit> = parent.iter().collect();
-
-        let meta = event.metadata();
+    /// Build a git signature from event metadata.
+    fn build_signature(
+        meta: &crate::domain::event_metadata::EventMetadata,
+    ) -> Result<git2::Signature<'static>> {
         let author_name = if meta.author.name.is_empty() {
             "yx"
         } else {
@@ -190,12 +172,95 @@ impl EventStore for GitEventStore {
             &meta.author.email
         };
         let time = git2::Time::new(meta.timestamp.as_epoch_secs(), 0);
-        let sig = git2::Signature::new(author_name, author_email, &time)?;
+        Ok(git2::Signature::new(author_name, author_email, &time)?)
+    }
 
-        self.repo
-            .commit(Some(&self.ref_name), &sig, &sig, &message, &tree, &parents)?;
+    /// Atomically update the ref using compare-and-swap.
+    /// Returns `CasResult::Retry` if the ref was moved by another writer.
+    fn cas_update_ref(&self, new_oid: git2::Oid, expected_oid: Option<git2::Oid>) -> CasResult {
+        match expected_oid {
+            Some(old_oid) => {
+                // Ref exists — update only if it still points to old_oid.
+                match self.repo.reference_matching(
+                    &self.ref_name,
+                    new_oid,
+                    true,
+                    old_oid,
+                    "yx: append event",
+                ) {
+                    Ok(_) => CasResult::Success,
+                    Err(e) if e.code() == git2::ErrorCode::Modified => CasResult::Retry,
+                    Err(e) => CasResult::Error(e),
+                }
+            }
+            None => {
+                // Ref doesn't exist yet — create only if it still doesn't exist
+                match self.repo.reference(
+                    &self.ref_name,
+                    new_oid,
+                    false,
+                    "yx: append event (initial)",
+                ) {
+                    Ok(_) => CasResult::Success,
+                    Err(e) if e.code() == git2::ErrorCode::Exists => CasResult::Retry,
+                    Err(e) => CasResult::Error(e),
+                }
+            }
+        }
+    }
+}
 
-        Ok(())
+enum CasResult {
+    Success,
+    Retry,
+    Error(git2::Error),
+}
+
+impl EventStore for GitEventStore {
+    fn append(&mut self, event: &YakEvent) -> Result<()> {
+        let event = super::ensure_event_id(event.clone());
+        let event_id = event.metadata().event_id.clone().unwrap();
+
+        const MAX_RETRIES: usize = 10;
+
+        for attempt in 0..MAX_RETRIES {
+            // Idempotent: skip if we already have a commit with this event_id
+            if commit::has_event_id(&self.repo, &self.ref_name, &event_id)? {
+                return Ok(());
+            }
+
+            let tree = self.build_versioned_tree(&event)?;
+            let message = format!("{}\n\nEvent-Id: {}", event.format_message(), event_id);
+
+            // Record the current ref target BEFORE creating the commit,
+            // so we can do a compare-and-swap to detect concurrent writers.
+            let parent = self.get_latest_commit()?;
+            let expected_oid = parent.as_ref().map(|c| c.id());
+            let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+            let sig = Self::build_signature(event.metadata())?;
+            let commit_oid = self
+                .repo
+                .commit(None, &sig, &sig, &message, &tree, &parents)?;
+
+            match self.cas_update_ref(commit_oid, expected_oid) {
+                CasResult::Success => return Ok(()),
+                CasResult::Retry => continue,
+                CasResult::Error(e) => {
+                    return Err(anyhow::anyhow!(
+                        "Failed to update ref '{}' after {} attempts: {}",
+                        self.ref_name,
+                        attempt + 1,
+                        e
+                    ));
+                }
+            }
+        }
+
+        anyhow::bail!(
+            "Failed to append event after {} retries due to concurrent writes",
+            MAX_RETRIES
+        );
     }
 
     fn wipe(&mut self) -> Result<()> {
@@ -1090,6 +1155,157 @@ mod tests {
         assert_eq!(events[0].metadata().author.name, "Reader Test");
         assert_eq!(events[0].metadata().author.email, "reader@test.com");
         assert_eq!(events[0].metadata().timestamp, Timestamp(1708300800));
+    }
+
+    #[test]
+    fn concurrent_appends_do_not_lose_events() {
+        // Two GitEventStore instances sharing the same .git directory
+        // (simulating two processes / worktrees) both append events.
+        // The CAS ref update ensures no events are silently lost.
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Seed with an initial event so the ref exists
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("initial"),
+                    id: YakId::from("initial-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Open a second GitEventStore pointing at the same repo
+        let mut store2 = GitEventStore::from_repo(Repository::open(store.repo.path()).unwrap());
+
+        // Sequential appends from different store instances
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("from-store-1"),
+                    id: YakId::from("store1-c3d4"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        store2
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("from-store-2"),
+                    id: YakId::from("store2-e5f6"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Both events must be present — no silent data loss
+        let events = EventStore::get_all_events(&store).unwrap();
+        let names: Vec<String> = events
+            .iter()
+            .filter_map(|e| match e {
+                YakEvent::Added(added, _) => Some(added.name.to_string()),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&"initial".to_string()), "Missing 'initial'");
+        assert!(
+            names.contains(&"from-store-1".to_string()),
+            "Missing 'from-store-1'"
+        );
+        assert!(
+            names.contains(&"from-store-2".to_string()),
+            "Missing 'from-store-2'"
+        );
+        assert_eq!(events.len(), 3);
+
+        // Verify linear commit chain (no orphaned commits)
+        let latest = store.get_latest_commit().unwrap().unwrap();
+        let mut revwalk = store.repo.revwalk().unwrap();
+        revwalk
+            .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+            .unwrap();
+        revwalk.push(latest.id()).unwrap();
+        assert_eq!(revwalk.count(), 3, "Expected 3 commits in a linear chain");
+    }
+
+    #[test]
+    fn cas_detects_ref_moved_by_another_writer() {
+        // Directly simulate the race: read the parent, then move the ref
+        // out from under us before we try to CAS-update. The append must
+        // detect this and retry successfully.
+        let (_tmp, mut store) = setup_test_repo();
+
+        // Create initial event
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("first"),
+                    id: YakId::from("first-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let original_oid = store.repo.refname_to_id(&store.ref_name).unwrap();
+
+        // Simulate another process sneaking in a commit by directly
+        // manipulating the ref (bypassing our append method).
+        {
+            let parent = store.repo.find_commit(original_oid).unwrap();
+            let tree = parent.tree().unwrap();
+            let sig = git2::Signature::now("interloper", "interloper@test.com").unwrap();
+            let sneaky_oid = store
+                .repo
+                .commit(
+                    Some(&store.ref_name),
+                    &sig,
+                    &sig,
+                    "Sneaky: interleaved commit\n\nEvent-Id: sneaky-id",
+                    &tree,
+                    &[&parent],
+                )
+                .unwrap();
+            assert_ne!(sneaky_oid, original_oid);
+        }
+
+        // Now our store's "view" is stale — the ref has moved.
+        // But append should still succeed via CAS retry.
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("second"),
+                    id: YakId::from("second-c3d4"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // All three commits should be in the chain
+        let latest = store.get_latest_commit().unwrap().unwrap();
+        let mut revwalk = store.repo.revwalk().unwrap();
+        revwalk
+            .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+            .unwrap();
+        revwalk.push(latest.id()).unwrap();
+        assert_eq!(
+            revwalk.count(),
+            3,
+            "Expected 3 commits: first + sneaky + second"
+        );
+
+        // Verify our event is present
+        let events = EventStore::get_all_events(&store).unwrap();
+        let has_second = events.iter().any(|e| match e {
+            YakEvent::Added(added, _) => added.name.to_string() == "second",
+            _ => false,
+        });
+        assert!(has_second, "Our event should be present after CAS retry");
     }
 
     mod sync {
