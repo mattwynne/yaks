@@ -15,7 +15,7 @@ jobs:
           name: devenv
       - name: Build release for installer test
         run: |
-          nix develop --impure --command bin/dev release
+          nix build .#release-zip
           mkdir -p result-linux
           cp result/yx.zip result-linux/yx-linux.zip
       - name: Run tests
