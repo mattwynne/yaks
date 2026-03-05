@@ -11,8 +11,14 @@ export default function (pi: ExtensionAPI) {
     const isGitCommit = /\bgit\s+commit\b/.test(cmd);
     if (!isGitCommit) return;
 
-    // Check current branch
-    const result = await pi.exec("git", ["branch", "--show-current"], {});
+    // Parse -C flag if present (handles quoted paths like git -C "/path with spaces" commit)
+    const cDirMatch = cmd.match(/\bgit\s+(?:.*\s+)?-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
+    const cDir = cDirMatch ? (cDirMatch[1] || cDirMatch[2] || cDirMatch[3]) : undefined;
+
+    // Check current branch in the specified directory (or cwd if no -C flag)
+    const result = await pi.exec("git", ["branch", "--show-current"], {
+      cwd: cDir,
+    });
     const branch = result.stdout.trim();
 
     if (branch === "main") {
