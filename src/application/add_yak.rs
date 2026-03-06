@@ -94,9 +94,10 @@ impl AddYak {
         self.read_stdin = read_stdin;
         self
     }
+}
 
-    /// Execute the use case with the application's infrastructure
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for AddYak {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         use crate::domain::event_metadata::EventMetadata;
 
         // Validate user-provided name
@@ -143,12 +144,6 @@ impl AddYak {
         })?;
         app.display.message(&Message::Info(id.as_str().to_string()));
         Ok(())
-    }
-}
-
-impl UseCase for AddYak {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }
 

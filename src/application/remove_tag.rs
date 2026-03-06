@@ -18,8 +18,10 @@ impl RemoveTag {
             tags,
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for RemoveTag {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         // Read existing tags
@@ -42,11 +44,5 @@ impl RemoveTag {
         )));
 
         Ok(())
-    }
-}
-
-impl UseCase for RemoveTag {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

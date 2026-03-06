@@ -54,77 +54,6 @@ impl ListYaks {
         }
     }
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let format = self.format.as_str();
-        let only = self.only.as_deref();
-        let mut yaks = app.store.list_yaks()?;
-
-        // Normalize format
-        let normalized_format = match format {
-            "md" => "markdown",
-            "raw" => "plain",
-            other => other,
-        };
-
-        // Validate format
-        if !["pretty", "markdown", "plain", "ids"].contains(&normalized_format) {
-            anyhow::bail!(
-                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, ids (aliases: md, raw)",
-                format
-            );
-        }
-
-        // Validate filter
-        if let Some(filter) = only {
-            if !["done", "not-done"].contains(&filter) {
-                anyhow::bail!(
-                    "Unknown filter '{}'. Valid filters are: done, not-done",
-                    filter
-                );
-            }
-        }
-
-        // Apply tag filter
-        if let Some(ref tag) = self.tag {
-            yaks.retain(|y| y.tags.contains(tag));
-        }
-
-        // Handle ids format early (before tree building)
-        if normalized_format == "ids" {
-            for yak in &yaks {
-                app.display
-                    .message(&Message::Info(yak.id.as_str().to_string()));
-            }
-            return Ok(());
-        }
-
-        // Build hierarchy tree (even if empty)
-        let tree = if yaks.is_empty() {
-            vec![]
-        } else {
-            self.build_tree(app, yaks)
-        };
-
-        // Build YakTreeView from internal tree
-        let view_nodes = self.build_view_tree(&tree, only, &TreePrefix::new());
-
-        // For markdown format when empty, show a message instead of the list
-        if tree.is_empty() && normalized_format == "markdown" {
-            app.display
-                .message(&Message::Info("You have no yaks. Are you done?".into()));
-            return Ok(());
-        }
-
-        let view = YakTreeView {
-            nodes: view_nodes,
-            format: normalized_format.to_string(),
-            is_empty: false,
-        };
-
-        app.display.show_list(&view);
-        Ok(())
-    }
-
     /// Build a hierarchical tree from flat list of yaks using parent_id
     fn build_tree(&self, _app: &Application, yaks: Vec<YakView>) -> Vec<YakNode> {
         // Index all yak IDs for validation
@@ -286,7 +215,74 @@ impl ListYaks {
 
 impl UseCase for ListYaks {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
+        let format = self.format.as_str();
+        let only = self.only.as_deref();
+        let mut yaks = app.store.list_yaks()?;
+
+        // Normalize format
+        let normalized_format = match format {
+            "md" => "markdown",
+            "raw" => "plain",
+            other => other,
+        };
+
+        // Validate format
+        if !["pretty", "markdown", "plain", "ids"].contains(&normalized_format) {
+            anyhow::bail!(
+                "Unknown format '{}'. Valid formats are: pretty, markdown, plain, ids (aliases: md, raw)",
+                format
+            );
+        }
+
+        // Validate filter
+        if let Some(filter) = only {
+            if !["done", "not-done"].contains(&filter) {
+                anyhow::bail!(
+                    "Unknown filter '{}'. Valid filters are: done, not-done",
+                    filter
+                );
+            }
+        }
+
+        // Apply tag filter
+        if let Some(ref tag) = self.tag {
+            yaks.retain(|y| y.tags.contains(tag));
+        }
+
+        // Handle ids format early (before tree building)
+        if normalized_format == "ids" {
+            for yak in &yaks {
+                app.display
+                    .message(&Message::Info(yak.id.as_str().to_string()));
+            }
+            return Ok(());
+        }
+
+        // Build hierarchy tree (even if empty)
+        let tree = if yaks.is_empty() {
+            vec![]
+        } else {
+            self.build_tree(app, yaks)
+        };
+
+        // Build YakTreeView from internal tree
+        let view_nodes = self.build_view_tree(&tree, only, &TreePrefix::new());
+
+        // For markdown format when empty, show a message instead of the list
+        if tree.is_empty() && normalized_format == "markdown" {
+            app.display
+                .message(&Message::Info("You have no yaks. Are you done?".into()));
+            return Ok(());
+        }
+
+        let view = YakTreeView {
+            nodes: view_nodes,
+            format: normalized_format.to_string(),
+            is_empty: false,
+        };
+
+        app.display.show_list(&view);
+        Ok(())
     }
 }
 

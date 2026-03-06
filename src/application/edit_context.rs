@@ -24,8 +24,10 @@ impl EditContext {
         self.initial_content = Some(content.to_string());
         self
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for EditContext {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         // Use pre-provided initial content, or fall back to existing context
@@ -40,11 +42,5 @@ impl EditContext {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for EditContext {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

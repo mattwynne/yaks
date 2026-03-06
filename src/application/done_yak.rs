@@ -17,8 +17,10 @@ impl DoneYak {
             recursive,
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for DoneYak {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         SetState::new(&self.name, "done")
             .with_recursive(self.recursive)
             .with_silent(true)
@@ -35,11 +37,5 @@ impl DoneYak {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for DoneYak {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

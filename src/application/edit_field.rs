@@ -27,8 +27,10 @@ impl EditField {
         self.initial_content = Some(content.to_string());
         self
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for EditField {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         validate_field_name(&self.field)?;
 
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
@@ -48,12 +50,6 @@ impl EditField {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for EditField {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }
 

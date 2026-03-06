@@ -19,8 +19,8 @@ impl Default for PruneYaks {
     }
 }
 
-impl PruneYaks {
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for PruneYaks {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let before_count = app.store.list_yaks()?.len();
 
         app.with_yak_map(|yak_map| yak_map.prune())?;
@@ -37,11 +37,5 @@ impl PruneYaks {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for PruneYaks {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

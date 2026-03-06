@@ -16,16 +16,12 @@ impl WriteContext {
             content: content.to_string(),
         }
     }
-
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
-        app.with_yak_map(|yak_map| yak_map.update_context(id, self.content.clone()))
-    }
 }
 
 impl UseCase for WriteContext {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
+        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        app.with_yak_map(|yak_map| yak_map.update_context(id, self.content.clone()))
     }
 }
 

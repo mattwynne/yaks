@@ -15,8 +15,10 @@ impl ShowContext {
             name: name.to_string(),
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for ShowContext {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
 
@@ -27,12 +29,6 @@ impl ShowContext {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for ShowContext {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }
 

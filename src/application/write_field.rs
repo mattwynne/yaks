@@ -25,8 +25,10 @@ impl WriteField {
         self.content = Some(content.to_string());
         self
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for WriteField {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate field name
         validate_field_name(&self.field)?;
 
@@ -45,11 +47,5 @@ impl WriteField {
         } else {
             Ok(())
         }
-    }
-}
-
-impl UseCase for WriteField {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

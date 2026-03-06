@@ -18,8 +18,10 @@ impl RenameYak {
             to: to.to_string(),
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for RenameYak {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         validate_yak_name(&self.to).map_err(|e| anyhow::anyhow!(e))?;
 
         let id = app.store.fuzzy_find_yak_id(&self.from)?;
@@ -32,11 +34,5 @@ impl RenameYak {
         )));
 
         Ok(())
-    }
-}
-
-impl UseCase for RenameYak {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

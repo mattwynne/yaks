@@ -32,8 +32,10 @@ impl ShowYak {
             format: format.to_string(),
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for ShowYak {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let valid_formats = ["pretty"];
         if !valid_formats.contains(&self.format.as_str()) {
             anyhow::bail!(
@@ -116,12 +118,6 @@ impl ShowYak {
 
         app.display.show_yak(&view);
         Ok(())
-    }
-}
-
-impl UseCase for ShowYak {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }
 

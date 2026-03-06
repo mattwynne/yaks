@@ -18,8 +18,10 @@ impl AddTag {
             tags,
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for AddTag {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         // Read existing tags
@@ -46,11 +48,5 @@ impl AddTag {
             .message(&Message::Success(format!("Tagged '{}'", self.name)));
 
         Ok(())
-    }
-}
-
-impl UseCase for AddTag {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

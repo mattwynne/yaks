@@ -31,8 +31,10 @@ impl MoveYak {
             target: MoveTarget::ToRoot,
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for MoveYak {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
 
         match &self.target {
@@ -52,11 +54,5 @@ impl MoveYak {
         }
 
         Ok(())
-    }
-}
-
-impl UseCase for MoveYak {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }

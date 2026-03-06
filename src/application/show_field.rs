@@ -18,8 +18,10 @@ impl ShowField {
             field: field.to_string(),
         }
     }
+}
 
-    pub fn execute(&self, app: &mut Application) -> Result<()> {
+impl UseCase for ShowField {
+    fn execute(&self, app: &mut Application) -> Result<()> {
         // Validate field name format (allow reserved fields for reading)
         validate_field_name_format(&self.field)?;
 
@@ -33,11 +35,5 @@ impl ShowField {
         app.display.message(&Message::Info(content));
 
         Ok(())
-    }
-}
-
-impl UseCase for ShowField {
-    fn execute(&self, app: &mut Application) -> Result<()> {
-        Self::execute(self, app)
     }
 }
