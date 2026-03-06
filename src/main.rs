@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{CommandFactory, Parser};
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -21,10 +22,38 @@ use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
 use yx::infrastructure::EventBus;
 
+fn styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default() | Effects::BOLD)
+        .usage(AnsiColor::Yellow.on_default() | Effects::BOLD)
+        .literal(AnsiColor::Green.on_default() | Effects::BOLD)
+        .placeholder(AnsiColor::Cyan.on_default())
+        .valid(AnsiColor::Green.on_default())
+        .invalid(AnsiColor::Red.on_default() | Effects::BOLD)
+        .error(AnsiColor::Red.on_default() | Effects::BOLD)
+}
+
 /// DAG-based TODO list CLI for software teams
 #[derive(Parser, Debug)]
 #[command(name = "yx")]
 #[command(version, about, long_about = None)]
+#[command(styles = styles())]
+#[command(after_help = "\
+\x1b[1;33mExamples:\x1b[0m
+  yx add fix the flaky test
+  yx add upgrade auth library --under fix the flaky test
+  yx list
+  yx start fix the flaky test
+  yx done fix the flaky test
+  yx show fix the flaky test")]
+#[command(help_template = "\
+{before-help}\
+  🐃 {name} {version} — {about}
+
+{usage-heading} {usage}
+
+{all-args}{after-help}
+")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -33,6 +62,7 @@ struct Cli {
 #[derive(Parser, Debug)]
 enum Commands {
     /// Add a new yak
+    #[command(display_order = 1)]
     Add {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -56,7 +86,7 @@ enum Commands {
         fields: Vec<(String, String)>,
     },
     /// List yaks
-    #[command(alias = "ls")]
+    #[command(alias = "ls", display_order = 2)]
     List {
         #[arg(
             long,
@@ -73,7 +103,7 @@ enum Commands {
         tag: Option<String>,
     },
     /// Mark yak as done
-    #[command(alias = "finish")]
+    #[command(alias = "finish", display_order = 4)]
     Done {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -82,7 +112,7 @@ enum Commands {
         recursive: bool,
     },
     /// Start working on a yak (set state to wip)
-    #[command(alias = "wip")]
+    #[command(alias = "wip", display_order = 5)]
     Start {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -91,7 +121,7 @@ enum Commands {
         recursive: bool,
     },
     /// Remove a yak
-    #[command(alias = "rm")]
+    #[command(alias = "rm", display_order = 10)]
     Remove {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -100,9 +130,10 @@ enum Commands {
         recursive: bool,
     },
     /// Remove all done yaks
+    #[command(display_order = 11)]
     Prune,
     /// Move a yak in the hierarchy
-    #[command(alias = "mv")]
+    #[command(alias = "mv", display_order = 12)]
     Move {
         /// The yak to move (space-separated words)
         name: Vec<String>,
@@ -120,6 +151,7 @@ enum Commands {
         to_root: bool,
     },
     /// Rename a yak (change name without moving)
+    #[command(display_order = 13)]
     Rename {
         /// Current yak name (quote multi-word names)
         from: String,
@@ -127,6 +159,7 @@ enum Commands {
         to: String,
     },
     /// Show yak details
+    #[command(display_order = 3)]
     Show {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -139,6 +172,7 @@ enum Commands {
         format: String,
     },
     /// Show or edit yak context
+    #[command(display_order = 6)]
     Context {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -150,6 +184,7 @@ enum Commands {
         edit: bool,
     },
     /// Set the state of a yak
+    #[command(display_order = 7)]
     State {
         /// The yak name (space-separated words)
         #[arg(required = true)]
@@ -161,6 +196,7 @@ enum Commands {
         recursive: bool,
     },
     /// Show or edit custom field for a yak
+    #[command(display_order = 8)]
     Field {
         /// The yak name (space-separated words)
         #[arg(required = true)]
@@ -175,6 +211,7 @@ enum Commands {
         edit: bool,
     },
     /// Rebuild yaks from the git event store tree
+    #[command(display_order = 20)]
     Reset {
         /// Rebuild .yaks directory from git tree (default)
         #[arg(long)]
@@ -187,20 +224,23 @@ enum Commands {
         force: bool,
     },
     /// Manage tags on a yak
-    #[command(alias = "tags")]
+    #[command(alias = "tags", display_order = 9)]
     Tag {
         #[command(subcommand)]
         action: TagAction,
     },
     /// Compact the event stream into a snapshot
+    #[command(display_order = 21)]
     Compact {
         /// Skip confirmation prompt
         #[arg(long)]
         yes: bool,
     },
     /// Sync yaks with git refs
+    #[command(display_order = 22)]
     Sync,
     /// Show event log from refs/notes/yaks
+    #[command(display_order = 23)]
     Log,
     /// Generate shell completions (hidden)
     #[command(hide = true)]

@@ -1,0 +1,9 @@
+{
+  "name": "show-yak-extension",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "0.55.0",
+    "vitest": "^4.0.0"
+  }
+}

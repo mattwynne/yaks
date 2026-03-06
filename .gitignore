@@ -41,3 +41,4 @@ mutants.out.old/
 .pi/*
 !.pi/prompts/
 !.pi/extensions/
+node_modules/

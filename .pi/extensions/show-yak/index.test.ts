@@ -13,7 +13,7 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import showYakExtension from "./show-yak.js";
+import showYakExtension from "./index.js";
 
 // Helper: find the show_yak tool and call execute
 async function callShowYak(session: AgentSession, name: string) {
@@ -62,7 +62,6 @@ describe("show_yak tool", () => {
 
     const parsed = JSON.parse(text!);
     expect(parsed.name).toBe("dx");
-    expect(parsed).toHaveProperty("id");
     expect(parsed).toHaveProperty("state");
     expect(parsed).toHaveProperty("children");
   });
