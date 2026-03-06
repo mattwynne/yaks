@@ -23,6 +23,82 @@ async function callShowYak(session: AgentSession, name: string) {
   return result;
 }
 
+// Helper: find the list_yaks tool and call execute
+async function callListYaks(session: AgentSession, params: Record<string, string> = {}) {
+  const tool = session.agent.state.tools.find((t) => t.name === "list_yaks");
+  if (!tool) throw new Error("list_yaks tool not registered");
+  const result = await tool.execute("test-call-id", params, new AbortController().signal);
+  return result;
+}
+
+describe("list_yaks tool", () => {
+  let session: AgentSession;
+
+  beforeAll(async () => {
+    const loader = new DefaultResourceLoader({
+      cwd: process.cwd(),
+      extensionFactories: [showYakExtension],
+      skipDiscovery: true,
+    });
+    await loader.reload();
+
+    ({ session } = await createAgentSession({
+      cwd: process.cwd(),
+      resourceLoader: loader,
+      sessionManager: SessionManager.inMemory(),
+      settingsManager: SettingsManager.inMemory(),
+      tools: [],
+    }));
+  });
+
+  afterAll(() => {
+    session?.dispose();
+  });
+
+  it("is registered as a tool", () => {
+    const toolNames = session.agent.state.tools.map((t) => t.name);
+    expect(toolNames).toContain("list_yaks");
+  });
+
+  it("returns valid JSON array", async () => {
+    const result = await callListYaks(session);
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toBeDefined();
+
+    const parsed = JSON.parse(text!);
+    expect(Array.isArray(parsed)).toBe(true);
+  });
+
+  it("passes --only flag when only param is provided", async () => {
+    // Even with no yaks, this should succeed (not error)
+    const result = await callListYaks(session, { only: "not-done" });
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    const parsed = JSON.parse(text!);
+    expect(Array.isArray(parsed)).toBe(true);
+  });
+
+  it("passes --tag flag when tag param is provided", async () => {
+    const result = await callListYaks(session, { tag: "ready" });
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    const parsed = JSON.parse(text!);
+    expect(Array.isArray(parsed)).toBe(true);
+  });
+
+  it("returns error for invalid filter", async () => {
+    const result = await callListYaks(session, { only: "foobar" });
+
+    expect(result.isError).toBe(true);
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toMatch(/Unknown filter/i);
+  });
+});
+
 describe("show_yak tool", () => {
   let session: AgentSession;
 
