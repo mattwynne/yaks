@@ -931,4 +931,32 @@ mod tests {
             "clear_all should remove all yaks"
         );
     }
+
+    #[test]
+    fn test_tags_with_empty_lines_are_filtered() {
+        let (storage, temp) = setup_test_storage();
+
+        // Create a yak directory with tags file containing empty lines
+        let yak_dir = temp.path().join("test-yak");
+        std::fs::create_dir_all(&yak_dir).unwrap();
+        std::fs::write(yak_dir.join(crate::domain::CONTEXT_FIELD), "").unwrap();
+        std::fs::write(yak_dir.join(crate::domain::ID_FIELD), "test-yak-a1b2").unwrap();
+        std::fs::write(yak_dir.join(crate::domain::NAME_FIELD), "test yak").unwrap();
+        std::fs::write(
+            yak_dir.join(crate::domain::TAGS_FIELD),
+            "tag1\n\ntag2\n\n\ntag3\n",
+        )
+        .unwrap();
+
+        // get_yak should filter out empty lines
+        let yak = ReadYakStore::get_yak(&storage, &YakId::from("test-yak-a1b2")).unwrap();
+        assert_eq!(yak.tags.len(), 3);
+        assert_eq!(yak.tags, vec!["tag1", "tag2", "tag3"]);
+
+        // list_yaks should also filter out empty lines
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        assert_eq!(yaks.len(), 1);
+        assert_eq!(yaks[0].tags.len(), 3);
+        assert_eq!(yaks[0].tags, vec!["tag1", "tag2", "tag3"]);
+    }
 }
