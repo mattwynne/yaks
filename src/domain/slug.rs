@@ -175,13 +175,16 @@ pub fn generate_id(name: &str, parent_id: Option<&YakId>) -> YakId {
 }
 
 fn hash_suffix(input: &str) -> String {
-    use std::hash::{Hash, Hasher};
+    // Use FNV-1a hash for stability across Rust versions.
+    // FNV-1a is simple, fast, and explicitly designed to be stable.
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
 
-    // Use a fixed-seed hasher for determinism.
-    // SipHasher with known keys (0, 0) gives consistent results.
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    input.hash(&mut hasher);
-    let hash = hasher.finish();
+    let mut hash = FNV_OFFSET_BASIS;
+    for byte in input.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
 
     let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz0123456789".chars().collect();
     (0..4)
@@ -353,7 +356,7 @@ mod tests {
     fn generate_id_snapshot_root() {
         assert_eq!(
             generate_id("make the tea", None).as_str(),
-            "make-the-tea-t3ru"
+            "make-the-tea-gcos"
         );
     }
 
@@ -362,7 +365,7 @@ mod tests {
         let parent = generate_id("make the tea", None);
         assert_eq!(
             generate_id("buy biscuits", Some(&parent)).as_str(),
-            "buy-biscuits-506d"
+            "buy-biscuits-kcz6"
         );
     }
 
