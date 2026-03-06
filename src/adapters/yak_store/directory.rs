@@ -1,18 +1,14 @@
 // Directory-based storage adapter - implements .yaks/ directory structure
 
-use crate::domain::event_metadata::{Author, Timestamp};
-use crate::domain::field::RESERVED_FIELDS;
+mod fields;
+mod io;
+mod query;
+
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
-use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::{
-    YakState, YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD,
-};
+use crate::domain::slug::{Name, YakId};
 use crate::infrastructure::check_yaks_gitignored;
-use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::fs;
+use anyhow::Result;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 #[derive(Clone)]
 pub struct DirectoryStorage {
@@ -45,371 +41,33 @@ impl DirectoryStorage {
         Self { base_path }
     }
 
-    /// Resolve a yak's directory by name or id.
-    /// Tries: direct path, resolve by id, resolve by name (in that order).
-    fn yak_dir(&self, key: &str) -> PathBuf {
-        // Try direct path first (backward compat: dir name == yak name)
-        let direct = self.base_path.join(key);
-        if direct.exists() {
-            return direct;
-        }
-
-        // Try resolve by id (finds nested id-based dirs)
-        if let Some(dir) = self.resolve_by_id(key) {
-            return dir;
-        }
-
-        // Try resolve by leaf name (scans name files)
-        if let Some(dir) = self.resolve_by_name(key) {
-            return dir;
-        }
-
-        // Fallback to direct path (will fail later with "not found")
-        direct
-    }
-
-    /// Find a yak directory by its id, searching recursively.
-    /// Reads the `id` file inside each yak directory and matches against that.
-    /// Falls back to directory name matching for backward compat (yaks without id files).
-    fn resolve_by_id(&self, id: &str) -> Option<PathBuf> {
-        if !self.base_path.exists() {
-            return None;
-        }
-        let mut fallback: Option<PathBuf> = None;
-        for entry in WalkDir::new(&self.base_path)
-            .min_depth(1)
-            .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
-        {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let path = entry.path();
-            if !path.join(CONTEXT_FIELD).exists() {
-                continue;
-            }
-            // Primary: match against id file contents
-            let id_file = path.join(ID_FIELD);
-            if id_file.exists() {
-                if let Ok(stored_id) = fs::read_to_string(&id_file) {
-                    if stored_id.trim() == id {
-                        return Some(path.to_path_buf());
-                    }
-                }
-            }
-            // Fallback: match against directory name (backward compat)
-            if fallback.is_none() && path.file_name().and_then(|n| n.to_str()) == Some(id) {
-                fallback = Some(path.to_path_buf());
-            }
-        }
-        fallback
-    }
-
-    /// Scan directories recursively for one whose name file matches the given name.
-    fn resolve_by_name(&self, name: &str) -> Option<PathBuf> {
-        if !self.base_path.exists() {
-            return None;
-        }
-        for entry in WalkDir::new(&self.base_path)
-            .min_depth(1)
-            .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
-        {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let path = entry.path();
-            let name_file = path.join(NAME_FIELD);
-            if name_file.exists() {
-                if let Ok(stored_name) = fs::read_to_string(&name_file) {
-                    if stored_name == name {
-                        return Some(path.to_path_buf());
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Move any immediate child yak directories to the base path (root).
-    /// Called before deleting a parent so nested children are not lost.
-    fn rescue_children(&self, parent_dir: &Path) -> Result<()> {
-        if let Ok(entries) = fs::read_dir(parent_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && path.join(CONTEXT_FIELD).exists() {
-                    // This is a child yak directory - move to root
-                    let dir_name = path
-                        .file_name()
-                        .ok_or_else(|| anyhow::anyhow!("Cannot get dir name"))?;
-                    let target = self.base_path.join(dir_name);
-                    if !target.exists() {
-                        fs::rename(&path, &target).context("Failed to rescue child yak")?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Read the yak ID from a directory's id file, falling back to dir name.
-    fn read_id_from_dir(&self, dir: &std::path::Path, fallback: &str) -> YakId {
-        fs::read_to_string(dir.join(ID_FIELD))
-            .map(|s| YakId::from(s.trim().to_string()))
-            .unwrap_or_else(|_| {
-                YakId::from(
-                    dir.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or(fallback)
-                        .to_string(),
-                )
-            })
-    }
-
-    /// Read custom fields (non-reserved files) from a yak directory.
-    fn read_custom_fields(&self, dir: &std::path::Path) -> HashMap<String, String> {
-        let mut fields = HashMap::new();
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
-                }
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if !RESERVED_FIELDS.contains(&name) {
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            fields.insert(name.to_string(), content);
-                        }
-                    }
-                }
-            }
-        }
-        fields
-    }
-
-    /// Read direct child yak IDs from subdirectories of a yak directory.
-    fn read_children(&self, dir: &std::path::Path) -> Vec<YakId> {
-        let mut children = Vec::new();
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-                if !path.join(CONTEXT_FIELD).exists() {
-                    continue;
-                }
-                let id = self.read_id_from_dir(
-                    &path,
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("unknown"),
-                );
-                children.push(id);
-            }
-        }
-        children
-    }
-
-    /// Read the parent yak's ID from the filesystem.
-    /// If the parent directory is also a yak (has context.md), read its id file.
-    fn read_parent_id(&self, dir: &std::path::Path) -> Option<YakId> {
-        dir.parent().and_then(|parent| {
-            if parent != self.base_path && parent.join(CONTEXT_FIELD).exists() {
-                let fallback = parent
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown");
-                Some(self.read_id_from_dir(parent, fallback))
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Read created_by and created_at from .created.json in a yak directory.
-    /// Returns (Author::unknown(), Timestamp::zero()) if the file is missing or unparseable.
-    fn read_metadata(dir: &Path) -> (Author, Timestamp) {
-        let content = fs::read_to_string(dir.join(".created.json"));
-        if let Ok(content) = content {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                let author = Author {
-                    name: json["created_by"]["name"]
-                        .as_str()
-                        .unwrap_or("unknown")
-                        .to_string(),
-                    email: json["created_by"]["email"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_string(),
-                };
-                let timestamp = Timestamp(json["created_at"].as_i64().unwrap_or(0));
-                return (author, timestamp);
-            }
-        }
-        (Author::unknown(), Timestamp::zero())
-    }
-
-    /// Read the leaf name for a yak at the given path.
-    /// Returns the content of the name file, or falls back to the directory name.
-    fn read_leaf_name(&self, path: &std::path::Path) -> String {
-        fs::read_to_string(path.join(NAME_FIELD)).unwrap_or_else(|_| {
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string()
-        })
-    }
-}
-
-impl DirectoryStorage {
     /// Remove all yak directories from the base path.
     /// A directory is a yak if it contains a `context.md` file.
     /// Non-yak files (e.g. `.schema-version`) are preserved.
     pub fn clear(&self) -> Result<()> {
-        if !self.base_path.exists() {
-            fs::create_dir_all(&self.base_path)?;
-            return Ok(());
-        }
-        for entry in fs::read_dir(&self.base_path)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() && path.join(CONTEXT_FIELD).exists() {
-                fs::remove_dir_all(&path)?;
-            }
-        }
-        Ok(())
+        io::clear(&self.base_path)
     }
 }
 
 impl WriteYakStore for DirectoryStorage {
     fn create_yak(&self, name: &Name, id: &YakId, parent_id: Option<&YakId>) -> Result<()> {
-        // Use slug (from name) as directory name for human readability.
-        // Fall back to name directly for backward compat (empty id = legacy).
-        let dir_name = if id.as_str().is_empty() {
-            name.as_str().to_string()
-        } else {
-            slugify(name.as_str()).to_string()
-        };
-
-        // Determine parent directory: base_path or parent's directory
-        let parent_dir = match parent_id {
-            Some(pid) => self
-                .resolve_by_id(pid.as_str())
-                .ok_or_else(|| anyhow::anyhow!("Parent yak '{}' not found", pid))?,
-            None => self.base_path.clone(),
-        };
-
-        let dir = parent_dir.join(&dir_name);
-        if dir.join(CONTEXT_FIELD).exists() {
-            anyhow::bail!("Yak '{}' already exists", name);
-        }
-
-        fs::create_dir_all(&dir)
-            .with_context(|| format!("Failed to create yak directory: {dir_name}"))?;
-
-        // Create empty context.md file by default
-        fs::write(dir.join(CONTEXT_FIELD), "")
-            .with_context(|| format!("Failed to create context.md for yak: {name}"))?;
-
-        // Write name file for name→directory resolution
-        fs::write(dir.join(NAME_FIELD), name.as_str())
-            .with_context(|| format!("Failed to write name file for yak: {name}"))?;
-
-        // Write id file so the immutable ID is stored inside the directory
-        if !id.as_str().is_empty() {
-            fs::write(dir.join(ID_FIELD), id.as_str())
-                .with_context(|| format!("Failed to write id file for yak: {name}"))?;
-        }
-
-        Ok(())
+        io::create_yak(&self.base_path, name, id, parent_id)
     }
 
     fn delete_yak(&self, id: &YakId) -> Result<()> {
-        let dir = self.yak_dir(id.as_str());
-        if dir.exists() {
-            // Before removing, move any child yak directories to root
-            // so they survive parent deletion (orphan rescue).
-            self.rescue_children(&dir)?;
-            fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{id}'"))?;
-        }
-        Ok(())
+        io::delete_yak(&self.base_path, id)
     }
 
     fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()> {
-        let from_dir = self.yak_dir(id.as_str());
-
-        if !from_dir.exists() {
-            anyhow::bail!("yak '{}' not found", id);
-        }
-
-        // Compute new slug-based directory name
-        let new_slug = slugify(new_name.as_str()).to_string();
-
-        // Target directory is in the same parent as the current directory
-        let parent_dir = from_dir
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory for '{}'", id))?;
-        let to_dir = parent_dir.join(&new_slug);
-
-        if to_dir == from_dir {
-            // Slug unchanged - just update the name file
-            fs::write(from_dir.join(NAME_FIELD), new_name.as_str())
-                .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
-            return Ok(());
-        }
-
-        if to_dir.exists() {
-            anyhow::bail!("Yak '{}' already exists", new_name);
-        }
-
-        fs::rename(&from_dir, &to_dir)
-            .with_context(|| format!("Failed to rename '{}' to '{}'", id, new_name))?;
-
-        // Update name file to reflect new name
-        fs::write(to_dir.join(NAME_FIELD), new_name.as_str())
-            .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
-
-        Ok(())
+        io::rename_yak(&self.base_path, id, new_name)
     }
 
     fn reparent_yak(&self, id: &YakId, new_parent_id: Option<&YakId>) -> Result<()> {
-        let current_dir = self
-            .resolve_by_id(id.as_str())
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
-
-        let new_parent_dir = match new_parent_id {
-            Some(pid) => self
-                .resolve_by_id(pid.as_str())
-                .ok_or_else(|| anyhow::anyhow!("parent yak '{}' not found", pid))?,
-            None => self.base_path.clone(),
-        };
-
-        // Preserve the existing slug-based directory name when moving
-        let dir_name = current_dir
-            .file_name()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine directory name for '{}'", id))?;
-        let new_dir = new_parent_dir.join(dir_name);
-        if new_dir.exists() {
-            anyhow::bail!("Target location already exists for '{}'", id);
-        }
-
-        fs::rename(&current_dir, &new_dir)
-            .with_context(|| format!("Failed to move yak '{}' to new parent", id))?;
-
-        Ok(())
+        io::reparent_yak(&self.base_path, id, new_parent_id)
     }
 
     fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()> {
-        let dir = self.yak_dir(id.as_str());
-        if !dir.exists() {
-            anyhow::bail!("yak '{}' not found", id);
-        }
-        let field_path = dir.join(field_name);
-        fs::write(&field_path, content)
-            .with_context(|| format!("Failed to write field '{field_name}' for '{id}'"))
+        io::write_field(&self.base_path, id, field_name, content)
     }
 
     fn clear_all(&self) -> Result<()> {
@@ -418,179 +76,20 @@ impl WriteYakStore for DirectoryStorage {
 }
 
 impl ReadYakStore for DirectoryStorage {
-    fn get_yak(&self, id: &YakId) -> Result<YakView> {
-        let dir = self
-            .resolve_by_id(id.as_str())
-            .or_else(|| {
-                // Fallback: try yak_dir resolution for backward compat
-                let d = self.yak_dir(id.as_str());
-                if d.exists() && d.join(CONTEXT_FIELD).exists() {
-                    Some(d)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
-
-        let display_name = self.read_leaf_name(&dir);
-
-        let context = fs::read_to_string(dir.join(CONTEXT_FIELD))
-            .ok()
-            .and_then(|c| if c.is_empty() { None } else { Some(c) });
-
-        let state: YakState = fs::read_to_string(dir.join(STATE_FIELD))
-            .unwrap_or_else(|_| "todo".to_string())
-            .trim()
-            .parse()
-            .unwrap_or(YakState::Todo);
-
-        let fields = self.read_custom_fields(&dir);
-        let tags: Vec<String> = fs::read_to_string(dir.join(TAGS_FIELD))
-            .ok()
-            .map(|t| {
-                t.lines()
-                    .filter(|l| !l.is_empty())
-                    .map(String::from)
-                    .collect()
-            })
-            .unwrap_or_default();
-        let children = self.read_children(&dir);
-        let parent_id = self.read_parent_id(&dir);
-        let (created_by, created_at) = Self::read_metadata(&dir);
-
-        Ok(YakView {
-            id: id.clone(),
-            name: Name::from(display_name),
-            parent_id,
-            state,
-            context,
-            fields,
-            tags,
-            children,
-            created_by,
-            created_at,
-        })
+    fn get_yak(&self, id: &YakId) -> Result<crate::domain::YakView> {
+        query::get_yak(&self.base_path, id)
     }
 
-    fn list_yaks(&self) -> Result<Vec<YakView>> {
-        let mut yaks = Vec::new();
-
-        if !self.base_path.exists() {
-            return Ok(yaks);
-        }
-
-        // Use WalkDir to recursively find all directories that are yaks
-        for entry in WalkDir::new(&self.base_path)
-            .min_depth(1)
-            .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
-        {
-            let entry = entry?;
-            let path = entry.path();
-
-            // Only process directories that have a context.md (are actual yaks)
-            if !path.join(CONTEXT_FIELD).exists() {
-                continue;
-            }
-
-            // Build hierarchical name from directory structure and leaf name files
-            let display_name = self.read_leaf_name(path);
-
-            // Read id from id file, fall back to directory name (backward compat)
-            let id = fs::read_to_string(path.join(ID_FIELD))
-                .unwrap_or_else(|_| {
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or(&display_name)
-                        .to_string()
-                })
-                .trim()
-                .to_string();
-
-            let context = fs::read_to_string(path.join(CONTEXT_FIELD))
-                .ok()
-                .and_then(|c| if c.is_empty() { None } else { Some(c) });
-
-            let state: YakState = fs::read_to_string(path.join(STATE_FIELD))
-                .unwrap_or_else(|_| "todo".to_string())
-                .trim()
-                .parse()
-                .unwrap_or(YakState::Todo);
-
-            let fields = self.read_custom_fields(path);
-            let tags: Vec<String> = fs::read_to_string(path.join(TAGS_FIELD))
-                .ok()
-                .map(|t| {
-                    t.lines()
-                        .filter(|l| !l.is_empty())
-                        .map(String::from)
-                        .collect()
-                })
-                .unwrap_or_default();
-            let children = self.read_children(path);
-            let parent_id = self.read_parent_id(path);
-            let (created_by, created_at) = Self::read_metadata(path);
-
-            yaks.push(YakView {
-                id: YakId::from(id),
-                name: Name::from(display_name),
-                parent_id,
-                state,
-                context,
-                fields,
-                tags,
-                children,
-                created_by,
-                created_at,
-            });
-        }
-
-        Ok(yaks)
+    fn list_yaks(&self) -> Result<Vec<crate::domain::YakView>> {
+        query::list_yaks(&self.base_path)
     }
 
-    fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId> {
-        // First, try exact match via resolution (handles both old and new format)
-        let dir = self.yak_dir(query);
-        if dir.exists() && dir.join(CONTEXT_FIELD).exists() {
-            let id = self.read_id_from_dir(&dir, query);
-            return Ok(id);
-        }
-
-        // If not found, try fuzzy match on the name
-        let yaks = ReadYakStore::list_yaks(self)?;
-        let matches: Vec<&YakView> = yaks
-            .iter()
-            .filter(|yak| {
-                yak.name
-                    .as_str()
-                    .to_lowercase()
-                    .contains(&query.to_lowercase())
-            })
-            .collect();
-
-        match matches.len() {
-            0 => anyhow::bail!("yak '{query}' not found"),
-            1 => Ok(matches[0].id.clone()),
-            _ => anyhow::bail!("yak name '{query}' is ambiguous"),
-        }
+    fn fuzzy_find_yak_id(&self, query_str: &str) -> Result<YakId> {
+        query::fuzzy_find_yak_id(&self.base_path, query_str)
     }
 
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
-        let dir = self
-            .resolve_by_id(id.as_str())
-            .or_else(|| {
-                let d = self.yak_dir(id.as_str());
-                if d.exists() {
-                    Some(d)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
-
-        let field_path = dir.join(field_name);
-        fs::read_to_string(&field_path)
-            .with_context(|| format!("Failed to read field '{field_name}' for '{id}'"))
+        io::read_field(&self.base_path, id, field_name)
     }
 }
 
@@ -634,7 +133,7 @@ mod tests {
 
         storage.on_event(&event).unwrap();
 
-        assert!(storage.yak_dir("test").exists());
+        assert!(query::yak_dir(&storage.base_path, "test").exists());
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test")).unwrap();
         assert_eq!(yak.state, crate::domain::YakState::Todo);
     }
@@ -1127,7 +626,7 @@ mod tests {
         // Place a context.md in base_path itself so the || mutant is detectable.
         // With &&: parent == base_path → false && true = false → None (correct).
         // With ||: parent == base_path → false || true = true → Some(id) (wrong!).
-        std::fs::write(temp.path().join(CONTEXT_FIELD), "").unwrap();
+        std::fs::write(temp.path().join(crate::domain::CONTEXT_FIELD), "").unwrap();
 
         storage
             .on_event(&YakEvent::Added(
