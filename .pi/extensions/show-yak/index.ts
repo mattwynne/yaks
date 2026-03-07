@@ -5,6 +5,8 @@
  * - "show_yak": retrieve yak details via `yx show --format json`
  * - "list_yaks": list all yaks via `yx list --format json`
  * - "update_yak_context": update a yak's context via `yx context`
+ * - "start_yak": create a worktree and start working on a yak
+ * - "merge_yak": merge a yak branch back to main
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -117,6 +119,93 @@ export default function showYakExtension(pi: ExtensionAPI) {
       } finally {
         try { unlinkSync(tmpFile); } catch {}
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "start_yak",
+    label: "Start Yak",
+    description:
+      "Start working on a yak: marks it as wip, creates a git worktree, and returns the worktree path and branch name. " +
+      "Pass the yak name as space-separated words, e.g. 'unify Yak type'.",
+    parameters: Type.Object({
+      name: Type.String({ description: "The yak name (space-separated words)" }),
+    }),
+
+    async execute(toolCallId, params, signal) {
+      const nameWords = params.name.split(/\s+/);
+      const result = await pi.exec("bin/dev", ["start", ...nameWords], {
+        signal,
+        timeout: 30000,
+      });
+
+      const output = (result.stdout + "\n" + result.stderr).trim();
+
+      if (result.code !== 0) {
+        return {
+          content: [{ type: "text", text: `Error starting yak:\n${output}` }],
+          isError: true,
+        };
+      }
+
+      // Parse worktree path and branch from output
+      // Format: "✅ Worktree ready: <path> (branch: <branch>)"
+      // Or if already exists: "Worktree already exists: <path>"
+      let worktreePath = "";
+      let branch = "";
+
+      const readyMatch = output.match(/Worktree ready: (\S+) \(branch: (\S+)\)/);
+      const existsMatch = output.match(/Worktree already exists: (\S+)/);
+
+      if (readyMatch) {
+        worktreePath = readyMatch[1];
+        branch = readyMatch[2];
+      } else if (existsMatch) {
+        worktreePath = existsMatch[1];
+        // Branch name is typically the last path segment
+        branch = worktreePath.split("/").pop() || "";
+      }
+
+      const response: Record<string, string> = {
+        worktreePath,
+        branch,
+        output,
+      };
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "merge_yak",
+    label: "Merge Yak",
+    description:
+      "Merge a yak branch back to main. Runs checks, rebases, fast-forward merges, and cleans up the worktree. " +
+      "Pass the branch name (typically the yak ID, e.g. 'unify-yak-type-lhf6').",
+    parameters: Type.Object({
+      branch: Type.String({ description: "The branch name to merge (typically the yak ID)" }),
+    }),
+
+    async execute(toolCallId, params, signal) {
+      const result = await pi.exec("bin/dev", ["merge", params.branch], {
+        signal,
+        timeout: 300000,
+      });
+
+      const output = (result.stdout + "\n" + result.stderr).trim();
+
+      if (result.code !== 0) {
+        return {
+          content: [{ type: "text", text: `Merge failed:\n${output}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: output }],
+      };
     },
   });
 }
