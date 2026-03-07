@@ -836,6 +836,53 @@ EOF
   done
 }
 
+# @cmd Start working on a yak (create worktree + mark wip)
+# @arg yak-name! Name of the yak to start
+# @alias st
+start() {
+  local yak_name="${argc_yak_name}"
+
+  # Get yak ID from yx show
+  local yak_json
+  yak_json=$(yx show --format json "$yak_name" 2>&1) || {
+    echo "❌ Failed to find yak: $yak_name"
+    echo "$yak_json"
+    return 1
+  }
+
+  local yak_id
+  yak_id=$(echo "$yak_json" | jq -r '.id')
+  if [ -z "$yak_id" ] || [ "$yak_id" = "null" ]; then
+    echo "❌ Could not get yak ID for '$yak_name'"
+    return 1
+  fi
+
+  local worktree_path=".worktrees/$yak_id"
+
+  # Check if worktree already exists
+  if [ -d "$worktree_path" ]; then
+    echo "Worktree already exists: $worktree_path"
+    yx start "$yak_name" 2>/dev/null || true
+    echo "$worktree_path"
+    return 0
+  fi
+
+  # Mark as wip
+  yx start "$yak_name"
+
+  # Create worktree
+  mkdir -p .worktrees
+  git worktree add "$worktree_path" -b "$yak_id" || {
+    echo "❌ Failed to create worktree"
+    return 1
+  }
+
+  # Record worktree location
+  echo "$worktree_path" | yx field "$yak_name" worktree
+
+  echo "✅ Worktree ready: $worktree_path"
+}
+
 # @cmd Merge a branch into main (check + rebase + fast-forward)
 # @arg branch! Branch to merge
 # @alias mg
