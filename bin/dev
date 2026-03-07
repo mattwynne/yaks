@@ -116,7 +116,7 @@ lint() {
     if ! shellcheck -S warning "$file"; then
       exit_code=1
     fi
-  done < <(find . -name "*.sh" -print0)
+  done < <(git ls-files -z '*.sh')
 
   echo ""
   echo "Running Rust clippy..."
