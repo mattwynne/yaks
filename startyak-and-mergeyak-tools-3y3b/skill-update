@@ -1,0 +1,3 @@
+The .pi/skills/ directory is gitignored, so the skill update needs to happen directly in the main repo. The protect-main extension blocks this. The user needs to either:
+1. Update .pi/skills/yak-worktree-workflow/SKILL.md manually
+2. Or we add !.pi/skills/ to .gitignore and track it
