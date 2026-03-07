@@ -877,10 +877,11 @@ start() {
     return 1
   }
 
-  # Record worktree location
+  # Record worktree and branch on the yak
   echo "$worktree_path" | yx field "$yak_name" worktree
+  echo "$yak_id" | yx field "$yak_name" branch
 
-  echo "✅ Worktree ready: $worktree_path"
+  echo "✅ Worktree ready: $worktree_path (branch: $yak_id)"
 }
 
 # @cmd Merge a branch into main (check + rebase + fast-forward)

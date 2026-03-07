@@ -12,7 +12,8 @@ export function isMainRepo(cwd: string): boolean {
 
 export function isAllowedBashCommand(cmd: string): boolean {
   const trimmed = cmd.trimStart();
-  return /(?:^|\|\s*)(dev|bin\/dev|yx)\b/.test(trimmed);
+  // Match dev/yx at start, after pipe, or after && or ;
+  return /(?:^|[|&;]\s*)(dev|bin\/dev|yx)\b/.test(trimmed);
 }
 
 export type ToolType = "read" | "write" | "edit" | "bash" | "other";

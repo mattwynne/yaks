@@ -55,6 +55,9 @@ describe("isAllowedBashCommand", () => {
     ['echo "context" | yx context "foo"', "piping into yx"],
     ["yx ls | grep foo", "piping from yx"],
     ['cat <<EOF | yx context "foo"\nstuff\nEOF', "heredoc into yx"],
+    ['cd /some/path && yx state "foo" wip', "cd then yx via &&"],
+    ['cd /some/path && dev check', "cd then dev via &&"],
+    ['cd foo; yx show bar', "cd then yx via ;"],
   ])("allows: %s (%s)", (cmd) => {
     expect(isAllowedBashCommand(cmd)).toBe(true);
   });
