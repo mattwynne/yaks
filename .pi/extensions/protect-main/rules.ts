@@ -25,8 +25,9 @@ export interface Decision {
 
 const BLOCK_REASON =
   "🛑 Blocked: you're in the main repo, not a worktree. " +
-  "Only `read`, `dev *`, and `yx *` commands are allowed here. " +
-  "Use `dev` commands to create a worktree first.";
+  "Only `read`, `yx *`, and `bin/dev *` commands are allowed here. " +
+  "To start work on a yak: `bin/dev start <yak-name>`, " +
+  "then use a subagent with cwd set to the worktree path.";
 
 export function decide(tool: ToolType, bashCommand?: string): Decision {
   if (tool === "read" || tool === "other") {
