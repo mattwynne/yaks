@@ -3,6 +3,8 @@ use serde::Serialize;
 /// View model for displaying detailed yak information (used in `yx show`)
 #[derive(Debug, Clone, Serialize)]
 pub struct YakDetailView {
+    /// Immutable yak identifier (e.g. "my-yak-a1b2")
+    pub id: String,
     /// Ancestor names, root-first
     pub breadcrumb: Vec<String>,
     pub name: String,

@@ -103,6 +103,7 @@ impl UseCase for ShowYak {
         let has_context = yak.context.as_ref().is_some_and(|c| !c.trim().is_empty());
 
         let view = YakDetailView {
+            id: id.to_string(),
             breadcrumb: ancestors,
             name: yak.name.to_string(),
             state: yak.state.to_string(),
@@ -748,6 +749,80 @@ mod tag_tests {
         assert!(
             !output.contains("Tags:"),
             "Tags should not appear as a custom field with 'Tags:' label, got:\n{output}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod json_tests {
+    use crate::adapters::json_display::JsonDisplay;
+    use crate::adapters::{
+        InMemoryAuthentication, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    };
+    use crate::application::{AddYak, Application, ShowYak};
+    use crate::infrastructure::EventBus;
+    use std::sync::{Arc, Mutex};
+
+    /// A shared writer that lets us read back what was written
+    #[derive(Clone)]
+    struct SharedBuffer(Arc<Mutex<Vec<u8>>>);
+
+    impl SharedBuffer {
+        fn new() -> Self {
+            Self(Arc::new(Mutex::new(Vec::new())))
+        }
+        fn contents(&self) -> String {
+            let buf = self.0.lock().unwrap();
+            String::from_utf8(buf.clone()).unwrap()
+        }
+    }
+
+    impl std::io::Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn json_output_includes_id() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let buffer = SharedBuffer::new();
+        let json_display = JsonDisplay::with_writer(Box::new(buffer.clone()));
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &json_display,
+            &input,
+            None,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        // Clear any output from AddYak
+        buffer.0.lock().unwrap().clear();
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
+
+        let output = buffer.contents();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert!(
+            json.get("id").is_some(),
+            "Expected 'id' field in JSON output, got: {output}"
+        );
+        let id = json["id"].as_str().unwrap();
+        assert!(
+            id.starts_with("my-yak-"),
+            "Expected id to start with 'my-yak-', got: {id}"
         );
     }
 }
