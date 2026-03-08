@@ -263,7 +263,12 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             let breadcrumb = if view.breadcrumb.is_empty() {
                 None
             } else {
-                let path = view.breadcrumb.join(" > ");
+                let path = view
+                    .breadcrumb
+                    .iter()
+                    .map(|a| a.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" > ");
                 Some(format!("  {path} >   "))
             };
 

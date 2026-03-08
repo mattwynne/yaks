@@ -5,8 +5,8 @@ use serde::Serialize;
 pub struct YakDetailView {
     /// Immutable yak identifier (e.g. "my-yak-a1b2")
     pub id: String,
-    /// Ancestor names, root-first
-    pub breadcrumb: Vec<String>,
+    /// Ancestor yaks with id, name, and state (root-first)
+    pub breadcrumb: Vec<YakChildView>,
     pub name: String,
     pub state: String,
     /// Formatted date string
@@ -27,9 +27,10 @@ pub struct YakDetailView {
     pub has_context: bool,
 }
 
-/// View model for a child yak in the detail view
+/// View model for a child yak in the detail view (also used for breadcrumb ancestors)
 #[derive(Debug, Clone, Serialize)]
 pub struct YakChildView {
+    pub id: String,
     pub name: String,
     pub state: String,
 }

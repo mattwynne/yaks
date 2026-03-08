@@ -48,12 +48,16 @@ impl UseCase for ShowYak {
         let id = app.store.fuzzy_find_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
 
-        // Breadcrumb: walk parent chain to collect ancestor names (root-first)
+        // Breadcrumb: walk parent chain to collect ancestors with id, name, state (root-first)
         let mut ancestors = Vec::new();
         let mut current_parent = yak.parent_id.clone();
         while let Some(pid) = current_parent {
             let parent_yak = app.store.get_yak(&pid)?;
-            ancestors.push(parent_yak.name.to_string());
+            ancestors.push(YakChildView {
+                id: parent_yak.id.to_string(),
+                name: parent_yak.name.to_string(),
+                state: parent_yak.state.to_string(),
+            });
             current_parent = parent_yak.parent_id.clone();
         }
         ancestors.reverse();
@@ -66,6 +70,7 @@ impl UseCase for ShowYak {
                 .iter()
                 .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
                 .map(|c| YakChildView {
+                    id: c.id.to_string(),
                     name: c.name.to_string(),
                     state: c.state.to_string(),
                 })
@@ -824,6 +829,104 @@ mod json_tests {
         assert!(
             id.starts_with("my-yak-"),
             "Expected id to start with 'my-yak-', got: {id}"
+        );
+    }
+
+    #[test]
+    fn json_output_includes_child_ids_and_structured_ancestors() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let buffer = SharedBuffer::new();
+        let json_display = JsonDisplay::with_writer(Box::new(buffer.clone()));
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &json_display,
+            &input,
+            None,
+            &auth,
+        );
+
+        // Create a nested structure: grandparent > parent > child1, child2
+        app.handle(AddYak::new("grandparent")).unwrap();
+        app.handle(AddYak::new("parent").with_parent(Some("grandparent")))
+            .unwrap();
+        app.handle(AddYak::new("child1").with_parent(Some("parent")))
+            .unwrap();
+        app.handle(AddYak::new("child2").with_parent(Some("parent")))
+            .unwrap();
+
+        // Clear any output from AddYak
+        buffer.0.lock().unwrap().clear();
+        app.handle(ShowYak::new("parent", "pretty")).unwrap();
+
+        let output = buffer.contents();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        // Check children have id, name, and state
+        let children = json["children"].as_array().unwrap();
+        assert_eq!(
+            children.len(),
+            2,
+            "Expected 2 children, got: {}",
+            children.len()
+        );
+
+        for child in children {
+            assert!(
+                child.get("id").is_some(),
+                "Expected child to have 'id', got: {child}"
+            );
+            assert!(
+                child.get("name").is_some(),
+                "Expected child to have 'name', got: {child}"
+            );
+            assert!(
+                child.get("state").is_some(),
+                "Expected child to have 'state', got: {child}"
+            );
+            let child_id = child["id"].as_str().unwrap();
+            let child_name = child["name"].as_str().unwrap();
+            assert!(
+                child_id.starts_with(&format!("{}-", child_name)),
+                "Expected child id to start with '{}-', got: {child_id}",
+                child_name
+            );
+        }
+
+        // Check breadcrumb has structured ancestors with id, name, and state
+        let breadcrumb = json["breadcrumb"].as_array().unwrap();
+        assert_eq!(
+            breadcrumb.len(),
+            1,
+            "Expected 1 ancestor (grandparent), got: {}",
+            breadcrumb.len()
+        );
+
+        let ancestor = &breadcrumb[0];
+        assert!(
+            ancestor.get("id").is_some(),
+            "Expected ancestor to have 'id', got: {ancestor}"
+        );
+        assert_eq!(
+            ancestor["name"].as_str().unwrap(),
+            "grandparent",
+            "Expected ancestor name to be 'grandparent', got: {:?}",
+            ancestor["name"]
+        );
+        assert!(
+            ancestor.get("state").is_some(),
+            "Expected ancestor to have 'state', got: {ancestor}"
+        );
+        let ancestor_id = ancestor["id"].as_str().unwrap();
+        assert!(
+            ancestor_id.starts_with("grandparent-"),
+            "Expected ancestor id to start with 'grandparent-', got: {ancestor_id}"
         );
     }
 }
