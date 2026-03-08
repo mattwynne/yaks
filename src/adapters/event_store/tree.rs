@@ -602,4 +602,94 @@ mod tests {
         assert_eq!(restored_yak.tags[0], "leading-space");
         assert_eq!(restored_yak.tags[1], "trailing-space");
     }
+
+    #[test]
+    fn removed_yak_ids_are_persisted_in_tree() {
+        // Create a test git repo
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a yak snapshot
+        let yak = Yak {
+            id: YakId::from("kept-yak-a1b2"),
+            name: Name::from("kept yak"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields: std::collections::HashMap::new(),
+            tags: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
+        };
+
+        // Create removed yak IDs
+        let removed_yak_ids = vec![
+            YakId::from("removed-yak-c3d4"),
+            YakId::from("removed-yak-e5f6"),
+        ];
+
+        // Create a Compacted event with snapshots and removed yak IDs
+        let event = crate::domain::YakEvent::Compacted(
+            vec![yak],
+            removed_yak_ids.clone(),
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        // Build tree from the compacted event
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        // Verify the .removed-yaks blob was written
+        let removed_yaks_entry = tree.get_name(".removed-yaks");
+        assert!(
+            removed_yaks_entry.is_some(),
+            ".removed-yaks blob should be written when there are removed yak IDs"
+        );
+
+        // Read the blob content
+        let blob = repo.find_blob(removed_yaks_entry.unwrap().id()).unwrap();
+        let content = std::str::from_utf8(blob.content()).unwrap();
+
+        // Verify it contains the removed yak IDs
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "removed-yak-c3d4");
+        assert_eq!(lines[1], "removed-yak-e5f6");
+    }
+
+    #[test]
+    fn removed_yaks_blob_not_written_when_empty() {
+        // Create a test git repo
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a yak snapshot
+        let yak = Yak {
+            id: YakId::from("test-yak-a1b2"),
+            name: Name::from("test yak"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields: std::collections::HashMap::new(),
+            tags: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
+        };
+
+        // Create a Compacted event with no removed yak IDs
+        let event = crate::domain::YakEvent::Compacted(
+            vec![yak],
+            vec![],
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        // Build tree from the compacted event
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        // Verify the .removed-yaks blob was NOT written
+        let removed_yaks_entry = tree.get_name(".removed-yaks");
+        assert!(
+            removed_yaks_entry.is_none(),
+            ".removed-yaks blob should not be written when there are no removed yak IDs"
+        );
+    }
 }

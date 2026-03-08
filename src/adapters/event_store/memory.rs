@@ -252,6 +252,67 @@ mod tests {
     }
 
     #[test]
+    fn compact_collects_removed_yak_ids() {
+        let mut store = InMemoryEventStore::new();
+
+        // Add two yaks
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("keep"),
+                    id: YakId::from("keep-a1b2"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        store
+            .append(&YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("remove"),
+                    id: YakId::from("remove-c3d4"),
+                    parent_id: None,
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Remove one yak
+        store
+            .append(&YakEvent::Removed(
+                crate::domain::events::RemovedEvent {
+                    id: YakId::from("remove-c3d4"),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        // Compact
+        store.compact(EventMetadata::default_legacy()).unwrap();
+
+        // Check that the Compacted event has the removed yak ID
+        let raw = store.events.lock().unwrap();
+        let compacted = raw
+            .iter()
+            .find(|e| matches!(e, YakEvent::Compacted(_, _, _)));
+        assert!(compacted.is_some(), "Should have a Compacted event");
+
+        if let YakEvent::Compacted(snapshots, removed_yak_ids, _) = compacted.unwrap() {
+            // Should only have the kept yak in snapshots
+            assert_eq!(snapshots.len(), 1);
+            assert_eq!(snapshots[0].id, YakId::from("keep-a1b2"));
+
+            // Should have the removed yak ID in removed_yak_ids
+            assert_eq!(removed_yak_ids.len(), 1, "Should have one removed yak ID");
+            assert_eq!(
+                removed_yak_ids[0],
+                YakId::from("remove-c3d4"),
+                "Should track the removed yak ID"
+            );
+        }
+    }
+
+    #[test]
     fn test_in_memory_event_store() {
         let mut store = InMemoryEventStore::new();
 
