@@ -3,8 +3,8 @@
 use anyhow::Result;
 
 use super::{Application, UseCase};
+use crate::adapters::views::{YakChildView, YakDetailView};
 use crate::domain::tag::format_tag;
-use crate::domain::views::{YakChildView, YakDetailView};
 
 /// Convert a snake_case field name to Title Case (e.g. "relates_to" → "Relates To")
 fn title_case(s: &str) -> String {

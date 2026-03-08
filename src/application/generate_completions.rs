@@ -1,6 +1,6 @@
 // GenerateCompletions use case - generates shell completion suggestions
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::completions::complete_with_state;

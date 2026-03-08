@@ -1,7 +1,7 @@
 // JsonDisplay adapter - serializes view models to JSON
 
+use crate::adapters::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 use crate::domain::ports::DisplayPort;
-use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 use std::io::Write;
 use std::sync::Mutex;
 

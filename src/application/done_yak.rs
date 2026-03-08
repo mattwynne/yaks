@@ -1,6 +1,6 @@
 // Use case: Mark a yak as done (sugar for SetState with state="done")
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, SetState, UseCase};

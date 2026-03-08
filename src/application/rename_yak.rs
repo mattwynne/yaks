@@ -1,7 +1,7 @@
 // Use case: Rename a yak (change name without moving)
 
+use crate::adapters::views::Message;
 use crate::domain::validate_yak_name;
-use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

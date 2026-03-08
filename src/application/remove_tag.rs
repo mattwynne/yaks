@@ -1,7 +1,7 @@
 // Use case: Remove tags from a yak
 
+use crate::adapters::views::Message;
 use crate::domain::field::TAGS_FIELD;
-use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

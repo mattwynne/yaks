@@ -6,8 +6,8 @@
 use anyhow::Result;
 use std::path::Path;
 
+use crate::adapters::views::Message;
 use crate::domain::ports::{DisplayPort, EventStore};
-use crate::domain::views::Message;
 use crate::domain::YakEvent;
 
 use super::git::GitEventStore;

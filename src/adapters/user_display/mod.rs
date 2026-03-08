@@ -1,8 +1,8 @@
 pub mod relative_time;
 // CLI adapter - implementation using clap
 
+use crate::adapters::views::{LogEntryView, Message, YakDetailView, YakTreeNode, YakTreeView};
 use crate::domain::slug::Name;
-use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeNode, YakTreeView};
 use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
 

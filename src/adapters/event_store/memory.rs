@@ -2,9 +2,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::adapters::views::Message;
 use crate::domain::ports::{EventStore, EventStoreReader};
 use crate::domain::slug::Name;
-use crate::domain::views::Message;
 use crate::domain::YakEvent;
 
 #[allow(clippy::cognitive_complexity)]

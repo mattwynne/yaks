@@ -1,7 +1,7 @@
 // Use case: Show a yak field
 
+use crate::adapters::views::Message;
 use crate::domain::validate_field_name_format;
-use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

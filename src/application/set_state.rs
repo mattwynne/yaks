@@ -1,7 +1,7 @@
 // Use case: Set a yak's state
 
+use crate::adapters::views::Message;
 use crate::domain::slug::YakId;
-use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

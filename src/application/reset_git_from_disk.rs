@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use crate::domain::slug::YakId;

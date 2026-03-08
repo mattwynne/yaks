@@ -1,9 +1,9 @@
 // Use case: Add a new yak
 
+use crate::adapters::views::Message;
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::YakId;
 use crate::domain::validate_yak_name;
-use crate::domain::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

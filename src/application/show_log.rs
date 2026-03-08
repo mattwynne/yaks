@@ -4,8 +4,8 @@ use anyhow::Result;
 
 use super::{Application, UseCase};
 use crate::adapters::user_display::relative_time::format_relative;
+use crate::adapters::views::{LogEntryView, NarrativeSpanView};
 use crate::domain::narrative::NarrativeSpan;
-use crate::domain::views::{LogEntryView, NarrativeSpanView};
 
 pub struct ShowLog;
 

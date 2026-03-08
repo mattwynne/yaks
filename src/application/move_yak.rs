@@ -1,6 +1,6 @@
 // Use case: Move a yak in the hierarchy
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

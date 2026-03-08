@@ -1,9 +1,9 @@
 // TUI adapter - implementation using ratatui for rich terminal output
 
 use crate::adapters::user_display::ConsoleDisplay;
+use crate::adapters::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::slug::Name;
-use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 use ratatui::backend::Backend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};

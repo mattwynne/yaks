@@ -1,6 +1,6 @@
 // Display port trait - abstraction for displaying results to user
 
-use crate::domain::views::{LogEntryView, Message, YakDetailView, YakTreeView};
+use crate::adapters::views::{LogEntryView, Message, YakDetailView, YakTreeView};
 
 pub trait DisplayPort {
     /// Get the display width

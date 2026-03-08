@@ -10,7 +10,6 @@ pub mod narrative;
 pub mod ports;
 pub mod slug;
 pub mod tag;
-pub mod views;
 pub mod yak;
 pub mod yak_map;
 pub mod yak_snapshot;

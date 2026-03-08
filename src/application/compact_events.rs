@@ -1,6 +1,6 @@
 // CompactEvents use case - compacts the event stream into a snapshot
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};

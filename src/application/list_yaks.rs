@@ -1,7 +1,7 @@
 // ListYaks use case - displays all yaks
 
+use crate::adapters::views::{Message, YakTreeNode, YakTreeView};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::views::{Message, YakTreeNode, YakTreeView};
 use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
 use anyhow::Result;

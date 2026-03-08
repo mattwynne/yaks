@@ -1,6 +1,6 @@
 // Use case: Start a yak (sugar for SetState with state="wip")
 
-use crate::domain::views::Message;
+use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, SetState, UseCase};

@@ -8,6 +8,7 @@ pub mod spinner;
 pub mod tui_display;
 pub mod user_display;
 pub mod user_input;
+pub mod views;
 pub mod yak_store;
 
 // Re-export test adapters for use in tests across the crate
