@@ -92,6 +92,16 @@ impl<'r> YakSubtreeBuilder<'r> {
         self
     }
 
+    /// Set the yak's tags (stored as newline-separated blob).
+    /// Only writes the .tags blob if the vec is non-empty.
+    pub(super) fn tags(mut self, tags: &[String]) -> Self {
+        if !tags.is_empty() {
+            let content = tags.join("\n");
+            self.entries.push((".tags", content));
+        }
+        self
+    }
+
     /// Write all collected entries to a new git tree object.
     pub(super) fn build(self) -> Result<git2::Oid> {
         let mut builder = self.repo.treebuilder(None)?;
@@ -180,6 +190,7 @@ pub(super) fn build_tree_from_event(
                 .context("")
                 .metadata(&metadata.author, metadata.timestamp)
                 .parent_id(e.parent_id.as_ref().map(|p| p.as_str()))
+                .tags(&[])
                 .build()?;
             set_yak_in_root(repo, current_tree, e.id.as_str(), Some(yak_tree_oid))
         }
@@ -235,6 +246,7 @@ pub(super) fn build_tree_from_event(
                         .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
                         .metadata(&snap.created_by, snap.created_at)
                         .custom_fields(&snap.fields)
+                        .tags(&snap.tags)
                         .build()?;
                     root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
                 }
@@ -402,6 +414,17 @@ pub(super) fn read_snapshots_from_tree(
 
         let fields = read_custom_fields(repo, &subtree)?;
 
+        // Read tags from .tags blob (newline-separated)
+        let tags = read_blob_str(repo, &subtree, ".tags")?
+            .map(|s| {
+                s.lines()
+                    .map(|line| line.trim())
+                    .filter(|line| !line.is_empty())
+                    .map(|line| line.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         snapshots.push(Yak {
             id: YakId::from(data.id.as_str()),
             name: Name::from(data.name_str.as_str()),
@@ -409,11 +432,159 @@ pub(super) fn read_snapshots_from_tree(
             state,
             context,
             fields,
-            tags: vec![], // git tree doesn't store tags
+            tags,
             created_by,
             created_at,
         });
     }
 
     Ok(snapshots)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::event_metadata::{Author, Timestamp};
+    use crate::domain::slug::{Name, YakId};
+    use crate::domain::{Yak, YakState};
+    use tempfile::TempDir;
+
+    fn setup_test_repo() -> (TempDir, Repository) {
+        let tmp = TempDir::new().unwrap();
+        let repo = Repository::init(tmp.path()).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@example.com").unwrap();
+        (tmp, repo)
+    }
+
+    #[test]
+    fn tags_survive_compaction_roundtrip() {
+        // Create a test git repo
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a yak with tags
+        let yak = Yak {
+            id: YakId::from("test-yak-a1b2"),
+            name: Name::from("test yak"),
+            parent_id: None,
+            state: YakState::Wip,
+            context: Some("some context".to_string()),
+            fields: std::collections::HashMap::new(),
+            tags: vec!["urgent".to_string(), "backend".to_string()],
+            created_by: Author {
+                name: "Test User".to_string(),
+                email: "test@example.com".to_string(),
+            },
+            created_at: Timestamp(1234567890),
+        };
+
+        // Create a Compacted event with the yak
+        let event = crate::domain::YakEvent::Compacted(
+            vec![yak.clone()],
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        // Build tree from the compacted event
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        // Read snapshots back from the tree
+        let snapshots = read_snapshots_from_tree(&repo, &tree).unwrap();
+
+        // Verify tags survived
+        assert_eq!(snapshots.len(), 1);
+        let restored_yak = &snapshots[0];
+        assert_eq!(restored_yak.id.as_str(), "test-yak-a1b2");
+        assert_eq!(restored_yak.tags.len(), 2);
+        assert_eq!(restored_yak.tags[0], "urgent");
+        assert_eq!(restored_yak.tags[1], "backend");
+    }
+
+    #[test]
+    fn empty_tags_not_written_to_tree() {
+        // Create a test git repo
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a yak with no tags
+        let yak = Yak {
+            id: YakId::from("test-yak-a1b2"),
+            name: Name::from("test yak"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields: std::collections::HashMap::new(),
+            tags: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
+        };
+
+        // Create a Compacted event with the yak
+        let event = crate::domain::YakEvent::Compacted(
+            vec![yak],
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        // Build tree from the compacted event
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        // Get the yak subtree
+        let yak_subtree = get_yak_subtree(&repo, Some(&tree), "test-yak-a1b2")
+            .unwrap()
+            .unwrap();
+
+        // Verify .tags blob was NOT created
+        assert!(yak_subtree.get_name(".tags").is_none());
+
+        // Read snapshots back from the tree
+        let snapshots = read_snapshots_from_tree(&repo, &tree).unwrap();
+
+        // Verify empty tags are preserved as empty vec
+        assert_eq!(snapshots.len(), 1);
+        let restored_yak = &snapshots[0];
+        assert_eq!(restored_yak.tags.len(), 0);
+    }
+
+    #[test]
+    fn tags_with_whitespace_are_trimmed() {
+        // Create a test git repo
+        let (_tmp, repo) = setup_test_repo();
+
+        // Create a yak snapshot with tags
+        let yak = Yak {
+            id: YakId::from("test-yak-a1b2"),
+            name: Name::from("test yak"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields: std::collections::HashMap::new(),
+            tags: vec![
+                "  leading-space".to_string(),
+                "trailing-space  ".to_string(),
+            ],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
+        };
+
+        // Create a Compacted event with the yak
+        let event = crate::domain::YakEvent::Compacted(
+            vec![yak],
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        // Build tree from the compacted event
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        // Read snapshots back from the tree
+        let snapshots = read_snapshots_from_tree(&repo, &tree).unwrap();
+
+        // Verify tags are trimmed
+        assert_eq!(snapshots.len(), 1);
+        let restored_yak = &snapshots[0];
+        assert_eq!(restored_yak.tags.len(), 2);
+        assert_eq!(restored_yak.tags[0], "leading-space");
+        assert_eq!(restored_yak.tags[1], "trailing-space");
+    }
 }
