@@ -191,7 +191,7 @@ fn compact_ref(location: &EventStoreLocation, version: u32) -> Result<()> {
         Some(location.ref_name),
         &sig,
         &sig,
-        &format!("Compacted\n\nEvent-Id: migration-to-v{}", version),
+        &format!("Compacted\n\nEvent-Id: {}", uuid::Uuid::now_v7()),
         &new_tree,
         &[&parent],
     )?;
