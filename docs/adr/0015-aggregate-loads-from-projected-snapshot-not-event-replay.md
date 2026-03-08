@@ -4,7 +4,7 @@ Date: 2026-02-28
 
 ## Status
 
-accepted (elaborates on ADR 0002 "Aggregate loading cost" and ADR 0002 "Snapshot version linkage")
+Superseded by ADR 0019 — Event-source the aggregate
 
 ## Context
 

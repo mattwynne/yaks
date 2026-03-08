@@ -20,10 +20,11 @@ ADRs document significant architectural and design decisions.
 | [0012](0012-compact-after-migration-to-hide-pre-migration-history.md) | Compact after migration to hide pre-migration history | accepted |
 | [0013](0013-every-cli-command-is-a-use-case.md) | Every CLI command is a UseCase | proposed |
 | [0014](0014-no-optimistic-concurrency-on-event-appends.md) | No optimistic concurrency on event appends | accepted |
-| [0015](0015-aggregate-loads-from-projected-snapshot-not-event-replay.md) | Aggregate Loads from Projected Snapshot, Not Event Replay | accepted |
+| [0015](0015-aggregate-loads-from-projected-snapshot-not-event-replay.md) | Aggregate Loads from Projected Snapshot, Not Event Replay | superseded |
 | [0016](0016-reserved-fields-stored-as-hidden-files.md) | Reserved fields stored as hidden (dot-prefixed) files | accepted |
 | [0017](0017-ratatui-tui-display-adapter.md) | Ratatui TuiDisplay adapter for rich terminal output | accepted |
 | [0018](0018-unify-yak-domain-types-into-single-yak-struct.md) | Unify Yak domain types into single Yak struct | accepted |
+| [0019](0019-event-source-the-aggregate.md) | Event-source the aggregate | accepted |
 
 ## When to Write an ADR
 
