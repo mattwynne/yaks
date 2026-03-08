@@ -268,7 +268,7 @@ impl InProcessWorld {
     }
 
     /// List yaks in a named user's store
-    pub fn list_yaks_in_repo(&self, repo_name: &str) -> Result<Vec<yx::domain::YakView>> {
+    pub fn list_yaks_in_repo(&self, repo_name: &str) -> Result<Vec<yx::domain::Yak>> {
         let user = self
             .repos
             .get(repo_name)

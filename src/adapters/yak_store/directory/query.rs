@@ -1,13 +1,10 @@
 // Query and resolution operations for directory-based storage
 
 use super::fields::{
-    read_children, read_custom_fields, read_id_from_dir, read_leaf_name, read_metadata,
-    read_parent_id,
+    read_custom_fields, read_id_from_dir, read_leaf_name, read_metadata, read_parent_id,
 };
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{
-    YakState, YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD,
-};
+use crate::domain::{Yak, YakState, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD, TAGS_FIELD};
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -102,7 +99,7 @@ pub(super) fn resolve_by_name(base_path: &Path, name: &str) -> Option<PathBuf> {
 }
 
 /// Get a single yak by its ID.
-pub(super) fn get_yak(base_path: &Path, id: &YakId) -> Result<YakView> {
+pub(super) fn get_yak(base_path: &Path, id: &YakId) -> Result<Yak> {
     let dir = resolve_by_id(base_path, id.as_str())
         .or_else(|| {
             // Fallback: try yak_dir resolution for backward compat
@@ -137,11 +134,10 @@ pub(super) fn get_yak(base_path: &Path, id: &YakId) -> Result<YakView> {
                 .collect()
         })
         .unwrap_or_default();
-    let children = read_children(&dir);
     let parent_id = read_parent_id(&dir, base_path);
     let (created_by, created_at) = read_metadata(&dir);
 
-    Ok(YakView {
+    Ok(Yak {
         id: id.clone(),
         name: Name::from(display_name),
         parent_id,
@@ -149,14 +145,13 @@ pub(super) fn get_yak(base_path: &Path, id: &YakId) -> Result<YakView> {
         context,
         fields,
         tags,
-        children,
         created_by,
         created_at,
     })
 }
 
 /// List all yaks in the storage.
-pub(super) fn list_yaks(base_path: &Path) -> Result<Vec<YakView>> {
+pub(super) fn list_yaks(base_path: &Path) -> Result<Vec<Yak>> {
     let mut yaks = Vec::new();
 
     if !base_path.exists() {
@@ -211,11 +206,10 @@ pub(super) fn list_yaks(base_path: &Path) -> Result<Vec<YakView>> {
                     .collect()
             })
             .unwrap_or_default();
-        let children = read_children(path);
         let parent_id = read_parent_id(path, base_path);
         let (created_by, created_at) = read_metadata(path);
 
-        yaks.push(YakView {
+        yaks.push(Yak {
             id: YakId::from(id),
             name: Name::from(display_name),
             parent_id,
@@ -223,7 +217,6 @@ pub(super) fn list_yaks(base_path: &Path) -> Result<Vec<YakView>> {
             context,
             fields,
             tags,
-            children,
             created_by,
             created_at,
         });
@@ -243,7 +236,7 @@ pub(super) fn fuzzy_find_yak_id(base_path: &Path, query: &str) -> Result<YakId> 
 
     // If not found, try fuzzy match on the name
     let yaks = list_yaks(base_path)?;
-    let matches: Vec<&YakView> = yaks
+    let matches: Vec<&Yak> = yaks
         .iter()
         .filter(|yak| {
             yak.name

@@ -4,7 +4,7 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{YakState, YakView, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{Yak, YakState, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -27,6 +27,7 @@ impl InMemoryStorage {
 
     /// Find direct child yak IDs by scanning for entries whose
     /// _parent_id field matches the given id.
+    #[allow(dead_code)]
     fn find_children_from_yaks(
         yaks: &HashMap<String, HashMap<String, String>>,
         parent_key: &str,
@@ -206,7 +207,7 @@ impl WriteYakStore for InMemoryStorage {
 }
 
 impl ReadYakStore for InMemoryStorage {
-    fn get_yak(&self, id: &YakId) -> Result<YakView> {
+    fn get_yak(&self, id: &YakId) -> Result<Yak> {
         let yaks = self.yaks.read().unwrap();
         let key = Self::resolve_key_from_yaks(&yaks, id.as_str())
             .ok_or_else(|| anyhow::anyhow!("yak '{}' not found", id))?;
@@ -260,9 +261,6 @@ impl ReadYakStore for InMemoryStorage {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        // Find children by parent_id
-        let children = Self::find_children_from_yaks(&yaks, &key);
-
         // Read parent_id from fields
         let parent_id = fields
             .get(PARENT_ID_FIELD)
@@ -287,7 +285,7 @@ impl ReadYakStore for InMemoryStorage {
             })
             .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
 
-        Ok(YakView {
+        Ok(Yak {
             id: YakId::from(key.as_str()),
             name: Name::from(display_name),
             parent_id,
@@ -295,13 +293,12 @@ impl ReadYakStore for InMemoryStorage {
             context,
             fields: custom_fields,
             tags,
-            children,
             created_by,
             created_at,
         })
     }
 
-    fn list_yaks(&self) -> Result<Vec<YakView>> {
+    fn list_yaks(&self) -> Result<Vec<Yak>> {
         let yaks = self.yaks.read().unwrap();
         let mut result = Vec::new();
 
@@ -346,9 +343,6 @@ impl ReadYakStore for InMemoryStorage {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
-            // Find children by parent_id
-            let children = Self::find_children_from_yaks(&yaks, key);
-
             // Read parent_id from fields
             let parent_id = fields
                 .get(PARENT_ID_FIELD)
@@ -373,7 +367,7 @@ impl ReadYakStore for InMemoryStorage {
                 })
                 .unwrap_or_else(|| (Author::unknown(), Timestamp::zero()));
 
-            result.push(YakView {
+            result.push(Yak {
                 id: YakId::from(key.as_str()),
                 name: Name::from(display_name),
                 parent_id,
@@ -381,7 +375,6 @@ impl ReadYakStore for InMemoryStorage {
                 context,
                 fields: custom_fields,
                 tags,
-                children,
                 created_by,
                 created_at,
             });
@@ -515,10 +508,10 @@ mod tests {
     }
 
     // Mutant 1: find_children_from_yaks pid == parent_key comparison
-    // Verifies that children are only returned for the correct parent,
-    // not for every other yak (which would happen if == became !=).
+    // Verifies that parent-child relationships are correctly established.
+    // (Children are no longer stored on the Yak struct but are derived from parent_id)
     #[test]
-    fn test_find_children_returns_only_correct_parent_children() {
+    fn test_parent_child_relationship() {
         let storage = InMemoryStorage::new();
         let parent_id = YakId::from("parent-id-001");
         let other_id = YakId::from("other-id-002");
@@ -538,17 +531,21 @@ mod tests {
             .create_yak(&Name::from("unrelated"), &unrelated_id, None)
             .unwrap();
 
+        // Verify child has correct parent_id
+        let child_yak = ReadYakStore::get_yak(&storage, &child_id).unwrap();
+        assert_eq!(child_yak.parent_id, Some(parent_id.clone()));
+
+        // Verify parent has no parent_id
         let parent_yak = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
-        assert_eq!(parent_yak.children.len(), 1);
-        assert_eq!(parent_yak.children[0], child_id);
+        assert_eq!(parent_yak.parent_id, None);
 
-        // other yak has no children
+        // other yak has no parent
         let other_yak = ReadYakStore::get_yak(&storage, &other_id).unwrap();
-        assert!(other_yak.children.is_empty());
+        assert_eq!(other_yak.parent_id, None);
 
-        // unrelated yak has no children
+        // unrelated yak has no parent
         let unrelated_yak = ReadYakStore::get_yak(&storage, &unrelated_id).unwrap();
-        assert!(unrelated_yak.children.is_empty());
+        assert_eq!(unrelated_yak.parent_id, None);
     }
 
     // Mutant 2: rename_yak `!fields.contains_key(NAME_FIELD)` — legacy detection

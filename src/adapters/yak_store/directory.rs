@@ -76,11 +76,11 @@ impl WriteYakStore for DirectoryStorage {
 }
 
 impl ReadYakStore for DirectoryStorage {
-    fn get_yak(&self, id: &YakId) -> Result<crate::domain::YakView> {
+    fn get_yak(&self, id: &YakId) -> Result<crate::domain::Yak> {
         query::get_yak(&self.base_path, id)
     }
 
-    fn list_yaks(&self) -> Result<Vec<crate::domain::YakView>> {
+    fn list_yaks(&self) -> Result<Vec<crate::domain::Yak>> {
         query::list_yaks(&self.base_path)
     }
 
@@ -437,14 +437,15 @@ mod tests {
             ))
             .unwrap();
 
+        // Verify parent-child relationships via parent_id
         let parent = ReadYakStore::get_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
-        assert_eq!(parent.children.len(), 2);
-        assert!(parent.children.contains(&YakId::from("child1-c3d4")));
-        assert!(parent.children.contains(&YakId::from("child2-e5f6")));
+        assert_eq!(parent.parent_id, None);
 
-        // Leaf yaks should have no children
-        let child = ReadYakStore::get_yak(&storage, &YakId::from("child1-c3d4")).unwrap();
-        assert!(child.children.is_empty());
+        let child1 = ReadYakStore::get_yak(&storage, &YakId::from("child1-c3d4")).unwrap();
+        assert_eq!(child1.parent_id, Some(YakId::from("parent-a1b2")));
+
+        let child2 = ReadYakStore::get_yak(&storage, &YakId::from("child2-e5f6")).unwrap();
+        assert_eq!(child2.parent_id, Some(YakId::from("parent-a1b2")));
     }
 
     #[test]
@@ -494,11 +495,11 @@ mod tests {
             .find(|y| y.id == YakId::from("child-c3d4"))
             .unwrap();
 
-        assert_eq!(parent.children.len(), 1);
-        assert!(parent.children.contains(&YakId::from("child-c3d4")));
+        // Verify parent-child relationship
+        assert_eq!(parent.parent_id, None);
+        assert_eq!(child.parent_id, Some(YakId::from("parent-a1b2")));
 
         assert_eq!(child.fields.get("spec"), Some(&"some spec".to_string()));
-        assert!(child.children.is_empty());
     }
 
     #[test]

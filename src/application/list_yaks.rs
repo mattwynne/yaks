@@ -2,16 +2,16 @@
 
 use crate::domain::slug::{Name, YakId};
 use crate::domain::views::{Message, YakTreeNode, YakTreeView};
-use crate::domain::{YakState, YakView};
+use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
 use anyhow::Result;
 use std::collections::HashMap;
 
 /// Represents a node in the yak hierarchy tree
 struct YakNode {
-    name: Name,           // Just the leaf name (e.g., "child" not "parent/child")
-    full_path: String,    // Full path (e.g., "parent/child")
-    yak: Option<YakView>, // None for implicit parents
+    name: Name,        // Just the leaf name (e.g., "child" not "parent/child")
+    full_path: String, // Full path (e.g., "parent/child")
+    yak: Option<Yak>,  // None for implicit parents
     children: Vec<YakNode>,
 }
 
@@ -55,12 +55,12 @@ impl ListYaks {
     }
 
     /// Build a hierarchical tree from flat list of yaks using parent_id
-    fn build_tree(&self, _app: &Application, yaks: Vec<YakView>) -> Vec<YakNode> {
+    fn build_tree(&self, _app: &Application, yaks: Vec<Yak>) -> Vec<YakNode> {
         // Index all yak IDs for validation
         let yak_ids: std::collections::HashSet<&str> = yaks.iter().map(|y| y.id.as_str()).collect();
 
         // Group yaks by parent_id
-        let mut children_by_parent: HashMap<Option<&YakId>, Vec<&YakView>> = HashMap::new();
+        let mut children_by_parent: HashMap<Option<&YakId>, Vec<&Yak>> = HashMap::new();
         for yak in &yaks {
             // Validate: if parent_id points to a yak not in the list, skip it
             // (corrupted data - but we log and continue rather than crash)
@@ -288,8 +288,8 @@ impl UseCase for ListYaks {
 
 /// Recursively build a YakNode and its children from parent_id grouping
 fn build_node(
-    yak: &YakView,
-    children_by_parent: &HashMap<Option<&YakId>, Vec<&YakView>>,
+    yak: &Yak,
+    children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
     parent_path: &str,
 ) -> YakNode {
     let leaf_name = yak.name.as_str();
@@ -510,7 +510,7 @@ mod tests {
         YakNode {
             name: Name::from(name),
             full_path: name.to_string(),
-            yak: Some(YakView {
+            yak: Some(Yak {
                 id: YakId::from(format!("{}-xxxx", name)),
                 name: Name::from(name),
                 parent_id: None,
@@ -518,7 +518,6 @@ mod tests {
                 context: None,
                 fields: HashMap::new(),
                 tags: vec![],
-                children: vec![],
                 created_by: Author::unknown(),
                 created_at: Timestamp::zero(),
             }),

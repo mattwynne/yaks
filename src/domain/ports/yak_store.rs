@@ -1,12 +1,12 @@
 // Yak store port traits - read/write abstractions for yak persistence
 
 use crate::domain::slug::{Name, YakId};
-use crate::domain::YakView;
+use crate::domain::Yak;
 use anyhow::Result;
 
 pub trait ReadYakStore {
-    fn get_yak(&self, id: &YakId) -> Result<YakView>;
-    fn list_yaks(&self) -> Result<Vec<YakView>>;
+    fn get_yak(&self, id: &YakId) -> Result<Yak>;
+    fn list_yaks(&self) -> Result<Vec<Yak>>;
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId>;
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String>;
 }
@@ -39,18 +39,18 @@ mod tests {
     use std::collections::HashMap;
 
     struct InMemoryStore {
-        yaks: HashMap<String, YakView>,
+        yaks: HashMap<String, Yak>,
     }
 
     impl ReadYakStore for InMemoryStore {
-        fn get_yak(&self, id: &YakId) -> Result<YakView> {
+        fn get_yak(&self, id: &YakId) -> Result<Yak> {
             self.yaks
                 .get(id.as_str())
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Yak not found"))
         }
 
-        fn list_yaks(&self) -> Result<Vec<YakView>> {
+        fn list_yaks(&self) -> Result<Vec<Yak>> {
             Ok(self.yaks.values().cloned().collect())
         }
 
@@ -73,7 +73,7 @@ mod tests {
         let mut yaks = HashMap::new();
         yaks.insert(
             "test".to_string(),
-            YakView {
+            Yak {
                 id: YakId::from("test"),
                 name: Name::from("test"),
                 parent_id: None,
@@ -81,7 +81,6 @@ mod tests {
                 context: None,
                 fields: HashMap::new(),
                 tags: vec![],
-                children: vec![],
                 created_by: Author::unknown(),
                 created_at: Timestamp::zero(),
             },

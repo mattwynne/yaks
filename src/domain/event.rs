@@ -14,7 +14,7 @@ pub enum YakEvent {
     Removed(RemovedEvent, EventMetadata),
     Moved(MovedEvent, EventMetadata),
     FieldUpdated(FieldUpdatedEvent, EventMetadata),
-    Compacted(Vec<super::yak_snapshot::YakSnapshot>, EventMetadata),
+    Compacted(Vec<super::yak::Yak>, EventMetadata),
 }
 
 impl YakEvent {
@@ -266,7 +266,7 @@ mod tests {
     fn narrative_compacted_with_count() {
         use crate::domain::event_metadata::{Author, Timestamp};
         use crate::domain::slug::Name;
-        use crate::domain::yak_snapshot::YakSnapshot;
+        use crate::domain::yak::Yak;
         use crate::domain::yak_state::YakState;
         use std::collections::HashMap;
         let author = Author {
@@ -274,23 +274,25 @@ mod tests {
             email: "test@test.com".to_string(),
         };
         let snapshots = vec![
-            YakSnapshot {
+            Yak {
                 name: Name::from("yak one"),
                 id: YakId::from("yak-one-a1b2"),
                 state: YakState::Todo,
                 context: None,
                 parent_id: None,
                 fields: HashMap::new(),
+                tags: vec![],
                 created_by: author.clone(),
                 created_at: Timestamp(0),
             },
-            YakSnapshot {
+            Yak {
                 name: Name::from("yak two"),
                 id: YakId::from("yak-two-c3d4"),
                 state: YakState::Todo,
                 context: None,
                 parent_id: None,
                 fields: HashMap::new(),
+                tags: vec![],
                 created_by: author,
                 created_at: Timestamp(0),
             },

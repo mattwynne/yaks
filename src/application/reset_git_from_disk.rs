@@ -6,13 +6,13 @@
 //
 // This is the `yx reset --git-from-disk` mode.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::domain::views::Message;
 use anyhow::Result;
 
 use crate::domain::slug::YakId;
-use crate::domain::YakView;
+use crate::domain::Yak;
 
 use super::{AddYak, Application, UseCase};
 
@@ -56,16 +56,10 @@ impl UseCase for ResetGitFromDisk {
         app.event_bus.rebuild(&[])?;
 
         // 4. Replay yaks through AddYak in topological order (parents before children)
-        let yak_index: HashMap<&YakId, &YakView> = yaks.iter().map(|y| (&y.id, y)).collect();
+        let yak_index: HashMap<&YakId, &Yak> = yaks.iter().map(|y| (&y.id, y)).collect();
 
-        // Find roots: yaks not appearing in any other yak's children list
-        let mut child_ids = HashSet::new();
-        for yak in &yaks {
-            for child_id in &yak.children {
-                child_ids.insert(child_id);
-            }
-        }
-        let roots: Vec<&YakView> = yaks.iter().filter(|y| !child_ids.contains(&y.id)).collect();
+        // Find roots: yaks with no parent_id
+        let roots: Vec<&Yak> = yaks.iter().filter(|y| y.parent_id.is_none()).collect();
 
         for root_yak in &roots {
             replay_yak(app, root_yak, &yak_index, None)?;
@@ -94,8 +88,8 @@ impl UseCase for ResetGitFromDisk {
 
 fn replay_yak(
     app: &mut Application,
-    yak: &YakView,
-    yak_index: &HashMap<&YakId, &YakView>,
+    yak: &Yak,
+    yak_index: &HashMap<&YakId, &Yak>,
     parent_id: Option<&str>,
 ) -> Result<()> {
     let has_real_metadata = yak.created_at != crate::domain::Timestamp::zero();
@@ -131,10 +125,13 @@ fn replay_yak(
     }
     app.handle(use_case)?;
 
-    for child_id in &yak.children {
-        if let Some(child) = yak_index.get(child_id) {
-            replay_yak(app, child, yak_index, Some(yak.id.as_str()))?;
-        }
+    // Find and replay children (yaks whose parent_id matches this yak's id)
+    let children: Vec<&&Yak> = yak_index
+        .values()
+        .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
+        .collect();
+    for child in children {
+        replay_yak(app, child, yak_index, Some(yak.id.as_str()))?;
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-// YakView - read-model projection of a yak
+// Yak - read-model projection of a yak
 
 use std::collections::HashMap;
 
@@ -6,13 +6,16 @@ use super::event_metadata::{Author, Timestamp};
 use super::slug::{Name, YakId};
 use super::yak_state::YakState;
 
-/// Read-model projection of a yak.
+/// Unified yak domain type.
 ///
 /// This is a DTO (data transfer object) with public fields, used for
 /// displaying yak data. It is NOT the core domain entity — see `YakState`
 /// (inside `YakMap`) for the authoritative domain type.
+///
+/// Note: `children` is excluded — it should be derived by scanning other yaks
+/// for matching `parent_id` at the presentation layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct YakView {
+pub struct Yak {
     pub id: YakId,
     pub name: Name,
     pub parent_id: Option<YakId>,
@@ -20,12 +23,11 @@ pub struct YakView {
     pub context: Option<String>,
     pub fields: HashMap<String, String>,
     pub tags: Vec<String>,
-    pub children: Vec<YakId>,
     pub created_by: Author,
     pub created_at: Timestamp,
 }
 
-impl YakView {
+impl Yak {
     pub fn is_done(&self) -> bool {
         self.state == YakState::Done
     }
@@ -53,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_is_done_derived_from_state() {
-        let yak = YakView {
+        let yak = Yak {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,
@@ -61,13 +63,12 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             tags: vec![],
-            children: vec![],
             created_by: Author::unknown(),
             created_at: Timestamp::zero(),
         };
         assert!(!yak.is_done());
 
-        let done_yak = YakView {
+        let done_yak = Yak {
             id: YakId::from("test"),
             name: Name::from("test"),
             parent_id: None,
@@ -75,7 +76,6 @@ mod tests {
             context: None,
             fields: HashMap::new(),
             tags: vec![],
-            children: vec![],
             created_by: Author::unknown(),
             created_at: Timestamp::zero(),
         };

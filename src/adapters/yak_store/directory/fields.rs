@@ -44,6 +44,7 @@ pub(super) fn read_custom_fields(dir: &Path) -> HashMap<String, String> {
 }
 
 /// Read direct child yak IDs from subdirectories of a yak directory.
+#[allow(dead_code)]
 pub(super) fn read_children(dir: &Path) -> Vec<YakId> {
     let mut children = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {

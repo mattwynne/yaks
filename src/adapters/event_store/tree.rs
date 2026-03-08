@@ -378,14 +378,13 @@ fn topological_sort(yak_data: Vec<YakData>) -> Vec<YakData> {
     ordered
 }
 
-/// Read the git tree into `Vec<YakSnapshot>`, preserving existing yak IDs.
+/// Read the git tree into `Vec<Yak>`, preserving existing yak IDs.
 pub(super) fn read_snapshots_from_tree(
     repo: &Repository,
     tree: &git2::Tree,
-) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
+) -> Result<Vec<crate::domain::Yak>> {
     use crate::domain::slug::{Name, YakId};
-    use crate::domain::yak_snapshot::YakSnapshot;
-    use crate::domain::YakState;
+    use crate::domain::{Yak, YakState};
 
     let yak_data = collect_yak_entries(repo, tree)?;
     let ordered = topological_sort(yak_data);
@@ -403,13 +402,14 @@ pub(super) fn read_snapshots_from_tree(
 
         let fields = read_custom_fields(repo, &subtree)?;
 
-        snapshots.push(YakSnapshot {
+        snapshots.push(Yak {
             id: YakId::from(data.id.as_str()),
             name: Name::from(data.name_str.as_str()),
             parent_id: data.parent_id_str.as_ref().map(|p| YakId::from(p.as_str())),
             state,
             context,
             fields,
+            tags: vec![], // git tree doesn't store tags
             created_by,
             created_at,
         });

@@ -8,26 +8,25 @@ use crate::domain::views::Message;
 use crate::domain::YakEvent;
 
 #[allow(clippy::cognitive_complexity)]
-fn build_snapshots_from_events(
-    events: &[YakEvent],
-) -> Result<Vec<crate::domain::yak_snapshot::YakSnapshot>> {
-    use crate::domain::yak_snapshot::YakSnapshot;
+fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain::Yak>> {
+    use crate::domain::Yak;
     use std::collections::HashSet;
 
-    let mut yaks: HashMap<String, YakSnapshot> = HashMap::new();
+    let mut yaks: HashMap<String, Yak> = HashMap::new();
 
     for event in events {
         match event {
             YakEvent::Added(e, m) => {
                 yaks.insert(
                     e.id.as_str().to_string(),
-                    YakSnapshot {
+                    Yak {
                         id: e.id.clone(),
                         name: e.name.clone(),
                         parent_id: e.parent_id.clone(),
                         state: crate::domain::YakState::Todo,
                         context: None,
                         fields: HashMap::new(),
+                        tags: vec![],
                         created_by: m.author.clone(),
                         created_at: m.timestamp,
                     },
@@ -67,7 +66,7 @@ fn build_snapshots_from_events(
     // Topological sort: parents before children
     let mut result = Vec::new();
     let mut emitted: HashSet<String> = HashSet::new();
-    let mut remaining: Vec<YakSnapshot> = yaks.into_values().collect();
+    let mut remaining: Vec<Yak> = yaks.into_values().collect();
     remaining.sort_by_key(|y| y.id.as_str().to_string());
 
     loop {

@@ -157,6 +157,7 @@ mod tests {
                 state: crate::domain::YakState::Wip,
                 context: Some("use the good teapot".to_string()),
                 fields: HashMap::new(),
+                tags: vec![],
                 created_by: Author {
                     name: "alice".into(),
                     email: "alice@example.com".into(),
@@ -170,6 +171,7 @@ mod tests {
                 state: crate::domain::YakState::Todo,
                 context: None,
                 fields: HashMap::new(),
+                tags: vec![],
                 created_by: Author {
                     name: "alice".into(),
                     email: "alice@example.com".into(),
@@ -287,6 +289,7 @@ mod tests {
             state: crate::domain::YakState::Todo,
             context: None,
             fields,
+            tags: vec![],
             created_by: Author {
                 name: "alice".into(),
                 email: "alice@example.com".into(),

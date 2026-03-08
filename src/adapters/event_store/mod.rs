@@ -206,7 +206,7 @@ mod merge_event_streams_tests {
     use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
     use crate::domain::events::AddedEvent;
     use crate::domain::slug::{Name, YakId};
-    use crate::domain::yak_snapshot::YakSnapshot;
+    use crate::domain::Yak;
     use crate::domain::YakEvent;
     use std::collections::HashMap;
 
@@ -229,7 +229,7 @@ mod merge_event_streams_tests {
         )
     }
 
-    fn make_compacted(snapshots: Vec<YakSnapshot>, timestamp: i64, event_id: &str) -> YakEvent {
+    fn make_compacted(snapshots: Vec<Yak>, timestamp: i64, event_id: &str) -> YakEvent {
         let mut m = EventMetadata::new(
             Author {
                 name: "alice".into(),
@@ -241,14 +241,15 @@ mod merge_event_streams_tests {
         YakEvent::Compacted(snapshots, m)
     }
 
-    fn snapshot(name: &str, id: &str) -> YakSnapshot {
-        YakSnapshot {
+    fn snapshot(name: &str, id: &str) -> Yak {
+        Yak {
             id: YakId::from(id),
             name: Name::from(name),
             parent_id: None,
             state: crate::domain::YakState::Todo,
             context: None,
             fields: HashMap::new(),
+            tags: vec![],
             created_by: Author {
                 name: "test".into(),
                 email: "".into(),

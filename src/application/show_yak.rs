@@ -60,10 +60,11 @@ impl UseCase for ShowYak {
 
         // Collect immediate children, sorted by done-state then name
         let children: Vec<YakChildView> = {
-            let mut kids: Vec<_> = yak
-                .children
+            // Find children by scanning all yaks for matching parent_id
+            let all_yaks = app.store.list_yaks()?;
+            let mut kids: Vec<_> = all_yaks
                 .iter()
-                .filter_map(|id| app.store.get_yak(id).ok())
+                .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
                 .map(|c| YakChildView {
                     name: c.name.to_string(),
                     state: c.state.to_string(),
