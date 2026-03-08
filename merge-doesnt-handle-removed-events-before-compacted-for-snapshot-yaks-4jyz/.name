@@ -1,0 +1,1 @@
+merge doesn't handle Removed events before Compacted for snapshot yaks
