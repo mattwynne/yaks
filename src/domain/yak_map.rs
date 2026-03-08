@@ -47,6 +47,100 @@ impl YakMap {
         })
     }
 
+    /// Build YakMap by replaying events from the event store
+    pub fn from_events(events: Vec<YakEvent>, metadata: EventMetadata) -> Result<Self> {
+        let mut yak_map = Self {
+            yaks: HashMap::new(),
+            pending_events: Vec::new(),
+            metadata,
+        };
+
+        for event in events {
+            yak_map.apply(event)?;
+        }
+
+        Ok(yak_map)
+    }
+
+    /// Apply a single event to update the YakMap state
+    fn apply(&mut self, event: YakEvent) -> Result<()> {
+        use crate::domain::YakEvent;
+        match event {
+            YakEvent::Added(added, metadata) => {
+                self.yaks.insert(
+                    added.id.clone(),
+                    Yak {
+                        id: added.id.clone(),
+                        name: added.name.clone(),
+                        parent_id: added.parent_id.clone(),
+                        state: YakState::Todo,
+                        context: None,
+                        fields: HashMap::new(),
+                        tags: vec![],
+                        created_by: metadata.author.clone(),
+                        created_at: metadata.timestamp,
+                    },
+                );
+            }
+            YakEvent::Removed(removed, _) => {
+                self.yaks.remove(&removed.id);
+            }
+            YakEvent::Moved(moved, _) => {
+                if let Some(yak) = self.yaks.get_mut(&moved.id) {
+                    yak.parent_id = moved.new_parent;
+                }
+            }
+            YakEvent::FieldUpdated(field_updated, _) => {
+                if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
+                    match field_updated.field_name.as_str() {
+                        ".state" => {
+                            if !field_updated.content.is_empty() {
+                                yak.state = field_updated.content.parse().unwrap_or(YakState::Todo);
+                            }
+                        }
+                        ".context.md" => {
+                            yak.context = if field_updated.content.is_empty() {
+                                None
+                            } else {
+                                Some(field_updated.content.clone())
+                            };
+                        }
+                        ".name" => {
+                            yak.name = Name::from(field_updated.content.as_str());
+                        }
+                        ".tags" => {
+                            yak.tags = field_updated
+                                .content
+                                .lines()
+                                .filter(|l| !l.is_empty())
+                                .map(String::from)
+                                .collect();
+                        }
+                        _ => {
+                            // Custom field
+                            if field_updated.content.is_empty() {
+                                yak.fields.remove(&field_updated.field_name);
+                            } else {
+                                yak.fields.insert(
+                                    field_updated.field_name.clone(),
+                                    field_updated.content.clone(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            YakEvent::Compacted(snapshots, _) => {
+                // Replace all yaks with the snapshots
+                self.yaks.clear();
+                for yak in snapshots {
+                    self.yaks.insert(yak.id.clone(), yak);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn take_events(&mut self) -> Vec<YakEvent> {
         std::mem::take(&mut self.pending_events)
     }
@@ -894,6 +988,291 @@ mod tests {
         let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
         assert_eq!(child.name, Name::from("child"));
         assert_eq!(child.parent_id, Some(YakId::from("parent-aaaa")));
+    }
+
+    #[test]
+    fn test_from_events_replays_events_correctly() {
+        use crate::domain::event_metadata::EventMetadata;
+        use crate::domain::events::*;
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        // Create a sequence of events
+        let events = vec![
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent"),
+                    id: YakId::from("parent-aaaa"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("parent-aaaa"),
+                    field_name: ".state".to_string(),
+                    content: "wip".to_string(),
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-bbbb"),
+                    parent_id: Some(YakId::from("parent-aaaa")),
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("child-bbbb"),
+                    field_name: ".context.md".to_string(),
+                    content: "Test context".to_string(),
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("child-bbbb"),
+                    field_name: ".tags".to_string(),
+                    content: "tag1\ntag2".to_string(),
+                },
+                metadata.clone(),
+            ),
+        ];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        // Verify parent
+        let parent = map.yaks.get(&YakId::from("parent-aaaa")).unwrap();
+        assert_eq!(parent.name, Name::from("parent"));
+        assert_eq!(parent.state, YakState::Wip);
+        assert_eq!(parent.parent_id, None);
+
+        // Verify child
+        let child = map.yaks.get(&YakId::from("child-bbbb")).unwrap();
+        assert_eq!(child.name, Name::from("child"));
+        assert_eq!(child.state, YakState::Todo);
+        assert_eq!(child.parent_id, Some(YakId::from("parent-aaaa")));
+        assert_eq!(child.context, Some("Test context".to_string()));
+        assert_eq!(child.tags, vec!["tag1", "tag2"]);
+    }
+
+    #[test]
+    fn test_from_events_handles_compacted_event() {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        // Create a compacted event with snapshots
+        let snapshots = vec![
+            Yak {
+                id: YakId::from("yak1-aaaa"),
+                name: Name::from("yak1"),
+                parent_id: None,
+                state: YakState::Wip,
+                context: Some("context1".to_string()),
+                fields: HashMap::new(),
+                tags: vec!["tag1".to_string()],
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
+            },
+            Yak {
+                id: YakId::from("yak2-bbbb"),
+                name: Name::from("yak2"),
+                parent_id: Some(YakId::from("yak1-aaaa")),
+                state: YakState::Done,
+                context: None,
+                fields: HashMap::new(),
+                tags: vec![],
+                created_by: Author::unknown(),
+                created_at: Timestamp::zero(),
+            },
+        ];
+
+        let events = vec![YakEvent::Compacted(snapshots, metadata.clone())];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        // Verify both yaks were loaded from snapshot
+        assert_eq!(map.yaks.len(), 2);
+        let yak1 = map.yaks.get(&YakId::from("yak1-aaaa")).unwrap();
+        assert_eq!(yak1.name, Name::from("yak1"));
+        assert_eq!(yak1.state, YakState::Wip);
+        assert_eq!(yak1.context, Some("context1".to_string()));
+        assert_eq!(yak1.tags, vec!["tag1"]);
+
+        let yak2 = map.yaks.get(&YakId::from("yak2-bbbb")).unwrap();
+        assert_eq!(yak2.name, Name::from("yak2"));
+        assert_eq!(yak2.state, YakState::Done);
+        assert_eq!(yak2.parent_id, Some(YakId::from("yak1-aaaa")));
+    }
+
+    #[test]
+    fn test_from_events_handles_removed_event() {
+        use crate::domain::event_metadata::EventMetadata;
+        use crate::domain::events::*;
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        let events = vec![
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak1"),
+                    id: YakId::from("yak1-aaaa"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak2"),
+                    id: YakId::from("yak2-bbbb"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Removed(
+                RemovedEvent {
+                    id: YakId::from("yak1-aaaa"),
+                },
+                metadata.clone(),
+            ),
+        ];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        // Verify only yak2 remains
+        assert_eq!(map.yaks.len(), 1);
+        assert!(!map.yaks.contains_key(&YakId::from("yak1-aaaa")));
+        assert!(map.yaks.contains_key(&YakId::from("yak2-bbbb")));
+    }
+
+    #[test]
+    fn test_from_events_handles_moved_event() {
+        use crate::domain::event_metadata::EventMetadata;
+        use crate::domain::events::*;
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        let events = vec![
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent1"),
+                    id: YakId::from("parent1-aaaa"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("parent2"),
+                    id: YakId::from("parent2-bbbb"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("child"),
+                    id: YakId::from("child-cccc"),
+                    parent_id: Some(YakId::from("parent1-aaaa")),
+                },
+                metadata.clone(),
+            ),
+            YakEvent::Moved(
+                MovedEvent {
+                    id: YakId::from("child-cccc"),
+                    new_parent: Some(YakId::from("parent2-bbbb")),
+                },
+                metadata.clone(),
+            ),
+        ];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        // Verify child moved to parent2
+        let child = map.yaks.get(&YakId::from("child-cccc")).unwrap();
+        assert_eq!(child.parent_id, Some(YakId::from("parent2-bbbb")));
+    }
+
+    #[test]
+    fn test_from_events_handles_name_change() {
+        use crate::domain::event_metadata::EventMetadata;
+        use crate::domain::events::*;
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        let events = vec![
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("old name"),
+                    id: YakId::from("yak-aaaa"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("yak-aaaa"),
+                    field_name: ".name".to_string(),
+                    content: "new name".to_string(),
+                },
+                metadata.clone(),
+            ),
+        ];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        let yak = map.yaks.get(&YakId::from("yak-aaaa")).unwrap();
+        assert_eq!(yak.name, Name::from("new name"));
+    }
+
+    #[test]
+    fn test_from_events_handles_custom_fields() {
+        use crate::domain::event_metadata::EventMetadata;
+        use crate::domain::events::*;
+        use crate::domain::YakEvent;
+
+        let metadata = EventMetadata::default_legacy();
+
+        let events = vec![
+            YakEvent::Added(
+                AddedEvent {
+                    name: Name::from("yak"),
+                    id: YakId::from("yak-aaaa"),
+                    parent_id: None,
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("yak-aaaa"),
+                    field_name: "notes".to_string(),
+                    content: "some notes".to_string(),
+                },
+                metadata.clone(),
+            ),
+            YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("yak-aaaa"),
+                    field_name: "plan".to_string(),
+                    content: "some plan".to_string(),
+                },
+                metadata.clone(),
+            ),
+        ];
+
+        let map = YakMap::from_events(events, metadata).unwrap();
+
+        let yak = map.yaks.get(&YakId::from("yak-aaaa")).unwrap();
+        assert_eq!(yak.fields.get("notes"), Some(&"some notes".to_string()));
+        assert_eq!(yak.fields.get("plan"), Some(&"some plan".to_string()));
     }
 
     #[test]

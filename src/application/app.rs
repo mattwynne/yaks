@@ -70,7 +70,14 @@ impl<'a> Application<'a> {
     where
         F: FnOnce(&mut YakMap) -> Result<T>,
     {
-        let mut yak_map = YakMap::from_store(self.store, metadata)?;
+        let mut yak_map = if let Some(reader) = self.event_reader {
+            // Event-sourced: replay events from event store
+            let events = reader.get_all_events()?;
+            YakMap::from_events(events, metadata)?
+        } else {
+            // Fallback: load from read model (for backward compatibility)
+            YakMap::from_store(self.store, metadata)?
+        };
         let result = f(&mut yak_map)?;
         self.save_yak_map(&mut yak_map)?;
         Ok(result)
@@ -353,6 +360,91 @@ mod tests {
         // Verify both parent and child exist
         assert!(ReadYakStore::get_yak(&storage, &YakId::from("parent")).is_ok());
         assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "child").is_ok());
+    }
+
+    #[test]
+    fn test_application_uses_event_reader_when_available() {
+        use crate::domain::ports::{EventStore, EventStoreReader};
+
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_store_reader = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = TestAuth::new("test", "test@test.com");
+
+        // First create some events without event reader
+        let mut app_no_reader = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        app_no_reader
+            .with_yak_map(|yak_map| {
+                let parent_id =
+                    yak_map.add_yak("parent".to_string(), None, None, None, None, vec![])?;
+                yak_map.add_yak(
+                    "child".to_string(),
+                    Some(parent_id),
+                    Some("test context".to_string()),
+                    None,
+                    None,
+                    vec![],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        // Copy events to the reader for testing
+        let all_events = EventStore::get_all_events(&event_store).unwrap();
+        for event in &all_events {
+            event_store_reader.append(event).unwrap();
+        }
+
+        // Now create a new application with event reader and verify it can replay events
+        let mut app_with_reader = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            Some(&event_store_reader as &dyn EventStoreReader),
+            &auth,
+        );
+
+        // Add another yak through event replay
+        app_with_reader
+            .with_yak_map(|yak_map| {
+                // If replay worked, we should be able to add a child under parent
+                let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent")?;
+                yak_map.add_yak(
+                    "another child".to_string(),
+                    Some(parent_id),
+                    None,
+                    None,
+                    None,
+                    vec![],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        // Verify state by reading from storage (which was updated by event bus)
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        assert_eq!(yaks.len(), 3); // parent + child + another child
+
+        // Verify events were persisted
+        let events = EventStore::get_all_events(&event_store).unwrap();
+        assert!(events.len() >= 3); // Should have at least 3 Added events
     }
 
     #[test]
