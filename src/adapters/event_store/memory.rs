@@ -54,7 +54,7 @@ fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain:
                     }
                 }
             }
-            YakEvent::Compacted(snapshots, _) => {
+            YakEvent::Compacted(snapshots, _, _) => {
                 yaks.clear();
                 for snap in snapshots {
                     yaks.insert(snap.id.as_str().to_string(), snap.clone());
@@ -153,9 +153,19 @@ impl EventStore for InMemoryEventStore {
         if events.is_empty() {
             anyhow::bail!("Cannot compact an empty event store");
         }
+
+        // Collect removed yak IDs from the pre-compaction event stream
+        let removed_yak_ids: Vec<crate::domain::slug::YakId> = events
+            .iter()
+            .filter_map(|e| match e {
+                YakEvent::Removed(removed, _) => Some(removed.id.clone()),
+                _ => None,
+            })
+            .collect();
+
         let snapshots = build_snapshots_from_events(&events)?;
         drop(events);
-        let event = YakEvent::Compacted(snapshots, metadata);
+        let event = YakEvent::Compacted(snapshots, removed_yak_ids, metadata);
         self.append(&event)
     }
 
@@ -229,10 +239,12 @@ mod tests {
 
         // Check the raw stored events (not get_all_events which may transform)
         let raw = store.events.lock().unwrap();
-        let compacted = raw.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+        let compacted = raw
+            .iter()
+            .find(|e| matches!(e, YakEvent::Compacted(_, _, _)));
         assert!(compacted.is_some(), "Should have a Compacted event");
 
-        if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+        if let YakEvent::Compacted(snapshots, _, _) = compacted.unwrap() {
             assert_eq!(snapshots.len(), 1);
             assert_eq!(snapshots[0].id, YakId::from("test-a1b2"));
             assert_eq!(snapshots[0].state, crate::domain::YakState::Wip);

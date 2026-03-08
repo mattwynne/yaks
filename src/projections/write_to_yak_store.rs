@@ -87,7 +87,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             }
         }
 
-        YakEvent::Compacted(snapshots, _) => {
+        YakEvent::Compacted(snapshots, _, _) => {
             store.clear_all()?;
             for snap in snapshots {
                 store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
@@ -180,7 +180,7 @@ mod tests {
             },
         ];
 
-        let compacted = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        let compacted = YakEvent::Compacted(snapshots, vec![], EventMetadata::default_legacy());
         listener.on_event(&compacted).unwrap();
 
         let yaks = storage.list_yaks().unwrap();
@@ -297,7 +297,7 @@ mod tests {
             created_at: Timestamp(1000),
         }];
 
-        let compacted = YakEvent::Compacted(snapshots, EventMetadata::default_legacy());
+        let compacted = YakEvent::Compacted(snapshots, vec![], EventMetadata::default_legacy());
         listener.on_event(&compacted).unwrap();
 
         let yak = storage.get_yak(&YakId::from("yak-a1b2")).unwrap();

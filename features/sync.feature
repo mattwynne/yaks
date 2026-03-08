@@ -311,6 +311,23 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then alice should have a yak called "make the tea"
       And alice should have a yak called "buy biscuits"
 
+  @fullstack
+  Rule: Removed yaks stay removed after compaction and sync
+
+    Example: Alice's removed yak doesn't reappear when Bob has stale events
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has a yak called "buy biscuits"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has removed the yak "buy biscuits"
+      And alice has compacted yaks
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should not have a yak called "buy biscuits"
+      And bob should have a yak called "make the tea"
+
   Rule: Sync refuses when the remote uses a newer schema version
 
     Example: Bob's outdated binary refuses to sync Alice's newer schema

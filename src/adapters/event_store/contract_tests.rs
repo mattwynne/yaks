@@ -257,10 +257,10 @@ macro_rules! event_store_tests {
             // Find the Compacted event
             let compacted = events
                 .iter()
-                .find(|e| matches!(e, YakEvent::Compacted(_, _)));
+                .find(|e| matches!(e, YakEvent::Compacted(_, _, _)));
             assert!(compacted.is_some(), "Should have a Compacted event");
 
-            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+            if let YakEvent::Compacted(snapshots, _, _) = compacted.unwrap() {
                 assert_eq!(snapshots.len(), 2, "Should have 2 snapshots");
                 let foo = snapshots.iter().find(|s| s.id.as_str() == "foo-a1b2");
                 assert!(foo.is_some(), "Should have snapshot for foo");
@@ -306,9 +306,9 @@ macro_rules! event_store_tests {
             // foo should be in the Compacted event's snapshots
             let compacted = events
                 .iter()
-                .find(|e| matches!(e, YakEvent::Compacted(_, _)));
+                .find(|e| matches!(e, YakEvent::Compacted(_, _, _)));
             assert!(compacted.is_some(), "Should have a Compacted event");
-            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+            if let YakEvent::Compacted(snapshots, _, _) = compacted.unwrap() {
                 assert!(
                     snapshots.iter().any(|s| s.id.as_str() == "foo-a1b2"),
                     "Compacted should have snapshot for foo"
@@ -367,11 +367,11 @@ macro_rules! event_store_tests {
             // Find the latest Compacted event (last one)
             let compacted_events: Vec<_> = events
                 .iter()
-                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
+                .filter(|e| matches!(e, YakEvent::Compacted(_, _, _)))
                 .collect();
             let latest = compacted_events.last().unwrap();
 
-            if let YakEvent::Compacted(snapshots, _) = latest {
+            if let YakEvent::Compacted(snapshots, _, _) = latest {
                 assert_eq!(
                     snapshots.len(),
                     2,
@@ -415,10 +415,12 @@ macro_rules! event_store_tests {
             store.compact(EventMetadata::default_legacy()).unwrap();
 
             let all = store.get_all_events().unwrap();
-            let compacted = all.iter().find(|e| matches!(e, YakEvent::Compacted(_, _)));
+            let compacted = all
+                .iter()
+                .find(|e| matches!(e, YakEvent::Compacted(_, _, _)));
             assert!(compacted.is_some(), "Should have a Compacted event");
 
-            if let YakEvent::Compacted(snapshots, _) = compacted.unwrap() {
+            if let YakEvent::Compacted(snapshots, _, _) = compacted.unwrap() {
                 assert_eq!(snapshots.len(), 1);
                 assert_eq!(snapshots[0].id.as_str(), "foo-a1b2");
             }
@@ -445,11 +447,11 @@ macro_rules! event_store_tests {
             // Find the latest Compacted event
             let compacted_events: Vec<_> = all
                 .iter()
-                .filter(|e| matches!(e, YakEvent::Compacted(_, _)))
+                .filter(|e| matches!(e, YakEvent::Compacted(_, _, _)))
                 .collect();
             let latest = compacted_events.last().unwrap();
 
-            if let YakEvent::Compacted(snapshots, _) = latest {
+            if let YakEvent::Compacted(snapshots, _, _) = latest {
                 assert_eq!(
                     snapshots.len(),
                     1,

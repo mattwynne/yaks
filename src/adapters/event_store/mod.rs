@@ -80,19 +80,26 @@ pub(crate) fn merge_event_streams(
     // events that pre-date it but aren't represented in its snapshot.
     // These events "missed the checkpoint" and must be replayed after
     // the Compacted event, not before it (where clear_all would wipe them).
+    // However, events for yaks that were deliberately removed should be dropped.
     if let Some(compact_idx) = all_events
         .iter()
-        .position(|e| matches!(e, YakEvent::Compacted(_, _)))
+        .position(|e| matches!(e, YakEvent::Compacted(_, _, _)))
     {
-        if let YakEvent::Compacted(ref snapshots, _) = all_events[compact_idx] {
+        if let YakEvent::Compacted(ref snapshots, ref removed_yak_ids, _) = all_events[compact_idx]
+        {
             let snapshot_yak_ids: HashSet<&str> = snapshots.iter().map(|s| s.id.as_str()).collect();
+            let removed_yak_id_set: HashSet<&str> =
+                removed_yak_ids.iter().map(|id| id.as_str()).collect();
 
             // Collect indices of events before Compacted that affect
             // yak IDs not in the snapshot (they'd be lost on replay).
+            // But exclude events for yaks that were deliberately removed.
             let orphan_indices: Vec<usize> = (0..compact_idx)
                 .filter(|&i| {
                     let yak_id = all_events[i].yak_id();
-                    !yak_id.is_empty() && !snapshot_yak_ids.contains(yak_id)
+                    !yak_id.is_empty()
+                        && !snapshot_yak_ids.contains(yak_id)
+                        && !removed_yak_id_set.contains(yak_id)
                 })
                 .collect();
 
@@ -108,7 +115,7 @@ pub(crate) fn merge_event_streams(
                 // Compacted has shifted left by the number of removals
                 let new_compact_idx = all_events
                     .iter()
-                    .position(|e| matches!(e, YakEvent::Compacted(_, _)))
+                    .position(|e| matches!(e, YakEvent::Compacted(_, _, _)))
                     .unwrap();
 
                 // Insert orphans right after Compacted
@@ -238,7 +245,7 @@ mod merge_event_streams_tests {
             Timestamp(timestamp),
         );
         m.event_id = Some(event_id.to_string());
-        YakEvent::Compacted(snapshots, m)
+        YakEvent::Compacted(snapshots, vec![], m)
     }
 
     fn snapshot(name: &str, id: &str) -> Yak {

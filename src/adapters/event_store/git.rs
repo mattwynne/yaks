@@ -275,11 +275,22 @@ impl EventStore for GitEventStore {
         if self.get_latest_commit()?.is_none() {
             anyhow::bail!("Cannot compact an empty event store");
         }
+
+        // Collect removed yak IDs from the pre-compaction event stream
+        let pre_compaction_events = EventStore::get_all_events(self)?;
+        let removed_yak_ids: Vec<crate::domain::slug::YakId> = pre_compaction_events
+            .iter()
+            .filter_map(|e| match e {
+                YakEvent::Removed(removed, _) => Some(removed.id.clone()),
+                _ => None,
+            })
+            .collect();
+
         let snapshots = {
             let tree = self.get_current_tree()?.unwrap();
             tree::read_snapshots_from_tree(&self.repo, &tree)?
         };
-        let event = YakEvent::Compacted(snapshots, metadata);
+        let event = YakEvent::Compacted(snapshots, removed_yak_ids, metadata);
         self.append(&event)
     }
 
@@ -417,8 +428,22 @@ impl EventStore for GitEventStore {
             // Read snapshots from the compaction tree
             let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
 
+            // Read removed yak IDs from .removed-yaks blob
+            let removed_yak_ids = match tree.get_name(".removed-yaks") {
+                Some(entry) => {
+                    let blob = self.repo.find_blob(entry.id())?;
+                    let content = std::str::from_utf8(blob.content())?;
+                    content
+                        .lines()
+                        .filter(|line| !line.trim().is_empty())
+                        .map(|line| crate::domain::slug::YakId::from(line.trim()))
+                        .collect()
+                }
+                None => vec![],
+            };
+
             let mut result = Vec::new();
-            result.push(YakEvent::Compacted(snapshots, metadata));
+            result.push(YakEvent::Compacted(snapshots, removed_yak_ids, metadata));
 
             // post_compaction_events are newest-first; reverse to
             // chronological then append after the Compacted event

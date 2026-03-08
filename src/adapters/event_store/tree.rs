@@ -225,7 +225,7 @@ pub(super) fn build_tree_from_event(
             update_yak_file(repo, current_tree, e.id.as_str(), &e.field_name, &e.content)
         }
 
-        YakEvent::Compacted(snapshots, _) => {
+        YakEvent::Compacted(snapshots, removed_yak_ids, _) => {
             if snapshots.is_empty() {
                 // Legacy: no snapshots, preserve current tree
                 match current_tree {
@@ -252,6 +252,18 @@ pub(super) fn build_tree_from_event(
                 }
                 let version_blob = repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
                 root_builder.insert(".schema-version", version_blob, 0o100644)?;
+
+                // Store removed yak IDs
+                if !removed_yak_ids.is_empty() {
+                    let removed_ids_content = removed_yak_ids
+                        .iter()
+                        .map(|id| id.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let removed_blob = repo.blob(removed_ids_content.as_bytes())?;
+                    root_builder.insert(".removed-yaks", removed_blob, 0o100644)?;
+                }
+
                 Ok(root_builder.write()?)
             }
         }
@@ -482,6 +494,7 @@ mod tests {
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
             vec![yak.clone()],
+            vec![],
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -522,6 +535,7 @@ mod tests {
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
             vec![yak],
+            vec![],
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -570,6 +584,7 @@ mod tests {
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
             vec![yak],
+            vec![],
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 

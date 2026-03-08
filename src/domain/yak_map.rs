@@ -130,7 +130,7 @@ impl YakMap {
                     }
                 }
             }
-            YakEvent::Compacted(snapshots, _) => {
+            YakEvent::Compacted(snapshots, _, _) => {
                 // Replace all yaks with the snapshots
                 self.yaks.clear();
                 for yak in snapshots {
@@ -1092,7 +1092,7 @@ mod tests {
             },
         ];
 
-        let events = vec![YakEvent::Compacted(snapshots, metadata.clone())];
+        let events = vec![YakEvent::Compacted(snapshots, vec![], metadata.clone())];
 
         let map = YakMap::from_events(events, metadata).unwrap();
 
