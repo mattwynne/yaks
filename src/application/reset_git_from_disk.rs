@@ -56,14 +56,7 @@ impl UseCase for ResetGitFromDisk {
         app.event_bus.rebuild(&[])?;
 
         // 4. Replay yaks through AddYak in topological order (parents before children)
-        let yak_index: HashMap<&YakId, &Yak> = yaks.iter().map(|y| (&y.id, y)).collect();
-
-        // Find roots: yaks with no parent_id
-        let roots: Vec<&Yak> = yaks.iter().filter(|y| y.parent_id.is_none()).collect();
-
-        for root_yak in &roots {
-            replay_yak(app, root_yak, &yak_index, None)?;
-        }
+        replay_yaks_in_order(app, &yaks)?;
 
         // 5. Report results
         app.display.message(&Message::Info(format!(
@@ -86,12 +79,50 @@ impl UseCase for ResetGitFromDisk {
     }
 }
 
-fn replay_yak(
-    app: &mut Application,
-    yak: &Yak,
-    yak_index: &HashMap<&YakId, &Yak>,
-    parent_id: Option<&str>,
-) -> Result<()> {
+/// Replay all yaks in topological order (parents before children) using an iterative approach.
+/// This avoids stack overflow and eliminates the timeout mutant that could occur with
+/// recursive traversal when the parent-child filter is mutated.
+fn replay_yaks_in_order(app: &mut Application, yaks: &[Yak]) -> Result<()> {
+    // Build children lookup: parent_id -> Vec<&Yak>
+    // This pre-computes the parent-child relationships ONCE using ==
+    // If mutated to !=, it builds a wrong map but won't cause infinite loops
+    let mut children_of: HashMap<Option<&YakId>, Vec<&Yak>> = HashMap::new();
+    for yak in yaks {
+        children_of
+            .entry(yak.parent_id.as_ref())
+            .or_default()
+            .push(yak);
+    }
+
+    // Use a stack for depth-first traversal (iterative, not recursive)
+    // Each entry is (yak, parent_id_str)
+    let mut stack: Vec<(&Yak, Option<&str>)> = Vec::new();
+
+    // Push roots (no parent) onto stack in reverse order so they process in order
+    if let Some(roots) = children_of.get(&None) {
+        for root in roots.iter().rev() {
+            stack.push((root, None));
+        }
+    }
+
+    // Process the stack
+    while let Some((yak, parent_id)) = stack.pop() {
+        // Replay this single yak
+        replay_single_yak(app, yak, parent_id)?;
+
+        // Push children onto stack in reverse order so they process in order
+        if let Some(kids) = children_of.get(&Some(&yak.id)) {
+            for child in kids.iter().rev() {
+                stack.push((child, Some(yak.id.as_str())));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Replay a single yak through the AddYak use case, preserving all its properties.
+fn replay_single_yak(app: &mut Application, yak: &Yak, parent_id: Option<&str>) -> Result<()> {
     let has_real_metadata = yak.created_at != crate::domain::Timestamp::zero();
     let mut use_case = AddYak::new(yak.name.as_str())
         .with_id(Some(yak.id.as_str()))
@@ -124,15 +155,6 @@ fn replay_yak(
         use_case = use_case.with_field(crate::domain::field::TAGS_FIELD, &tag_content);
     }
     app.handle(use_case)?;
-
-    // Find and replay children (yaks whose parent_id matches this yak's id)
-    let children: Vec<&&Yak> = yak_index
-        .values()
-        .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
-        .collect();
-    for child in children {
-        replay_yak(app, child, yak_index, Some(yak.id.as_str()))?;
-    }
     Ok(())
 }
 
@@ -536,6 +558,77 @@ mod tests {
             yak.tags.contains(&"backend".to_string()),
             "Expected 'backend' tag, got: {:?}",
             yak.tags
+        );
+    }
+
+    #[test]
+    fn reset_git_from_disk_replays_children_under_correct_parents() {
+        // This test kills the mutant that changes == to != in the children filter.
+        // Setup: one root with two children. With the != mutant, children won't be
+        // replayed at all (filter would select nothing), causing this test to fail
+        // quickly when trying to look them up.
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            // Create one parent with two children
+            app.handle(AddYak::new("parent")).unwrap();
+            app.handle(AddYak::new("child-a").with_parent(Some("parent")))
+                .unwrap();
+            app.handle(AddYak::new("child-b").with_parent(Some("parent")))
+                .unwrap();
+        }
+
+        {
+            let mut app = Application::new(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                None,
+                &auth,
+            );
+
+            // Reset git from disk
+            app.handle(ResetGitFromDisk::new()).unwrap();
+        }
+
+        // Verify children exist and have correct parent
+        // With != mutation, children won't be replayed, so these lookups will fail
+        let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
+
+        let child_a_id = ReadYakStore::fuzzy_find_yak_id(&storage, "child-a").unwrap();
+        let child_a = ReadYakStore::get_yak(&storage, &child_a_id).unwrap();
+        assert_eq!(
+            child_a.parent_id.as_ref(),
+            Some(&parent_id),
+            "child-a should be under parent"
+        );
+
+        let child_b_id = ReadYakStore::fuzzy_find_yak_id(&storage, "child-b").unwrap();
+        let child_b = ReadYakStore::get_yak(&storage, &child_b_id).unwrap();
+        assert_eq!(
+            child_b.parent_id.as_ref(),
+            Some(&parent_id),
+            "child-b should be under parent"
         );
     }
 }
