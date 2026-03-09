@@ -208,6 +208,95 @@ impl GitEventStore {
             }
         }
     }
+
+    /// Extract metadata from a git commit.
+    fn extract_metadata_from_commit(
+        commit: &git2::Commit,
+        full_message: &str,
+    ) -> crate::domain::event_metadata::EventMetadata {
+        use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
+        let author = Author {
+            name: commit.author().name().unwrap_or("unknown").to_string(),
+            email: commit.author().email().unwrap_or("").to_string(),
+        };
+        let timestamp = Timestamp(commit.author().when().seconds());
+        let mut metadata = EventMetadata::new(author, timestamp);
+        metadata.event_id = Some(commit::extract_event_id(
+            full_message,
+            &commit.id().to_string(),
+        ));
+        metadata.commit_sha = Some(commit.id().to_string());
+        metadata
+    }
+
+    /// Read content for a FieldUpdated event from the git tree.
+    fn read_field_updated_content(
+        &self,
+        tree: &git2::Tree,
+        yak_id: &crate::domain::slug::YakId,
+        field_name: &str,
+    ) -> Result<String> {
+        let yak_entry = tree.get_name(yak_id.as_str()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Missing yak entry '{}' in tree for \
+                     FieldUpdated event (field '{}')",
+                yak_id,
+                field_name
+            )
+        })?;
+        let yak_tree = self.repo.find_tree(yak_entry.id()).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to read yak subtree '{}' for \
+                     FieldUpdated event (field '{}'): {}",
+                yak_id,
+                field_name,
+                err
+            )
+        })?;
+        let field_entry = yak_tree.get_name(field_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Missing field '{}' in yak '{}' subtree \
+                     for FieldUpdated event",
+                field_name,
+                yak_id
+            )
+        })?;
+        let blob = self.repo.find_blob(field_entry.id()).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to read blob for field '{}' in \
+                     yak '{}': {}",
+                field_name,
+                yak_id,
+                err
+            )
+        })?;
+        let content = std::str::from_utf8(blob.content()).map_err(|err| {
+            anyhow::anyhow!(
+                "Invalid UTF-8 in field '{}' of yak \
+                     '{}': {}",
+                field_name,
+                yak_id,
+                err
+            )
+        })?;
+        Ok(content.to_string())
+    }
+
+    /// Read removed yak IDs from a compaction tree.
+    fn read_removed_yak_ids(&self, tree: &git2::Tree) -> Result<Vec<crate::domain::slug::YakId>> {
+        match tree.get_name(".removed-yaks") {
+            Some(entry) => {
+                let blob = self.repo.find_blob(entry.id())?;
+                let content = std::str::from_utf8(blob.content())?;
+                Ok(content
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| crate::domain::slug::YakId::from(line.trim()))
+                    .collect())
+            }
+            None => Ok(vec![]),
+        }
+    }
 }
 
 enum CasResult {
@@ -323,20 +412,10 @@ impl EventStore for GitEventStore {
             }
 
             // Check for Compacted or Migrated commit — stop walking and use its tree
-            if first_line == "Compacted" || first_line == "Migrated" {
-                use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
-                let author = Author {
-                    name: commit.author().name().unwrap_or("unknown").to_string(),
-                    email: commit.author().email().unwrap_or("").to_string(),
-                };
-                let timestamp = Timestamp(commit.author().when().seconds());
-                let mut metadata = EventMetadata::new(author, timestamp);
-                metadata.event_id = Some(commit::extract_event_id(
-                    full_message,
-                    &commit.id().to_string(),
-                ));
-                metadata.commit_sha = Some(commit.id().to_string());
-                compaction_metadata = Some(metadata);
+            let is_boundary = matches!(first_line, "Compacted" | "Migrated");
+            if is_boundary {
+                compaction_metadata =
+                    Some(Self::extract_metadata_from_commit(&commit, full_message));
                 compaction_tree = Some(commit.tree()?);
                 is_migrated = first_line == "Migrated";
                 break;
@@ -344,21 +423,7 @@ impl EventStore for GitEventStore {
 
             match YakEvent::parse(first_line) {
                 Ok(mut event) => {
-                    use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
-                    let author = Author {
-                        name: commit.author().name().unwrap_or("unknown").to_string(),
-                        email: commit.author().email().unwrap_or("").to_string(),
-                    };
-                    let timestamp = Timestamp(commit.author().when().seconds());
-                    let mut metadata = EventMetadata::new(author, timestamp);
-
-                    // Extract Event-Id from commit message trailer,
-                    // falling back to the commit SHA for legacy commits
-                    metadata.event_id = Some(commit::extract_event_id(
-                        full_message,
-                        &commit.id().to_string(),
-                    ));
-                    metadata.commit_sha = Some(commit.id().to_string());
+                    let metadata = Self::extract_metadata_from_commit(&commit, full_message);
 
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).
@@ -372,50 +437,7 @@ impl EventStore for GitEventStore {
                                 err
                             )
                         })?;
-                        let yak_entry = tree.get_name(e.id.as_str()).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Missing yak entry '{}' in tree for \
-                                     FieldUpdated event (field '{}')",
-                                e.id,
-                                e.field_name
-                            )
-                        })?;
-                        let yak_tree = self.repo.find_tree(yak_entry.id()).map_err(|err| {
-                            anyhow::anyhow!(
-                                "Failed to read yak subtree '{}' for \
-                                     FieldUpdated event (field '{}'): {}",
-                                e.id,
-                                e.field_name,
-                                err
-                            )
-                        })?;
-                        let field_entry = yak_tree.get_name(&e.field_name).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Missing field '{}' in yak '{}' subtree \
-                                     for FieldUpdated event",
-                                e.field_name,
-                                e.id
-                            )
-                        })?;
-                        let blob = self.repo.find_blob(field_entry.id()).map_err(|err| {
-                            anyhow::anyhow!(
-                                "Failed to read blob for field '{}' in \
-                                     yak '{}': {}",
-                                e.field_name,
-                                e.id,
-                                err
-                            )
-                        })?;
-                        let content = std::str::from_utf8(blob.content()).map_err(|err| {
-                            anyhow::anyhow!(
-                                "Invalid UTF-8 in field '{}' of yak \
-                                     '{}': {}",
-                                e.field_name,
-                                e.id,
-                                err
-                            )
-                        })?;
-                        e.content = content.to_string();
+                        e.content = self.read_field_updated_content(&tree, &e.id, &e.field_name)?;
                     }
 
                     post_compaction_events.push(event.with_metadata(metadata));
@@ -431,25 +453,15 @@ impl EventStore for GitEventStore {
             let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
 
             // Read removed yak IDs from .removed-yaks blob
-            let removed_yak_ids = match tree.get_name(".removed-yaks") {
-                Some(entry) => {
-                    let blob = self.repo.find_blob(entry.id())?;
-                    let content = std::str::from_utf8(blob.content())?;
-                    content
-                        .lines()
-                        .filter(|line| !line.trim().is_empty())
-                        .map(|line| crate::domain::slug::YakId::from(line.trim()))
-                        .collect()
-                }
-                None => vec![],
-            };
+            let removed_yak_ids = self.read_removed_yak_ids(&tree)?;
 
             let mut result = Vec::new();
-            if is_migrated {
-                result.push(YakEvent::Migrated(snapshots, removed_yak_ids, metadata));
+            let boundary_event = if is_migrated {
+                YakEvent::Migrated(snapshots, removed_yak_ids, metadata)
             } else {
-                result.push(YakEvent::Compacted(snapshots, removed_yak_ids, metadata));
-            }
+                YakEvent::Compacted(snapshots, removed_yak_ids, metadata)
+            };
+            result.push(boundary_event);
 
             // post_compaction_events are newest-first; reverse to
             // chronological then append after the Compacted/Migrated event
