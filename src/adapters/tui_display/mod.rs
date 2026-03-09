@@ -57,7 +57,8 @@ impl TuiDisplay {
     ) {
         fn indicator_for(state: &str) -> &'static str {
             match state {
-                "wip" | "done" => "●",
+                "wip" => "●",
+                "done" => "✓",
                 _ => "○",
             }
         }
@@ -502,7 +503,7 @@ mod tests {
         let terminal = draw_test_show_header_box(60, &view);
 
         let output = buffer_to_string(terminal.backend().buffer());
-        assert!(output.contains("● done yak"), "got:\n{output}");
+        assert!(output.contains("✓ done yak"), "got:\n{output}");
     }
 
     #[test]

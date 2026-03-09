@@ -60,13 +60,14 @@ impl ConsoleDisplay {
 /// Helper for rendering styled yak items (name + indicator) consistently
 fn style_yak_item(name: &str, state: &str, color: bool) -> String {
     let indicator = match state {
-        "wip" | "done" => "●",
+        "wip" => "●",
+        "done" => "✓",
         _ => "○",
     };
     if color {
         match state {
             "wip" => format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
-            "done" => format!("\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m"),
+            "done" => format!("\x1b[90m✓\x1b[0m \x1b[90;9m{name}\x1b[0m"),
             _ => format!("○ \x1b[1m{name}\x1b[0m"),
         }
     } else {
@@ -160,13 +161,14 @@ impl ConsoleDisplay {
                 ),
                 "done" => writeln!(
                     out,
-                    "{prefix}\x1b[90m●\x1b[0m \x1b[90;9m{name}\x1b[0m{dim_tags}"
+                    "{prefix}\x1b[90m✓\x1b[0m \x1b[90;9m{name}\x1b[0m{dim_tags}"
                 ),
                 _ => writeln!(out, "{prefix}○ {name}{dim_tags}"),
             }
         } else {
             let indicator = match state {
-                "wip" | "done" => "●",
+                "wip" => "●",
+                "done" => "✓",
                 _ => "○",
             };
             writeln!(out, "{prefix}{indicator} {name}{tag_suffix}")
@@ -255,7 +257,8 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
             let name = &view.name;
 
             let indicator = match state {
-                "wip" | "done" => "●",
+                "wip" => "●",
+                "done" => "✓",
                 _ => "○",
             };
 
@@ -295,7 +298,8 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                         "├─"
                     };
                     let ci = match child.state.as_str() {
-                        "wip" | "done" => "●",
+                        "wip" => "●",
+                        "done" => "✓",
                         _ => "○",
                     };
                     format!("  {connector} {ci} {}  ", child.name)
@@ -656,7 +660,7 @@ mod tests {
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
         );
-        assert!(output.contains("●"));
+        assert!(output.contains("✓"));
     }
 
     #[test]
