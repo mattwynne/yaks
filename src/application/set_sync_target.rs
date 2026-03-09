@@ -195,10 +195,7 @@ mod tests {
         perms.set_mode(0o755);
         let _ = fs::set_permissions(&git_dir, perms);
 
-        assert!(
-            result.is_err(),
-            "Should fail when git config command fails"
-        );
+        assert!(result.is_err(), "Should fail when git config command fails");
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Failed to set yaks.remote config"),
