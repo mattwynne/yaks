@@ -51,3 +51,159 @@ impl UseCase for SetSyncTarget {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::event_store::git::GitEventStore;
+    use crate::adapters::{
+        make_test_display, InMemoryAuthentication, InMemoryInput, InMemoryStorage,
+    };
+    use crate::infrastructure::EventBus;
+
+    #[test]
+    fn fails_when_remote_is_unreachable() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repository
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        let mut event_store = GitEventStore::new(repo_path).unwrap();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        // Try to set sync target to a non-existent URL
+        let use_case = SetSyncTarget::new(
+            "https://invalid-url-that-does-not-exist.example/repo.git".to_string(),
+        );
+        let result = use_case.execute(&mut app);
+
+        assert!(result.is_err(), "Should fail when remote is unreachable");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Failed to connect to"),
+            "Error should mention connection failure, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn fails_when_not_in_git_repo() {
+        use crate::adapters::event_store::memory::InMemoryEventStore;
+
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        let use_case = SetSyncTarget::new("https://example.com/repo.git".to_string());
+        let result = use_case.execute(&mut app);
+
+        assert!(result.is_err(), "Should fail when not in a git repository");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not in a git repository"),
+            "Error should mention git repository requirement, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fails_when_git_config_fails() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repository
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Create a valid remote to pass the ls-remote check
+        // We'll use a local path as a remote
+        let remote_dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(remote_dir.path())
+            .output()
+            .unwrap();
+
+        // Make the .git directory read-only to cause git config to fail
+        let git_dir = repo_path.join(".git");
+        let mut perms = fs::metadata(&git_dir).unwrap().permissions();
+        perms.set_mode(0o555); // Read-only
+        fs::set_permissions(&git_dir, perms).unwrap();
+
+        let mut event_store = GitEventStore::new(repo_path).unwrap();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            None,
+            &auth,
+        );
+
+        // Try to set sync target - should fail when trying to write config
+        let use_case = SetSyncTarget::new(remote_dir.path().to_str().unwrap().to_string());
+        let result = use_case.execute(&mut app);
+
+        // Restore permissions before assertions to ensure cleanup
+        let mut perms = fs::metadata(&git_dir).unwrap().permissions();
+        perms.set_mode(0o755);
+        let _ = fs::set_permissions(&git_dir, perms);
+
+        assert!(
+            result.is_err(),
+            "Should fail when git config command fails"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Failed to set yaks.remote config"),
+            "Error should mention config failure, got: {}",
+            err_msg
+        );
+    }
+}

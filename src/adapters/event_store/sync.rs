@@ -176,3 +176,81 @@ pub(super) fn sync_with_remote(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_sync_target_falls_back_to_origin_when_config_is_empty() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repository
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Set yaks.remote to empty string
+        std::process::Command::new("git")
+            .args(["config", "yaks.remote", ""])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        let result = resolve_sync_target(repo_path).unwrap();
+        assert_eq!(
+            result, "origin",
+            "Should fall back to 'origin' when yaks.remote is empty"
+        );
+    }
+
+    #[test]
+    fn resolve_sync_target_uses_config_when_set() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repository
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Set yaks.remote to a custom value
+        std::process::Command::new("git")
+            .args(["config", "yaks.remote", "custom-remote"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        let result = resolve_sync_target(repo_path).unwrap();
+        assert_eq!(
+            result, "custom-remote",
+            "Should use yaks.remote config when set"
+        );
+    }
+
+    #[test]
+    fn resolve_sync_target_falls_back_to_origin_when_not_configured() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize a git repository
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Don't set yaks.remote
+
+        let result = resolve_sync_target(repo_path).unwrap();
+        assert_eq!(
+            result, "origin",
+            "Should fall back to 'origin' when yaks.remote is not configured"
+        );
+    }
+}

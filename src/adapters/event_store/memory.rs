@@ -345,6 +345,12 @@ mod tests {
         assert!(events.is_empty());
     }
 
+    #[test]
+    fn test_repo_path_returns_none() {
+        let store = InMemoryEventStore::new();
+        assert_eq!(store.repo_path(), None);
+    }
+
     mod sync {
         use super::*;
         use crate::adapters::make_test_display;
