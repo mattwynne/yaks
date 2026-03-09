@@ -15,8 +15,8 @@ use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
     GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak,
-    ResetDiskFromGit, ResetGitFromDisk, SetState, ShowContext, ShowField, ShowLog, ShowYak,
-    StartYak, SyncYaks, WriteContext, WriteField,
+    ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncTarget, ShowContext, ShowField, ShowLog,
+    ShowSyncTarget, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
@@ -238,7 +238,13 @@ enum Commands {
     },
     /// Sync yaks with git refs
     #[command(display_order = 22)]
-    Sync,
+    Sync {
+        /// URL to set as sync target
+        url: Option<String>,
+        /// Show current sync target
+        #[arg(long)]
+        show: bool,
+    },
     /// Show event log from refs/notes/yaks
     #[command(display_order = 23)]
     Log,
@@ -524,7 +530,15 @@ fn route_command(
         }
         Commands::Tag { action } => handle_tag_command(handler, action),
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
-        Commands::Sync => handler.handle(SyncYaks::new()),
+        Commands::Sync { url, show } => {
+            if show {
+                handler.handle(ShowSyncTarget::new())
+            } else if let Some(url) = url {
+                handler.handle(SetSyncTarget::new(url))
+            } else {
+                handler.handle(SyncYaks::new())
+            }
+        }
         Commands::Log => {
             pager::Pager::with_pager("less -R").setup();
             handler.handle(ShowLog::new())

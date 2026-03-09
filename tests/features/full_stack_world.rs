@@ -1305,4 +1305,43 @@ impl FullStackWorld {
 
         Ok(())
     }
+
+    /// Set git config yaks.remote in a named repository
+    pub fn set_sync_remote(&mut self, repo_name: &str, remote_url: &str) -> Result<()> {
+        let repo_path = self.repo_path(repo_name)?;
+
+        let output = Command::new("git")
+            .args(["config", "yaks.remote", remote_url])
+            .current_dir(&repo_path)
+            .output()
+            .context("Failed to set yaks.remote config")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "Failed to set yaks.remote: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Get the URL (path) of a named repository
+    pub fn get_repo_url(&self, repo_name: &str) -> Result<String> {
+        let repo_path = self.repo_path(repo_name)?;
+        Ok(repo_path.to_string_lossy().to_string())
+    }
+
+    /// Check if yaks.remote is configured in a named repository
+    pub fn has_sync_remote_configured(&self, repo_name: &str) -> Result<bool> {
+        let repo_path = self.repo_path(repo_name)?;
+
+        let output = Command::new("git")
+            .args(["config", "--get", "yaks.remote"])
+            .current_dir(&repo_path)
+            .output()
+            .context("Failed to check yaks.remote config")?;
+
+        Ok(output.status.success())
+    }
 }

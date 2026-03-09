@@ -357,6 +357,72 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob should not have a yak called "buy biscuits"
       And bob should have a yak called "make the tea"
 
+  @fullstack
+  Rule: Sync target resolution
+
+    Example: sync uses configured URL when yaks.remote is set
+      Given a bare git repository called team-meta
+      And a git clone of team-meta called alice
+      And alice has configured sync remote to team-meta
+      And alice has a yak called "make the tea"
+      When alice syncs yaks
+      Then team-meta has a "refs/notes/yaks" ref
+
+    Example: sync falls back to origin remote when yaks.remote is not set
+      Given a git clone of origin called alice
+      And alice has a yak called "make the tea"
+      When alice syncs yaks
+      Then origin has a "refs/notes/yaks" ref
+
+    Example: sync errors "Sync not configured" when neither yaks.remote nor origin exists
+      Given a git repository called alice
+      When alice tries to sync yaks
+      Then the command should fail
+      And the error should contain "Sync not configured"
+
+  @fullstack
+  Rule: Setting sync target verifies reachability
+
+    Example: yx sync <valid-url> stores URL after git ls-remote succeeds
+      Given a bare git repository called team-meta
+      And a git clone of origin called alice
+      When alice runs "yx sync" with the URL of team-meta
+      Then the output should include "Connected to"
+      And alice should have yaks.remote configured to team-meta
+
+    Example: yx sync <unreachable-url> errors and stores nothing
+      Given a git clone of origin called alice
+      When alice tries to run "yx sync /tmp/nonexistent-repo"
+      Then the command should fail
+      And alice should not have yaks.remote configured
+
+    Example: yx sync <no-auth-url> errors and stores nothing
+      Given a git clone of origin called alice
+      When alice tries to run "yx sync git@github.com:nonexistent/repo.git"
+      Then the command should fail
+      And alice should not have yaks.remote configured
+
+  @fullstack
+  Rule: Sync show displays current target
+
+    Example: yx sync --show prints configured URL when yaks.remote is set
+      Given a bare git repository called team-meta
+      And a git clone of origin called alice
+      And alice has configured sync remote to team-meta
+      When alice runs "yx sync --show"
+      Then the output should include the URL of team-meta
+
+    Example: yx sync --show prints origin URL with (origin) when not configured
+      Given a git clone of origin called alice
+      When alice runs "yx sync --show"
+      Then the output should include the URL of origin
+      And the output should include "(origin)"
+
+    Example: yx sync --show prints "Not connected" when no origin either
+      Given a git repository called alice
+      When alice runs "yx sync --show"
+      Then the output should include "Not connected"
+
   @wip
   Rule: Sync tells you what changed
 

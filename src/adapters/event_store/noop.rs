@@ -32,4 +32,8 @@ impl EventStore for NoOpEventStore {
     ) -> Result<()> {
         anyhow::bail!("Sync not configured")
     }
+
+    fn repo_path(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }

@@ -1397,6 +1397,92 @@ async fn repo_tries_to_sync(world: &mut FullStackWorld, repo: String) -> Result<
     Ok(())
 }
 
+#[given(regex = r#"^([\w-]+) has configured sync remote to ([\w-]+)$"#)]
+async fn repo_has_configured_sync_remote(
+    world: &mut FullStackWorld,
+    repo: String,
+    remote: String,
+) -> Result<()> {
+    let remote_url = world.get_repo_url(&remote)?;
+    world.set_sync_remote(&repo, &remote_url)?;
+    Ok(())
+}
+
+#[when(regex = r#"^([\w-]+) runs "yx sync" with the URL of ([\w-]+)$"#)]
+async fn repo_runs_sync_with_url(
+    world: &mut FullStackWorld,
+    repo: String,
+    remote: String,
+) -> Result<()> {
+    let remote_url = world.get_repo_url(&remote)?;
+    world.run_yx_in_repo(&repo, &["sync", &remote_url])?;
+    Ok(())
+}
+
+#[when(regex = r#"^([\w-]+) tries to run "yx sync (.+)"$"#)]
+async fn repo_tries_to_run_sync_with_url(
+    world: &mut FullStackWorld,
+    repo: String,
+    url: String,
+) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["sync", &url])?;
+    Ok(())
+}
+
+#[when(regex = r#"^([\w-]+) runs "yx sync --show"$"#)]
+async fn repo_runs_sync_show(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["sync", "--show"])?;
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) should have yaks\.remote configured to ([\w-]+)$"#)]
+async fn repo_should_have_sync_remote_configured(
+    world: &mut FullStackWorld,
+    repo: String,
+    remote: String,
+) -> Result<()> {
+    let remote_url = world.get_repo_url(&remote)?;
+    world.run_git_in_repo(&repo, &["config", "--get", "yaks.remote"])?;
+    let output = world.get_output().trim().to_string();
+    if output != remote_url {
+        anyhow::bail!(
+            "Expected repo '{}' to have yaks.remote configured to '{}', but got '{}'",
+            repo,
+            remote_url,
+            output
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^([\w-]+) should not have yaks\.remote configured$"#)]
+async fn repo_should_not_have_sync_remote_configured(
+    world: &mut FullStackWorld,
+    repo: String,
+) -> Result<()> {
+    if world.has_sync_remote_configured(&repo)? {
+        anyhow::bail!(
+            "Expected repo '{}' to not have yaks.remote configured, but it does",
+            repo
+        );
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^the output should include the URL of ([\w-]+)$"#)]
+async fn output_should_include_url_of_repo(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    let repo_url = world.get_repo_url(&repo)?;
+    let output = world.get_output();
+    if !output.contains(&repo_url) {
+        anyhow::bail!(
+            "Expected output to include URL '{}', but got:\n{}",
+            repo_url,
+            output
+        );
+    }
+    Ok(())
+}
+
 #[then(regex = r#"^([\w-]+) has a "(.+)" ref$"#)]
 async fn repo_has_ref(world: &mut FullStackWorld, repo: String, ref_name: String) -> Result<()> {
     world.run_git_in_repo(&repo, &["show-ref", &ref_name])?;

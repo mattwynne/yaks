@@ -196,6 +196,10 @@ impl EventStore for InMemoryEventStore {
 
         Ok(())
     }
+
+    fn repo_path(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 impl EventStoreReader for InMemoryEventStore {

@@ -18,6 +18,9 @@ pub trait EventStore {
     /// Used by the reset-git-from-disk workflow.
     fn wipe(&mut self) -> Result<()>;
 
+    /// Get the repository workdir path. Returns None for non-git stores or bare repos.
+    fn repo_path(&self) -> Option<std::path::PathBuf>;
+
     fn get_events(&self, yak_id: &str) -> Result<Vec<YakEvent>> {
         Ok(self
             .get_all_events()?

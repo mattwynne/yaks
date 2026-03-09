@@ -482,6 +482,10 @@ impl EventStore for GitEventStore {
     ) -> Result<()> {
         super::sync::sync_with_remote(self, bus, output)
     }
+
+    fn repo_path(&self) -> Option<std::path::PathBuf> {
+        self.repo.workdir().map(|p| p.to_path_buf())
+    }
 }
 
 impl EventStoreReader for GitEventStore {

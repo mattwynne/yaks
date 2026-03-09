@@ -12,15 +12,40 @@ use crate::domain::YakEvent;
 
 use super::git::GitEventStore;
 
-/// Fetch refs/notes/yaks from origin into a temporary peer ref.
-/// Returns an error if sync is not configured (no origin remote).
+/// Resolve the sync target (remote name or URL) to use for fetch/push.
+/// Reads git config yaks.remote if set, otherwise falls back to "origin".
+/// Returns an error if neither is configured.
+fn resolve_sync_target(repo_path: &Path) -> Result<String> {
+    // Try to read git config yaks.remote
+    let config_output = std::process::Command::new("git")
+        .args(["config", "--get", "yaks.remote"])
+        .current_dir(repo_path)
+        .output()?;
+
+    if config_output.status.success() {
+        let remote = String::from_utf8_lossy(&config_output.stdout)
+            .trim()
+            .to_string();
+        if !remote.is_empty() {
+            return Ok(remote);
+        }
+    }
+
+    // Fall back to "origin"
+    Ok("origin".to_string())
+}
+
+/// Fetch refs/notes/yaks from the sync target into a temporary peer ref.
+/// Returns an error if sync is not configured (no remote).
 fn fetch_peer_ref(repo_path: &Path) -> Result<()> {
+    let remote = resolve_sync_target(repo_path)?;
+
     let fetch_output = std::process::Command::new("git")
-        .args(["fetch", "origin", "+refs/notes/yaks:refs/notes/yaks-peer"])
+        .args(["fetch", &remote, "+refs/notes/yaks:refs/notes/yaks-peer"])
         .current_dir(repo_path)
         .output();
 
-    let has_origin = match fetch_output {
+    let has_remote = match fetch_output {
         Ok(out) => {
             if out.status.success() {
                 true
@@ -32,7 +57,7 @@ fn fetch_peer_ref(repo_path: &Path) -> Result<()> {
         Err(_) => false,
     };
 
-    if !has_origin {
+    if !has_remote {
         anyhow::bail!("Sync not configured");
     }
     Ok(())
@@ -50,8 +75,9 @@ pub(super) fn sync_with_remote(
         .ok_or_else(|| anyhow::anyhow!("Cannot sync: bare repository"))?
         .to_path_buf();
 
-    // 1. Fetch refs/notes/yaks from origin into a temporary peer ref
-    let _spinner = output.start_progress("Fetching from origin...");
+    // 1. Fetch refs/notes/yaks from the sync target into a temporary peer ref
+    let remote = resolve_sync_target(&repo_path)?;
+    let _spinner = output.start_progress(&format!("Fetching from {}...", remote));
     fetch_peer_ref(&repo_path)?;
     drop(_spinner);
 
@@ -125,17 +151,18 @@ pub(super) fn sync_with_remote(
         )));
     }
 
-    // 3. Push refs/notes/yaks back to origin
-    let _spinner = output.start_progress("Pushing to origin...");
+    // 3. Push refs/notes/yaks back to the sync target
+    let remote = resolve_sync_target(&repo_path)?;
+    let _spinner = output.start_progress(&format!("Pushing to {}...", remote));
     if store.repo().refname_to_id(store.ref_name()).is_ok() {
         let push_output = std::process::Command::new("git")
-            .args(["push", "origin", "+refs/notes/yaks:refs/notes/yaks"])
+            .args(["push", &remote, "+refs/notes/yaks:refs/notes/yaks"])
             .current_dir(&repo_path)
             .output()?;
 
         if !push_output.status.success() {
             let stderr = String::from_utf8_lossy(&push_output.stderr);
-            anyhow::bail!("Failed to push to origin: {}", stderr.trim());
+            anyhow::bail!("Failed to push to {}: {}", remote, stderr.trim());
         }
     }
 
