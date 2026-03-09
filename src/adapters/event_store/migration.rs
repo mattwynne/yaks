@@ -167,9 +167,9 @@ pub fn write_schema_version(location: &EventStoreLocation, version: u32) -> Resu
     Ok(())
 }
 
-/// Compact the event store after migration: create a Compacted commit whose tree
+/// Compact the event store after migration: create a Migrated commit whose tree
 /// is the current tip tree (with the schema version stamped). `get_all_events()`
-/// stops at Compacted commits, so pre-migration history is never visited.
+/// stops at Migrated commits, so pre-migration history is never visited.
 fn compact_ref(location: &EventStoreLocation, version: u32) -> Result<()> {
     let oid = location.repo.refname_to_id(location.ref_name)?;
     let parent = location.repo.find_commit(oid)?;
@@ -191,7 +191,7 @@ fn compact_ref(location: &EventStoreLocation, version: u32) -> Result<()> {
         Some(location.ref_name),
         &sig,
         &sig,
-        &format!("Compacted\n\nEvent-Id: {}", uuid::Uuid::now_v7()),
+        &format!("Migrated\n\nEvent-Id: {}", uuid::Uuid::now_v7()),
         &new_tree,
         &[&parent],
     )?;

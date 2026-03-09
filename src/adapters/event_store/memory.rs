@@ -54,7 +54,7 @@ fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain:
                     }
                 }
             }
-            YakEvent::Compacted(snapshots, _, _) => {
+            YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
                 yaks.clear();
                 for snap in snapshots {
                     yaks.insert(snap.id.as_str().to_string(), snap.clone());

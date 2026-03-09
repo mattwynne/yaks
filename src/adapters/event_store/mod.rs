@@ -81,6 +81,8 @@ pub(crate) fn merge_event_streams(
     // These events "missed the checkpoint" and must be replayed after
     // the Compacted event, not before it (where clear_all would wipe them).
     // However, events for yaks that were deliberately removed should be dropped.
+    // Migrated events are NOT subject to orphan reordering — they are schema
+    // migration boundaries, not user-triggered compactions.
     if let Some(compact_idx) = all_events
         .iter()
         .position(|e| matches!(e, YakEvent::Compacted(_, _, _)))

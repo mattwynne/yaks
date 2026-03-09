@@ -15,6 +15,7 @@ pub enum YakEvent {
     Moved(MovedEvent, EventMetadata),
     FieldUpdated(FieldUpdatedEvent, EventMetadata),
     Compacted(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
+    Migrated(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
 }
 
 impl YakEvent {
@@ -25,6 +26,7 @@ impl YakEvent {
             Self::Moved(_, m) => m,
             Self::FieldUpdated(_, m) => m,
             Self::Compacted(_, _, m) => m,
+            Self::Migrated(_, _, m) => m,
         }
     }
 
@@ -35,6 +37,7 @@ impl YakEvent {
             Self::Moved(e, _) => Self::Moved(e, metadata),
             Self::FieldUpdated(e, _) => Self::FieldUpdated(e, metadata),
             Self::Compacted(s, r, _) => Self::Compacted(s, r, metadata),
+            Self::Migrated(s, r, _) => Self::Migrated(s, r, metadata),
         }
     }
 
@@ -55,6 +58,13 @@ impl YakEvent {
                     plain(&format!(" compacted the event stream ({} yaks)", count)),
                 ]
             }
+            Self::Migrated(snapshots, _, _) => {
+                let count = snapshots.len();
+                vec![
+                    highlight(author),
+                    plain(&format!(" migrated the event stream ({} yaks)", count)),
+                ]
+            }
         }
     }
 
@@ -65,6 +75,7 @@ impl YakEvent {
             Self::Moved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::FieldUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Compacted(_, _, _) => "Compacted".to_string(),
+            Self::Migrated(_, _, _) => "Migrated".to_string(),
         }
     }
 
@@ -73,6 +84,9 @@ impl YakEvent {
         // Handle dataless events (no ": " separator)
         if message == "Compacted" {
             return Ok(Self::Compacted(vec![], vec![], meta));
+        }
+        if message == "Migrated" {
+            return Ok(Self::Migrated(vec![], vec![], meta));
         }
         let (tag, data) = message
             .split_once(": ")
@@ -137,6 +151,7 @@ impl YakEvent {
             Self::Moved(e, _) => e.id.as_str(),
             Self::FieldUpdated(e, _) => e.id.as_str(),
             Self::Compacted(_, _, _) => "",
+            Self::Migrated(_, _, _) => "",
         }
     }
 }

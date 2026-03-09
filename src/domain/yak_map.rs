@@ -130,7 +130,7 @@ impl YakMap {
                     }
                 }
             }
-            YakEvent::Compacted(snapshots, _, _) => {
+            YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
                 // Replace all yaks with the snapshots
                 self.yaks.clear();
                 for yak in snapshots {

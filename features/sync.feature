@@ -342,6 +342,21 @@ Feature: yx sync - Collaborate on Yaks via Git
       And the error should contain "Please update yx"
       And bob should have a yak called "make the tea"
 
+  Rule: Independent migrations don't corrupt state
+
+    Example: Removed yaks stay removed after migration and sync
+      Given a git clone of origin called alice
+      And a git clone of origin called bob
+      And alice has a yak called "make the tea"
+      And alice has a yak called "buy biscuits"
+      And alice has synced yaks
+      And bob has synced yaks
+      And alice has removed the yak "buy biscuits"
+      And alice has synced yaks
+      When bob syncs yaks
+      Then bob should not have a yak called "buy biscuits"
+      And bob should have a yak called "make the tea"
+
   @wip
   Rule: Sync tells you what changed
 

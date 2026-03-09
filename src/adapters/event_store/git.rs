@@ -309,6 +309,7 @@ impl EventStore for GitEventStore {
 
         let mut compaction_tree: Option<git2::Tree> = None;
         let mut compaction_metadata: Option<crate::domain::event_metadata::EventMetadata> = None;
+        let mut is_migrated = false;
 
         for oid in revwalk {
             let oid = oid?;
@@ -321,8 +322,8 @@ impl EventStore for GitEventStore {
                 continue;
             }
 
-            // Check for Compacted commit — stop walking and use its tree
-            if first_line == "Compacted" {
+            // Check for Compacted or Migrated commit — stop walking and use its tree
+            if first_line == "Compacted" || first_line == "Migrated" {
                 use crate::domain::event_metadata::{Author, EventMetadata, Timestamp};
                 let author = Author {
                     name: commit.author().name().unwrap_or("unknown").to_string(),
@@ -337,6 +338,7 @@ impl EventStore for GitEventStore {
                 metadata.commit_sha = Some(commit.id().to_string());
                 compaction_metadata = Some(metadata);
                 compaction_tree = Some(commit.tree()?);
+                is_migrated = first_line == "Migrated";
                 break;
             }
 
@@ -443,10 +445,14 @@ impl EventStore for GitEventStore {
             };
 
             let mut result = Vec::new();
-            result.push(YakEvent::Compacted(snapshots, removed_yak_ids, metadata));
+            if is_migrated {
+                result.push(YakEvent::Migrated(snapshots, removed_yak_ids, metadata));
+            } else {
+                result.push(YakEvent::Compacted(snapshots, removed_yak_ids, metadata));
+            }
 
             // post_compaction_events are newest-first; reverse to
-            // chronological then append after the Compacted event
+            // chronological then append after the Compacted/Migrated event
             post_compaction_events.reverse();
             result.extend(post_compaction_events);
             Ok(result)

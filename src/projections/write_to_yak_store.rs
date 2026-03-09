@@ -87,7 +87,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             }
         }
 
-        YakEvent::Compacted(snapshots, _, _) => {
+        YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
             store.clear_all()?;
             for snap in snapshots {
                 store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;

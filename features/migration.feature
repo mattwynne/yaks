@@ -5,7 +5,16 @@ Feature: Schema migration
 
   Rule: Existing stores are migrated transparently
 
+    @fullstack
     Example: Store created before schema versioning still works
       Given a yak "make tea" created with the v1 schema
       When I list the yaks
       Then the output should include "make tea"
+
+  Rule: Migration produces a Migrated event
+
+    @fullstack
+    Example: Migration produces a Migrated event in the log
+      Given a yak "make tea" created with the v1 schema
+      When I run yx log
+      Then the output should include "migrated"

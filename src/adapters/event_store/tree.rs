@@ -225,7 +225,8 @@ pub(super) fn build_tree_from_event(
             update_yak_file(repo, current_tree, e.id.as_str(), &e.field_name, &e.content)
         }
 
-        YakEvent::Compacted(snapshots, removed_yak_ids, _) => {
+        YakEvent::Compacted(snapshots, removed_yak_ids, _)
+        | YakEvent::Migrated(snapshots, removed_yak_ids, _) => {
             if snapshots.is_empty() {
                 // Legacy: no snapshots, preserve current tree
                 match current_tree {
