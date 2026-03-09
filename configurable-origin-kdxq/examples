@@ -1,0 +1,16 @@
+Feature: configurable origin
+
+  Rule: Sync target resolution
+    Example: sync uses configured URL when yaks.remote is set
+    Example: sync falls back to origin remote when yaks.remote is not set
+    Example: sync errors "Sync not configured" when neither yaks.remote nor origin exists
+
+  Rule: Setting sync target verifies reachability
+    Example: yx sync <valid-url> stores URL after git ls-remote succeeds
+    Example: yx sync <unreachable-url> errors and stores nothing
+    Example: yx sync <no-auth-url> errors and stores nothing
+
+  Rule: Sync show displays current target
+    Example: yx sync --show prints configured URL when yaks.remote is set
+    Example: yx sync --show prints origin URL with (origin) when not configured
+    Example: yx sync --show prints "Not connected" when no origin either
