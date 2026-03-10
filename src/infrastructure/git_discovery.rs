@@ -26,21 +26,6 @@ pub fn discover_git_root() -> Result<PathBuf> {
     Ok(workdir.to_path_buf())
 }
 
-/// Check whether `.yaks` is gitignored in the repository at repo_root.
-///
-/// Runs `git check-ignore .yaks` from the repo root directory so
-/// that the check works correctly regardless of the current working
-/// directory.  We shell out to `git` rather than using libgit2's
-/// `is_path_ignored` because the CLI correctly honours environment
-/// variables like `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`
-/// that tests rely on to isolate from the user's global gitconfig.
-pub fn check_yaks_gitignored(repo_root: &std::path::Path) -> Result<()> {
-    if !is_yaks_gitignored(repo_root)? {
-        anyhow::bail!("Error: .yaks folder is not gitignored");
-    }
-    Ok(())
-}
-
 /// Check whether `.yaks` is gitignored, returning a boolean.
 ///
 /// Returns true if .yaks is gitignored, false otherwise.

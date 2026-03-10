@@ -6,7 +6,6 @@ mod query;
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::infrastructure::check_yaks_gitignored;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -17,9 +16,7 @@ pub struct DirectoryStorage {
 
 impl DirectoryStorage {
     /// Create a DirectoryStorage using the provided git repo root and yaks path.
-    /// Checks that .yaks is gitignored before proceeding.
-    pub fn new(repo_root: &Path, yaks_path: &Path) -> Result<Self> {
-        check_yaks_gitignored(repo_root)?;
+    pub fn new(_repo_root: &Path, yaks_path: &Path) -> Result<Self> {
         Ok(Self {
             base_path: yaks_path.to_path_buf(),
         })
