@@ -1,0 +1,17 @@
+{
+  "name": "yaks",
+  "owner": {
+    "name": "Matt Wynne"
+  },
+  "metadata": {
+    "description": "Skills for using yaks (yx) — DAG-based TODO list CLI",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "yx",
+      "source": "./plugins/yx",
+      "description": "Skills for mapping, preparing, and working on yaks"
+    }
+  ]
+}
