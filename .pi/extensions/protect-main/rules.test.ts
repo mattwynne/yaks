@@ -58,20 +58,49 @@ describe("isAllowedBashCommand", () => {
     ['cd /some/path && yx state "foo" wip', "cd then yx via &&"],
     ['cd /some/path && dev check', "cd then dev via &&"],
     ['cd foo; yx show bar', "cd then yx via ;"],
+    // Read-only commands
+    ["ls -la", "listing files"],
+    ["grep -r foo src/", "grep recursively"],
+    ["cat src/main.rs", "cat a file"],
+    ["find . -name '*.rs'", "find files"],
+    ["head -20 file.txt", "head of file"],
+    ["tail -f log", "tail follow"],
+    ["wc -l file", "word count"],
+    ["grep -rn foo src/", "grep with line numbers"],
+    ["tree src/", "tree directory"],
+    ["stat file.txt", "stat file"],
+    ["du -sh .", "disk usage"],
+    ["echo 'hello'", "echo text"],
+    ["which grep", "which command"],
+    ["type ls", "type command"],
+    ["realpath .", "realpath"],
+    ["dirname /path/to/file", "dirname"],
+    ["basename /path/to/file", "basename"],
+    ["diff file1 file2", "diff files"],
+    // Pipelines of read-only commands
+    ["grep foo | wc -l", "pipeline of read-only"],
+    ["find . -name '*.rs' | grep test", "find piped to grep"],
+    ["cat file.txt | head -10", "cat piped to head"],
+    // cd then read-only
+    ["cd src && grep foo *.rs", "cd then read-only via &&"],
+    ["cd src; ls -la", "cd then read-only via ;"],
   ])("allows: %s (%s)", (cmd) => {
     expect(isAllowedBashCommand(cmd)).toBe(true);
   });
 
   it.each([
-    ["ls -la", "listing files"],
     ["git commit -m 'foo'", "git commit"],
     ["git checkout feature-branch", "git checkout"],
-    ['echo "hello" > file.txt', "echo redirect"],
+    ['echo "hello" > file.txt', "echo redirect (write)"],
     ["cargo build", "cargo build"],
-    ["grep -r foo src/", "grep"],
-    ["cat src/main.rs", "cat"],
     ['sed -i "s/foo/bar/" file.txt', "sed in-place"],
-    ["rm -rf src/", "rm"],
+    ["rm -rf src/", "rm command"],
+    ["touch newfile.txt", "touch creates files"],
+    ["mkdir newdir", "mkdir creates directories"],
+    ["mv file1 file2", "mv moves files"],
+    ["cp file1 file2", "cp copies files"],
+    ["npm install", "npm install"],
+    ["cargo test", "cargo test"],
   ])("blocks: %s (%s)", (cmd) => {
     expect(isAllowedBashCommand(cmd)).toBe(false);
   });
