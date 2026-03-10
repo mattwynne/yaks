@@ -29,8 +29,20 @@ export default function (pi: ExtensionAPI) {
       },
       required: ["path"],
     },
-    handler: async (params: FindParams) => {
-      return await find(params);
+    execute: async (toolCallId, params: FindParams, signal, onUpdate, ctx) => {
+      const result = await find(params);
+      
+      if (!result.success) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: result.error || "Unknown error" }],
+        };
+      }
+      
+      const text = result.files?.join("\n") || "";
+      return {
+        content: [{ type: "text", text }],
+      };
     },
   });
 
@@ -56,8 +68,22 @@ export default function (pi: ExtensionAPI) {
       },
       required: ["pattern"],
     },
-    handler: async (params: SearchParams) => {
-      return await search(params);
+    execute: async (toolCallId, params: SearchParams, signal, onUpdate, ctx) => {
+      const result = await search(params);
+      
+      if (!result.success) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: result.error || "Unknown error" }],
+        };
+      }
+      
+      const text = result.matches
+        ?.map(m => `${m.file}:${m.lineNumber}: ${m.line}`)
+        .join("\n") || "";
+      return {
+        content: [{ type: "text", text }],
+      };
     },
   });
 
