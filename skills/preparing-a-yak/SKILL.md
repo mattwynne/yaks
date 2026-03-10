@@ -7,9 +7,9 @@ description: Use when a yak needs requirements, examples, and a plan before impl
 
 ## Overview
 
-**Preparing a yak turns a vague idea into a buildable spec with a
-plan and sub-yaks.** Each phase stores its output on the yak itself
-using `yx` fields, so everything travels with the yak.
+**Preparing a yak turns a vague idea into a buildable spec with
+sub-yaks.** Each phase stores its output on the yak itself
+using `yx` commands, so everything travels with the yak.
 
 Yaks come in different flavours. A feature adds or changes observable
 behaviour. A refactoring changes structure while preserving behaviour.
@@ -23,7 +23,7 @@ The preparation flow adapts to the type.
 - When a yak needs requirements fleshed out before coding
 
 **Don't use when:**
-- Yak already has context, examples, and plan
+- Yak already has context, examples, and sub-yaks
 - Yak is a simple, obvious task (just pick it up)
 
 ## Phase 0: Read Existing State
@@ -34,7 +34,6 @@ Before doing anything, understand what you're working with:
    ```bash
    yx context --show "yak name"
    yx field --show "yak name" examples
-   yx field --show "yak name" plan
    ```
 
 2. **Read parent and sibling yaks** for scope and constraints:
@@ -82,9 +81,6 @@ cat <<'EOF' | yx context "yak name"
 # Design Decisions
 [Key decisions from brainstorming]
 
-# See Also
-- `yx field --show "yak name" examples` for detailed behaviour
-- `yx field --show "yak name" plan` for implementation plan
 EOF
 ```
 
@@ -218,58 +214,35 @@ For dependency upgrades, CI fixes, tooling changes, and other
 work that doesn't change behaviour or architecture: the spec
 from Phase 2 is sufficient. Proceed to Phase 4.
 
-## Phase 4: Write the Implementation Plan
+## Phase 4: Plan as Sub-Yaks
 
-Use `/writing-plans` to create a step-by-step implementation
-plan.
+**The yak tree is the plan.** Don't write a separate plan
+document or store a plan in a field — break the work directly
+into sub-yaks. The tree structure expresses dependencies
+(children are prerequisites, leaf nodes get done first).
 
-**Ground the plan in the codebase.** Before writing tasks:
+**Ground the plan in the codebase.** Before creating sub-yaks:
 - Map which files will be created or modified
 - Identify exact file paths and line ranges
 - Follow existing patterns in the codebase
-- Design each task to produce self-contained, testable changes
+- Design each sub-yak to produce self-contained, testable
+  changes
 
 **Adapt based on yak type:**
-- **Feature:** Plan tasks should follow TDD — failing test,
+- **Feature:** Sub-yaks should follow TDD — failing test,
   implementation, verification, commit. Use the example map
   to drive which tests to write.
-- **Refactoring:** Plan tasks should preserve behaviour at
-  every step. Each task should leave tests passing. Consider
+- **Refactoring:** Sub-yaks should preserve behaviour at
+  every step. Each one should leave tests passing. Consider
   whether existing tests are sufficient or need strengthening
   first.
-- **Chore:** Plan tasks can be more mechanical. Still commit
+- **Chore:** Sub-yaks can be more mechanical. Still commit
   after each logical step.
 
-**Store the plan on the yak:**
+**Create sub-yaks and arrange by dependency:**
 
 ```bash
-cat <<'EOF' | yx field "yak name" plan
-# Implementation Plan
-
-## File Structure
-[Which files will be created/modified and why]
-
-## Tasks
-1. [First task — specific files, test approach, commands]
-2. [Second task]
-...
-
-## Dependencies
-[Which tasks depend on others, what can be parallelised]
-EOF
-```
-
-**Done when:** The user approves the plan.
-
-## Phase 5: Break Down into Sub-Yaks
-
-Create sub-yaks from the plan's tasks and arrange them using
-the `/yak-mapping` nesting pattern.
-
-**Children are prerequisites — leaf nodes get done first.**
-
-```bash
-# Create sub-yaks from plan tasks
+# Create sub-yaks from planned tasks
 yx add task A --under "yak name"
 yx ls
 yx add task B --under "yak name"
@@ -311,6 +284,8 @@ EOF
 The tree enforces execution order: work leaves first, then
 their parents.
 
+**Done when:** The user approves the sub-yak tree.
+
 ## After Preparation
 
 The yak now has everything needed for implementation:
@@ -318,8 +293,7 @@ The yak now has everything needed for implementation:
 - **examples** (features only): The behaviour (rules and
   edge cases)
 - **adr** (refactorings only): The architectural decision
-- **plan**: The how (ordered tasks with file paths)
-- **sub-yaks**: The work breakdown (dependency hierarchy)
+- **sub-yaks**: The plan (dependency hierarchy with context)
 
 **Next step:** Use `/parallel-yak-implementation` for
 independent leaf yaks, or `/subagent-driven-development`
@@ -335,8 +309,7 @@ to execute sequentially.
 | 3a | Behaviour (feature) | `/example-mapping` | examples field | `yx field --show "name" examples` |
 | 3b | Decision (refactoring) | — | adr field + file | `yx field --show "name" adr` |
 | 3c | — (chore) | skip | — | — |
-| 4 | Plan | `/writing-plans` | plan field | `yx field --show "name" plan` |
-| 5 | Sub-yaks | `/yak-mapping` | yak hierarchy | `yx ls` |
+| 4 | Plan as sub-yaks | `/yak-mapping` | yak hierarchy | `yx ls` |
 
 ## Common Mistakes
 
@@ -350,7 +323,8 @@ to execute sequentially.
 | Writing examples without a spec | Brainstorm the spec first, then map examples against it |
 | Skipping example mapping for a feature with multiple rules | If it has rules and edge cases, map it |
 | Storing outputs in files instead of on the yak | Always use `yx context` and `yx field` |
+| Writing a plan field instead of sub-yaks | The tree is the plan — break work into sub-yaks directly |
 | Starting implementation without user approval at each phase | Each phase ends with user confirmation |
 | Leaving plan tasks as flat siblings | Use `/yak-mapping` nesting to order by dependency |
-| Writing plan tasks without exact file paths | Ground every task in specific files and commands |
+| Writing sub-yak context without exact file paths | Ground every sub-yak in specific files and commands |
 | Adding sub-yaks without running `yx ls` after each | Iron Law — `yx add` then `yx ls`, always |
