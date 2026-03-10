@@ -15,8 +15,8 @@ use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
     GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak,
-    ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncTarget, ShowContext, ShowField, ShowLog,
-    ShowSyncTarget, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
+    ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncRemote, ShowContext, ShowField, ShowLog,
+    ShowSyncRemote, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::EventStore;
@@ -236,12 +236,20 @@ enum Commands {
         #[arg(long)]
         yes: bool,
     },
-    /// Sync yaks with git refs
+    /// Sync yaks with a remote git repository
     #[command(display_order = 22)]
+    #[command(long_about = "Sync yaks with a remote git repository\n\n\
+        When run with no arguments, pushes and pulls yak events to/from\n\
+        the configured remote. Use a URL argument to set the remote.")]
+    #[command(after_help = "\x1b[1;33mExamples:\x1b[0m\n  \
+        yx sync git@github.com:team/project.git        # set remote (SSH)\n  \
+        yx sync https://github.com/team/project.git    # set remote (HTTPS)\n  \
+        yx sync --show                                  # show current remote\n  \
+        yx sync                                         # push & pull events")]
     Sync {
-        /// URL to set as sync target
+        /// Set the remote URL to sync with (one-time setup)
         url: Option<String>,
-        /// Show current sync target
+        /// Show the currently configured remote
         #[arg(long)]
         show: bool,
     },
@@ -532,9 +540,9 @@ fn route_command(
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync { url, show } => {
             if show {
-                handler.handle(ShowSyncTarget::new())
+                handler.handle(ShowSyncRemote::new())
             } else if let Some(url) = url {
-                handler.handle(SetSyncTarget::new(url))
+                handler.handle(SetSyncRemote::new(url))
             } else {
                 handler.handle(SyncYaks::new())
             }

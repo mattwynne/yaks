@@ -12,10 +12,10 @@ use crate::domain::YakEvent;
 
 use super::git::GitEventStore;
 
-/// Resolve the sync target (remote name or URL) to use for fetch/push.
+/// Resolve the sync remote (remote name or URL) to use for fetch/push.
 /// Reads git config yaks.remote if set, otherwise falls back to "origin".
 /// Returns an error if neither is configured.
-fn resolve_sync_target(repo_path: &Path) -> Result<String> {
+fn resolve_sync_remote(repo_path: &Path) -> Result<String> {
     // Try to read git config yaks.remote
     let config_output = std::process::Command::new("git")
         .args(["config", "--get", "yaks.remote"])
@@ -35,10 +35,10 @@ fn resolve_sync_target(repo_path: &Path) -> Result<String> {
     Ok("origin".to_string())
 }
 
-/// Fetch refs/notes/yaks from the sync target into a temporary peer ref.
+/// Fetch refs/notes/yaks from the sync remote into a temporary peer ref.
 /// Returns an error if sync is not configured (no remote).
 fn fetch_peer_ref(repo_path: &Path) -> Result<()> {
-    let remote = resolve_sync_target(repo_path)?;
+    let remote = resolve_sync_remote(repo_path)?;
 
     let fetch_output = std::process::Command::new("git")
         .args(["fetch", &remote, "+refs/notes/yaks:refs/notes/yaks-peer"])
@@ -75,8 +75,8 @@ pub(super) fn sync_with_remote(
         .ok_or_else(|| anyhow::anyhow!("Cannot sync: bare repository"))?
         .to_path_buf();
 
-    // 1. Fetch refs/notes/yaks from the sync target into a temporary peer ref
-    let remote = resolve_sync_target(&repo_path)?;
+    // 1. Fetch refs/notes/yaks from the sync remote into a temporary peer ref
+    let remote = resolve_sync_remote(&repo_path)?;
     let _spinner = output.start_progress(&format!("Fetching from {}...", remote));
     fetch_peer_ref(&repo_path)?;
     drop(_spinner);
@@ -151,8 +151,8 @@ pub(super) fn sync_with_remote(
         )));
     }
 
-    // 3. Push refs/notes/yaks back to the sync target
-    let remote = resolve_sync_target(&repo_path)?;
+    // 3. Push refs/notes/yaks back to the sync remote
+    let remote = resolve_sync_remote(&repo_path)?;
     let _spinner = output.start_progress(&format!("Pushing to {}...", remote));
     if store.repo().refname_to_id(store.ref_name()).is_ok() {
         let push_output = std::process::Command::new("git")
@@ -182,7 +182,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_sync_target_falls_back_to_origin_when_config_is_empty() {
+    fn resolve_sync_remote_falls_back_to_origin_when_config_is_empty() {
         let temp_dir = tempfile::tempdir().unwrap();
         let repo_path = temp_dir.path();
 
@@ -200,7 +200,7 @@ mod tests {
             .output()
             .unwrap();
 
-        let result = resolve_sync_target(repo_path).unwrap();
+        let result = resolve_sync_remote(repo_path).unwrap();
         assert_eq!(
             result, "origin",
             "Should fall back to 'origin' when yaks.remote is empty"
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_sync_target_uses_config_when_set() {
+    fn resolve_sync_remote_uses_config_when_set() {
         let temp_dir = tempfile::tempdir().unwrap();
         let repo_path = temp_dir.path();
 
@@ -226,7 +226,7 @@ mod tests {
             .output()
             .unwrap();
 
-        let result = resolve_sync_target(repo_path).unwrap();
+        let result = resolve_sync_remote(repo_path).unwrap();
         assert_eq!(
             result, "custom-remote",
             "Should use yaks.remote config when set"
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_sync_target_falls_back_to_origin_when_not_configured() {
+    fn resolve_sync_remote_falls_back_to_origin_when_not_configured() {
         let temp_dir = tempfile::tempdir().unwrap();
         let repo_path = temp_dir.path();
 
@@ -247,7 +247,7 @@ mod tests {
 
         // Don't set yaks.remote
 
-        let result = resolve_sync_target(repo_path).unwrap();
+        let result = resolve_sync_remote(repo_path).unwrap();
         assert_eq!(
             result, "origin",
             "Should fall back to 'origin' when yaks.remote is not configured"

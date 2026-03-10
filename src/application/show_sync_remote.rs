@@ -1,31 +1,31 @@
-// Use case: Show current sync target
+// Use case: Show current sync remote
 
 use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
 
-pub struct ShowSyncTarget;
+pub struct ShowSyncRemote;
 
-impl ShowSyncTarget {
+impl ShowSyncRemote {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for ShowSyncTarget {
+impl Default for ShowSyncRemote {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl UseCase for ShowSyncTarget {
+impl UseCase for ShowSyncRemote {
     fn execute(&self, app: &mut Application) -> Result<()> {
         // Get the repository path
         let repo_path = app
             .event_store
             .repo_path()
-            .ok_or_else(|| anyhow::anyhow!("Cannot show sync target: not in a git repository"))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot show sync remote: not in a git repository"))?;
 
         // Try to read git config yaks.remote
         let config_output = std::process::Command::new("git")

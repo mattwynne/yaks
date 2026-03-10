@@ -1,27 +1,27 @@
-// Use case: Set sync target URL
+// Use case: Set sync remote URL
 
 use crate::adapters::views::Message;
 use anyhow::Result;
 
 use super::{Application, UseCase};
 
-pub struct SetSyncTarget {
+pub struct SetSyncRemote {
     url: String,
 }
 
-impl SetSyncTarget {
+impl SetSyncRemote {
     pub fn new(url: String) -> Self {
         Self { url }
     }
 }
 
-impl UseCase for SetSyncTarget {
+impl UseCase for SetSyncRemote {
     fn execute(&self, app: &mut Application) -> Result<()> {
         // Get the repository path
         let repo_path = app
             .event_store
             .repo_path()
-            .ok_or_else(|| anyhow::anyhow!("Cannot set sync target: not in a git repository"))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot set sync remote: not in a git repository"))?;
 
         // Verify the URL is reachable using git ls-remote
         let ls_remote_output = std::process::Command::new("git")
@@ -90,8 +90,8 @@ mod tests {
             &auth,
         );
 
-        // Try to set sync target to a non-existent URL
-        let use_case = SetSyncTarget::new(
+        // Try to set sync remote to a non-existent URL
+        let use_case = SetSyncRemote::new(
             "https://invalid-url-that-does-not-exist.example/repo.git".to_string(),
         );
         let result = use_case.execute(&mut app);
@@ -126,7 +126,7 @@ mod tests {
             &auth,
         );
 
-        let use_case = SetSyncTarget::new("https://example.com/repo.git".to_string());
+        let use_case = SetSyncRemote::new("https://example.com/repo.git".to_string());
         let result = use_case.execute(&mut app);
 
         assert!(result.is_err(), "Should fail when not in a git repository");
@@ -186,8 +186,8 @@ mod tests {
             &auth,
         );
 
-        // Try to set sync target - should fail when trying to write config
-        let use_case = SetSyncTarget::new(remote_dir.path().to_str().unwrap().to_string());
+        // Try to set sync remote - should fail when trying to write config
+        let use_case = SetSyncRemote::new(remote_dir.path().to_str().unwrap().to_string());
         let result = use_case.execute(&mut app);
 
         // Restore permissions before assertions to ensure cleanup
