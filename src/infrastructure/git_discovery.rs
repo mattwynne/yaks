@@ -35,6 +35,17 @@ pub fn discover_git_root() -> Result<PathBuf> {
 /// variables like `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`
 /// that tests rely on to isolate from the user's global gitconfig.
 pub fn check_yaks_gitignored(repo_root: &std::path::Path) -> Result<()> {
+    if !is_yaks_gitignored(repo_root)? {
+        anyhow::bail!("Error: .yaks folder is not gitignored");
+    }
+    Ok(())
+}
+
+/// Check whether `.yaks` is gitignored, returning a boolean.
+///
+/// Returns true if .yaks is gitignored, false otherwise.
+/// Errors only on command execution failures.
+pub fn is_yaks_gitignored(repo_root: &std::path::Path) -> Result<bool> {
     let output = match Command::new("git")
         .arg("check-ignore")
         .arg(".yaks")
@@ -50,9 +61,5 @@ pub fn check_yaks_gitignored(repo_root: &std::path::Path) -> Result<()> {
         }
     };
 
-    if !output.status.success() {
-        anyhow::bail!("Error: .yaks folder is not gitignored");
-    }
-
-    Ok(())
+    Ok(output.status.success())
 }

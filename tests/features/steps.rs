@@ -844,6 +844,39 @@ async fn git_repo_without_gitignore(world: &mut FullStackWorld) -> Result<()> {
     if !status.success() {
         anyhow::bail!("git init failed");
     }
+
+    // Configure git user for commits
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to set git user.email")?;
+
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test User"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to set git user.name")?;
+
+    // Create an initial commit so we have a baseline
+    std::fs::write(temp_dir.path().join("README.md"), "# Test Repo\n")?;
+    std::process::Command::new("git")
+        .args(["add", "README.md"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()?;
+    std::process::Command::new("git")
+        .args(["commit", "-m", "Initial commit"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()?;
+
     world.override_dir = Some(temp_dir);
     Ok(())
 }
@@ -897,6 +930,21 @@ async fn list_yaks_from_subdir_with_yak_path(world: &mut FullStackWorld) -> Resu
 #[then(expr = "the command should succeed")]
 async fn command_should_succeed(world: &mut FullStackWorld) -> Result<()> {
     check_should_succeed(world)
+}
+
+#[when(regex = r#"^I interactively run yx add "([^"]+)" from this directory$"#)]
+async fn run_yx_add_from_directory_interactive(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
+    // Store command for later execution with interactive responses
+    world.pending_command = Some(vec!["add".to_string(), yak_name]);
+    Ok(())
+}
+
+#[when(expr = "I non-interactively run yx from this directory")]
+async fn run_yx_non_interactively_from_directory(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_in_override_dir(&["ls"])
 }
 
 #[when(regex = r#"^I run yx (.+)$"#)]
@@ -2002,4 +2050,96 @@ async fn then_appears_before(
             output_no_ansi
         ),
     }
+}
+
+// Steps for interactive gitignore prompts
+
+#[when(expr = "I accept the offer to add .yaks to .gitignore")]
+async fn accept_add_to_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    world.interactive_responses.push("y\n".to_string());
+    // Check if we should execute now (if we have both responses)
+    if world.interactive_responses.len() >= 2 {
+        execute_pending_command(world)?;
+    }
+    Ok(())
+}
+
+#[when(expr = "I accept the offer to commit the change")]
+async fn accept_commit(world: &mut FullStackWorld) -> Result<()> {
+    world.interactive_responses.push("y\n".to_string());
+    // Execute now that we have both responses
+    execute_pending_command(world)?;
+    Ok(())
+}
+
+fn execute_pending_command(world: &mut FullStackWorld) -> Result<()> {
+    if let Some(args) = world.pending_command.take() {
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        world.run_yx_in_override_dir_interactive(&arg_refs, "")?;
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^there should be a yak called "([^"]+)"$"#)]
+async fn there_should_be_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+    let yx_path = env!("CARGO_BIN_EXE_yx");
+
+    let output = std::process::Command::new(yx_path)
+        .args(["ls"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(dir.path())
+        .output()
+        .context("Failed to run yx ls")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.contains(&yak_name) {
+        anyhow::bail!("Yak '{}' not found in output:\n{}", yak_name, stdout);
+    }
+    Ok(())
+}
+
+#[then(expr = ".yaks should be in .gitignore")]
+async fn yaks_should_be_in_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+    let gitignore_path = dir.path().join(".gitignore");
+
+    if !gitignore_path.exists() {
+        anyhow::bail!(".gitignore does not exist");
+    }
+
+    let content = std::fs::read_to_string(&gitignore_path)?;
+    if !content.lines().any(|line| line.trim() == ".yaks") {
+        anyhow::bail!(".yaks not found in .gitignore:\n{}", content);
+    }
+    Ok(())
+}
+
+#[then(expr = "the last commit should include .gitignore")]
+async fn last_commit_should_include_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+
+    let output = std::process::Command::new("git")
+        .args(["log", "-1", "--name-only", "--pretty=format:"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(dir.path())
+        .output()
+        .context("Failed to run git log")?;
+
+    let files = String::from_utf8_lossy(&output.stdout);
+    if !files.contains(".gitignore") {
+        anyhow::bail!(".gitignore not in last commit:\n{}", files);
+    }
+    Ok(())
 }

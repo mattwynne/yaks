@@ -29,6 +29,10 @@ pub struct FullStackWorld {
     pub git_repo_subdir: Option<PathBuf>,
     /// An explicit YAK_PATH used alongside git_repo for YAK_PATH tests
     pub explicit_yak_path: Option<TempDir>,
+    /// Interactive responses to be sent to stdin (for simulating user input)
+    pub interactive_responses: Vec<String>,
+    /// Pending command to execute after collecting interactive responses
+    pub pending_command: Option<Vec<String>>,
 }
 
 impl FullStackWorld {
@@ -47,6 +51,8 @@ impl FullStackWorld {
             git_repo: None,
             git_repo_subdir: None,
             explicit_yak_path: None,
+            interactive_responses: Vec::new(),
+            pending_command: None,
         })
     }
 
@@ -370,6 +376,54 @@ impl FullStackWorld {
         }
 
         let output = cmd.output().context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
+    /// Run yx in the override directory with interactive input simulation.
+    /// Uses YX_FORCE_INTERACTIVE=1 to treat stdin as interactive even when piped.
+    pub fn run_yx_in_override_dir_interactive(
+        &mut self,
+        args: &[&str],
+        _extra: &str,
+    ) -> Result<()> {
+        let dir = self
+            .override_dir
+            .as_ref()
+            .context("No override directory set")?;
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        // Collect all accumulated responses
+        let stdin_input = self.interactive_responses.join("");
+        self.interactive_responses.clear(); // Clear for next test
+
+        let mut cmd = Command::new(yx_path);
+        cmd.args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("YX_FORCE_INTERACTIVE", "1") // Force interactive mode
+            .env_remove("YX_SKIP_GIT_CHECKS")
+            .current_dir(dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().context("Failed to spawn yx command")?;
+
+        // Write all responses to stdin
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(stdin_input.as_bytes())
+                .context("Failed to write to stdin")?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .context("Failed to wait for yx command")?;
 
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();

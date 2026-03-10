@@ -13,11 +13,27 @@ Feature: Git repository safety checks
 
   Rule: The .yaks folder must be gitignored
 
-    Example: Running yx in a git repo without .yaks gitignored
+    @fullstack
+    Example: Offer to add .yaks to .gitignore and commit
       Given a git repository without .yaks in .gitignore
-      When I try to list the yaks from this directory
+      When I interactively run yx add "my-yak" from this directory
+      And I accept the offer to add .yaks to .gitignore
+      And I accept the offer to commit the change
+      Then the command should succeed
+      And there should be a yak called "my-yak"
+      And .yaks should be in .gitignore
+      And the last commit should include .gitignore
+
+    @fullstack
+    Example: Non-interactive environment without .yaks gitignored
+      Given a git repository without .yaks in .gitignore
+      When I non-interactively run yx from this directory
       Then the command should fail
       And the error should contain ".yaks folder is not gitignored"
+
+    # TODO: Add tests for partial acceptance/decline scenarios
+    # - Accept gitignore, decline commit (should leave uncommitted changes)
+    # - Decline gitignore (should fail immediately)
 
   Rule: yx auto-discovers the git repo root
 
