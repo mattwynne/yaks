@@ -831,7 +831,7 @@ async fn dir_not_git_repo(world: &mut FullStackWorld) -> Result<()> {
     Ok(())
 }
 
-#[given(expr = "a git repository without .yaks in .gitignore")]
+#[given(expr = "a git repository that has never used yaks")]
 async fn git_repo_without_gitignore(world: &mut FullStackWorld) -> Result<()> {
     let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
     let status = std::process::Command::new("git")
@@ -2176,7 +2176,7 @@ async fn gitignore_should_have_uncommitted_changes(world: &mut FullStackWorld) -
         .context("Failed to run git status --porcelain")?;
 
     let status = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check if .gitignore has uncommitted changes
     if !status.contains(".gitignore") {
         anyhow::bail!(".gitignore has no uncommitted changes");
@@ -2199,7 +2199,10 @@ async fn yaks_should_not_be_in_gitignore(world: &mut FullStackWorld) -> Result<(
 
     let content = std::fs::read_to_string(&gitignore_path)?;
     if content.lines().any(|line| line.trim() == ".yaks") {
-        anyhow::bail!(".yaks found in .gitignore (but should not be):\n{}", content);
+        anyhow::bail!(
+            ".yaks found in .gitignore (but should not be):\n{}",
+            content
+        );
     }
     Ok(())
 }
@@ -2210,7 +2213,7 @@ async fn output_should_contain(world: &mut FullStackWorld, expected: String) -> 
     let stdout = world.get_output();
     let stderr = world.get_error();
     let combined = format!("{}\n{}", stdout, stderr);
-    
+
     if !combined.contains(&expected) {
         anyhow::bail!(
             "Expected output to contain '{}', but got:\nstdout:\n{}\nstderr:\n{}",

@@ -717,8 +717,12 @@ fn main() -> Result<()> {
 fn prompt_add_yaks_to_gitignore(repo_root: &std::path::Path) -> Result<bool> {
     use std::io::{self, Write};
 
-    // Prompt to add .yaks to .gitignore
-    eprint!("The .yaks folder is not gitignored. Add .yaks to .gitignore? [Y/n] ");
+    // Welcome message for first-time users
+    eprintln!();
+    eprintln!("👋 It looks like you've never used yaks in this repo before!");
+    eprintln!("   I need to add .yaks to your .gitignore to keep things tidy.");
+    eprintln!();
+    eprint!("   Add .yaks to .gitignore? [Y/n] ");
     io::stderr().flush()?;
 
     let mut response = String::new();
@@ -746,8 +750,9 @@ fn prompt_add_yaks_to_gitignore(repo_root: &std::path::Path) -> Result<bool> {
         std::fs::write(&gitignore_path, content)?;
     }
 
-    // Prompt to commit
-    eprint!("Commit .gitignore? [Y/n] ");
+    eprintln!("   ✅ Added .yaks to .gitignore");
+    eprintln!();
+    eprint!("   Commit this change now? [Y/n] ");
     io::stderr().flush()?;
 
     let mut commit_response = String::new();
@@ -774,8 +779,10 @@ fn prompt_add_yaks_to_gitignore(repo_root: &std::path::Path) -> Result<bool> {
         if !commit_status.success() {
             anyhow::bail!("Failed to commit .gitignore");
         }
+
+        eprintln!("   ✅ Committed!");
     } else {
-        eprintln!("Please remember to commit .gitignore");
+        eprintln!("   Please remember to commit .gitignore");
     }
 
     Ok(true)
