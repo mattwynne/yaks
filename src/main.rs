@@ -617,20 +617,8 @@ fn main() -> Result<()> {
 
     // Initialize storage and register as projection
     let storage = if let Some(ref root) = repo_root {
-        // Check if .yaks is gitignored, and handle interactively if needed
-        if !yx::infrastructure::is_yaks_gitignored(root)? {
-            if is_interactive_mode() {
-                // Interactive mode: offer to add .yaks to .gitignore
-                if !prompt_add_yaks_to_gitignore(root)? {
-                    // User declined, fail with error
-                    anyhow::bail!("Error: .yaks folder is not gitignored");
-                }
-                // User accepted and .yaks was added, continue
-            } else {
-                // Non-interactive mode: fail immediately
-                anyhow::bail!("Error: .yaks folder is not gitignored");
-            }
-        }
+        // Ensure .yaks is gitignored (prompts interactively if needed)
+        yx::adapters::onboarding::ensure_yaks_gitignored(root)?;
         DirectoryStorage::new(root, &yaks_path)?
     } else {
         // skip_git is true (otherwise we bailed above)
@@ -710,90 +698,6 @@ fn main() -> Result<()> {
     // accidentally bypass use cases because route_command only
     // sees `&mut impl CommandHandler`.
     route_command(cli.command, &mut app, stdin)
-}
-
-/// Prompt user to add .yaks to .gitignore, and optionally commit it.
-/// Returns true if .yaks was added to .gitignore (regardless of commit decision).
-fn prompt_add_yaks_to_gitignore(repo_root: &std::path::Path) -> Result<bool> {
-    use std::io::{self, Write};
-
-    // Welcome message for first-time users
-    eprintln!();
-    eprintln!("👋 It looks like you've never used yaks in this repo before!");
-    eprintln!("   I need to add .yaks to your .gitignore to keep things tidy.");
-    eprintln!();
-    eprint!("   Add .yaks to .gitignore? [Y/n] ");
-    io::stderr().flush()?;
-
-    let mut response = String::new();
-    io::stdin().read_line(&mut response)?;
-    let add_to_gitignore = response.trim().is_empty() || response.trim().eq_ignore_ascii_case("y");
-
-    if !add_to_gitignore {
-        return Ok(false);
-    }
-
-    // Add .yaks to .gitignore
-    let gitignore_path = repo_root.join(".gitignore");
-    let mut content = if gitignore_path.exists() {
-        std::fs::read_to_string(&gitignore_path)?
-    } else {
-        String::new()
-    };
-
-    // Check if .yaks is already in .gitignore (shouldn't happen, but be safe)
-    if !content.lines().any(|line| line.trim() == ".yaks") {
-        if !content.is_empty() && !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content.push_str(".yaks\n");
-        std::fs::write(&gitignore_path, content)?;
-    }
-
-    eprintln!("   ✅ Added .yaks to .gitignore");
-    eprintln!();
-    eprint!("   Commit this change now? [Y/n] ");
-    io::stderr().flush()?;
-
-    let mut commit_response = String::new();
-    io::stdin().read_line(&mut commit_response)?;
-    let should_commit =
-        commit_response.trim().is_empty() || commit_response.trim().eq_ignore_ascii_case("y");
-
-    if should_commit {
-        // Stage and commit .gitignore
-        let add_status = std::process::Command::new("git")
-            .args(["add", ".gitignore"])
-            .current_dir(repo_root)
-            .status()?;
-
-        if !add_status.success() {
-            anyhow::bail!("Failed to stage .gitignore");
-        }
-
-        let commit_status = std::process::Command::new("git")
-            .args(["commit", "-m", "Add .yaks to .gitignore"])
-            .current_dir(repo_root)
-            .status()?;
-
-        if !commit_status.success() {
-            anyhow::bail!("Failed to commit .gitignore");
-        }
-
-        eprintln!("   ✅ Committed!");
-    } else {
-        eprintln!("   Please remember to commit .gitignore");
-    }
-
-    Ok(true)
-}
-
-/// Check if we're in interactive mode for prompting.
-/// Returns true if:
-/// - stdout is a TTY, OR
-/// - YX_FORCE_INTERACTIVE=1 is set (for testing)
-fn is_interactive_mode() -> bool {
-    std::io::stdout().is_terminal() || std::env::var("YX_FORCE_INTERACTIVE").as_deref() == Ok("1")
 }
 
 #[cfg(test)]
