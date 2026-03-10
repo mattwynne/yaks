@@ -11,6 +11,7 @@ use std::cell::RefCell;
 pub struct InMemoryInput {
     content: RefCell<Option<String>>,
     confirm_response: RefCell<bool>,
+    is_interactive: bool,
 }
 
 impl InMemoryInput {
@@ -19,6 +20,7 @@ impl InMemoryInput {
         Self {
             content: RefCell::new(None),
             confirm_response: RefCell::new(true),
+            is_interactive: true,
         }
     }
 
@@ -27,7 +29,13 @@ impl InMemoryInput {
         Self {
             content: RefCell::new(Some(content)),
             confirm_response: RefCell::new(true),
+            is_interactive: true,
         }
+    }
+
+    /// Set whether this input should report as interactive
+    pub fn set_interactive(&mut self, interactive: bool) {
+        self.is_interactive = interactive;
     }
 
     /// Set the content that will be returned by request_content
@@ -59,6 +67,10 @@ impl InputPort for InMemoryInput {
 
     fn confirm(&self, _message: &str) -> Result<bool> {
         Ok(*self.confirm_response.borrow())
+    }
+
+    fn is_interactive(&self) -> bool {
+        self.is_interactive
     }
 }
 

@@ -4,7 +4,7 @@ pub mod authentication;
 pub mod broken_pipe_guard;
 pub mod event_store;
 pub mod json_display;
-pub mod onboarding;
+pub mod local_workspace;
 pub mod spinner;
 pub mod tui_display;
 pub mod user_display;

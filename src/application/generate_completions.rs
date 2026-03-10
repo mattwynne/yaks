@@ -41,6 +41,21 @@ impl UseCase for GenerateCompletions {
 
 #[cfg(test)]
 mod tests {
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
     use super::*;
     use crate::adapters::user_display::ConsoleDisplay;
     use crate::adapters::{
@@ -56,9 +71,19 @@ mod tests {
         storage: &'a InMemoryStorage,
         display: &'a ConsoleDisplay,
         input: &'a InMemoryInput,
+        workspace: &'a TestWorkspace,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
-        Application::new(event_store, event_bus, storage, display, input, None, auth)
+        Application::new(
+            event_store,
+            event_bus,
+            storage,
+            display,
+            input,
+            workspace,
+            None,
+            auth,
+        )
     }
 
     #[test]
@@ -70,12 +95,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -100,12 +127,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -140,12 +169,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 

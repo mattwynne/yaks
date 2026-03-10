@@ -316,6 +316,21 @@ fn build_node(
 
 #[cfg(test)]
 mod tests {
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
     use super::*;
     use crate::adapters::user_display::ConsoleDisplay;
     use crate::adapters::{
@@ -331,9 +346,19 @@ mod tests {
         storage: &'a InMemoryStorage,
         display: &'a ConsoleDisplay,
         input: &'a InMemoryInput,
+        workspace: &'a TestWorkspace,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
-        Application::new(event_store, event_bus, storage, display, input, None, auth)
+        Application::new(
+            event_store,
+            event_bus,
+            storage,
+            display,
+            input,
+            workspace,
+            None,
+            auth,
+        )
     }
 
     // Mutant 1 (line 89): only markdown format shows "You have no yaks"
@@ -347,12 +372,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -397,12 +424,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -444,12 +473,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -581,12 +612,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -623,12 +656,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -670,12 +705,14 @@ mod tests {
         let (display, _buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -703,12 +740,14 @@ mod tests {
         let (display, _buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -737,12 +776,14 @@ mod tests {
             let (display, _buffer) = make_test_display();
             let input = InMemoryInput::new();
             let auth = InMemoryAuthentication::new();
+            let workspace = TestWorkspace;
             let mut app = make_app(
                 &mut event_store,
                 &mut event_bus,
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 &auth,
             );
 
@@ -768,12 +809,14 @@ mod tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -816,15 +859,41 @@ mod tag_tests {
     use crate::application::{AddTag, AddYak, Application, ListYaks};
     use crate::infrastructure::EventBus;
 
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
     fn make_app<'a>(
         event_store: &'a mut InMemoryEventStore,
         event_bus: &'a mut EventBus,
         storage: &'a InMemoryStorage,
         display: &'a ConsoleDisplay,
         input: &'a InMemoryInput,
+        workspace: &'a TestWorkspace,
         auth: &'a InMemoryAuthentication,
     ) -> Application<'a> {
-        Application::new(event_store, event_bus, storage, display, input, None, auth)
+        Application::new(
+            event_store,
+            event_bus,
+            storage,
+            display,
+            input,
+            workspace,
+            None,
+            auth,
+        )
     }
 
     #[test]
@@ -836,12 +905,14 @@ mod tag_tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -867,12 +938,14 @@ mod tag_tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 
@@ -905,12 +978,14 @@ mod tag_tests {
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = make_app(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             &auth,
         );
 

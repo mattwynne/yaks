@@ -37,4 +37,10 @@ pub trait InputPort {
     /// * `Ok(false)` - User declined
     /// * `Err(_)` - Error occurred
     fn confirm(&self, message: &str) -> Result<bool>;
+
+    /// Check if the input is running in interactive mode
+    ///
+    /// Returns true if the input adapter can prompt the user interactively
+    /// (e.g., stdout is a TTY or YX_FORCE_INTERACTIVE is set).
+    fn is_interactive(&self) -> bool;
 }

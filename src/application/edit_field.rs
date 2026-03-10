@@ -55,6 +55,21 @@ impl UseCase for EditField {
 
 #[cfg(test)]
 mod tests {
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
     use super::*;
     use crate::adapters::{make_test_display, InMemoryEventStore, InMemoryInput, InMemoryStorage};
     use crate::application::AddYak;
@@ -79,6 +94,7 @@ mod tests {
         crate::adapters::user_display::ConsoleDisplay,
         crate::adapters::TestBuffer,
         InMemoryInput,
+        TestWorkspace,
         TestAuth,
     ) {
         let event_store = InMemoryEventStore::new();
@@ -87,6 +103,7 @@ mod tests {
         event_bus.register(Box::new(storage.clone()));
         let (display, buffer) = make_test_display();
         let input = InMemoryInput::new();
+        let workspace = TestWorkspace;
         let auth = TestAuth;
         (
             event_store,
@@ -95,13 +112,15 @@ mod tests {
             display,
             buffer,
             input,
+            workspace,
             auth,
         )
     }
 
     #[test]
     fn edit_field_saves_content_from_input_port() {
-        let (mut event_store, mut event_bus, storage, display, _buffer, input, auth) = setup();
+        let (mut event_store, mut event_bus, storage, display, _buffer, input, workspace, auth) =
+            setup();
 
         {
             let mut app = Application::new(
@@ -110,6 +129,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -126,6 +146,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -139,7 +160,8 @@ mod tests {
 
     #[test]
     fn edit_field_no_op_when_input_returns_none() {
-        let (mut event_store, mut event_bus, storage, display, _buffer, input, auth) = setup();
+        let (mut event_store, mut event_bus, storage, display, _buffer, input, workspace, auth) =
+            setup();
 
         {
             let mut app = Application::new(
@@ -148,6 +170,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -164,6 +187,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -177,7 +201,8 @@ mod tests {
 
     #[test]
     fn edit_field_works_when_field_does_not_exist_yet() {
-        let (mut event_store, mut event_bus, storage, display, _buffer, input, auth) = setup();
+        let (mut event_store, mut event_bus, storage, display, _buffer, input, workspace, auth) =
+            setup();
 
         {
             let mut app = Application::new(
@@ -186,6 +211,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -201,6 +227,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -214,7 +241,8 @@ mod tests {
 
     #[test]
     fn edit_field_validates_field_name() {
-        let (mut event_store, mut event_bus, storage, display, _buffer, input, auth) = setup();
+        let (mut event_store, mut event_bus, storage, display, _buffer, input, workspace, auth) =
+            setup();
 
         {
             let mut app = Application::new(
@@ -223,6 +251,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -238,6 +267,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -248,7 +278,8 @@ mod tests {
 
     #[test]
     fn edit_field_with_initial_content_overrides_existing_field() {
-        let (mut event_store, mut event_bus, storage, display, _buffer, input, auth) = setup();
+        let (mut event_store, mut event_bus, storage, display, _buffer, input, workspace, auth) =
+            setup();
 
         {
             let mut app = Application::new(
@@ -257,6 +288,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -274,6 +306,7 @@ mod tests {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );

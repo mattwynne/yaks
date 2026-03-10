@@ -3,6 +3,7 @@
 pub mod authentication;
 pub mod event_listener;
 pub mod event_store;
+pub mod local_workspace;
 pub mod user_display;
 pub mod user_input;
 pub mod yak_store;
@@ -11,6 +12,7 @@ pub use authentication::AuthenticationPort;
 pub use event_listener::EventListener;
 pub use event_store::EventStore;
 pub use event_store::EventStoreReader;
+pub use local_workspace::LocalWorkspacePort;
 pub use user_display::DisplayPort;
 pub use user_display::ProgressHandle;
 pub use user_input::InputPort;

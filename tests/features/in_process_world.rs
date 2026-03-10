@@ -17,8 +17,25 @@ use yx::application::{
     WriteField,
 };
 use yx::domain::normalize_tag;
-use yx::domain::ports::{EventStore, ReadYakStore};
+use yx::domain::ports::{EventStore, LocalWorkspacePort, ReadYakStore};
 use yx::infrastructure::EventBus;
+
+/// Test workspace that always reports .yaks as gitignored
+struct TestWorkspace;
+
+impl LocalWorkspacePort for TestWorkspace {
+    fn is_yaks_gitignored(&self) -> Result<bool> {
+        Ok(true)
+    }
+
+    fn add_yaks_to_gitignore(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn commit_gitignore(&self) -> Result<()> {
+        Ok(())
+    }
+}
 
 /// A named user instance for multi-repo sync scenarios.
 /// Each user (alice, bob) gets their own set of in-memory adapters.
@@ -30,6 +47,7 @@ struct UserInstance {
     buffer: TestBuffer,
     input: InMemoryInput,
     auth: InMemoryAuthentication,
+    workspace: TestWorkspace,
 }
 
 impl UserInstance {
@@ -48,6 +66,7 @@ impl UserInstance {
             buffer,
             input: InMemoryInput::new(),
             auth: InMemoryAuthentication::new(),
+            workspace: TestWorkspace,
         }
     }
 }
@@ -62,6 +81,7 @@ pub struct InProcessWorld {
     buffer: TestBuffer,
     input: InMemoryInput,
     auth: InMemoryAuthentication,
+    workspace: TestWorkspace,
     error: String,
     exit_code: i32,
     /// Named user instances for multi-repo sync scenarios
@@ -96,6 +116,7 @@ impl InProcessWorld {
             buffer,
             input: InMemoryInput::new(),
             auth: InMemoryAuthentication::new(),
+            workspace: TestWorkspace,
             error: String::new(),
             exit_code: 0,
             repos: HashMap::new(),
@@ -116,6 +137,7 @@ impl InProcessWorld {
             &self.storage,
             &self.display,
             &self.input,
+            &self.workspace,
             None,
             &self.auth,
         );
@@ -139,6 +161,7 @@ impl InProcessWorld {
             &self.storage,
             &self.display,
             &self.input,
+            &self.workspace,
             None,
             &self.auth,
         );
@@ -190,6 +213,7 @@ impl InProcessWorld {
             &user.storage,
             &user.display,
             &user.input,
+            &user.workspace,
             None,
             &user.auth,
         );
@@ -235,6 +259,7 @@ impl InProcessWorld {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let storage = user.storage.clone();
 
         {
@@ -244,6 +269,7 @@ impl InProcessWorld {
                 &storage,
                 &display,
                 &input,
+                &workspace,
                 None,
                 &auth,
             );
@@ -352,6 +378,7 @@ impl TestWorld for InProcessWorld {
             &self.storage,
             &json_display,
             &self.input,
+            &self.workspace,
             None,
             &self.auth,
         );
@@ -381,6 +408,7 @@ impl TestWorld for InProcessWorld {
                 &self.storage,
                 &json_display,
                 &self.input,
+                &self.workspace,
                 None,
                 &self.auth,
             );
@@ -417,6 +445,7 @@ impl TestWorld for InProcessWorld {
                 &self.storage,
                 &json_display,
                 &self.input,
+                &self.workspace,
                 None,
                 &self.auth,
             );

@@ -1,7 +1,8 @@
 // Application struct - bundles infrastructure adapters for use case execution
 
 use crate::domain::ports::{
-    AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, ReadYakStore,
+    AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, LocalWorkspacePort,
+    ReadYakStore,
 };
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
@@ -19,17 +20,20 @@ pub struct Application<'a> {
     pub store: &'a dyn ReadYakStore,
     pub display: &'a dyn DisplayPort,
     pub input: &'a dyn InputPort,
+    pub local_workspace: &'a dyn LocalWorkspacePort,
     pub event_reader: Option<&'a dyn EventStoreReader>,
     auth: &'a dyn AuthenticationPort,
 }
 
 impl<'a> Application<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         event_store: &'a mut dyn EventStore,
         event_bus: &'a mut EventBus,
         store: &'a dyn ReadYakStore,
         display: &'a dyn DisplayPort,
         input: &'a dyn InputPort,
+        local_workspace: &'a dyn LocalWorkspacePort,
         event_reader: Option<&'a dyn EventStoreReader>,
         auth: &'a dyn AuthenticationPort,
     ) -> Self {
@@ -39,6 +43,7 @@ impl<'a> Application<'a> {
             store,
             display,
             input,
+            local_workspace,
             event_reader,
             auth,
         }
@@ -166,6 +171,22 @@ mod tests {
         }
     }
 
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn test_application_stamps_author_on_events() {
         use crate::domain::ports::EventStore;
@@ -179,6 +200,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("Test Author", "test@example.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -186,6 +208,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -221,6 +244,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -228,6 +252,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -252,6 +277,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -259,6 +285,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -286,6 +313,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -293,6 +321,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -330,6 +359,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -337,6 +367,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -376,6 +407,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         // First create some events without event reader
         let mut app_no_reader = Application::new(
@@ -384,6 +416,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -417,6 +450,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             Some(&event_store_reader as &dyn EventStoreReader),
             &auth,
         );
@@ -458,6 +492,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = TestAuth::new("test", "test@test.com");
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -465,6 +500,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );

@@ -26,6 +26,10 @@ impl InputPort for NullInput {
         // Non-interactive: always decline
         Ok(false)
     }
+
+    fn is_interactive(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

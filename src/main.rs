@@ -8,18 +8,19 @@ use yx::adapters::broken_pipe_guard::BrokenPipeGuard;
 use yx::adapters::event_store::migration::Migrator;
 use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::json_display::JsonDisplay;
+use yx::adapters::local_workspace::LocalWorkspace;
 use yx::adapters::tui_display::TuiDisplay;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
-    GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak,
-    ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncRemote, ShowContext, ShowField, ShowLog,
-    ShowSyncRemote, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
+    EnsureGitignore, GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag,
+    RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncRemote, ShowContext,
+    ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
-use yx::domain::ports::EventStore;
+use yx::domain::ports::{EventStore, LocalWorkspacePort};
 use yx::infrastructure::EventBus;
 
 fn styles() -> Styles {
@@ -555,6 +556,23 @@ fn route_command(
     }
 }
 
+/// Null workspace adapter for skip_git mode
+struct NullWorkspace;
+
+impl LocalWorkspacePort for NullWorkspace {
+    fn is_yaks_gitignored(&self) -> Result<bool> {
+        Ok(true) // Always pretend it's gitignored in skip_git mode
+    }
+
+    fn add_yaks_to_gitignore(&self) -> Result<()> {
+        Ok(()) // No-op
+    }
+
+    fn commit_gitignore(&self) -> Result<()> {
+        Ok(()) // No-op
+    }
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
@@ -617,8 +635,6 @@ fn main() -> Result<()> {
 
     // Initialize storage and register as projection
     let storage = if let Some(ref root) = repo_root {
-        // Ensure .yaks is gitignored (prompts interactively if needed)
-        yx::adapters::onboarding::ensure_yaks_gitignored(root)?;
         DirectoryStorage::new(root, &yaks_path)?
     } else {
         // skip_git is true (otherwise we bailed above)
@@ -681,6 +697,13 @@ fn main() -> Result<()> {
         Box::new(UnknownAuthentication)
     };
 
+    // Initialize workspace adapter
+    let workspace: Box<dyn LocalWorkspacePort> = if let Some(ref root) = repo_root {
+        Box::new(LocalWorkspace::new(root.clone()))
+    } else {
+        Box::new(NullWorkspace)
+    };
+
     // Create application with injected dependencies
     let mut app = Application::new(
         event_store.as_mut(),
@@ -688,11 +711,15 @@ fn main() -> Result<()> {
         &storage,
         display.as_ref(),
         &input,
+        workspace.as_ref(),
         git_event_reader
             .as_ref()
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
         auth.as_ref(),
     );
+
+    // Ensure .yaks is gitignored (runs before any other command)
+    app.handle(EnsureGitignore::new())?;
 
     // Route command through CommandHandler trait — main() cannot
     // accidentally bypass use cases because route_command only

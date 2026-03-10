@@ -43,6 +43,10 @@ impl InputPort for ConsoleInput {
         std::io::BufRead::read_line(&mut io::stdin().lock(), &mut answer)?;
         Ok(answer.trim().to_lowercase() == "y")
     }
+
+    fn is_interactive(&self) -> bool {
+        io::stdout().is_terminal() || env::var("YX_FORCE_INTERACTIVE").as_deref() == Ok("1")
+    }
 }
 
 impl ConsoleInput {

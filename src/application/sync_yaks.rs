@@ -26,6 +26,21 @@ impl UseCase for SyncYaks {
 
 #[cfg(test)]
 mod tests {
+    struct TestWorkspace;
+
+    impl crate::domain::ports::LocalWorkspacePort for TestWorkspace {
+        fn is_yaks_gitignored(&self) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
     use super::*;
     use crate::adapters::{
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
@@ -46,6 +61,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -53,6 +69,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -95,6 +112,7 @@ mod tests {
         let (display, _) = make_test_display();
         let input = InMemoryInput::new();
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
 
         let mut app = Application::new(
             &mut event_store,
@@ -102,6 +120,7 @@ mod tests {
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
@@ -129,12 +148,14 @@ mod tests {
         let input = InMemoryInput::new();
 
         let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
         let mut app = Application::new(
             &mut event_store,
             &mut event_bus,
             &storage,
             &display,
             &input,
+            &workspace,
             None,
             &auth,
         );
