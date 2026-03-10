@@ -408,6 +408,12 @@ mutate-sync() {
 # @cmd Run all checks (tests + lint + audit) and mark as verified
 # @alias c
 check() {
+  # Skip if nothing has changed since last check
+  if .githooks/verify-checks 2>/dev/null; then
+    echo "✅ Already verified — nothing changed since last check"
+    return 0
+  fi
+
   echo "Building release binary..."
   if ! cargo build --release --quiet; then
     echo "❌ Build failed"
