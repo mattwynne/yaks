@@ -2,8 +2,15 @@
   "name": "protect-main-extension",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "0.55.0",
     "vitest": "^4.0.0"
+  },
+  "dependencies": {
+    "minimatch": "^10.2.4"
   }
 }
