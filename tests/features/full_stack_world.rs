@@ -414,16 +414,35 @@ impl FullStackWorld {
 
         let mut child = cmd.spawn().context("Failed to spawn yx command")?;
 
-        // Write all responses to stdin
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(stdin_input.as_bytes())
-                .context("Failed to write to stdin")?;
-        }
+        // Write all responses to stdin in a separate thread to avoid deadlock
+        // Keep stdin open long enough for the child to start reading
+        let stdin_thread = if let Some(mut stdin) = child.stdin.take() {
+            Some(std::thread::spawn(move || -> Result<()> {
+                use std::io::Write;
+                // Give the child process time to start
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                stdin.write_all(stdin_input.as_bytes())?;
+                stdin.flush()?;
+                // Keep stdin open a bit longer to ensure child reads it
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                // stdin is dropped here, closing the pipe
+                Ok(())
+            }))
+        } else {
+            None
+        };
 
         let output = child
             .wait_with_output()
             .context("Failed to wait for yx command")?;
+
+        // Wait for stdin thread to complete
+        if let Some(thread) = stdin_thread {
+            thread
+                .join()
+                .expect("stdin thread panicked")
+                .context("Failed to write to stdin in thread")?;
+        }
 
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();

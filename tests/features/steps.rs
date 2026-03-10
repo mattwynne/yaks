@@ -2072,6 +2072,22 @@ async fn accept_commit(world: &mut FullStackWorld) -> Result<()> {
     Ok(())
 }
 
+#[when(expr = "I decline the offer to add .yaks to .gitignore")]
+async fn decline_add_to_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    world.interactive_responses.push("n\n".to_string());
+    // Execute immediately since declining ends the flow
+    execute_pending_command(world)?;
+    Ok(())
+}
+
+#[when(expr = "I decline the offer to commit the change")]
+async fn decline_commit(world: &mut FullStackWorld) -> Result<()> {
+    world.interactive_responses.push("n\n".to_string());
+    // Execute now that we have both responses
+    execute_pending_command(world)?;
+    Ok(())
+}
+
 fn execute_pending_command(world: &mut FullStackWorld) -> Result<()> {
     if let Some(args) = world.pending_command.take() {
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -2140,6 +2156,68 @@ async fn last_commit_should_include_gitignore(world: &mut FullStackWorld) -> Res
     let files = String::from_utf8_lossy(&output.stdout);
     if !files.contains(".gitignore") {
         anyhow::bail!(".gitignore not in last commit:\n{}", files);
+    }
+    Ok(())
+}
+
+#[then(expr = ".gitignore should have uncommitted changes")]
+async fn gitignore_should_have_uncommitted_changes(world: &mut FullStackWorld) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(dir.path())
+        .output()
+        .context("Failed to run git status --porcelain")?;
+
+    let status = String::from_utf8_lossy(&output.stdout);
+    
+    // Check if .gitignore has uncommitted changes
+    if !status.contains(".gitignore") {
+        anyhow::bail!(".gitignore has no uncommitted changes");
+    }
+    Ok(())
+}
+
+#[then(expr = ".yaks should not be in .gitignore")]
+async fn yaks_should_not_be_in_gitignore(world: &mut FullStackWorld) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+    let gitignore_path = dir.path().join(".gitignore");
+
+    if !gitignore_path.exists() {
+        // .gitignore doesn't exist, so .yaks is definitely not in it
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&gitignore_path)?;
+    if content.lines().any(|line| line.trim() == ".yaks") {
+        anyhow::bail!(".yaks found in .gitignore (but should not be):\n{}", content);
+    }
+    Ok(())
+}
+
+#[then(regex = r#"^the output should contain "(.+)"$"#)]
+async fn output_should_contain(world: &mut FullStackWorld, expected: String) -> Result<()> {
+    // Check both stdout and stderr since prompts go to stderr
+    let stdout = world.get_output();
+    let stderr = world.get_error();
+    let combined = format!("{}\n{}", stdout, stderr);
+    
+    if !combined.contains(&expected) {
+        anyhow::bail!(
+            "Expected output to contain '{}', but got:\nstdout:\n{}\nstderr:\n{}",
+            expected,
+            stdout,
+            stderr
+        );
     }
     Ok(())
 }

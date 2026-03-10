@@ -31,9 +31,25 @@ Feature: Git repository safety checks
       Then the command should fail
       And the error should contain ".yaks folder is not gitignored"
 
-    # TODO: Add tests for partial acceptance/decline scenarios
-    # - Accept gitignore, decline commit (should leave uncommitted changes)
-    # - Decline gitignore (should fail immediately)
+    @fullstack
+    Example: Add to .gitignore but decline to commit
+      Given a git repository without .yaks in .gitignore
+      When I interactively run yx add "my-yak" from this directory
+      And I accept the offer to add .yaks to .gitignore
+      And I decline the offer to commit the change
+      Then the command should succeed
+      And there should be a yak called "my-yak"
+      And .yaks should be in .gitignore
+      And .gitignore should have uncommitted changes
+      And the output should contain "remember to commit"
+
+    @fullstack
+    Example: User declines to add .yaks to .gitignore
+      Given a git repository without .yaks in .gitignore
+      When I interactively run yx add "my-yak" from this directory
+      And I decline the offer to add .yaks to .gitignore
+      Then the command should fail
+      And .yaks should not be in .gitignore
 
   Rule: yx auto-discovers the git repo root
 
