@@ -25,6 +25,8 @@ ADRs document significant architectural and design decisions.
 | [0017](0017-ratatui-tui-display-adapter.md) | Ratatui TuiDisplay adapter for rich terminal output | accepted |
 | [0018](0018-unify-yak-domain-types-into-single-yak-struct.md) | Unify Yak domain types into single Yak struct | accepted |
 | [0019](0019-event-source-the-aggregate.md) | Event-source the aggregate | accepted |
+| [0020](0020-uuid-for-migration-compaction-events.md) | UUID for Migration Compaction Events | accepted |
+| [0021](0021-local-workspace-port-for-onboarding.md) | LocalWorkspacePort for onboarding | accepted |
 
 ## When to Write an ADR
 
