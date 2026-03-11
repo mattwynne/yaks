@@ -1,0 +1,24 @@
+digraph yak_workflow {
+    rankdir=TB
+    node [shape=box, style=rounded]
+    
+    start [label="You have something\nyou want to do", shape=ellipse]
+    too_big [label="Is it too big to\njust start?", shape=diamond]
+    clear [label="Is it clear what\n'done' looks like?", shape=diamond]
+    map [label="/yx:map\nDiscover structure,\nfind blockers,\nbuild the tree", style="rounded,filled", fillcolor="#e8f4e8"]
+    prepare [label="/yx:prepare\nFlesh out spec,\nacceptance criteria,\nsub-yaks", style="rounded,filled", fillcolor="#e8e8f4"]
+    work [label="/yx:work\nWorktree, implement,\nmerge", style="rounded,filled", fillcolor="#f4e8e8"]
+    leaves [label="Pick a leaf yak", shape=ellipse]
+    done [label="yx done ✓", shape=ellipse]
+    
+    start -> too_big
+    too_big -> clear [label="no"]
+    too_big -> map [label="yes"]
+    map -> leaves
+    leaves -> clear
+    clear -> work [label="yes"]
+    clear -> prepare [label="no"]
+    prepare -> leaves [label="sub-yaks created"]
+    work -> done
+    done -> leaves [label="more leaves?"]
+}

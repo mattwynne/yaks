@@ -1,0 +1,26 @@
+digraph yak_mapping {
+    rankdir=TB
+    node [shape=box, style=rounded]
+    
+    goal [label="User has a goal", shape=ellipse]
+    add_goal [label="yx add <goal>\nyx ls"]
+    scope [label="Summarise understanding,\npresent candidate areas,\nagree scope with user", shape=diamond]
+    approach [label="Approach: if we tried\nthis RIGHT NOW, what\nwould we try first?"]
+    blocked [label="Blocked by\nsomething?", shape=diamond]
+    add_child [label="yx add <blocker> --under <yak>\nyx ls\nAdd brief context"]
+    is_leaf [label="Is the blocker\nsmall enough\nto just do?", shape=diamond]
+    more [label="More branches\nto explore?", shape=diamond]
+    present [label="Present leaf yaks\nas ready to work on", shape=ellipse]
+    
+    goal -> add_goal
+    add_goal -> scope
+    scope -> approach [label="agreed"]
+    approach -> blocked
+    blocked -> add_child [label="yes"]
+    blocked -> more [label="no — it's a leaf"]
+    add_child -> is_leaf
+    is_leaf -> more [label="yes"]
+    is_leaf -> approach [label="no — go deeper"]
+    more -> approach [label="yes"]
+    more -> present [label="no — done mapping"]
+}
