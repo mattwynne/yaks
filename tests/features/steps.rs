@@ -227,6 +227,10 @@ fn impl_prune_done_yaks(world: &mut dyn TestWorld) -> Result<()> {
     world.prune_yaks()
 }
 
+fn impl_prune_done_yaks_excluding_tag(world: &mut dyn TestWorld, tag: String) -> Result<()> {
+    world.prune_yaks_excluding_tag(&tag)
+}
+
 fn impl_set_state(world: &mut dyn TestWorld, name: String, state: String) -> Result<()> {
     world.set_state(&name, &state)
 }
@@ -459,6 +463,9 @@ both_worlds!(when(regex = r#"^I show the context of "(.+)"$"#)
 
 both_worlds!(when(expr = "I prune done yaks")
     fn when_prune_done_yaks_fs / when_prune_done_yaks_ip () -> impl_prune_done_yaks);
+
+both_worlds!(when(regex = r#"^I prune done yaks excluding tag "([^"]+)"$"#)
+    fn when_prune_exclude_tag_fs / when_prune_exclude_tag_ip (tag: String) -> impl_prune_done_yaks_excluding_tag);
 
 both_worlds!(when(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)
     fn when_set_state_fs / when_set_state_ip (name: String, state: String) -> impl_set_state);

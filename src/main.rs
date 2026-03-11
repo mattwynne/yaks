@@ -132,7 +132,11 @@ enum Commands {
     },
     /// Remove all done yaks
     #[command(display_order = 11)]
-    Prune,
+    Prune {
+        /// Exclude done yaks with this tag from pruning
+        #[arg(long)]
+        exclude_tag: Option<String>,
+    },
     /// Move a yak in the hierarchy
     #[command(alias = "mv", display_order = 12)]
     Move {
@@ -481,7 +485,13 @@ fn route_command(
             let name_str = name.join(" ");
             handler.handle(RemoveYak::new(&name_str).with_recursive(recursive))
         }
-        Commands::Prune => handler.handle(PruneYaks::new()),
+        Commands::Prune { exclude_tag } => {
+            let mut use_case = PruneYaks::new();
+            if let Some(ref tag) = exclude_tag {
+                use_case = use_case.with_exclude_tag(tag);
+            }
+            handler.handle(use_case)
+        }
         Commands::Move {
             name,
             under,

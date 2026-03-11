@@ -505,13 +505,15 @@ impl YakMap {
         Ok(())
     }
 
-    pub fn prune(&mut self) -> Result<()> {
+    pub fn prune(&mut self, exclude_tag: Option<&str>) -> Result<()> {
         loop {
             let done_leaves: Vec<YakId> = self
                 .yaks
                 .iter()
                 .filter(|(id, entry)| {
-                    entry.state == YakState::Done && self.find_children_of(id).is_empty()
+                    entry.state == YakState::Done
+                        && self.find_children_of(id).is_empty()
+                        && !exclude_tag.is_some_and(|tag| entry.tags.contains(&tag.to_string()))
                 })
                 .map(|(id, _)| id.clone())
                 .collect();
@@ -2054,7 +2056,7 @@ mod tests {
             .unwrap();
         map.take_events();
 
-        map.prune().unwrap();
+        map.prune(None).unwrap();
 
         assert!(!map.yaks.contains_key(&done_id));
         assert!(map.yaks.contains_key(&todo_id));
@@ -2075,7 +2077,7 @@ mod tests {
             .unwrap();
         map.take_events();
 
-        map.prune().unwrap();
+        map.prune(None).unwrap();
 
         assert!(!map.yaks.contains_key(&child_id));
         assert!(!map.yaks.contains_key(&parent_id));
@@ -2092,7 +2094,7 @@ mod tests {
         map.update_state(done_id, "done".to_string()).unwrap();
         map.take_events();
 
-        map.prune().unwrap();
+        map.prune(None).unwrap();
         let events = map.take_events();
 
         assert_eq!(events.len(), 1);

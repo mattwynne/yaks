@@ -499,6 +499,11 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(PruneYaks::new()))
     }
 
+    fn prune_yaks_excluding_tag(&mut self, tag: &str) -> Result<()> {
+        let tag = tag.to_string();
+        self.execute(|app| app.handle(PruneYaks::new().with_exclude_tag(&tag)))
+    }
+
     fn set_state(&mut self, name: &str, state: &str) -> Result<()> {
         self.execute(|app| app.handle(SetState::new(name, state)))
     }

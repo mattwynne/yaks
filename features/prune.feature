@@ -51,3 +51,64 @@ Feature: Prune done yaks
         """
         You have no yaks. Are you done?
         """
+
+  Rule: Exclude-tag preserves matching done yaks from pruning
+
+    When --exclude-tag is passed, done yaks carrying that tag survive
+    pruning. Done yaks without the tag are still removed. Without
+    the flag, all done yaks are pruned as before (even tagged ones).
+
+    Example: Done yak with excluded tag is kept
+      Given I have a clean git repository
+      And I add the yak "important"
+      And I tag "important" with "keep"
+      And I mark the yak "important" as done
+      And I add the yak "old stuff"
+      And I mark the yak "old stuff" as done
+      When I prune done yaks excluding tag "keep"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] important @keep
+        """
+
+    Example: Tagged done yak pruned when no flag given
+      Given I have a clean git repository
+      And I add the yak "important"
+      And I tag "important" with "keep"
+      And I mark the yak "important" as done
+      When I prune done yaks
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        You have no yaks. Are you done?
+        """
+
+    Example: Excluded parent with done untagged child
+      Given I have a clean git repository
+      And I add the yak "epic"
+      And I tag "epic" with "keep"
+      And I add the yak "subtask" under "epic"
+      And I mark the yak "subtask" as done
+      And I mark the yak "epic" as done
+      When I prune done yaks excluding tag "keep"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] epic @keep
+        """
+
+    Example: Untagged done parent with excluded child
+      Given I have a clean git repository
+      And I add the yak "wrapper"
+      And I add the yak "important" under "wrapper"
+      And I tag "important" with "keep"
+      And I mark the yak "important" as done
+      And I mark the yak "wrapper" as done
+      When I prune done yaks excluding tag "keep"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] wrapper
+          - [done] important @keep
+        """

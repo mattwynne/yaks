@@ -1231,6 +1231,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["prune"])
     }
 
+    fn prune_yaks_excluding_tag(&mut self, tag: &str) -> Result<()> {
+        self.run_yx(&["prune", "--exclude-tag", tag])
+    }
+
     fn set_state(&mut self, name: &str, state: &str) -> Result<()> {
         self.run_yx(&["state", name, state])
     }
