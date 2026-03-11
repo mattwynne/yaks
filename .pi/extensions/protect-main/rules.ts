@@ -41,6 +41,12 @@ export function isAllowedBashCommand(cmd: string): boolean {
     return true;
   }
 
+  // Allow git push — it doesn't modify the working tree
+  // But block all other git subcommands (commit, checkout, pull, merge, etc.)
+  if (/(?:^|[|&;]\s*)git\s+push\b/.test(trimmed)) {
+    return true;
+  }
+
   // Block commands with output redirects (>, >>, 2>, &>, etc.)
   // These can write to files even if the base command is read-only
   if (/\s+[0-9]*>&?[0-9]*\s*[^|&;]/.test(trimmed) || /\s+[0-9]*>>?\s*[^|&;]/.test(trimmed)) {

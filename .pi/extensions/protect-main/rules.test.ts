@@ -84,6 +84,10 @@ describe("isAllowedBashCommand", () => {
     // cd then read-only
     ["cd src && grep foo *.rs", "cd then read-only via &&"],
     ["cd src; ls -la", "cd then read-only via ;"],
+    // git push (safe — doesn't modify the working tree)
+    ["git push", "bare git push"],
+    ["git push origin main", "git push with remote and branch"],
+    ["git push --force-with-lease", "git push with flags"],
   ])("allows: %s (%s)", (cmd) => {
     expect(isAllowedBashCommand(cmd)).toBe(true);
   });
@@ -91,6 +95,10 @@ describe("isAllowedBashCommand", () => {
   it.each([
     ["git commit -m 'foo'", "git commit"],
     ["git checkout feature-branch", "git checkout"],
+    ["git pull", "git pull modifies working tree"],
+    ["git merge foo", "git merge modifies working tree"],
+    ["git rebase main", "git rebase modifies working tree"],
+    ["git stash", "git stash modifies working tree"],
     ['echo "hello" > file.txt', "echo redirect (write)"],
     ["cargo build", "cargo build"],
     ['sed -i "s/foo/bar/" file.txt', "sed in-place"],
