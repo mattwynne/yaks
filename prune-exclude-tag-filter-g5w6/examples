@@ -1,0 +1,46 @@
+Feature: prune exclude-tag filter
+
+  Rule: Exclude-tag preservation
+    Done yaks carrying the excluded tag are kept; done yaks
+    without it are still pruned.
+
+    Example: Done yak with excluded tag is kept
+      - "important" is done, tagged keep
+      - prune --exclude-tag keep
+      - "important" survives
+
+    Example: Done yak without excluded tag is pruned
+      - "old stuff" is done, no tags
+      - prune --exclude-tag keep
+      - "old stuff" is removed
+
+    Example: Done yak with a different tag is pruned
+      - "other" is done, tagged urgent
+      - prune --exclude-tag keep
+      - "other" is removed
+
+  Rule: No flag means current behaviour
+    Without --exclude-tag, all done yaks are pruned as before,
+    even if they carry tags.
+
+    Example: Tagged done yak pruned when no flag given
+      - "important" is done, tagged keep
+      - prune (no flag)
+      - "important" is removed
+
+  Rule: Excluded descendants preserve ancestors
+    The iterative leaf-pruning algorithm means: if a tagged
+    child is kept, its parent never becomes a leaf and is
+    naturally preserved.
+
+    Example: Excluded parent with done untagged child
+      - parent "epic" is done, tagged keep
+      - child "subtask" is done, no tags
+      - prune --exclude-tag keep
+      - "subtask" pruned, "epic" kept
+
+    Example: Untagged done parent with excluded child
+      - parent "wrapper" is done, no tags
+      - child "important" is done, tagged keep
+      - prune --exclude-tag keep
+      - both kept (parent never becomes a leaf)
