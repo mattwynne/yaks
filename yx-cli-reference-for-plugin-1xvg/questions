@@ -1,0 +1,9 @@
+## Questions before implementation
+
+1. **Format & location:** Should this be a standalone doc (e.g. `plugins/yx/docs/cli-reference.md`) that the three skills reference via "See Also"? Or should it be inlined into each skill?
+
+2. **Scope:** Full CLI reference (all 17 commands), or just the commands the plugin skills actually use? The skills use: `add`, `list`, `show`, `start`, `done`, `context`, `tag`, `move`, `field`.
+
+3. **Accuracy fixes:** The skills have some incorrect syntax (e.g. `yx tag "name" --remove @tag` should be `yx tag rm "name" @tag`; `yx untag` does not exist). Should fixing these inaccuracies in the skill files be part of this yak, or a separate yak?
+
+4. **Auto-generation vs hand-written:** Should this be generated from `yx --help` output, or hand-written with examples tailored to the plugin workflow?
