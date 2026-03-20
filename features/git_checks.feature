@@ -44,6 +44,15 @@ Feature: Git repository safety checks
       Then the command should fail
       And the error should contain "not in a git repository"
 
+  Rule: YX_ROOT overrides git root detection for write operations
+
+    @fullstack
+    Example: Write operations work from a nested git repo when YX_ROOT is set
+      Given a git repository with .yaks gitignored and a yak called "workspace-yak"
+      And the workspace contains a nested git repository
+      When I mark "workspace-yak" as done from the nested git repo with YX_ROOT set
+      Then the command should succeed
+
   Rule: YX_SKIP_GIT_CHECKS bypasses all git requirements
 
     Example: YX_SKIP_GIT_CHECKS lets yx run outside a git repo

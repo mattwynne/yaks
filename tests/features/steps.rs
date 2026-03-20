@@ -894,6 +894,19 @@ async fn list_yaks_from_subdir_with_yak_path(world: &mut FullStackWorld) -> Resu
     world.list_yaks_from_subdir_with_yak_path()
 }
 
+#[given(expr = "the workspace contains a nested git repository")]
+async fn create_nested_git_repo(world: &mut FullStackWorld) -> Result<()> {
+    world.init_nested_git_repo()
+}
+
+#[when(regex = r#"^I mark "([^"]+)" as done from the nested git repo with YX_ROOT set$"#)]
+async fn done_from_nested_git_repo_with_yx_root(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
+    world.run_done_from_nested_git_repo_with_yx_root(&yak_name)
+}
+
 #[then(expr = "the command should succeed")]
 async fn command_should_succeed(world: &mut FullStackWorld) -> Result<()> {
     check_should_succeed(world)

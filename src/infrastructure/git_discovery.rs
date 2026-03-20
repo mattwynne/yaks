@@ -9,13 +9,28 @@ use std::process::Command;
 
 /// Discover the git repository root from the current working directory.
 ///
-/// Uses `git2::Repository::discover(".")` which walks up the directory
-/// tree looking for a `.git` directory, exactly like `git rev-parse
+/// If the `YX_ROOT` environment variable is set, it is used directly as the
+/// repository root. This allows shavers who have `cd`'d into a sub-repo to
+/// anchor `.yaks` lookups to the outer workspace root (set by yak-box spawn).
+///
+/// Otherwise, uses `git2::Repository::discover(".")` which walks up the
+/// directory tree looking for a `.git` directory, exactly like `git rev-parse
 /// --show-toplevel`.
 ///
 /// Returns the working directory (workdir) of the repository.
 /// Errors if not inside a git repo or the repo is bare.
 pub fn discover_git_root() -> Result<PathBuf> {
+    if let Ok(yx_root) = std::env::var("YX_ROOT") {
+        let path = PathBuf::from(&yx_root);
+        if path.is_dir() {
+            return Ok(path);
+        }
+        anyhow::bail!(
+            "Error: YX_ROOT is set to {:?} but it is not a directory",
+            yx_root
+        );
+    }
+
     let repo = git2::Repository::discover(".")
         .map_err(|_| anyhow::anyhow!("Error: not in a git repository"))?;
 

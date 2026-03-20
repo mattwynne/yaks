@@ -556,6 +556,70 @@ impl FullStackWorld {
         Ok(())
     }
 
+    /// Initialize the current git_repo_subdir as its own git repository,
+    /// simulating a nested/inner git repo (like repos/releng/release inside a workspace).
+    pub fn init_nested_git_repo(&mut self) -> Result<()> {
+        let repo = self.git_repo.as_ref().context("No git_repo set; call setup_git_repo_with_yak first")?;
+        let nested_path = repo.path().join("inner-repo");
+        std::fs::create_dir_all(&nested_path).context("Failed to create nested repo dir")?;
+
+        let status = Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .current_dir(&nested_path)
+            .status()
+            .context("Failed to run git init in nested repo")?;
+        if !status.success() {
+            anyhow::bail!("git init failed in nested repo");
+        }
+
+        Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(&nested_path)
+            .status()
+            .context("Failed to set git user.email in nested repo")?;
+
+        Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(&nested_path)
+            .status()
+            .context("Failed to set git user.name in nested repo")?;
+
+        self.git_repo_subdir = Some(nested_path);
+        Ok(())
+    }
+
+    /// Run `yx done <yak_name>` from the nested git repo directory with YX_ROOT
+    /// set to the workspace (outer) git repo root. This simulates a shaver who has
+    /// cd'd into a sub-repo and needs write ops to resolve .yaks from the workspace root.
+    pub fn run_done_from_nested_git_repo_with_yx_root(&mut self, yak_name: &str) -> Result<()> {
+        let repo = self.git_repo.as_ref().context("No git_repo set")?;
+        let workspace_root = repo.path().to_path_buf();
+        let run_dir = self
+            .git_repo_subdir
+            .clone()
+            .context("No nested git repo; call init_nested_git_repo first")?;
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let output = Command::new(yx_path)
+            .args(["done", yak_name])
+            .env("YX_ROOT", &workspace_root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("YX_SKIP_GIT_CHECKS")
+            .env_remove("YAK_PATH")
+            .current_dir(&run_dir)
+            .output()
+            .context("Failed to run yx done")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
     /// Run bash completion by sourcing completions/yx.bash and invoking _yx_completions.
     /// The words_str is a space-separated list of words (respecting double quotes).
     /// This simulates what bash's programmable completion does.
