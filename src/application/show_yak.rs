@@ -90,7 +90,7 @@ impl UseCase for ShowYak {
         field_names.sort();
         for name in &field_names {
             let value = yak.fields[*name].as_str().trim();
-            if value.contains('\n') {
+            if name.ends_with(".md") || value.contains('\n') {
                 long_fields.push((title_case(name), value.to_string()));
             } else {
                 short_fields.push((title_case(name), value.to_string()));
@@ -659,6 +659,49 @@ mod tests {
         assert!(
             !output.contains("── description"),
             "Should not have ruled section for single-line field, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn md_fields_always_render_as_long_sections() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("my yak")).unwrap();
+        // Single-line .md field — no newlines
+        app.handle(WriteField::new("my yak", "comments.md").with_content("A single line note"))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ShowYak::new("my yak", "pretty")).unwrap();
+        let output = buffer.contents();
+        // .md fields must appear as ruled sections, not in the header box
+        assert!(
+            output.contains("── Comments.md ─"),
+            "Expected ruled section for .md field, got:\n{output}"
+        );
+        assert!(
+            output.contains("  A single line note"),
+            "Expected indented .md field content, got:\n{output}"
+        );
+        assert!(
+            !output.contains("Comments.md:"),
+            "Should not appear as short header field, got:\n{output}"
         );
     }
 
