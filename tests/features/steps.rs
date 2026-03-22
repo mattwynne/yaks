@@ -630,6 +630,40 @@ async fn v1_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     Ok(())
 }
 
+/// Create a yak in a named repo using the v1 schema format.
+/// Simulates a machine that last used an old binary version.
+#[given(regex = r#"^(\w+) has a yak "(.+)" created with the v1 schema$"#)]
+async fn v1_yak_in_repo(
+    world: &mut FullStackWorld,
+    repo_name: String,
+    yak_name: String,
+) -> Result<()> {
+    let repo_path = world.repo_path(&repo_name)?;
+
+    let state_oid = git_hash_object(&repo_path, "todo")?;
+    let context_oid = git_hash_object(&repo_path, "")?;
+
+    let yak_tree_input = format!(
+        "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
+        state_oid, context_oid
+    );
+    let yak_tree_oid = git_mktree(&repo_path, &yak_tree_input)?;
+
+    let root_tree_input = format!("040000 tree {}\t{}\n", yak_tree_oid, yak_name);
+    let root_tree_oid = git_mktree(&repo_path, &root_tree_input)?;
+
+    let message = format!("Added: \"{}\"", yak_name);
+    let commit_oid = git_commit_tree(&repo_path, &root_tree_oid, &message, None)?;
+    git_update_ref(&repo_path, "refs/notes/yaks", &commit_oid)?;
+
+    let yak_dir = repo_path.join(".yaks").join(&yak_name);
+    std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
+    std::fs::write(yak_dir.join("state"), "todo").context("Failed to write state")?;
+    std::fs::write(yak_dir.join("context.md"), "").context("Failed to write context.md")?;
+
+    Ok(())
+}
+
 /// Create a yak directly in the git event store using the v2 schema format.
 #[given(regex = r#"^a yak "(.+)" created with the v2 schema$"#)]
 async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {

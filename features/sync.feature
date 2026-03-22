@@ -357,6 +357,19 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob should not have a yak called "buy biscuits"
       And bob should have a yak called "make the tea"
 
+  @fullstack @wip
+  Rule: Stale migration does not overwrite state during sync
+
+    Example: Bob's stale local yaks don't replace Alice's after migration and sync
+      Given a git clone of origin called alice
+      And alice has a yak called "make the tea"
+      And alice has synced yaks
+      And a git clone of origin called bob
+      And bob has a yak "buy biscuits" created with the v1 schema
+      When bob syncs yaks
+      Then bob should have a yak called "make the tea"
+      And bob should have a yak called "buy biscuits"
+
   @fullstack
   Rule: Sync target resolution
 
