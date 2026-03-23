@@ -17,7 +17,7 @@ ADRs document significant architectural and design decisions.
 | [0009](0009-compacted-event-design-and-known-gaps.md) | Compacted event design | accepted |
 | [0010](0010-state-reconstruction-mechanisms.md) | State reconstruction mechanisms | accepted |
 | [0011](0011-schema-versioning-and-sync-compatibility.md) | Schema versioning and sync compatibility | accepted |
-| [0012](0012-compact-after-migration-to-hide-pre-migration-history.md) | Compact after migration to hide pre-migration history | accepted |
+| [0012](0012-compact-after-migration-to-hide-pre-migration-history.md) | Compact after migration to hide pre-migration history | superseded by 0022 |
 | [0013](0013-every-cli-command-is-a-use-case.md) | Every CLI command is a UseCase | proposed |
 | [0014](0014-no-optimistic-concurrency-on-event-appends.md) | No optimistic concurrency on event appends | accepted |
 | [0015](0015-aggregate-loads-from-projected-snapshot-not-event-replay.md) | Aggregate Loads from Projected Snapshot, Not Event Replay | superseded |
@@ -27,6 +27,7 @@ ADRs document significant architectural and design decisions.
 | [0019](0019-event-source-the-aggregate.md) | Event-source the aggregate | accepted |
 | [0020](0020-uuid-for-migration-compaction-events.md) | UUID for Migration Compaction Events | accepted |
 | [0021](0021-local-workspace-port-for-onboarding.md) | LocalWorkspacePort for onboarding | accepted |
+| [0022](0022-lazy-migration-replaces-boundary-events.md) | Lazy migration replaces boundary events | accepted |
 
 ## When to Write an ADR
 
