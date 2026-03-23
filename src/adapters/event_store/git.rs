@@ -428,7 +428,7 @@ impl EventStore for GitEventStore {
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).
                     if let YakEvent::FieldUpdated(ref mut e, _) = event {
-                        let tree = commit.tree().map_err(|err| {
+                        let raw_tree = commit.tree().map_err(|err| {
                             anyhow::anyhow!(
                                 "Failed to read tree for FieldUpdated event \
                                  (yak '{}', field '{}'): {}",
@@ -437,6 +437,8 @@ impl EventStore for GitEventStore {
                                 err
                             )
                         })?;
+                        let tree =
+                            super::migration::migrate_tree_to_current(&self.repo, &raw_tree)?;
                         e.content = self.read_field_updated_content(&tree, &e.id, &e.field_name)?;
                     }
 
@@ -446,10 +448,13 @@ impl EventStore for GitEventStore {
             }
         }
 
-        if let Some(tree) = compaction_tree {
+        if let Some(raw_tree) = compaction_tree {
             let metadata = compaction_metadata.unwrap();
 
-            // Read snapshots from the compaction tree
+            // Lazily migrate old-format trees before reading snapshots
+            let tree = super::migration::migrate_tree_to_current(&self.repo, &raw_tree)?;
+
+            // Read snapshots from the (possibly migrated) compaction tree
             let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
 
             // Read removed yak IDs from .removed-yaks blob
@@ -1640,6 +1645,153 @@ mod tests {
             "Error should mention the field name, got: {}",
             err_msg
         );
+    }
+
+    mod lazy_tree_migration {
+        use super::*;
+
+        /// A v5-format tree uses bare field names (state, name, id, context.md)
+        /// instead of dot-prefixed (.state, .name, .id, .context.md).
+        /// When get_all_events() encounters a FieldUpdated commit whose tree
+        /// is at v5, it should lazily migrate the tree and still read the
+        /// field content correctly from the dot-prefixed location.
+        #[test]
+        fn field_updated_on_v5_tree_is_read_correctly() {
+            let (_tmp, store) = setup_test_repo();
+
+            // Build a v5-format tree: bare field names, .created.json
+            let state_blob = store.repo.blob(b"wip").unwrap();
+            let name_blob = store.repo.blob(b"My Yak").unwrap();
+            let id_blob = store.repo.blob(b"my-yak-a1b2").unwrap();
+            let context_blob = store.repo.blob(b"updated context").unwrap();
+            let created_blob = store
+                .repo
+                .blob(
+                    br#"{"created_by":{"name":"Alice","email":"alice@example.com"},"created_at":1234567890}"#,
+                )
+                .unwrap();
+
+            let mut yak_builder = store.repo.treebuilder(None).unwrap();
+            yak_builder.insert("state", state_blob, 0o100644).unwrap();
+            yak_builder.insert("name", name_blob, 0o100644).unwrap();
+            yak_builder.insert("id", id_blob, 0o100644).unwrap();
+            yak_builder
+                .insert("context.md", context_blob, 0o100644)
+                .unwrap();
+            yak_builder
+                .insert(".created.json", created_blob, 0o100644)
+                .unwrap();
+            let yak_tree = yak_builder.write().unwrap();
+
+            let version_blob = store.repo.blob(b"5").unwrap();
+            let mut root_builder = store.repo.treebuilder(None).unwrap();
+            root_builder
+                .insert("my-yak-a1b2", yak_tree, 0o040000)
+                .unwrap();
+            root_builder
+                .insert(".schema-version", version_blob, 0o100644)
+                .unwrap();
+            let root_tree_oid = root_builder.write().unwrap();
+            let root_tree = store.repo.find_tree(root_tree_oid).unwrap();
+
+            let sig = git2::Signature::now("test", "test@test.com").unwrap();
+            // Create a FieldUpdated commit with a v5-format tree
+            store
+                .repo
+                .commit(
+                    Some("refs/notes/yaks"),
+                    &sig,
+                    &sig,
+                    "FieldUpdated: \"my-yak-a1b2\" \".context.md\"\n\nEvent-Id: test-event-1",
+                    &root_tree,
+                    &[],
+                )
+                .unwrap();
+
+            // get_all_events should lazily migrate the v5 tree and read the
+            // field content from the dot-prefixed location
+            let events = EventStore::get_all_events(&store).unwrap();
+            assert_eq!(events.len(), 1);
+            match &events[0] {
+                YakEvent::FieldUpdated(e, _) => {
+                    assert_eq!(e.id.as_str(), "my-yak-a1b2");
+                    assert_eq!(e.field_name, ".context.md");
+                    assert_eq!(e.content, "updated context");
+                }
+                other => panic!("Expected FieldUpdated, got {:?}", other),
+            }
+        }
+
+        /// When get_all_events() encounters a Compacted boundary with a v5
+        /// tree, it should lazily migrate and read snapshots correctly.
+        /// A v5 tree has bare field names (state, name, id, context.md)
+        /// and .created.json (already renamed from .metadata.json by v4->v5).
+        #[test]
+        fn compacted_boundary_with_v5_tree_is_read_correctly() {
+            let (_tmp, store) = setup_test_repo();
+
+            // Build a v5-format compaction tree: bare field names, .created.json
+            let state_blob = store.repo.blob(b"wip").unwrap();
+            let name_blob = store.repo.blob(b"My Yak").unwrap();
+            let id_blob = store.repo.blob(b"my-yak-a1b2").unwrap();
+            let context_blob = store.repo.blob(b"some context").unwrap();
+            let created_blob = store
+                .repo
+                .blob(
+                    br#"{"created_by":{"name":"Alice","email":"alice@example.com"},"created_at":1234567890}"#,
+                )
+                .unwrap();
+
+            let mut yak_builder = store.repo.treebuilder(None).unwrap();
+            yak_builder.insert("state", state_blob, 0o100644).unwrap();
+            yak_builder.insert("name", name_blob, 0o100644).unwrap();
+            yak_builder.insert("id", id_blob, 0o100644).unwrap();
+            yak_builder
+                .insert("context.md", context_blob, 0o100644)
+                .unwrap();
+            yak_builder
+                .insert(".created.json", created_blob, 0o100644)
+                .unwrap();
+            let yak_tree = yak_builder.write().unwrap();
+
+            let version_blob = store.repo.blob(b"5").unwrap();
+            let mut root_builder = store.repo.treebuilder(None).unwrap();
+            root_builder
+                .insert("my-yak-a1b2", yak_tree, 0o040000)
+                .unwrap();
+            root_builder
+                .insert(".schema-version", version_blob, 0o100644)
+                .unwrap();
+            let root_tree_oid = root_builder.write().unwrap();
+            let root_tree = store.repo.find_tree(root_tree_oid).unwrap();
+
+            let sig = git2::Signature::now("test", "test@test.com").unwrap();
+            store
+                .repo
+                .commit(
+                    Some("refs/notes/yaks"),
+                    &sig,
+                    &sig,
+                    "Compacted\n\nEvent-Id: test-event-1",
+                    &root_tree,
+                    &[],
+                )
+                .unwrap();
+
+            let events = EventStore::get_all_events(&store).unwrap();
+            assert_eq!(events.len(), 1);
+            match &events[0] {
+                YakEvent::Compacted(snapshots, _, _) => {
+                    assert_eq!(snapshots.len(), 1);
+                    assert_eq!(snapshots[0].id.as_str(), "my-yak-a1b2");
+                    assert_eq!(snapshots[0].name.as_str(), "My Yak");
+                    assert_eq!(snapshots[0].state, crate::domain::YakState::Wip);
+                    assert_eq!(snapshots[0].context.as_deref(), Some("some context"));
+                    assert_eq!(snapshots[0].created_by.name, "Alice");
+                }
+                other => panic!("Expected Compacted, got {:?}", other),
+            }
+        }
     }
 
     mod peer_schema_version {

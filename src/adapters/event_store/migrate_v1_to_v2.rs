@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::migration::{EventStoreLocation, Migration};
+use super::migration::{EventStoreLocation, Migration, TreeMigration};
 
 /// No-op migration from v1 to v2.
 /// Placeholder — will be fleshed out when yak names/IDs/paths lands.
@@ -15,6 +15,12 @@ impl Migration for MigrateV1ToV2 {
     }
     fn migrate(&self, _location: &EventStoreLocation) -> Result<()> {
         Ok(())
+    }
+}
+
+impl TreeMigration for MigrateV1ToV2 {
+    fn migrate_tree(&self, _repo: &git2::Repository, tree: &git2::Tree) -> Result<git2::Oid> {
+        Ok(tree.id())
     }
 }
 

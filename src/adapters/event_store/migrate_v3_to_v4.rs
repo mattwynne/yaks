@@ -1,7 +1,7 @@
 use anyhow::Result;
 use git2::{ObjectType, Repository};
 
-use super::migration::{EventStoreLocation, Migration};
+use super::migration::{EventStoreLocation, Migration, TreeMigration};
 
 /// Migration that flattens nested yak tree structure.
 ///
@@ -88,27 +88,17 @@ impl MigrateV3ToV4 {
     }
 }
 
-impl Migration for MigrateV3ToV4 {
-    fn source_version(&self) -> u32 {
-        3
-    }
-    fn target_version(&self) -> u32 {
-        4
-    }
-    fn migrate(&self, location: &EventStoreLocation) -> Result<()> {
-        let oid = location.repo.refname_to_id(location.ref_name)?;
-        let parent_commit = location.repo.find_commit(oid)?;
-        let root_tree = parent_commit.tree()?;
-
+impl MigrateV3ToV4 {
+    /// Transform a root tree from v3 to v4 format, returning the new tree OID.
+    /// Returns the original tree OID if no changes were needed.
+    fn migrate_root_tree(repo: &Repository, root_tree: &git2::Tree) -> Result<git2::Oid> {
         let mut yaks = Vec::new();
-        Self::collect_yaks_recursive(location.repo, &root_tree, None, &mut yaks)?;
+        Self::collect_yaks_recursive(repo, root_tree, None, &mut yaks)?;
 
         if yaks.is_empty() {
-            return Ok(());
+            return Ok(root_tree.id());
         }
 
-        // Check if any work is needed: nesting to flatten OR entry keys
-        // that don't match their id (e.g., old-style names with spaces)
         let has_nested = yaks.iter().any(|(_, _, pid)| pid.is_some());
         let has_miskeyed = root_tree.iter().any(|entry| {
             if entry.kind() != Some(ObjectType::Tree) {
@@ -118,21 +108,21 @@ impl Migration for MigrateV3ToV4 {
                 Some(n) => n,
                 None => return false,
             };
-            let subtree = match location.repo.find_tree(entry.id()) {
+            let subtree = match repo.find_tree(entry.id()) {
                 Ok(t) => t,
                 Err(_) => return false,
             };
-            match Self::read_id(location.repo, &subtree, entry_name) {
+            match Self::read_id(repo, &subtree, entry_name) {
                 Ok(id) => id != entry_name,
                 Err(_) => false,
             }
         });
 
         if !has_nested && !has_miskeyed {
-            return Ok(());
+            return Ok(root_tree.id());
         }
 
-        let mut root_builder = location.repo.treebuilder(None)?;
+        let mut root_builder = repo.treebuilder(None)?;
 
         for entry in root_tree.iter() {
             if entry.kind() == Some(ObjectType::Blob) {
@@ -148,24 +138,48 @@ impl Migration for MigrateV3ToV4 {
             root_builder.insert(yak_id, *subtree_oid, 0o040000)?;
         }
 
-        let new_root_oid = root_builder.write()?;
-        let new_root_tree = location.repo.find_tree(new_root_oid)?;
+        Ok(root_builder.write()?)
+    }
+}
 
-        let sig = location
-            .repo
-            .signature()
-            .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+impl Migration for MigrateV3ToV4 {
+    fn source_version(&self) -> u32 {
+        3
+    }
+    fn target_version(&self) -> u32 {
+        4
+    }
+    fn migrate(&self, location: &EventStoreLocation) -> Result<()> {
+        let oid = location.repo.refname_to_id(location.ref_name)?;
+        let parent_commit = location.repo.find_commit(oid)?;
+        let root_tree = parent_commit.tree()?;
 
-        location.repo.commit(
-            Some(location.ref_name),
-            &sig,
-            &sig,
-            "Migration v3→v4: flatten nested yak tree structure",
-            &new_root_tree,
-            &[&parent_commit],
-        )?;
+        let new_root_oid = Self::migrate_root_tree(location.repo, &root_tree)?;
+
+        if new_root_oid != root_tree.id() {
+            let new_root_tree = location.repo.find_tree(new_root_oid)?;
+            let sig = location
+                .repo
+                .signature()
+                .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+
+            location.repo.commit(
+                Some(location.ref_name),
+                &sig,
+                &sig,
+                "Migration v3→v4: flatten nested yak tree structure",
+                &new_root_tree,
+                &[&parent_commit],
+            )?;
+        }
 
         Ok(())
+    }
+}
+
+impl TreeMigration for MigrateV3ToV4 {
+    fn migrate_tree(&self, repo: &Repository, tree: &git2::Tree) -> Result<git2::Oid> {
+        MigrateV3ToV4::migrate_root_tree(repo, tree)
     }
 }
 

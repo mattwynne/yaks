@@ -1,7 +1,7 @@
 use anyhow::Result;
 use git2::ObjectType;
 
-use super::migration::{EventStoreLocation, Migration};
+use super::migration::{EventStoreLocation, Migration, TreeMigration};
 
 /// Migration that renames `.metadata.json` to `.created.json` in every yak subtree.
 ///
@@ -22,12 +22,39 @@ impl Migration for MigrateV4ToV5 {
         let parent_commit = location.repo.find_commit(oid)?;
         let root_tree = parent_commit.tree()?;
 
-        // Check if any yak subtree has .metadata.json
+        let new_root_oid = Self::migrate_root_tree(location.repo, &root_tree)?;
+
+        if new_root_oid != root_tree.id() {
+            let new_root_tree = location.repo.find_tree(new_root_oid)?;
+
+            let sig = location
+                .repo
+                .signature()
+                .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+
+            location.repo.commit(
+                Some(location.ref_name),
+                &sig,
+                &sig,
+                "Migration v4→v5: rename .metadata.json to .created.json",
+                &new_root_tree,
+                &[&parent_commit],
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl MigrateV4ToV5 {
+    /// Transform a root tree from v4 to v5 format, returning the new tree OID.
+    /// Returns the original tree OID if no changes were needed.
+    fn migrate_root_tree(repo: &git2::Repository, root_tree: &git2::Tree) -> Result<git2::Oid> {
         let needs_migration = root_tree.iter().any(|entry| {
             if entry.kind() != Some(ObjectType::Tree) {
                 return false;
             }
-            let subtree = match location.repo.find_tree(entry.id()) {
+            let subtree = match repo.find_tree(entry.id()) {
                 Ok(t) => t,
                 Err(_) => return false,
             };
@@ -36,11 +63,10 @@ impl Migration for MigrateV4ToV5 {
         });
 
         if !needs_migration {
-            return Ok(());
+            return Ok(root_tree.id());
         }
 
-        // Rebuild the root tree, renaming .metadata.json → .created.json in each yak subtree
-        let mut root_builder = location.repo.treebuilder(None)?;
+        let mut root_builder = repo.treebuilder(None)?;
 
         for entry in root_tree.iter() {
             let entry_name = match entry.name() {
@@ -49,43 +75,29 @@ impl Migration for MigrateV4ToV5 {
             };
 
             if entry.kind() == Some(ObjectType::Tree) {
-                let subtree = location.repo.find_tree(entry.id())?;
+                let subtree = repo.find_tree(entry.id())?;
                 let meta_oid = subtree.get_name(".metadata.json").map(|e| e.id());
                 if let Some(oid) = meta_oid {
-                    // Rebuild this yak subtree with renamed file
-                    let mut yak_builder = location.repo.treebuilder(Some(&subtree))?;
+                    let mut yak_builder = repo.treebuilder(Some(&subtree))?;
                     yak_builder.remove(".metadata.json")?;
                     yak_builder.insert(".created.json", oid, 0o100644)?;
                     let new_subtree_oid = yak_builder.write()?;
                     root_builder.insert(entry_name, new_subtree_oid, 0o040000)?;
                 } else {
-                    // Yak subtree without .metadata.json — keep as-is
                     root_builder.insert(entry_name, entry.id(), 0o040000)?;
                 }
             } else {
-                // Blob entries (e.g., .schema-version) — keep as-is
                 root_builder.insert(entry_name, entry.id(), entry.filemode())?;
             }
         }
 
-        let new_root_oid = root_builder.write()?;
-        let new_root_tree = location.repo.find_tree(new_root_oid)?;
+        Ok(root_builder.write()?)
+    }
+}
 
-        let sig = location
-            .repo
-            .signature()
-            .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
-
-        location.repo.commit(
-            Some(location.ref_name),
-            &sig,
-            &sig,
-            "Migration v4→v5: rename .metadata.json to .created.json",
-            &new_root_tree,
-            &[&parent_commit],
-        )?;
-
-        Ok(())
+impl TreeMigration for MigrateV4ToV5 {
+    fn migrate_tree(&self, repo: &git2::Repository, tree: &git2::Tree) -> Result<git2::Oid> {
+        MigrateV4ToV5::migrate_root_tree(repo, tree)
     }
 }
 

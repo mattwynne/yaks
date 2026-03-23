@@ -1,7 +1,7 @@
 use anyhow::Result;
 use git2::ObjectType;
 
-use super::migration::{EventStoreLocation, Migration};
+use super::migration::{EventStoreLocation, Migration, TreeMigration};
 
 /// Field renames: bare name → dot-prefixed name
 const RENAMES: &[(&str, &str)] = &[("tags", ".tags")];
@@ -25,12 +25,39 @@ impl Migration for MigrateV6ToV7 {
         let parent_commit = location.repo.find_commit(oid)?;
         let root_tree = parent_commit.tree()?;
 
-        // Check if any yak subtree has a bare `tags` blob that needs renaming
+        let new_root_oid = Self::migrate_root_tree(location.repo, &root_tree)?;
+
+        if new_root_oid != root_tree.id() {
+            let new_root_tree = location.repo.find_tree(new_root_oid)?;
+
+            let sig = location
+                .repo
+                .signature()
+                .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
+
+            location.repo.commit(
+                Some(location.ref_name),
+                &sig,
+                &sig,
+                "Migration v6→v7: rename tags to .tags",
+                &new_root_tree,
+                &[&parent_commit],
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl MigrateV6ToV7 {
+    /// Transform a root tree from v6 to v7 format, returning the new tree OID.
+    /// Returns the original tree OID if no changes were needed.
+    fn migrate_root_tree(repo: &git2::Repository, root_tree: &git2::Tree) -> Result<git2::Oid> {
         let needs_migration = root_tree.iter().any(|entry| {
             if entry.kind() != Some(ObjectType::Tree) {
                 return false;
             }
-            let subtree = match location.repo.find_tree(entry.id()) {
+            let subtree = match repo.find_tree(entry.id()) {
                 Ok(t) => t,
                 Err(_) => return false,
             };
@@ -40,11 +67,10 @@ impl Migration for MigrateV6ToV7 {
         });
 
         if !needs_migration {
-            return Ok(());
+            return Ok(root_tree.id());
         }
 
-        // Rebuild the root tree, renaming `tags` to `.tags` in each yak subtree
-        let mut root_builder = location.repo.treebuilder(None)?;
+        let mut root_builder = repo.treebuilder(None)?;
 
         for entry in root_tree.iter() {
             let entry_name = match entry.name() {
@@ -53,14 +79,14 @@ impl Migration for MigrateV6ToV7 {
             };
 
             if entry.kind() == Some(ObjectType::Tree) {
-                let subtree = location.repo.find_tree(entry.id())?;
+                let subtree = repo.find_tree(entry.id())?;
 
                 let has_bare_names = RENAMES
                     .iter()
                     .any(|(old, _)| subtree.get_name(old).is_some());
 
                 if has_bare_names {
-                    let mut yak_builder = location.repo.treebuilder(Some(&subtree))?;
+                    let mut yak_builder = repo.treebuilder(Some(&subtree))?;
                     for (old_name, new_name) in RENAMES {
                         if let Some(blob_entry) = subtree.get_name(old_name) {
                             let blob_oid = blob_entry.id();
@@ -74,29 +100,17 @@ impl Migration for MigrateV6ToV7 {
                     root_builder.insert(entry_name, entry.id(), 0o040000)?;
                 }
             } else {
-                // Blob entries (e.g., .schema-version) — keep as-is
                 root_builder.insert(entry_name, entry.id(), entry.filemode())?;
             }
         }
 
-        let new_root_oid = root_builder.write()?;
-        let new_root_tree = location.repo.find_tree(new_root_oid)?;
+        Ok(root_builder.write()?)
+    }
+}
 
-        let sig = location
-            .repo
-            .signature()
-            .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
-
-        location.repo.commit(
-            Some(location.ref_name),
-            &sig,
-            &sig,
-            "Migration v6→v7: rename tags to .tags",
-            &new_root_tree,
-            &[&parent_commit],
-        )?;
-
-        Ok(())
+impl TreeMigration for MigrateV6ToV7 {
+    fn migrate_tree(&self, repo: &git2::Repository, tree: &git2::Tree) -> Result<git2::Oid> {
+        MigrateV6ToV7::migrate_root_tree(repo, tree)
     }
 }
 

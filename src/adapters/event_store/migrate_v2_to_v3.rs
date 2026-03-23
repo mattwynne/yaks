@@ -3,7 +3,7 @@ use git2::{ObjectType, Repository};
 
 use crate::domain::slug::{generate_id, YakId};
 
-use super::migration::{EventStoreLocation, Migration};
+use super::migration::{EventStoreLocation, Migration, TreeMigration};
 
 /// Migration that adds missing `name` and `id` blobs to yak subtrees.
 ///
@@ -91,6 +91,38 @@ impl MigrateV2ToV3 {
             Ok(None)
         }
     }
+
+    /// Transform a root tree from v2 to v3 format, returning the new tree OID.
+    /// Returns the original tree OID if no changes were needed.
+    fn migrate_root_tree(repo: &Repository, root_tree: &git2::Tree) -> Result<git2::Oid> {
+        let mut root_builder = repo.treebuilder(Some(root_tree))?;
+        let mut modified = false;
+
+        for i in 0..root_tree.len() {
+            let entry = root_tree.get(i).unwrap();
+            if entry.kind() != Some(ObjectType::Tree) {
+                continue;
+            }
+            let entry_name = match entry.name() {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            let subtree = repo.find_tree(entry.id())?;
+            if !Self::is_yak_subtree(repo, &subtree) {
+                continue;
+            }
+            if let Some(new_oid) = Self::migrate_subtree(repo, &subtree, &entry_name, None)? {
+                root_builder.insert(&entry_name, new_oid, 0o040000)?;
+                modified = true;
+            }
+        }
+
+        if modified {
+            Ok(root_builder.write()?)
+        } else {
+            Ok(root_tree.id())
+        }
+    }
 }
 
 impl Migration for MigrateV2ToV3 {
@@ -105,32 +137,9 @@ impl Migration for MigrateV2ToV3 {
         let parent = location.repo.find_commit(oid)?;
         let root_tree = parent.tree()?;
 
-        let mut root_builder = location.repo.treebuilder(Some(&root_tree))?;
-        let mut modified = false;
+        let new_root_oid = Self::migrate_root_tree(location.repo, &root_tree)?;
 
-        for i in 0..root_tree.len() {
-            let entry = root_tree.get(i).unwrap();
-            if entry.kind() != Some(ObjectType::Tree) {
-                continue;
-            }
-            let entry_name = match entry.name() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-            let subtree = location.repo.find_tree(entry.id())?;
-            if !Self::is_yak_subtree(location.repo, &subtree) {
-                continue;
-            }
-            if let Some(new_oid) =
-                Self::migrate_subtree(location.repo, &subtree, &entry_name, None)?
-            {
-                root_builder.insert(&entry_name, new_oid, 0o040000)?;
-                modified = true;
-            }
-        }
-
-        if modified {
-            let new_root_oid = root_builder.write()?;
+        if new_root_oid != root_tree.id() {
             let new_root_tree = location.repo.find_tree(new_root_oid)?;
             let sig = location
                 .repo
@@ -147,6 +156,12 @@ impl Migration for MigrateV2ToV3 {
         }
 
         Ok(())
+    }
+}
+
+impl TreeMigration for MigrateV2ToV3 {
+    fn migrate_tree(&self, repo: &Repository, tree: &git2::Tree) -> Result<git2::Oid> {
+        MigrateV2ToV3::migrate_root_tree(repo, tree)
     }
 }
 

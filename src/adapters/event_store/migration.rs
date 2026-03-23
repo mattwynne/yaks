@@ -26,6 +26,18 @@ pub trait Migration {
     fn migrate(&self, location: &EventStoreLocation) -> Result<()>;
 }
 
+/// A migration that can transform an arbitrary tree OID without committing.
+/// Used for lazy migration of old-format trees encountered during `get_all_events()`.
+///
+/// Each implementor is registered with its source/target version in
+/// `migrate_tree_to_current()` below. The trait itself only carries the
+/// tree-transform operation.
+pub trait TreeMigration {
+    /// Transform a tree at the source version format into the target version format.
+    /// Returns the OID of the new tree in the repo's object database.
+    fn migrate_tree(&self, repo: &Repository, tree: &git2::Tree) -> Result<git2::Oid>;
+}
+
 /// Manages schema versioning and migration for the git event store.
 pub struct Migrator {
     expected_version: u32,
@@ -126,15 +138,64 @@ pub fn read_schema_version(location: &EventStoreLocation) -> Result<Option<u32>>
     let commit = location.repo.find_commit(oid)?;
     let tree = commit.tree()?;
 
+    Ok(Some(read_schema_version_from_tree(location.repo, &tree)?))
+}
+
+/// Lazily migrate an arbitrary tree to the current schema version.
+/// If the tree is already at CURRENT_SCHEMA_VERSION, returns it unchanged.
+/// Otherwise, applies the migration chain and returns the new tree.
+pub fn migrate_tree_to_current<'r>(
+    repo: &'r Repository,
+    tree: &git2::Tree,
+) -> Result<git2::Tree<'r>> {
+    let version = read_schema_version_from_tree(repo, tree)?;
+    if version >= CURRENT_SCHEMA_VERSION {
+        // Already current — return the same tree (by OID lookup)
+        return Ok(repo.find_tree(tree.id())?);
+    }
+
+    // Each entry: (source_version, target_version, tree_migration)
+    let tree_migrations: Vec<(u32, u32, Box<dyn TreeMigration>)> = vec![
+        (1, 2, Box::new(super::migrate_v1_to_v2::MigrateV1ToV2)),
+        (2, 3, Box::new(super::migrate_v2_to_v3::MigrateV2ToV3)),
+        (3, 4, Box::new(super::migrate_v3_to_v4::MigrateV3ToV4)),
+        (4, 5, Box::new(super::migrate_v4_to_v5::MigrateV4ToV5)),
+        (5, 6, Box::new(super::migrate_v5_to_v6::MigrateV5ToV6)),
+        (6, 7, Box::new(super::migrate_v6_to_v7::MigrateV6ToV7)),
+    ];
+
+    let mut current_version = version;
+    let mut current_tree_oid = tree.id();
+
+    for (from, to, migration) in &tree_migrations {
+        if *from == current_version {
+            let current_tree = repo.find_tree(current_tree_oid)?;
+            current_tree_oid = migration.migrate_tree(repo, &current_tree)?;
+            current_version = *to;
+        }
+    }
+
+    // Stamp the current schema version on the migrated tree
+    let final_tree = repo.find_tree(current_tree_oid)?;
+    let version_blob = repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+    let mut builder = repo.treebuilder(Some(&final_tree))?;
+    builder.insert(".schema-version", version_blob, 0o100644)?;
+    let stamped_oid = builder.write()?;
+    Ok(repo.find_tree(stamped_oid)?)
+}
+
+/// Read the schema version from an arbitrary git tree.
+/// Returns 1 if the tree has no .schema-version blob (v1 format).
+pub fn read_schema_version_from_tree(repo: &Repository, tree: &git2::Tree) -> Result<u32> {
     let entry_id = match tree.get_name(".schema-version") {
         Some(entry) => entry.id(),
-        None => return Ok(Some(1)),
+        None => return Ok(1),
     };
 
-    let blob = location.repo.find_blob(entry_id)?;
+    let blob = repo.find_blob(entry_id)?;
     let content = std::str::from_utf8(blob.content())?;
     let version: u32 = content.trim().parse()?;
-    Ok(Some(version))
+    Ok(version)
 }
 
 /// Write the schema version to .schema-version in the event store tree.
