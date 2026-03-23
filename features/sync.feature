@@ -357,7 +357,7 @@ Feature: yx sync - Collaborate on Yaks via Git
       Then bob should not have a yak called "buy biscuits"
       And bob should have a yak called "make the tea"
 
-  @fullstack @wip
+  @fullstack
   Rule: Stale migration does not overwrite state during sync
 
     Example: Bob's stale local yaks don't replace Alice's after migration and sync

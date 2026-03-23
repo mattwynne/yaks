@@ -11,10 +11,10 @@ Feature: Schema migration
       When I list the yaks
       Then the output should include "make tea"
 
-  Rule: Migration produces a Migrated event
+  Rule: Migration does not produce a Migrated boundary event
 
     @fullstack
-    Example: Migration produces a Migrated event in the log
+    Example: Migration does not produce a Migrated event in the log
       Given a yak "make tea" created with the v1 schema
       When I run yx log
-      Then the output should include "migrated"
+      Then the output should not include "migrated"

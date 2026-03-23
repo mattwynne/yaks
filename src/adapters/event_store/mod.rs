@@ -57,6 +57,11 @@ pub(crate) fn merge_event_streams(
     let mut all_events: Vec<YakEvent> = Vec::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
     for event in local_events.iter().chain(peer_events.iter()) {
+        // Skip Migrated events — they are schema migration boundaries
+        // that should not participate in the merge at all.
+        if matches!(event, YakEvent::Migrated(_, _, _)) {
+            continue;
+        }
         if let Some(id) = &event.metadata().event_id {
             if seen_ids.insert(id.clone()) {
                 all_events.push(event.clone());
@@ -130,10 +135,12 @@ pub(crate) fn merge_event_streams(
 
     let local_ids: HashSet<String> = local_events
         .iter()
+        .filter(|e| !matches!(e, YakEvent::Migrated(_, _, _)))
         .filter_map(|e| e.metadata().event_id.clone())
         .collect();
     let peer_ids: HashSet<String> = peer_events
         .iter()
+        .filter(|e| !matches!(e, YakEvent::Migrated(_, _, _)))
         .filter_map(|e| e.metadata().event_id.clone())
         .collect();
 

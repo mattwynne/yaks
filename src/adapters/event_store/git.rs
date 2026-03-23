@@ -297,6 +297,43 @@ impl GitEventStore {
             None => Ok(vec![]),
         }
     }
+
+    /// Enrich a v1/v2 Added event (which has an empty id) by reading the
+    /// yak's `.id` blob from the lazily migrated commit tree. After
+    /// migration, tree entry names are slug-based, so we scan entries and
+    /// match on the `.name` blob.
+    fn enrich_added_event_id(
+        &self,
+        event: &mut crate::domain::events::AddedEvent,
+        commit: &git2::Commit,
+    ) -> Result<()> {
+        let raw_tree = commit.tree()?;
+        let tree = super::migration::migrate_tree_to_current(&self.repo, &raw_tree)?;
+        for i in 0..tree.len() {
+            let entry = tree.get(i).unwrap();
+            if entry.kind() != Some(git2::ObjectType::Tree) {
+                continue;
+            }
+            if let Ok(subtree) = self.repo.find_tree(entry.id()) {
+                if let Some(name_entry) = subtree.get_name(".name") {
+                    if let Ok(blob) = self.repo.find_blob(name_entry.id()) {
+                        let name = std::str::from_utf8(blob.content()).unwrap_or("");
+                        if name.trim() == event.name.as_str() {
+                            if let Some(id_e) = subtree.get_name(".id") {
+                                if let Ok(id_blob) = self.repo.find_blob(id_e.id()) {
+                                    if let Ok(id_str) = std::str::from_utf8(id_blob.content()) {
+                                        event.id = crate::domain::slug::YakId::from(id_str.trim());
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 enum CasResult {
@@ -424,6 +461,14 @@ impl EventStore for GitEventStore {
             match YakEvent::parse(first_line) {
                 Ok(mut event) => {
                     let metadata = Self::extract_metadata_from_commit(&commit, full_message);
+
+                    // For Added events from v1/v2 format (empty id), enrich
+                    // from the lazily migrated tree which has an id blob.
+                    if let YakEvent::Added(ref mut e, _) = event {
+                        if e.id.as_str().is_empty() {
+                            self.enrich_added_event_id(e, &commit)?;
+                        }
+                    }
 
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).
@@ -1976,6 +2021,39 @@ mod tests {
             // Verify we got the event
             let events = EventStore::get_all_events(&local_store).unwrap();
             assert_eq!(events.len(), 1, "Should have pulled the event from origin");
+        }
+    }
+
+    #[test]
+    fn get_all_events_enriches_v1_added_events_with_id_from_tree() {
+        // Create a v1-format event (no schema version, no id in message)
+        let (_tmp, store) = setup_test_repo();
+        use crate::adapters::event_store::migration::{
+            tests::create_v1_event, EventStoreLocation, Migrator,
+        };
+        create_v1_event(&store.repo, "buy biscuits");
+
+        // Run migration (v1 -> current) — now just writes schema version
+        let location = EventStoreLocation {
+            repo: &store.repo,
+            ref_name: "refs/notes/yaks",
+        };
+        Migrator::for_current_version()
+            .ensure_schema(&location)
+            .unwrap();
+
+        // get_all_events should enrich the Added event with an id from the tree
+        let events = EventStore::get_all_events(&store).unwrap();
+        assert_eq!(events.len(), 1, "Should have one event");
+        match &events[0] {
+            YakEvent::Added(e, _) => {
+                assert!(
+                    !e.id.as_str().is_empty(),
+                    "Added event should have id populated from tree, got empty id"
+                );
+                assert_eq!(e.name.as_str(), "buy biscuits");
+            }
+            other => panic!("Expected Added event, got {:?}", other.format_message()),
         }
     }
 }

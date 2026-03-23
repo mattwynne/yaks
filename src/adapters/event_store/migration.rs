@@ -116,10 +116,6 @@ impl Migrator {
         }
 
         if migrated {
-            // Compact after migration: create a Compacted commit so that
-            // get_all_events() never walks past into pre-migration history.
-            compact_ref(location, self.expected_version)?;
-        } else {
             write_schema_version(location, self.expected_version)?;
         }
         Ok(migrated)
@@ -221,38 +217,6 @@ pub fn write_schema_version(location: &EventStoreLocation, version: u32) -> Resu
         &sig,
         &sig,
         &format!("Schema version: {}", version),
-        &new_tree,
-        &[&parent],
-    )?;
-
-    Ok(())
-}
-
-/// Compact the event store after migration: create a Migrated commit whose tree
-/// is the current tip tree (with the schema version stamped). `get_all_events()`
-/// stops at Migrated commits, so pre-migration history is never visited.
-fn compact_ref(location: &EventStoreLocation, version: u32) -> Result<()> {
-    let oid = location.repo.refname_to_id(location.ref_name)?;
-    let parent = location.repo.find_commit(oid)?;
-    let current_tree = parent.tree()?;
-
-    // Stamp schema version on the tree
-    let version_blob = location.repo.blob(version.to_string().as_bytes())?;
-    let mut builder = location.repo.treebuilder(Some(&current_tree))?;
-    builder.insert(".schema-version", version_blob, 0o100644)?;
-    let new_tree_oid = builder.write()?;
-    let new_tree = location.repo.find_tree(new_tree_oid)?;
-
-    let sig = location
-        .repo
-        .signature()
-        .or_else(|_| git2::Signature::now("yx", "yx@localhost"))?;
-
-    location.repo.commit(
-        Some(location.ref_name),
-        &sig,
-        &sig,
-        &format!("Migrated\n\nEvent-Id: {}", uuid::Uuid::now_v7()),
         &new_tree,
         &[&parent],
     )?;
