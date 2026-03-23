@@ -4,8 +4,7 @@ Date: 2026-02-27
 
 ## Status
 
-accepted (extends ADR 0009 Compacted event design, ADR 0011 Schema
-versioning and sync compatibility)
+superseded by ADR 0022 Lazy migration replaces boundary events
 
 ## Context
 
