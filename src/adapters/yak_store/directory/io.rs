@@ -1,5 +1,8 @@
 // File and directory I/O operations for directory-based storage
 
+use super::permissions::{
+    make_dir_readonly, make_dir_writable_recursive, make_readonly, make_writable,
+};
 use super::query::resolve_by_id;
 use crate::domain::slug::{slugify, Name, YakId};
 use crate::domain::{CONTEXT_FIELD, ID_FIELD, NAME_FIELD};
@@ -34,6 +37,11 @@ pub(super) fn create_yak(
         anyhow::bail!("Yak '{}' already exists", name);
     }
 
+    // Make parent writable before creating the new yak (only if it's a yak directory, not base_path)
+    if parent_dir != base_path {
+        make_writable(&parent_dir)?;
+    }
+
     fs::create_dir_all(&dir)
         .with_context(|| format!("Failed to create yak directory: {dir_name}"))?;
 
@@ -51,6 +59,14 @@ pub(super) fn create_yak(
             .with_context(|| format!("Failed to write id file for yak: {name}"))?;
     }
 
+    // Make the new yak directory readonly recursively
+    make_dir_readonly(&dir)?;
+
+    // Make parent readonly again (only if it's a yak directory, not base_path)
+    if parent_dir != base_path {
+        make_readonly(&parent_dir)?;
+    }
+
     Ok(())
 }
 
@@ -58,10 +74,25 @@ pub(super) fn create_yak(
 pub(super) fn delete_yak(base_path: &Path, id: &YakId) -> Result<()> {
     let dir = super::query::yak_dir(base_path, id.as_str());
     if dir.exists() {
+        // Make the yak directory writable recursively
+        make_dir_writable_recursive(&dir)?;
+
+        // Make parent dir writable (to remove the entry) - but only if it's a yak directory
+        let parent_dir = dir.parent().unwrap_or(base_path);
+        if parent_dir != base_path {
+            make_writable(parent_dir)?;
+        }
+
         // Before removing, move any child yak directories to root
         // so they survive parent deletion (orphan rescue).
         rescue_children(base_path, &dir)?;
+
         fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{id}'"))?;
+
+        // Make parent readonly again - but only if it's a yak directory
+        if parent_dir != base_path {
+            make_readonly(parent_dir)?;
+        }
     }
     Ok(())
 }
@@ -85,8 +116,13 @@ pub(super) fn rename_yak(base_path: &Path, id: &YakId, new_name: &Name) -> Resul
 
     if to_dir == from_dir {
         // Slug unchanged - just update the name file
-        fs::write(from_dir.join(NAME_FIELD), new_name.as_str())
+        make_writable(&from_dir)?;
+        let name_file = from_dir.join(NAME_FIELD);
+        make_writable(&name_file)?;
+        fs::write(&name_file, new_name.as_str())
             .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
+        make_readonly(&name_file)?;
+        make_readonly(&from_dir)?;
         return Ok(());
     }
 
@@ -94,12 +130,25 @@ pub(super) fn rename_yak(base_path: &Path, id: &YakId, new_name: &Name) -> Resul
         anyhow::bail!("Yak '{}' already exists", new_name);
     }
 
+    // Make parent dir writable (only if it's a yak directory), make yak dir writable recursively
+    if parent_dir != base_path {
+        make_writable(parent_dir)?;
+    }
+    make_dir_writable_recursive(&from_dir)?;
+
     fs::rename(&from_dir, &to_dir)
         .with_context(|| format!("Failed to rename '{}' to '{}'", id, new_name))?;
 
     // Update name file to reflect new name
-    fs::write(to_dir.join(NAME_FIELD), new_name.as_str())
+    let name_file = to_dir.join(NAME_FIELD);
+    fs::write(&name_file, new_name.as_str())
         .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
+
+    // Make the new dir readonly recursively, parent dir readonly (only if it's a yak directory)
+    make_dir_readonly(&to_dir)?;
+    if parent_dir != base_path {
+        make_readonly(parent_dir)?;
+    }
 
     Ok(())
 }
@@ -128,8 +177,27 @@ pub(super) fn reparent_yak(
         anyhow::bail!("Target location already exists for '{}'", id);
     }
 
+    // Make old parent writable (only if it's a yak directory), new parent writable (only if it's a yak directory), yak dir writable
+    let old_parent_dir = current_dir.parent().unwrap_or(base_path);
+    if old_parent_dir != base_path {
+        make_writable(old_parent_dir)?;
+    }
+    if new_parent_dir != base_path {
+        make_writable(&new_parent_dir)?;
+    }
+    make_dir_writable_recursive(&current_dir)?;
+
     fs::rename(&current_dir, &new_dir)
         .with_context(|| format!("Failed to move yak '{}' to new parent", id))?;
+
+    // Make yak dir readonly, both parent dirs readonly (only if they're yak directories)
+    make_dir_readonly(&new_dir)?;
+    if new_parent_dir != base_path {
+        make_readonly(&new_parent_dir)?;
+    }
+    if old_parent_dir != base_path {
+        make_readonly(old_parent_dir)?;
+    }
 
     Ok(())
 }
@@ -147,7 +215,13 @@ fn rescue_children(base_path: &Path, parent_dir: &Path) -> Result<()> {
                     .ok_or_else(|| anyhow::anyhow!("Cannot get dir name"))?;
                 let target = base_path.join(dir_name);
                 if !target.exists() {
+                    // Make child dir writable (base_path never needs to be made writable as it stays writable)
+                    make_dir_writable_recursive(&path)?;
+
                     fs::rename(&path, &target).context("Failed to rescue child yak")?;
+
+                    // Make it readonly at new location (base_path stays writable)
+                    make_dir_readonly(&target)?;
                 }
             }
         }
@@ -163,13 +237,18 @@ pub(super) fn clear(base_path: &Path) -> Result<()> {
         fs::create_dir_all(base_path)?;
         return Ok(());
     }
+
+    // base_path stays writable, only make individual yak directories writable before removing
     for entry in fs::read_dir(base_path)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() && path.join(CONTEXT_FIELD).exists() {
+            // Make it writable recursively, then remove
+            make_dir_writable_recursive(&path)?;
             fs::remove_dir_all(&path)?;
         }
     }
+
     Ok(())
 }
 
@@ -184,9 +263,26 @@ pub(super) fn write_field(
     if !dir.exists() {
         anyhow::bail!("yak '{}' not found", id);
     }
+
+    // Make the yak dir writable
+    make_writable(&dir)?;
+
     let field_path = dir.join(field_name);
+
+    // Make the target file writable (if it exists)
+    make_writable(&field_path)?;
+
+    // Write the file
     fs::write(&field_path, content)
-        .with_context(|| format!("Failed to write field '{field_name}' for '{id}'"))
+        .with_context(|| format!("Failed to write field '{field_name}' for '{id}'"))?;
+
+    // Make the file readonly
+    make_readonly(&field_path)?;
+
+    // Make the dir readonly
+    make_readonly(&dir)?;
+
+    Ok(())
 }
 
 /// Read a field from a yak directory.
