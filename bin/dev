@@ -409,7 +409,7 @@ mutate-sync() {
 # @alias c
 check() {
   # Skip if nothing has changed since last check
-  if .githooks/verify-checks 2>/dev/null; then
+  if [ -z "${FORCE_CHECK:-}" ] && .githooks/verify-checks 2>/dev/null; then
     echo "✅ Already verified — nothing changed since last check"
     return 0
   fi
@@ -920,7 +920,7 @@ merge() {
   # NEVER switch the main repo away from main.
   if [ -n "$worktree" ]; then
     echo "Running checks in worktree: $worktree"
-    if ! (cd "$worktree" && check); then
+    if ! (cd "$worktree" && FORCE_CHECK=1 check); then
       echo ""
       echo "❌ dev check failed on $branch — fix before merging"
       return 1
@@ -943,7 +943,7 @@ merge() {
     git worktree add "$tmp_worktree" "$branch"
 
     echo "Running checks in temporary worktree..."
-    if ! (cd "$tmp_worktree" && check); then
+    if ! (cd "$tmp_worktree" && FORCE_CHECK=1 check); then
       echo ""
       echo "❌ dev check failed on $branch — fix before merging"
       git worktree remove "$tmp_worktree"

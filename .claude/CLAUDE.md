@@ -185,6 +185,20 @@ After merging:
 1. `yx done "<yak-name>"` — mark the yak complete
 2. Clean up the worktree and branch
 
+## CRITICAL: Branch and Merge Rules
+
+**NEVER push directly to main.** All changes reach main through
+`dev merge <branch>` only.
+
+**NEVER create branches manually.** Use `dev start "<yak-name>"`
+which creates the worktree and branch with the correct naming.
+
+**NEVER use `git merge`, `git push`, or `--no-verify`.** The only
+merge path is `dev merge`, which runs `dev check` first.
+
+If you find yourself wanting to bypass these rules, STOP and ask
+the human.
+
 ## Commit Message Policy
 
 **Do NOT include Claude's name or "Co-Authored-By: Claude" in commit
