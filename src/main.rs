@@ -615,7 +615,17 @@ fn main() -> Result<()> {
 
     // Initialize event infrastructure
     // Discover git repo root using libgit2
-    let repo_root = yx::infrastructure::discover_git_root().ok();
+    let repo_root = match yx::infrastructure::discover_git_root() {
+        Ok(root) => Some(root),
+        Err(e) => {
+            // If YX_ROOT was set, propagate the error (it's a configuration issue)
+            if std::env::var("YX_ROOT").is_ok() {
+                return Err(e);
+            }
+            // Otherwise, not in a git repo - continue only if skip_git
+            None
+        }
+    };
 
     // Resolve yaks path once: <repo_root>/.yaks, or .yaks fallback (skip_git mode)
     let yaks_path: PathBuf = if let Some(ref root) = repo_root {

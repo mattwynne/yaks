@@ -1152,7 +1152,7 @@ async fn completions_should_include(world: &mut FullStackWorld, expected: String
 
 #[then(regex = r#"^the yak directory should be named "(.+)"$"#)]
 async fn yak_directory_named(world: &mut FullStackWorld, slug: String) -> Result<()> {
-    let dir = world.default_repo_path().join(&slug);
+    let dir = world.default_repo_path().join(".yaks").join(&slug);
     if !dir.exists() {
         anyhow::bail!("Expected yak directory '{}' to exist at {:?}", slug, dir);
     }
@@ -1188,7 +1188,11 @@ async fn yak_has_file_with_content(
     file_name: String,
     expected_content: String,
 ) -> Result<()> {
-    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    let path = world
+        .default_repo_path()
+        .join(".yaks")
+        .join(&yak_name)
+        .join(&file_name);
     if !path.exists() {
         anyhow::bail!(
             "Expected file '{}' in yak '{}' directory, but it doesn't exist",
@@ -1215,7 +1219,11 @@ async fn yak_has_file(
     yak_name: String,
     file_name: String,
 ) -> Result<()> {
-    let path = world.default_repo_path().join(&yak_name).join(&file_name);
+    let path = world
+        .default_repo_path()
+        .join(".yaks")
+        .join(&yak_name)
+        .join(&file_name);
     if !path.exists() {
         anyhow::bail!(
             "Expected file '{}' in yak '{}' directory, but it doesn't exist",
