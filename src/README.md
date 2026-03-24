@@ -64,8 +64,8 @@ Implementations of port traits for specific technologies.
   CRDT-style conflict resolution. See
   [ADR 0007](../docs/adr/0007-sync-is-an-eventstore-responsibility-not-a-separate-port.md).
 - **`yak_store/`** - `DirectoryStorage`: file-based read model under
-  `$YAK_PATH` (defaults to `.yaks/`). Each yak is a directory with
-  field files (state, context.md, etc).
+  `<repo_root>/.yaks/` (where repo_root is determined via `$YX_ROOT` or git discovery).
+  Each yak is a directory with field files (state, context.md, etc).
 - **`user_display/`** - `ConsoleDisplay`: terminal output with colours
 - **`user_input/`** - `ConsoleInput`: stdin and $EDITOR input
 - **`authentication/`** - `GitAuthentication`: reads author from git config

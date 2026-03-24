@@ -507,7 +507,7 @@ impl FullStackWorld {
     }
 
     /// Run yx ls from the git_repo subdirectory (if set) or the repo root,
-    /// without YX_SKIP_GIT_CHECKS. Does NOT pass YAK_PATH (lets yx discover it).
+    /// without YX_SKIP_GIT_CHECKS. Does NOT pass YX_ROOT (lets yx discover it).
     pub fn list_yaks_from_subdir(&mut self) -> Result<()> {
         let repo = self.git_repo.as_ref().context("No git_repo set")?;
         let run_dir = self
@@ -521,7 +521,7 @@ impl FullStackWorld {
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env_remove("YX_SKIP_GIT_CHECKS")
-            .env_remove("YAK_PATH")
+            .env_remove("YX_ROOT")
             .current_dir(&run_dir)
             .output()
             .context("Failed to run yx ls")?;
