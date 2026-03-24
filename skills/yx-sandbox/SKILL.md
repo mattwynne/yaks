@@ -24,12 +24,13 @@ Prefix **every** `yx` command with the env vars using the literal
 path from above:
 
 ```bash
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx <command>
+cd /tmp/tmp.xYz123AbC && YX_SKIP_GIT_CHECKS=1 yx <command>
 ```
 
-- `YAK_PATH` redirects storage to the temp directory
+- `cd /tmp/tmp.xYz123AbC` enters the temp sandbox directory
 - `YX_SKIP_GIT_CHECKS=1` avoids git setup requirements in temp dirs
-- **Never run bare `yx`** without these env vars during sandbox work
+- yx will use `.yaks` in the current directory when git checks are skipped
+- **Never run bare `yx`** without `YX_SKIP_GIT_CHECKS=1` during sandbox work
 
 **Note:** Shell variables don't persist between Bash tool calls.
 Always use the literal path, not a variable like `$SANDBOX`.

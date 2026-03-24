@@ -50,7 +50,7 @@ Pick 2-4 heuristics from the menu below that suit the target:
 | **Never and Always** | Invariants (done yaks always show done, removed yaks never listed) |
 | **Follow the Data** | Add -> list -> modify -> list -> verify consistency |
 | **Some, None, All** | Filters with matching/non-matching/all items |
-| **Starve** | Missing YAK_PATH, non-existent directories, no permissions |
+| **Starve** | Missing .yaks directory, non-existent directories, no permissions |
 | **Interrupt** | Broken pipes (`yx ls \| head -1`), partial stdin, Ctrl-C |
 | **Configuration Tour** | `--format` options, `--only` filters, env vars |
 | **Claims Tour** | Does `--help` text match actual behaviour? |
@@ -94,11 +94,12 @@ Before exploring, create enough data to work with:
 
 ```bash
 # Using the literal sandbox path from mktemp output:
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx add make the tea
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx add buy biscuits
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx add wash the cups --under make the tea
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx state wash the cups wip
-YAK_PATH=/tmp/tmp.xYz123AbC YX_SKIP_GIT_CHECKS=1 yx done buy biscuits
+cd /tmp/tmp.xYz123AbC
+YX_SKIP_GIT_CHECKS=1 yx add make the tea
+YX_SKIP_GIT_CHECKS=1 yx add buy biscuits
+YX_SKIP_GIT_CHECKS=1 yx add wash the cups --under make the tea
+YX_SKIP_GIT_CHECKS=1 yx state wash the cups wip
+YX_SKIP_GIT_CHECKS=1 yx done buy biscuits
 ```
 
 Adapt seeding to the charter - if exploring hierarchy, create deeper
@@ -118,7 +119,7 @@ Keep a running session log in this format:
 ### [Heuristic Name]
 
 **Probe:** [what you're trying]
-**Command:** `YAK_PATH=<sandbox-path> YX_SKIP_GIT_CHECKS=1 yx ...`
+**Command:** `cd <sandbox-path> && YX_SKIP_GIT_CHECKS=1 yx ...`
 **Expected:** [what you thought would happen]
 **Actual:** [what actually happened]
 **Verdict:** OK | BUG | UX-ISSUE | INCONSISTENCY | UNEXPECTED | QUESTION

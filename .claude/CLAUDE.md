@@ -130,8 +130,8 @@ Do NOT store plans in `docs/superpowers/plans/`.
 We're using yaks to build yaks (dogfooding). The `.yaks` folder
 contains the actual work tracker for this project.
 
-- **For testing**: Use `YAK_PATH` (tests set this to temp directories)
-- **For demos**: Use `YAK_PATH=/tmp/demo-yaks yx <command>`
+- **For testing**: Use `YX_ROOT` (tests set this to temp repo directories)
+- **For demos**: Use `YX_ROOT=/tmp/demo-repo yx <command>` (where demo-repo is a git repo)
 - **NEVER**: Run `rm -rf .yaks` or modify `.yaks` contents directly
 
 ## ADR Policy

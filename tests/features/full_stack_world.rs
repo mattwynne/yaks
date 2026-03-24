@@ -27,8 +27,6 @@ pub struct FullStackWorld {
     pub git_repo: Option<TempDir>,
     /// Subdirectory path within git_repo to run commands from
     pub git_repo_subdir: Option<PathBuf>,
-    /// An explicit YAK_PATH used alongside git_repo for YAK_PATH tests
-    pub explicit_yak_path: Option<TempDir>,
     /// Interactive responses to be sent to stdin (for simulating user input)
     pub interactive_responses: Vec<String>,
     /// Pending command to execute after collecting interactive responses
@@ -40,6 +38,9 @@ impl FullStackWorld {
         let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
         let repo_path = temp_dir.path().to_path_buf();
 
+        // Initialize as a real git repo with .yaks gitignored
+        Self::init_git_repo_with_gitignore(&temp_dir)?;
+
         Ok(Self {
             repo_path,
             _temp_dir: temp_dir,
@@ -50,7 +51,6 @@ impl FullStackWorld {
             repos: HashMap::new(),
             git_repo: None,
             git_repo_subdir: None,
-            explicit_yak_path: None,
             interactive_responses: Vec::new(),
             pending_command: None,
         })
@@ -112,8 +112,7 @@ impl FullStackWorld {
 
         let mut child = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -172,8 +171,7 @@ impl FullStackWorld {
 
         let output = Command::new(yx_path)
             .args(["add", name, "--edit"])
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .env("EDITOR", &editor_script)
             .env("WRITE_TEXT", content)
             .current_dir(&self.repo_path)
@@ -221,8 +219,7 @@ impl FullStackWorld {
 
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .env("EDITOR", &script_path)
             .current_dir(&self.repo_path);
 
@@ -271,8 +268,7 @@ impl FullStackWorld {
 
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .env("EDITOR", &script_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::piped())
@@ -314,30 +310,20 @@ impl FullStackWorld {
 
     /// Run yx in the override directory without YX_SKIP_GIT_CHECKS.
     /// Used for testing git environment checks (not-in-repo, no gitignore).
-    /// If explicit_yak_path is set, passes YAK_PATH to the command.
     pub fn run_yx_in_override_dir(&mut self, args: &[&str]) -> Result<()> {
         let dir = self
             .override_dir
             .as_ref()
             .context("No override directory set")?;
         let yx_path = env!("CARGO_BIN_EXE_yx");
-        let explicit_yak_path = self
-            .explicit_yak_path
-            .as_ref()
-            .map(|d| d.path().to_path_buf());
 
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env_remove("YX_SKIP_GIT_CHECKS")
+            .env_remove("YX_ROOT")
             .current_dir(dir.path());
-
-        if let Some(yak_path) = explicit_yak_path {
-            cmd.env("YAK_PATH", yak_path);
-        } else {
-            cmd.env_remove("YAK_PATH");
-        }
 
         let output = cmd.output().context("Failed to run yx command")?;
 
@@ -350,30 +336,21 @@ impl FullStackWorld {
 
     /// Run yx in the override directory WITH YX_SKIP_GIT_CHECKS set.
     /// Used for testing that YX_SKIP_GIT_CHECKS bypasses git requirements.
-    /// If explicit_yak_path is set, passes YAK_PATH to the command.
+    /// yx will use .yaks in the current directory when git checks are skipped.
     pub fn run_yx_in_override_dir_skip_git_checks(&mut self, args: &[&str]) -> Result<()> {
         let dir = self
             .override_dir
             .as_ref()
             .context("No override directory set")?;
         let yx_path = env!("CARGO_BIN_EXE_yx");
-        let explicit_yak_path = self
-            .explicit_yak_path
-            .as_ref()
-            .map(|d| d.path().to_path_buf());
 
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("YX_SKIP_GIT_CHECKS", "1")
+            .env_remove("YX_ROOT")
             .current_dir(dir.path());
-
-        if let Some(yak_path) = explicit_yak_path {
-            cmd.env("YAK_PATH", yak_path);
-        } else {
-            cmd.env_remove("YAK_PATH");
-        }
 
         let output = cmd.output().context("Failed to run yx command")?;
 
@@ -493,14 +470,12 @@ impl FullStackWorld {
         Self::init_git_repo_with_gitignore(&temp_dir)?;
 
         let repo_path = temp_dir.path().to_path_buf();
-        let yak_path = repo_path.join(".yaks");
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
         // Add the yak from the repo root
         let output = Command::new(yx_path)
             .args(["add", yak_name])
-            .env("YAK_PATH", &yak_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &repo_path)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .current_dir(&repo_path)
@@ -516,44 +491,6 @@ impl FullStackWorld {
         }
 
         self.git_repo = Some(temp_dir);
-        Ok(())
-    }
-
-    /// Set up a git repo with .yaks gitignored, an explicit YAK_PATH directory,
-    /// and add a yak to that YAK_PATH.
-    pub fn setup_git_repo_with_explicit_yak_path(&mut self, yak_name: &str) -> Result<()> {
-        let repo_temp_dir = tempfile::tempdir().context("Failed to create repo temp dir")?;
-        Self::init_git_repo_with_gitignore(&repo_temp_dir)?;
-
-        // Create a separate directory for the explicit YAK_PATH
-        let yak_path_temp_dir =
-            tempfile::tempdir().context("Failed to create yak_path temp dir")?;
-        let yak_path = yak_path_temp_dir.path().to_path_buf();
-
-        let repo_path = repo_temp_dir.path().to_path_buf();
-        let yx_path = env!("CARGO_BIN_EXE_yx");
-
-        // Add the yak using the explicit YAK_PATH
-        let output = Command::new(yx_path)
-            .args(["add", yak_name])
-            .env("YAK_PATH", &yak_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .current_dir(&repo_path)
-            .output()
-            .context("Failed to run yx add")?;
-
-        if !output.status.success() {
-            anyhow::bail!(
-                "yx add failed:\nstdout: {}\nstderr: {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-        }
-
-        self.git_repo = Some(repo_temp_dir);
-        self.explicit_yak_path = Some(yak_path_temp_dir);
         Ok(())
     }
 
@@ -596,36 +533,21 @@ impl FullStackWorld {
         Ok(())
     }
 
-    /// Run yx ls from the git_repo subdirectory using the explicit YAK_PATH.
-    /// Does NOT pass YX_SKIP_GIT_CHECKS.
-    pub fn list_yaks_from_subdir_with_yak_path(&mut self) -> Result<()> {
-        let repo = self.git_repo.as_ref().context("No git_repo set")?;
-        let run_dir = self
-            .git_repo_subdir
-            .clone()
-            .unwrap_or_else(|| repo.path().to_path_buf());
-        let yak_path = self
-            .explicit_yak_path
-            .as_ref()
-            .context("No explicit_yak_path set")?
-            .path()
-            .to_path_buf();
+    /// Run yx with YX_ROOT pointing to a specific directory.
+    /// Used for testing YX_ROOT override behavior.
+    pub fn run_yx_with_yx_root(&mut self, args: &[&str], root_path: &std::path::Path) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
-
         let output = Command::new(yx_path)
-            .args(["ls"])
-            .env("YAK_PATH", &yak_path)
+            .args(args)
+            .env("YX_ROOT", root_path)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env_remove("YX_SKIP_GIT_CHECKS")
-            .current_dir(&run_dir)
             .output()
-            .context("Failed to run yx ls")?;
-
+            .context("Failed to run yx command")?;
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();
         self.error = String::from_utf8_lossy(&output.stderr).to_string();
-
         Ok(())
     }
 
@@ -651,8 +573,7 @@ impl FullStackWorld {
 
         let script = format!(
             r#"
-export YAK_PATH="{yak_path}"
-export YX_SKIP_GIT_CHECKS=1
+export YX_ROOT="{yx_root}"
 export PATH="{yx_dir}:$PATH"
 source "{project_dir}/completions/yx.bash"
 COMP_WORDS=({comp_words_str})
@@ -660,7 +581,7 @@ COMP_CWORD={comp_cword}
 _yx_completions
 printf '%s\n' "${{COMPREPLY[@]}}"
 "#,
-            yak_path = self.repo_path.display(),
+            yx_root = self.repo_path.display(),
             yx_dir = std::path::Path::new(yx_path).parent().unwrap().display(),
             project_dir = project_dir,
             comp_words_str = comp_words_str,
@@ -938,13 +859,11 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         stdin_content: &str,
     ) -> Result<()> {
         let repo_path = self.repo_path(repo_name)?;
-        let yak_path = repo_path.join(".yaks");
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
         let mut child = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &yak_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &repo_path)
             .current_dir(&repo_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -972,13 +891,11 @@ printf '%s\n' "${{COMPREPLY[@]}}"
     /// Run yx command scoped to a named repository
     pub fn run_yx_in_repo(&mut self, repo_name: &str, args: &[&str]) -> Result<()> {
         let repo_path = self.repo_path(repo_name)?;
-        let yak_path = repo_path.join(".yaks");
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
         let output = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &yak_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &repo_path)
             .current_dir(&repo_path)
             .output()
             .context("Failed to run yx command in repo")?;
@@ -1021,8 +938,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let output = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::from(file))
             .stdout(Stdio::piped())
@@ -1058,8 +974,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let mut child = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1091,8 +1006,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let mut child = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1119,8 +1033,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let output = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to run yx command")?;
@@ -1276,8 +1189,7 @@ impl TestWorld for FullStackWorld {
 
         let mut child = Command::new(yx_path)
             .args(["field", name, field])
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .current_dir(&self.repo_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1369,8 +1281,7 @@ impl FullStackWorld {
 
         let output = Command::new(yx_path)
             .args(args)
-            .env("YAK_PATH", &self.repo_path)
-            .env("YX_SKIP_GIT_CHECKS", "1")
+            .env("YX_ROOT", &self.repo_path)
             .env("NO_COLOR", "1")
             .current_dir(&self.repo_path)
             .output()

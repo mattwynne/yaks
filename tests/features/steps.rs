@@ -927,6 +927,17 @@ async fn list_yaks_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
     world.run_yx_in_override_dir(&["ls"])
 }
 
+#[given(expr = "a .yaks directory exists in that directory")]
+async fn yaks_directory_exists_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
+    let dir = world
+        .override_dir
+        .as_ref()
+        .context("No override directory set")?;
+    let yaks_path = dir.path().join(".yaks");
+    std::fs::create_dir_all(&yaks_path).context("Failed to create .yaks directory")?;
+    Ok(())
+}
+
 #[when(expr = "I list the yaks with YX_SKIP_GIT_CHECKS set")]
 async fn list_yaks_with_skip_git_checks(world: &mut FullStackWorld) -> Result<()> {
     world.run_yx_in_override_dir_skip_git_checks(&["ls"])
@@ -941,31 +952,33 @@ async fn git_repo_with_gitignored_yaks_and_yak(
     world.create_subdir_in_git_repo("subdir")
 }
 
-#[given(regex = r#"^a git repository with YAK_PATH set and a yak called "([^"]+)"$"#)]
-async fn git_repo_with_explicit_yak_path_and_yak(
-    world: &mut FullStackWorld,
-    yak_name: String,
-) -> Result<()> {
-    world.setup_git_repo_with_explicit_yak_path(&yak_name)?;
-    world.create_subdir_in_git_repo("subdir")
-}
-
-#[given(expr = "YAK_PATH is set to a directory")]
-async fn yak_path_set_to_directory(world: &mut FullStackWorld) -> Result<()> {
-    let yak_path_temp_dir =
-        tempfile::tempdir().context("Failed to create yak_path temp directory")?;
-    world.explicit_yak_path = Some(yak_path_temp_dir);
-    Ok(())
-}
-
 #[when(expr = "I list the yaks from a subdirectory of that repository")]
 async fn list_yaks_from_subdir(world: &mut FullStackWorld) -> Result<()> {
     world.list_yaks_from_subdir()
 }
 
-#[when(expr = "I list the yaks from a subdirectory using YAK_PATH")]
-async fn list_yaks_from_subdir_with_yak_path(world: &mut FullStackWorld) -> Result<()> {
-    world.list_yaks_from_subdir_with_yak_path()
+#[when(expr = "I list the yaks with YX_ROOT pointing to that repository")]
+async fn list_yaks_with_yx_root_pointing_to_repo(world: &mut FullStackWorld) -> Result<()> {
+    let git_repo_path = world
+        .git_repo
+        .as_ref()
+        .context("git_repo not initialized")?
+        .path()
+        .to_path_buf();
+    world.run_yx_with_yx_root(&["list"], &git_repo_path)
+}
+
+#[when(expr = "I try to list the yaks with YX_ROOT pointing to that directory")]
+async fn try_list_yaks_with_yx_root_pointing_to_override_dir(
+    world: &mut FullStackWorld,
+) -> Result<()> {
+    let override_path = world
+        .override_dir
+        .as_ref()
+        .context("override_dir not initialized")?
+        .path()
+        .to_path_buf();
+    world.run_yx_with_yx_root(&["list"], &override_path)
 }
 
 #[then(expr = "the command should succeed")]

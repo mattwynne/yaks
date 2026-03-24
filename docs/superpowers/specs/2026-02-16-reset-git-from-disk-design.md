@@ -11,7 +11,7 @@ so there's no way to fix the git tree from a cleaned-up disk state.
 ## Solution
 
 Add a `--git-from-disk` flag to `yx reset` that rebuilds the
-`refs/notes/yaks` tree from whatever is on disk in `YAK_PATH`.
+`refs/notes/yaks` tree from whatever is on disk in `.yaks`.
 
 ```
 yx reset                 # git->disk (existing, default)

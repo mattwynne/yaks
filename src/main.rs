@@ -617,12 +617,11 @@ fn main() -> Result<()> {
     // Discover git repo root using libgit2
     let repo_root = yx::infrastructure::discover_git_root().ok();
 
-    // Resolve yaks path once: YAK_PATH env var, or <repo_root>/.yaks, or .yaks fallback
-    let yaks_path: PathBuf = if let Ok(yak_path) = std::env::var("YAK_PATH") {
-        PathBuf::from(yak_path)
-    } else if let Some(ref root) = repo_root {
+    // Resolve yaks path once: <repo_root>/.yaks, or .yaks fallback (skip_git mode)
+    let yaks_path: PathBuf = if let Some(ref root) = repo_root {
         root.join(".yaks")
     } else {
+        // skip_git mode — no repo root available
         PathBuf::from(".yaks")
     };
 

@@ -19,27 +19,26 @@ Feature: Git repository safety checks
       Then the command should succeed
       And the output should include "shave-yak"
 
-  Rule: YAK_PATH takes precedence over git repo root
+  Rule: YX_ROOT overrides git root detection
 
-    Example: Running yx from a subdirectory with YAK_PATH uses YAK_PATH
-      Given a git repository with YAK_PATH set and a yak called "explicit-path-yak"
-      When I list the yaks from a subdirectory using YAK_PATH
+    Example: Running yx with YX_ROOT from any directory
+      Given a git repository with .yaks gitignored and a yak called "root-yak"
+      When I list the yaks with YX_ROOT pointing to that repository
       Then the command should succeed
-      And the output should include "explicit-path-yak"
+      And the output should include "root-yak"
 
-  Rule: Git is required even when YAK_PATH is set
+  Rule: YX_ROOT must point to a git repo
 
-    Example: Running yx with YAK_PATH outside a git repo errors
+    Example: Running yx with YX_ROOT pointing to a non-git directory
       Given a directory that is not a git repository
-      And YAK_PATH is set to a directory
-      When I try to list the yaks from this directory
+      When I try to list the yaks with YX_ROOT pointing to that directory
       Then the command should fail
-      And the error should contain "not in a git repository"
+      And the error should contain "YX_ROOT does not point to a git repository"
 
   Rule: YX_SKIP_GIT_CHECKS bypasses all git requirements
 
     Example: YX_SKIP_GIT_CHECKS lets yx run outside a git repo
       Given a directory that is not a git repository
-      And YAK_PATH is set to a directory
+      And a .yaks directory exists in that directory
       When I list the yaks with YX_SKIP_GIT_CHECKS set
       Then the command should succeed
