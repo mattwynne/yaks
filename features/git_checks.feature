@@ -1,3 +1,4 @@
+@fullstack
 Feature: Git repository safety checks
   yx requires a properly configured git repository to operate.
   These checks run before any command and provide clear error
