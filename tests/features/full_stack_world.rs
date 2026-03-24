@@ -535,7 +535,11 @@ impl FullStackWorld {
 
     /// Run yx with YX_ROOT pointing to a specific directory.
     /// Used for testing YX_ROOT override behavior.
-    pub fn run_yx_with_yx_root(&mut self, args: &[&str], root_path: &std::path::Path) -> Result<()> {
+    pub fn run_yx_with_yx_root(
+        &mut self,
+        args: &[&str],
+        root_path: &std::path::Path,
+    ) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
         let output = Command::new(yx_path)
             .args(args)
