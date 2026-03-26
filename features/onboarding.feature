@@ -40,4 +40,4 @@ Feature: First-time onboarding
       Given a git repository that has never used yaks
       When I non-interactively run yx from this directory
       Then the command should fail
-      And the error should contain ".yaks folder is not gitignored"
+      And the error should contain ".yaks is not gitignored. Fix with: echo '.yaks' >> .gitignore"

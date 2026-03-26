@@ -70,7 +70,7 @@ impl UseCase for EnsureGitignore {
 
         // Not gitignored - check if we can prompt
         if !app.input.is_interactive() {
-            anyhow::bail!("Error: .yaks folder is not gitignored");
+            anyhow::bail!(".yaks is not gitignored. Fix with: echo '.yaks' >> .gitignore");
         }
 
         // Interactive mode: offer to add .yaks to .gitignore

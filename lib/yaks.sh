@@ -33,8 +33,7 @@ check_git_requirements() {
   fi
 
   if ! git -C "$GIT_WORK_TREE" check-ignore -q .yaks; then
-    echo "Error: .yaks folder is not gitignored" >&2
-    echo "Please add .yaks to your .gitignore file" >&2
+    echo "Error: .yaks is not gitignored. Fix with: echo '.yaks' >> .gitignore" >&2
     exit 1
   fi
 }
