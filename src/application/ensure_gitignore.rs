@@ -93,3 +93,114 @@ impl UseCase for EnsureGitignore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::{make_test_display, InMemoryEventStore, InMemoryInput, InMemoryStorage};
+    use crate::application::UseCase;
+    use crate::domain::event_metadata::Author;
+    use crate::domain::ports::{AuthenticationPort, LocalWorkspacePort};
+    use crate::infrastructure::EventBus;
+
+    struct TestAuth;
+
+    impl AuthenticationPort for TestAuth {
+        fn current_author(&self) -> Author {
+            Author {
+                name: "test".to_string(),
+                email: "test@test.com".to_string(),
+            }
+        }
+    }
+
+    /// Workspace that reports .yaks as NOT gitignored
+    struct NotGitignoredWorkspace;
+
+    impl LocalWorkspacePort for NotGitignoredWorkspace {
+        fn is_yaks_gitignored(&self) -> Result<bool> {
+            Ok(false)
+        }
+
+        fn add_yaks_to_gitignore(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn commit_gitignore(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn non_interactive_bails_when_not_gitignored() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _) = make_test_display();
+        let mut input = InMemoryInput::new();
+        input.set_interactive(false);
+        let auth = TestAuth;
+        let workspace = NotGitignoredWorkspace;
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+
+        let result = EnsureGitignore::new().execute(&mut app);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains(".yaks is not gitignored"),
+        );
+    }
+
+    #[test]
+    fn interactive_does_not_bail_when_not_gitignored() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new(); // interactive by default
+        let auth = TestAuth;
+        let workspace = NotGitignoredWorkspace;
+
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+
+        let result = EnsureGitignore::new().execute(&mut app);
+        // Should NOT get the non-interactive bail error.
+        // It may succeed (stdin EOF defaults to Y) or fail
+        // differently, but it must not contain the
+        // non-interactive error message.
+        match result {
+            Ok(()) => {} // passed through interactive flow
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    !msg.contains(".yaks is not gitignored"),
+                    "Interactive mode should not bail with \
+                     non-interactive error, got: {msg}",
+                );
+            }
+        }
+    }
+}
