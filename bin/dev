@@ -963,7 +963,10 @@ merge() {
   fi
 
   # Fast-forward main (we never left main)
-  git merge --ff-only "$branch" --no-verify
+  if ! git merge --ff-only "$branch" --no-verify; then
+    echo "❌ Fast-forward merge failed — is main's working tree clean?"
+    return 1
+  fi
 
   # Clean up worktree and branch
   if [ -n "$worktree" ]; then
