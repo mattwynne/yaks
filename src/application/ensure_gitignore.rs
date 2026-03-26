@@ -156,12 +156,10 @@ mod tests {
 
         let result = EnsureGitignore::new().execute(&mut app);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains(".yaks is not gitignored"),
-        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains(".yaks is not gitignored"),);
     }
 
     #[test]
