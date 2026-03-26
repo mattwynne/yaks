@@ -407,9 +407,10 @@ mutate-sync() {
 
 # @cmd Run all checks (tests + lint + audit) and mark as verified
 # @alias c
+# @flag --force Force re-run even if nothing changed
 check() {
   # Skip if nothing has changed since last check
-  if [ -z "${FORCE_CHECK:-}" ] && .githooks/verify-checks 2>/dev/null; then
+  if [ -z "${argc_force:-}" ] && [ -z "${FORCE_CHECK:-}" ] && .githooks/verify-checks 2>/dev/null; then
     echo "✅ Already verified — nothing changed since last check"
     return 0
   fi

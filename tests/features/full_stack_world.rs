@@ -654,9 +654,10 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let hooks_env = ("GIT_CONFIG_PARAMETERS", "'core.hooksPath=/dev/null'");
 
-        // Check if origin has any commits
+        // Check if origin has any commits (cat-file -t HEAD fails on empty repos,
+        // unlike rev-parse HEAD which misleadingly succeeds)
         let origin_has_commits = Command::new("git")
-            .args(["rev-parse", "HEAD"])
+            .args(["cat-file", "-t", "HEAD"])
             .current_dir(&origin_path)
             .output()
             .map(|o| o.status.success())
@@ -749,9 +750,10 @@ printf '%s\n' "${{COMPREPLY[@]}}"
 
         let hooks_env = ("GIT_CONFIG_PARAMETERS", "'core.hooksPath=/dev/null'");
 
-        // Check if origin has any commits
+        // Check if origin has any commits (cat-file -t HEAD fails on empty repos,
+        // unlike rev-parse HEAD which misleadingly succeeds)
         let origin_has_commits = Command::new("git")
-            .args(["rev-parse", "HEAD"])
+            .args(["cat-file", "-t", "HEAD"])
             .current_dir(&origin_path)
             .output()
             .map(|o| o.status.success())
