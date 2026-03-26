@@ -7,6 +7,7 @@ pub mod json_display;
 pub mod local_workspace;
 pub mod spinner;
 pub mod tui_display;
+pub mod user_config;
 pub mod user_display;
 pub mod user_input;
 pub mod views;
@@ -17,6 +18,8 @@ pub mod yak_store;
 pub use authentication::InMemoryAuthentication;
 #[cfg(any(test, feature = "test-support"))]
 pub use event_store::InMemoryEventStore;
+#[cfg(any(test, feature = "test-support"))]
+pub use user_config::InMemoryConfig;
 #[cfg(any(test, feature = "test-support"))]
 pub use user_display::{make_test_display, TestBuffer};
 #[cfg(any(test, feature = "test-support"))]

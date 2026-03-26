@@ -2,7 +2,7 @@
 
 use crate::domain::ports::{
     AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, LocalWorkspacePort,
-    ReadYakStore,
+    ReadYakStore, UserConfigPort,
 };
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
@@ -23,6 +23,7 @@ pub struct Application<'a> {
     pub local_workspace: &'a dyn LocalWorkspacePort,
     pub event_reader: Option<&'a dyn EventStoreReader>,
     auth: &'a dyn AuthenticationPort,
+    pub(super) user_config: Option<&'a mut dyn UserConfigPort>,
 }
 
 impl<'a> Application<'a> {
@@ -46,7 +47,14 @@ impl<'a> Application<'a> {
             local_workspace,
             event_reader,
             auth,
+            user_config: None,
         }
+    }
+
+    /// Attach a user config port (builder pattern).
+    pub fn with_user_config(mut self, config: &'a mut dyn UserConfigPort) -> Self {
+        self.user_config = Some(config);
+        self
     }
 
     pub fn with_yak_map<F>(&mut self, f: F) -> Result<()>

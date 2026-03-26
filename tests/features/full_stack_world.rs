@@ -31,12 +31,15 @@ pub struct FullStackWorld {
     pub interactive_responses: Vec<String>,
     /// Pending command to execute after collecting interactive responses
     pub pending_command: Option<Vec<String>>,
+    /// Temp directory for XDG_CONFIG_HOME (isolates config tests)
+    config_dir: TempDir,
 }
 
 impl FullStackWorld {
     fn new() -> Result<Self> {
         let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
         let repo_path = temp_dir.path().to_path_buf();
+        let config_dir = tempfile::tempdir().context("Failed to create config temp directory")?;
 
         // Initialize as a real git repo with .yaks gitignored
         Self::init_git_repo_with_gitignore(&temp_dir)?;
@@ -53,6 +56,7 @@ impl FullStackWorld {
             git_repo_subdir: None,
             interactive_responses: Vec::new(),
             pending_command: None,
+            config_dir,
         })
     }
 
@@ -1040,6 +1044,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let output = Command::new(yx_path)
             .args(args)
             .env("YX_ROOT", &self.repo_path)
+            .env("XDG_CONFIG_HOME", self.config_dir.path())
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to run yx command")?;
@@ -1273,6 +1278,18 @@ impl TestWorld for FullStackWorld {
 
     fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()> {
         FullStackWorld::create_clone(self, origin, clone)
+    }
+
+    fn set_config(&mut self, key: &str, value: &str) -> Result<()> {
+        self.run_yx(&["config", "set", key, value])
+    }
+
+    fn get_config(&mut self, key: &str) -> Result<()> {
+        self.run_yx(&["config", "get", key])
+    }
+
+    fn list_config(&mut self) -> Result<()> {
+        self.run_yx(&["config", "list"])
     }
 
     fn get_exit_code(&self) -> i32 {
