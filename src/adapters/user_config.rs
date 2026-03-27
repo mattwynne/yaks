@@ -158,3 +158,85 @@ fn read_toml_file(path: &PathBuf) -> Result<HashMap<String, String>> {
 fn dirs_home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_toml_file_skips_comments_and_empty_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "# This is a comment\n\nshow-claude-plugin-hint = \"false\"\n",
+        )
+        .unwrap();
+        let map = read_toml_file(&path).unwrap();
+        assert_eq!(map.get("show-claude-plugin-hint").unwrap(), "false");
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn read_toml_file_skips_comments_containing_equals() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "# default = \"something\"\nshow-claude-plugin-hint = \"false\"\n",
+        )
+        .unwrap();
+        let map = read_toml_file(&path).unwrap();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("show-claude-plugin-hint").unwrap(), "false");
+        assert!(map.get("# default").is_none());
+    }
+
+    #[test]
+    fn read_toml_file_handles_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "").unwrap();
+        let map = read_toml_file(&path).unwrap();
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn dirs_home_returns_home_env_var() {
+        // HOME is always set in test environments
+        let result = dirs_home();
+        assert!(result.is_some());
+        let home = result.unwrap();
+        assert!(!home.as_os_str().is_empty());
+        assert_eq!(home, PathBuf::from(std::env::var("HOME").unwrap()));
+    }
+
+    #[test]
+    fn list_returns_all_config_keys_with_defaults() {
+        let config = TomlFileConfig {
+            path: PathBuf::from("/nonexistent"),
+            values: HashMap::new(),
+        };
+        let entries = config.list().unwrap();
+        assert_eq!(entries.len(), CONFIG_KEYS.len());
+        assert!(entries.len() > 0);
+        for (i, (key, default)) in CONFIG_KEYS.iter().enumerate() {
+            assert_eq!(entries[i].0, *key);
+            assert_eq!(entries[i].1, *default);
+        }
+    }
+
+    #[test]
+    fn list_returns_overridden_values() {
+        let mut values = HashMap::new();
+        values.insert("show-claude-plugin-hint".to_string(), "false".to_string());
+        let config = TomlFileConfig {
+            path: PathBuf::from("/nonexistent"),
+            values,
+        };
+        let entries = config.list().unwrap();
+        assert_eq!(entries.len(), CONFIG_KEYS.len());
+        assert_eq!(entries[0].0, "show-claude-plugin-hint");
+        assert_eq!(entries[0].1, "false");
+    }
+}

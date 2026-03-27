@@ -30,9 +30,15 @@ Feature: User configuration
       Given I have a clean git repository
       When I set config "show-claude-plugin-hint" to "false"
       And I list config
-      Then the output should include "show-claude-plugin-hint = false"
+      Then the output should be:
+        """
+        show-claude-plugin-hint = false
+        """
 
     Example: List shows defaults when nothing is set
       Given I have a clean git repository
       When I list config
-      Then the output should include "show-claude-plugin-hint = true"
+      Then the output should be:
+        """
+        show-claude-plugin-hint = true
+        """
