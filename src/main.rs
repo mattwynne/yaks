@@ -292,6 +292,7 @@ enum ConfigAction {
         key: String,
     },
     /// List all config values
+    #[command(alias = "ls")]
     List,
 }
 
