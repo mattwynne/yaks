@@ -2314,7 +2314,7 @@ async fn output_should_contain(world: &mut FullStackWorld, expected: String) -> 
 // Claude plugin hint steps (full-stack only)
 // ============================================================================
 
-const PLUGIN_HINT: &str = "Tip: yx works better with its Claude Code plugin";
+const PLUGIN_HINT: &str = "yx works better with its Claude Code plugin";
 
 #[given(expr = "the Claude Code plugin is not installed")]
 async fn claude_plugin_not_installed(world: &mut FullStackWorld) -> Result<()> {

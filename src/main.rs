@@ -662,110 +662,13 @@ fn yx_plugin_installed() -> bool {
 }
 
 fn print_plugin_hint() {
-    use ratatui::style::{Color, Modifier, Style};
-    use ratatui::text::{Line, Span};
-
-    let content = vec![
-        Line::from(Span::styled(
-            "Tip: yx works better with its Claude Code plugin. To install:",
-            Style::default().fg(Color::White),
-        )),
-        Line::from(Span::styled(
-            " claude plugin marketplace add mattwynne/yaks && claude plugin install yx@yaks",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            " Suppress: yx config set show-claude-plugin-hint false",
-            Style::default().fg(Color::DarkGray),
-        )),
-    ];
-
-    let banner = render_bordered_box(
-        content,
-        Style::default().bg(Color::Indexed(236)),
-        Style::default().fg(Color::DarkGray),
-        82,
-    );
-    eprintln!("{banner}");
-}
-
-fn render_bordered_box(
-    content: Vec<ratatui::text::Line<'_>>,
-    box_style: ratatui::style::Style,
-    border_style: ratatui::style::Style,
-    width: u16,
-) -> String {
-    use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
-    use ratatui::widgets::{Block, Borders, Paragraph, Widget};
-
-    let height = content.len() as u16 + 2; // content + border
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .style(box_style);
-    let paragraph = Paragraph::new(content).block(block);
-
-    let area = Rect::new(0, 0, width, height);
-    let mut buf = Buffer::empty(area);
-    paragraph.render(area, &mut buf);
-
-    buffer_to_ansi(&buf, area)
-}
-
-fn buffer_to_ansi(buf: &ratatui::buffer::Buffer, area: ratatui::layout::Rect) -> String {
-    let mut output = String::new();
-    for y in area.top()..area.bottom() {
-        let mut prev_style = None;
-        for x in area.left()..area.right() {
-            let cell = &buf[(x, y)];
-            let style = ansi_codes(cell.fg, cell.bg, cell.modifier);
-            if prev_style.as_ref() != Some(&style) {
-                if prev_style.is_some() {
-                    output.push_str("\x1b[0m");
-                }
-                if !style.is_empty() {
-                    output.push_str(&format!("\x1b[{style}m"));
-                }
-                prev_style = Some(style);
-            }
-            output.push_str(cell.symbol());
-        }
-        if prev_style.is_some() {
-            output.push_str("\x1b[0m");
-        }
-        output.push('\n');
-    }
-    output
-}
-
-fn ansi_codes(
-    fg: ratatui::style::Color,
-    bg: ratatui::style::Color,
-    modifier: ratatui::style::Modifier,
-) -> String {
-    use ratatui::style::{Color, Modifier};
-
-    let mut codes = Vec::new();
-    match bg {
-        Color::Indexed(n) => codes.push(format!("48;5;{n}")),
-        Color::Rgb(r, g, b) => codes.push(format!("48;2;{r};{g};{b}")),
-        _ => {}
-    }
-    match fg {
-        Color::White => codes.push("37".into()),
-        Color::Green => codes.push("32".into()),
-        Color::DarkGray => codes.push("90".into()),
-        Color::Indexed(n) => codes.push(format!("38;5;{n}")),
-        Color::Rgb(r, g, b) => codes.push(format!("38;2;{r};{g};{b}")),
-        _ => {}
-    }
-    if modifier.contains(Modifier::BOLD) {
-        codes.push("1".into());
-    }
-    codes.join(";")
+    eprintln!("# IMPORTANT ADVICE");
+    eprintln!();
+    eprintln!("yx works better with its Claude Code plugin. To install:");
+    eprintln!();
+    eprintln!("! claude plugin marketplace add mattwynne/yaks && claude plugin install yx@yaks");
+    eprintln!();
+    eprintln!("Suppress this message: yx config set show-claude-plugin-hint false");
 }
 
 #[allow(clippy::cognitive_complexity)]
