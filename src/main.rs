@@ -622,7 +622,7 @@ fn maybe_show_claude_plugin_hint(args: &[String]) {
     if !is_help_invocation(args) {
         return;
     }
-    if !in_claude_code_session() {
+    if std::env::var("CLAUDECODE").as_deref() != Ok("1") {
         return;
     }
     if plugin_hint_suppressed() {
@@ -636,10 +636,6 @@ fn maybe_show_claude_plugin_hint(args: &[String]) {
 
 fn is_help_invocation(args: &[String]) -> bool {
     args.len() == 1 || args.iter().any(|a| a == "--help" || a == "-h")
-}
-
-fn in_claude_code_session() -> bool {
-    std::env::var("CLAUDECODE").as_deref() == Ok("1")
 }
 
 fn plugin_hint_suppressed() -> bool {
