@@ -2309,3 +2309,60 @@ async fn output_should_contain(world: &mut FullStackWorld, expected: String) -> 
     }
     Ok(())
 }
+
+// ============================================================================
+// Claude plugin hint steps (full-stack only)
+// ============================================================================
+
+const PLUGIN_HINT: &str = "Tip: install the yx plugin for Claude Code";
+
+#[given(expr = "the Claude Code plugin is not installed")]
+async fn claude_plugin_not_installed(world: &mut FullStackWorld) -> Result<()> {
+    world.setup_fake_claude(false)
+}
+
+#[given(expr = "the Claude Code plugin is installed")]
+async fn claude_plugin_installed(world: &mut FullStackWorld) -> Result<()> {
+    world.setup_fake_claude(true)
+}
+
+#[when(expr = "I run bare yx in a Claude Code session")]
+async fn run_bare_yx_in_claude(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_in_claude_session(&[])
+}
+
+#[when(expr = "I request help in a Claude Code session")]
+async fn run_yx_help_in_claude(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_in_claude_session(&["--help"])
+}
+
+#[when(expr = "I run bare yx outside a Claude Code session")]
+async fn run_bare_yx_outside_claude(world: &mut FullStackWorld) -> Result<()> {
+    world.run_yx_outside_claude_session(&[])
+}
+
+#[then(expr = "stderr should contain the plugin install hint")]
+async fn stderr_contains_hint(world: &mut FullStackWorld) -> Result<()> {
+    let stderr = world.get_error();
+    if !stderr.contains(PLUGIN_HINT) {
+        anyhow::bail!(
+            "Expected stderr to contain '{}', but stderr was:\n{}",
+            PLUGIN_HINT,
+            stderr
+        );
+    }
+    Ok(())
+}
+
+#[then(expr = "stderr should not contain the plugin install hint")]
+async fn stderr_does_not_contain_hint(world: &mut FullStackWorld) -> Result<()> {
+    let stderr = world.get_error();
+    if stderr.contains(PLUGIN_HINT) {
+        anyhow::bail!(
+            "Expected stderr NOT to contain '{}', but stderr was:\n{}",
+            PLUGIN_HINT,
+            stderr
+        );
+    }
+    Ok(())
+}

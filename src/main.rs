@@ -22,7 +22,7 @@ use yx::application::{
     SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
-use yx::domain::ports::{EventStore, LocalWorkspacePort};
+use yx::domain::ports::{EventStore, LocalWorkspacePort, UserConfigPort};
 use yx::infrastructure::EventBus;
 
 fn styles() -> Styles {
@@ -615,10 +615,59 @@ impl LocalWorkspacePort for NullWorkspace {
     }
 }
 
+/// Check whether to show the Claude plugin install hint on stderr.
+///
+/// Shows the hint only on help-like invocations (bare `yx` or
+/// `yx --help`/`-h`) when ALL of these are true:
+/// - Running inside Claude Code (CLAUDECODE=1)
+/// - The user hasn't suppressed the hint via config
+/// - The yx plugin is not already installed
+fn maybe_show_claude_plugin_hint(args: &[String]) {
+    // Only show on bare yx or yx --help/-h
+    let is_help = args.len() == 1 || args.iter().any(|a| a == "--help" || a == "-h");
+    if !is_help {
+        return;
+    }
+
+    // Gate: only in Claude Code sessions
+    if std::env::var("CLAUDECODE").as_deref() != Ok("1") {
+        return;
+    }
+
+    // Check user config for suppression
+    if let Ok(config) = TomlFileConfig::new() {
+        if let Ok(value) = config.get("show-claude-plugin-hint") {
+            if value == "false" {
+                return;
+            }
+        }
+    }
+
+    // Check if plugin is already installed by running `claude plugin list`
+    if let Ok(output) = std::process::Command::new("claude")
+        .args(["plugin", "list"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.contains("yx@yaks") {
+            return;
+        }
+    }
+
+    eprintln!(
+        "Tip: install the yx plugin for Claude Code: \
+         claude plugin marketplace add mattwynne/yaks && \
+         claude plugin install yx@yaks \
+         (suppress with: yx config set show-claude-plugin-hint false)"
+    );
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     // Show help on stderr when run with no arguments
     let args: Vec<_> = std::env::args().collect();
+    maybe_show_claude_plugin_hint(&args);
+
     if args.len() == 1 {
         let mut cmd = Cli::command();
         let help = cmd.render_help();
