@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: No specs or plans in git
+
+We use superpowers skills for planning and development, but specs and
+plans are **ephemeral artefacts that belong on yaks, not in git**.
+NEVER commit files under `docs/superpowers/`. Instead, move them to
+the yak's context and delete the file:
+
+```bash
+cat docs/superpowers/specs/my-spec.md | yx context "my yak name"
+rm docs/superpowers/specs/my-spec.md
+
+cat docs/superpowers/plans/my-plan.md | yx field "my yak name" plan.md
+rm docs/superpowers/plans/my-plan.md
+```
+
 # Yak - DAG-based TODO List CLI
 
 A CLI tool for managing TODO lists as a directed acyclic graph (DAG), designed for teams working on software projects. The name comes from "yak shaving" - when you set out to do task A but discover you need B first, which requires C.
