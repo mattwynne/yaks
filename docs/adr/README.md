@@ -28,6 +28,7 @@ ADRs document significant architectural and design decisions.
 | [0020](0020-uuid-for-migration-compaction-events.md) | UUID for Migration Compaction Events | accepted |
 | [0021](0021-local-workspace-port-for-onboarding.md) | LocalWorkspacePort for onboarding | accepted |
 | [0022](0022-lazy-migration-replaces-boundary-events.md) | Lazy migration replaces boundary events | accepted |
+| [0023](0023-agent-aware-help-via-displayport.md) | Agent-aware help via DisplayPort | proposed |
 
 ## When to Write an ADR
 
