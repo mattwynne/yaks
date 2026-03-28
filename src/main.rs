@@ -41,14 +41,6 @@ fn styles() -> Styles {
 #[command(name = "yx")]
 #[command(version, about, long_about = None)]
 #[command(styles = styles())]
-#[command(after_help = "\
-\x1b[1;33mExamples:\x1b[0m
-  yx add fix the flaky test
-  yx add upgrade auth library --under fix the flaky test
-  yx list
-  yx start fix the flaky test
-  yx done fix the flaky test
-  yx show fix the flaky test")]
 #[command(help_template = "\
 {before-help}\
   🐃 {name} {version} — {about}
@@ -675,18 +667,67 @@ fn print_plugin_hint() {
     eprintln!("Suppress this message: yx config set show-claude-plugin-hint false");
 }
 
-#[allow(clippy::cognitive_complexity)]
-fn main() -> Result<()> {
-    // Show help on stderr when run with no arguments
-    let args: Vec<_> = std::env::args().collect();
-    maybe_show_claude_plugin_hint(&args);
+/// Handle top-level help: bare `yx` or `yx --help`/`-h`.
+///
+/// Injects context-aware examples (human vs agent) and exits early,
+/// before adapter construction — help works outside a git repo.
+fn maybe_show_help_and_exit(args: &[String]) {
+    let wants_help =
+        args.len() == 1 || (args.len() == 2 && args.iter().any(|a| a == "--help" || a == "-h"));
+
+    if !wants_help {
+        return;
+    }
+
+    let is_agent = std::env::var("CLAUDECODE").as_deref() == Ok("1");
+    let examples = if is_agent {
+        yx::adapters::help_examples::for_agents()
+    } else {
+        yx::adapters::help_examples::for_humans()
+    };
+
+    let help = Cli::command()
+        .after_help(examples)
+        .render_help()
+        .to_string();
 
     if args.len() == 1 {
-        let mut cmd = Cli::command();
-        let help = cmd.render_help();
+        // No subcommand: show help on stderr, exit non-zero
         eprintln!("{help}");
         std::process::exit(2);
     }
+
+    // Explicit --help/-h: show help on stdout via DisplayPort
+    let is_tty = std::io::stdout().is_terminal();
+    let no_color = std::env::var_os("NO_COLOR").is_some();
+    let guarded_stdout = Box::new(BrokenPipeGuard::new(std::io::stdout()));
+
+    let display: Box<dyn yx::domain::ports::DisplayPort> = if is_tty && !no_color {
+        Box::new(TuiDisplay::with_writer(guarded_stdout))
+    } else {
+        use yx::adapters::user_display::ConsoleDisplayOptions;
+        let width = terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .unwrap_or(80);
+        Box::new(ConsoleDisplay::new(
+            guarded_stdout,
+            ConsoleDisplayOptions {
+                color: false,
+                width,
+            },
+        ))
+    };
+
+    display.show_help(&help);
+    std::process::exit(0);
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn main() -> Result<()> {
+    let args: Vec<_> = std::env::args().collect();
+    maybe_show_claude_plugin_hint(&args);
+
+    maybe_show_help_and_exit(&args);
 
     let cli = Cli::parse();
 
