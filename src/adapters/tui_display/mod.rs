@@ -263,6 +263,10 @@ impl crate::domain::ports::DisplayPort for TuiDisplay {
         self.fallback.message(msg);
     }
 
+    fn show_help(&self, help_text: &str) {
+        self.fallback.show_help(help_text);
+    }
+
     fn start_progress(&self, message: &str) -> Box<dyn crate::domain::ports::ProgressHandle> {
         let handle = crate::adapters::spinner::SpinnerHandle::start(
             message.to_string(),

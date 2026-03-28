@@ -13,8 +13,10 @@ additional_cargo_test_args = ["--lib", "--test", "cucumber"]
 # - GitEventStore: git ref operations (needs real git repos)
 # - NoOpEventStore: trivial no-op adapter
 # - git_discovery: git repo detection (needs real git repos)
+# - local_workspace.rs: env var checks, git commands (infrastructure)
 # - main.rs: CLI wiring (tested by full-stack cucumber)
 exclude_globs = [
+  "src/adapters/local_workspace.rs",
   "src/adapters/user_input/console_input.rs",
   "src/adapters/user_display/mod.rs",
   "src/adapters/event_store/git.rs",

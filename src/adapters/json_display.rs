@@ -57,6 +57,11 @@ impl DisplayPort for JsonDisplay {
         writeln!(writer, "{json}").expect("Failed to write JSON");
     }
 
+    fn show_help(&self, help_text: &str) {
+        let mut writer = self.writer.lock().unwrap();
+        write!(writer, "{help_text}").ok();
+    }
+
     fn message(&self, msg: &Message) {
         match msg {
             Message::Warn(s) => {

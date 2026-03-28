@@ -18,6 +18,9 @@ pub trait DisplayPort {
     /// Display a user-facing message (hint, success, info, warning)
     fn message(&self, msg: &Message);
 
+    /// Display help text to the user.
+    fn show_help(&self, help_text: &str);
+
     /// Start a progress spinner with the given message.
     /// Returns a handle that stops the spinner when dropped.
     /// Default impl returns a no-op handle.

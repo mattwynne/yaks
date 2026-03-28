@@ -474,6 +474,11 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
         }
     }
 
+    fn show_help(&self, help_text: &str) {
+        let mut out = self.output.lock().unwrap();
+        write!(out, "{help_text}").ok();
+    }
+
     fn show_log(&self, entries: &[LogEntryView]) {
         let mut out = self.output.lock().unwrap();
         let rule: String = "─".repeat(self.options.width);
