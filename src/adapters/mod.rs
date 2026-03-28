@@ -3,6 +3,7 @@
 pub mod authentication;
 pub mod broken_pipe_guard;
 pub mod event_store;
+pub mod help_examples;
 pub mod json_display;
 pub mod local_workspace;
 pub mod spinner;
