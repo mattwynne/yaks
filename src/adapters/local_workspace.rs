@@ -49,6 +49,10 @@ impl LocalWorkspacePort for LocalWorkspace {
         Ok(())
     }
 
+    fn is_agent_session(&self) -> bool {
+        std::env::var("CLAUDECODE").as_deref() == Ok("1")
+    }
+
     fn commit_gitignore(&self) -> Result<()> {
         // Stage .gitignore
         let add_status = std::process::Command::new("git")

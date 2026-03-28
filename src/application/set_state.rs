@@ -101,6 +101,10 @@ mod tests {
         fn commit_gitignore(&self) -> anyhow::Result<()> {
             Ok(())
         }
+
+        fn is_agent_session(&self) -> bool {
+            false
+        }
     }
     use super::*;
     use crate::adapters::user_display::ConsoleDisplay;

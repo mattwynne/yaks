@@ -35,6 +35,10 @@ impl LocalWorkspacePort for TestWorkspace {
     fn commit_gitignore(&self) -> Result<()> {
         Ok(())
     }
+
+    fn is_agent_session(&self) -> bool {
+        false
+    }
 }
 
 /// A named user instance for multi-repo sync scenarios.

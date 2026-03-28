@@ -129,6 +129,10 @@ mod tests {
         fn commit_gitignore(&self) -> Result<()> {
             Ok(())
         }
+
+        fn is_agent_session(&self) -> bool {
+            false
+        }
     }
 
     #[test]

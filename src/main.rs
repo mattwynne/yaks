@@ -613,6 +613,10 @@ impl LocalWorkspacePort for NullWorkspace {
     fn commit_gitignore(&self) -> Result<()> {
         Ok(()) // No-op
     }
+
+    fn is_agent_session(&self) -> bool {
+        false
+    }
 }
 
 /// Check whether to show the Claude plugin install hint on stderr.

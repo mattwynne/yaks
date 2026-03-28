@@ -26,4 +26,10 @@ pub trait LocalWorkspacePort {
     /// Stages and commits .gitignore with the message "Add .yaks to .gitignore".
     /// Fails if the git commit fails.
     fn commit_gitignore(&self) -> Result<()>;
+
+    /// Check whether the current session is driven by an AI agent.
+    ///
+    /// Used to tailor CLI output (e.g. help examples) for agents.
+    /// The real adapter checks environment variables like CLAUDECODE=1.
+    fn is_agent_session(&self) -> bool;
 }
