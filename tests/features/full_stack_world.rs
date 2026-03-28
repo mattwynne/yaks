@@ -1100,10 +1100,22 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         self.run_yx_with_env(args, &[("CLAUDECODE", "1"), ("PATH", &new_path)])
     }
 
-    /// Run yx outside a Claude Code session (no CLAUDECODE env var).
+    /// Run yx outside a Claude Code session (CLAUDECODE explicitly removed).
     pub fn run_yx_outside_claude_session(&mut self, args: &[&str]) -> Result<()> {
-        // run_yx_unchecked doesn't set CLAUDECODE, which is what we want
-        self.run_yx_unchecked(args)
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+
+        let mut cmd = Command::new(yx_path);
+        cmd.args(args)
+            .env("YX_ROOT", &self.repo_path)
+            .env("XDG_CONFIG_HOME", self.config_dir.path())
+            .env_remove("CLAUDECODE")
+            .current_dir(&self.repo_path);
+
+        let output = cmd.output().context("Failed to run yx command")?;
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+        Ok(())
     }
 
     /// Run yx with extra environment variables, capturing output without

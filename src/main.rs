@@ -623,43 +623,149 @@ impl LocalWorkspacePort for NullWorkspace {
 /// - The user hasn't suppressed the hint via config
 /// - The yx plugin is not already installed
 fn maybe_show_claude_plugin_hint(args: &[String]) {
-    // Only show on bare yx or yx --help/-h
-    let is_help = args.len() == 1 || args.iter().any(|a| a == "--help" || a == "-h");
-    if !is_help {
+    if !is_help_invocation(args) {
         return;
     }
-
-    // Gate: only in Claude Code sessions
-    if std::env::var("CLAUDECODE").as_deref() != Ok("1") {
+    if !in_claude_code_session() {
         return;
     }
-
-    // Check user config for suppression
-    if let Ok(config) = TomlFileConfig::new() {
-        if let Ok(value) = config.get("show-claude-plugin-hint") {
-            if value == "false" {
-                return;
-            }
-        }
+    if plugin_hint_suppressed() {
+        return;
     }
+    if yx_plugin_installed() {
+        return;
+    }
+    print_plugin_hint();
+}
 
-    // Check if plugin is already installed by running `claude plugin list`
-    if let Ok(output) = std::process::Command::new("claude")
+fn is_help_invocation(args: &[String]) -> bool {
+    args.len() == 1 || args.iter().any(|a| a == "--help" || a == "-h")
+}
+
+fn in_claude_code_session() -> bool {
+    std::env::var("CLAUDECODE").as_deref() == Ok("1")
+}
+
+fn plugin_hint_suppressed() -> bool {
+    TomlFileConfig::new()
+        .and_then(|c| c.get("show-claude-plugin-hint"))
+        .map(|v| v == "false")
+        .unwrap_or(false)
+}
+
+fn yx_plugin_installed() -> bool {
+    std::process::Command::new("claude")
         .args(["plugin", "list"])
         .output()
-    {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.contains("yx@yaks") {
-            return;
-        }
-    }
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("yx@yaks"))
+        .unwrap_or(false)
+}
 
-    eprintln!(
-        "Tip: install the yx plugin for Claude Code: \
-         claude plugin marketplace add mattwynne/yaks && \
-         claude plugin install yx@yaks \
-         (suppress with: yx config set show-claude-plugin-hint false)"
+fn print_plugin_hint() {
+    use ratatui::style::{Color, Modifier, Style};
+    use ratatui::text::{Line, Span};
+
+    let content = vec![
+        Line::from(Span::styled(
+            "Tip: yx works better with its Claude Code plugin. To install:",
+            Style::default().fg(Color::White),
+        )),
+        Line::from(Span::styled(
+            " claude plugin marketplace add mattwynne/yaks && claude plugin install yx@yaks",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            " Suppress: yx config set show-claude-plugin-hint false",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    let banner = render_bordered_box(
+        content,
+        Style::default().bg(Color::Indexed(236)),
+        Style::default().fg(Color::DarkGray),
+        82,
     );
+    eprintln!("{banner}");
+}
+
+fn render_bordered_box(
+    content: Vec<ratatui::text::Line<'_>>,
+    box_style: ratatui::style::Style,
+    border_style: ratatui::style::Style,
+    width: u16,
+) -> String {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+
+    let height = content.len() as u16 + 2; // content + border
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .style(box_style);
+    let paragraph = Paragraph::new(content).block(block);
+
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    paragraph.render(area, &mut buf);
+
+    buffer_to_ansi(&buf, area)
+}
+
+fn buffer_to_ansi(buf: &ratatui::buffer::Buffer, area: ratatui::layout::Rect) -> String {
+    let mut output = String::new();
+    for y in area.top()..area.bottom() {
+        let mut prev_style = None;
+        for x in area.left()..area.right() {
+            let cell = &buf[(x, y)];
+            let style = ansi_codes(cell.fg, cell.bg, cell.modifier);
+            if prev_style.as_ref() != Some(&style) {
+                if prev_style.is_some() {
+                    output.push_str("\x1b[0m");
+                }
+                if !style.is_empty() {
+                    output.push_str(&format!("\x1b[{style}m"));
+                }
+                prev_style = Some(style);
+            }
+            output.push_str(cell.symbol());
+        }
+        if prev_style.is_some() {
+            output.push_str("\x1b[0m");
+        }
+        output.push('\n');
+    }
+    output
+}
+
+fn ansi_codes(
+    fg: ratatui::style::Color,
+    bg: ratatui::style::Color,
+    modifier: ratatui::style::Modifier,
+) -> String {
+    use ratatui::style::{Color, Modifier};
+
+    let mut codes = Vec::new();
+    match bg {
+        Color::Indexed(n) => codes.push(format!("48;5;{n}")),
+        Color::Rgb(r, g, b) => codes.push(format!("48;2;{r};{g};{b}")),
+        _ => {}
+    }
+    match fg {
+        Color::White => codes.push("37".into()),
+        Color::Green => codes.push("32".into()),
+        Color::DarkGray => codes.push("90".into()),
+        Color::Indexed(n) => codes.push(format!("38;5;{n}")),
+        Color::Rgb(r, g, b) => codes.push(format!("38;2;{r};{g};{b}")),
+        _ => {}
+    }
+    if modifier.contains(Modifier::BOLD) {
+        codes.push("1".into());
+    }
+    codes.join(";")
 }
 
 #[allow(clippy::cognitive_complexity)]
