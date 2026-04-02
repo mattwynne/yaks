@@ -41,3 +41,11 @@ Feature: First-time onboarding
       When I non-interactively run yx from this directory
       Then the command should fail
       And the error should contain ".yaks is not gitignored. Fix with: echo '.yaks' >> .gitignore"
+
+  Rule: yx accepts both .yaks and .yaks/ as valid gitignore entries
+
+    @fullstack
+    Example: .gitignore contains ".yaks/" with trailing slash
+      Given a git repository with .gitignore containing ".yaks/"
+      When I non-interactively run yx from this directory
+      Then the command should succeed

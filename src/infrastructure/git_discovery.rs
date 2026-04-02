@@ -50,20 +50,29 @@ pub fn discover_git_root() -> Result<PathBuf> {
 /// Returns true if .yaks is gitignored, false otherwise.
 /// Errors only on command execution failures.
 pub fn is_yaks_gitignored(repo_root: &std::path::Path) -> Result<bool> {
-    let output = match Command::new("git")
-        .arg("check-ignore")
-        .arg(".yaks")
-        .current_dir(repo_root)
-        .output()
-    {
-        Ok(output) => output,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            anyhow::bail!("Error: git command not found");
-        }
-        Err(e) => {
-            return Err(anyhow::Error::new(e).context("Failed to check .yaks gitignore status"));
-        }
-    };
+    // Check both ".yaks" and ".yaks/" because a gitignore pattern with a
+    // trailing slash (e.g. ".yaks/") only matches directories, and
+    // `git check-ignore .yaks` won't match it.
+    for path in &[".yaks", ".yaks/"] {
+        let output = match Command::new("git")
+            .arg("check-ignore")
+            .arg(path)
+            .current_dir(repo_root)
+            .output()
+        {
+            Ok(output) => output,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                anyhow::bail!("Error: git command not found");
+            }
+            Err(e) => {
+                return Err(anyhow::Error::new(e).context("Failed to check .yaks gitignore status"));
+            }
+        };
 
-    Ok(output.status.success())
+        if output.status.success() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }

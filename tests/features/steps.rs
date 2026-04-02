@@ -945,6 +945,64 @@ async fn git_repo_without_gitignore(world: &mut FullStackWorld) -> Result<()> {
     Ok(())
 }
 
+#[given(regex = r#"^a git repository with \.gitignore containing "([^"]+)"$"#)]
+async fn git_repo_with_gitignore_containing(
+    world: &mut FullStackWorld,
+    gitignore_entry: String,
+) -> Result<()> {
+    let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+    let status = std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to run git init")?;
+    if !status.success() {
+        anyhow::bail!("git init failed");
+    }
+
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to set git user.email")?;
+
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test User"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()
+        .context("Failed to set git user.name")?;
+
+    // Write .gitignore with the specified entry
+    std::fs::write(
+        temp_dir.path().join(".gitignore"),
+        format!("{}\n", gitignore_entry),
+    )?;
+
+    // Create an initial commit so we have a baseline
+    std::fs::write(temp_dir.path().join("README.md"), "# Test Repo\n")?;
+    std::process::Command::new("git")
+        .args(["add", "."])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()?;
+    std::process::Command::new("git")
+        .args(["commit", "-m", "Initial commit"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(temp_dir.path())
+        .status()?;
+
+    world.override_dir = Some(temp_dir);
+    Ok(())
+}
+
 #[when(expr = "I try to list the yaks from this directory")]
 async fn list_yaks_in_override_dir(world: &mut FullStackWorld) -> Result<()> {
     world.run_yx_in_override_dir(&["ls"])

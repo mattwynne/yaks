@@ -35,7 +35,11 @@ impl LocalWorkspacePort for LocalWorkspace {
         };
 
         // Check if .yaks is already in .gitignore (defensive check)
-        if content.lines().any(|line| line.trim() == ".yaks") {
+        // Match both ".yaks" and ".yaks/" to avoid adding duplicates
+        if content
+            .lines()
+            .any(|line| line.trim() == ".yaks" || line.trim() == ".yaks/")
+        {
             return Ok(());
         }
 
