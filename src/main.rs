@@ -22,7 +22,7 @@ use yx::application::{
     SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
-use yx::domain::ports::{EventStore, LocalWorkspacePort, UserConfigPort};
+use yx::domain::ports::{EventStore, LocalWorkspacePort};
 use yx::infrastructure::EventBus;
 
 fn styles() -> Styles {
@@ -612,57 +612,6 @@ impl LocalWorkspacePort for NullWorkspace {
 }
 
 /// Check whether to show the Claude plugin install hint on stderr.
-///
-/// Shows the hint only on help-like invocations (bare `yx` or
-/// `yx --help`/`-h`) when ALL of these are true:
-/// - Running inside Claude Code (CLAUDECODE=1)
-/// - The user hasn't suppressed the hint via config
-/// - The yx plugin is not already installed
-fn maybe_show_claude_plugin_hint(args: &[String]) {
-    if !is_help_invocation(args) {
-        return;
-    }
-    if std::env::var("CLAUDECODE").as_deref() != Ok("1") {
-        return;
-    }
-    if plugin_hint_suppressed() {
-        return;
-    }
-    if yx_plugin_installed() {
-        return;
-    }
-    print_plugin_hint();
-}
-
-fn is_help_invocation(args: &[String]) -> bool {
-    args.len() == 1 || args.iter().any(|a| a == "--help" || a == "-h")
-}
-
-fn plugin_hint_suppressed() -> bool {
-    TomlFileConfig::new()
-        .and_then(|c| c.get("show-claude-plugin-hint"))
-        .map(|v| v == "false")
-        .unwrap_or(false)
-}
-
-fn yx_plugin_installed() -> bool {
-    std::process::Command::new("claude")
-        .args(["plugin", "list"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("yx@yaks"))
-        .unwrap_or(false)
-}
-
-fn print_plugin_hint() {
-    eprintln!("# IMPORTANT ADVICE");
-    eprintln!();
-    eprintln!("yx works better with its Claude Code plugin. To install:");
-    eprintln!();
-    eprintln!("! claude plugin marketplace add mattwynne/yaks && claude plugin install yx@yaks");
-    eprintln!();
-    eprintln!("Suppress this message: yx config set show-claude-plugin-hint false");
-}
-
 /// Handle top-level help: bare `yx` or `yx --help`/`-h`.
 ///
 /// Injects context-aware examples (human vs agent) and exits early,
@@ -721,8 +670,6 @@ fn maybe_show_help_and_exit(args: &[String]) {
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
-    maybe_show_claude_plugin_hint(&args);
-
     maybe_show_help_and_exit(&args);
 
     let cli = Cli::parse();

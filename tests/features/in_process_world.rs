@@ -632,12 +632,12 @@ impl TestWorld for InProcessWorld {
     fn set_config(&mut self, key: &str, value: &str) -> Result<()> {
         let key = key.to_string();
         let value = value.to_string();
-        self.execute(move |app| app.handle(SetConfig::new(&key, &value)))
+        self.try_execute(move |app| app.handle(SetConfig::new(&key, &value)))
     }
 
     fn get_config(&mut self, key: &str) -> Result<()> {
         let key = key.to_string();
-        self.execute(move |app| app.handle(GetConfig::new(&key)))
+        self.try_execute(move |app| app.handle(GetConfig::new(&key)))
     }
 
     fn list_config(&mut self) -> Result<()> {

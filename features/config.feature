@@ -5,40 +5,23 @@ Feature: User configuration
   to ~/.config/yaks/config.toml). Settings persist across sessions
   and are not tied to any particular yak repository.
 
-  Rule: Config values can be set and retrieved
+  Rule: Unknown config keys are rejected
 
-    Example: Set and get a config value
+    Example: Get rejects unknown key
       Given I have a clean git repository
-      When I set config "show-claude-plugin-hint" to "false"
-      And I get config "show-claude-plugin-hint"
-      Then the output should be:
-        """
-        false
-        """
+      When I get config "no-such-key"
+      Then the command should fail
+      And the error should contain "Unknown config key"
 
-    Example: Get returns default when key is unset
+    Example: Set rejects unknown key
       Given I have a clean git repository
-      When I get config "show-claude-plugin-hint"
-      Then the output should be:
-        """
-        true
-        """
+      When I set config "no-such-key" to "value"
+      Then the command should fail
+      And the error should contain "Unknown config key"
 
   Rule: Config values can be listed
 
-    Example: List shows all config with current values
-      Given I have a clean git repository
-      When I set config "show-claude-plugin-hint" to "false"
-      And I list config
-      Then the output should be:
-        """
-        show-claude-plugin-hint = false
-        """
-
-    Example: List shows defaults when nothing is set
+    Example: List shows nothing when no keys are defined
       Given I have a clean git repository
       When I list config
-      Then the output should be:
-        """
-        show-claude-plugin-hint = true
-        """
+      Then the output should be empty

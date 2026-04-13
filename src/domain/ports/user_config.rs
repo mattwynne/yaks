@@ -3,7 +3,7 @@
 use anyhow::Result;
 
 /// Known config keys with their default values
-pub const CONFIG_KEYS: &[(&str, &str)] = &[("show-claude-plugin-hint", "true")];
+pub const CONFIG_KEYS: &[(&str, &str)] = &[];
 
 /// Port for user-level configuration (not event-sourced).
 ///

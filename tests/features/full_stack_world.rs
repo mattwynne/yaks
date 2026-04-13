@@ -33,10 +33,6 @@ pub struct FullStackWorld {
     pub pending_command: Option<Vec<String>>,
     /// Temp directory for XDG_CONFIG_HOME (isolates config tests)
     config_dir: TempDir,
-    /// Whether to simulate the Claude Code plugin as installed
-    claude_plugin_installed: bool,
-    /// Temp directory for fake claude binary (plugin detection tests)
-    fake_claude_dir: Option<TempDir>,
 }
 
 impl FullStackWorld {
@@ -61,8 +57,6 @@ impl FullStackWorld {
             interactive_responses: Vec::new(),
             pending_command: None,
             config_dir,
-            claude_plugin_installed: false,
-            fake_claude_dir: None,
         })
     }
 
@@ -1062,44 +1056,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
-    /// Set up a fake `claude` binary that reports the plugin as installed
-    /// or not installed. Used by Claude plugin hint tests.
-    pub fn setup_fake_claude(&mut self, plugin_installed: bool) -> Result<()> {
-        let dir = tempfile::tempdir().context("Failed to create fake claude dir")?;
-        let script_path = dir.path().join("claude");
-
-        let output = if plugin_installed { "yx@yaks" } else { "" };
-        let script = format!("#!/bin/sh\necho '{}'\n", output);
-        std::fs::write(&script_path, script).context("Failed to write fake claude script")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
-                .context("Failed to set fake claude permissions")?;
-        }
-
-        self.claude_plugin_installed = plugin_installed;
-        self.fake_claude_dir = Some(dir);
-        Ok(())
-    }
-
-    /// Run yx in a Claude Code session (CLAUDECODE=1) with the fake
-    /// claude binary on PATH. Captures output without checking exit code.
-    pub fn run_yx_in_claude_session(&mut self, args: &[&str]) -> Result<()> {
-        let fake_dir = self
-            .fake_claude_dir
-            .as_ref()
-            .map(|d| d.path().to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        // Prepend fake claude dir to PATH so our fake claude is found first
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{}:{}", fake_dir, current_path);
-
-        self.run_yx_with_env(args, &[("CLAUDECODE", "1"), ("PATH", &new_path)])
-    }
-
     /// Run yx outside a Claude Code session (CLAUDECODE explicitly removed).
     pub fn run_yx_outside_claude_session(&mut self, args: &[&str]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
@@ -1119,8 +1075,7 @@ printf '%s\n' "${{COMPREPLY[@]}}"
     }
 
     /// Run yx with extra environment variables, capturing output without
-    /// checking exit code. Used for testing env-dependent behavior like
-    /// the Claude plugin hint banner.
+    /// checking exit code.
     pub fn run_yx_with_env(&mut self, args: &[&str], envs: &[(&str, &str)]) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 

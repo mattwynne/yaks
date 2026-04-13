@@ -167,13 +167,9 @@ mod tests {
     fn read_toml_file_skips_comments_and_empty_lines() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        std::fs::write(
-            &path,
-            "# This is a comment\n\nshow-claude-plugin-hint = \"false\"\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "# This is a comment\n\nsome-key = \"value\"\n").unwrap();
         let map = read_toml_file(&path).unwrap();
-        assert_eq!(map.get("show-claude-plugin-hint").unwrap(), "false");
+        assert_eq!(map.get("some-key").unwrap(), "value");
         assert_eq!(map.len(), 1);
     }
 
@@ -181,14 +177,10 @@ mod tests {
     fn read_toml_file_skips_comments_containing_equals() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        std::fs::write(
-            &path,
-            "# default = \"something\"\nshow-claude-plugin-hint = \"false\"\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "# default = \"something\"\nsome-key = \"value\"\n").unwrap();
         let map = read_toml_file(&path).unwrap();
         assert_eq!(map.len(), 1);
-        assert_eq!(map.get("show-claude-plugin-hint").unwrap(), "false");
+        assert_eq!(map.get("some-key").unwrap(), "value");
         assert!(map.get("# default").is_none());
     }
 
@@ -212,31 +204,12 @@ mod tests {
     }
 
     #[test]
-    fn list_returns_all_config_keys_with_defaults() {
+    fn list_returns_empty_when_no_keys_defined() {
         let config = TomlFileConfig {
             path: PathBuf::from("/nonexistent"),
             values: HashMap::new(),
         };
         let entries = config.list().unwrap();
-        assert_eq!(entries.len(), CONFIG_KEYS.len());
-        assert!(entries.len() > 0);
-        for (i, (key, default)) in CONFIG_KEYS.iter().enumerate() {
-            assert_eq!(entries[i].0, *key);
-            assert_eq!(entries[i].1, *default);
-        }
-    }
-
-    #[test]
-    fn list_returns_overridden_values() {
-        let mut values = HashMap::new();
-        values.insert("show-claude-plugin-hint".to_string(), "false".to_string());
-        let config = TomlFileConfig {
-            path: PathBuf::from("/nonexistent"),
-            values,
-        };
-        let entries = config.list().unwrap();
-        assert_eq!(entries.len(), CONFIG_KEYS.len());
-        assert_eq!(entries[0].0, "show-claude-plugin-hint");
-        assert_eq!(entries[0].1, "false");
+        assert!(entries.is_empty());
     }
 }
