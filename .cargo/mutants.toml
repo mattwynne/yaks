@@ -19,6 +19,7 @@ exclude_globs = [
   "src/adapters/local_workspace.rs",
   "src/adapters/user_input/console_input.rs",
   "src/adapters/user_display/mod.rs",
+  "src/adapters/tui_display/mod.rs",
   "src/adapters/event_store/git.rs",
   "src/adapters/event_store/noop.rs",
   "src/infrastructure/git_discovery.rs",

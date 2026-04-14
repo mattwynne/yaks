@@ -1,5 +1,5 @@
 Feature: Setting yak state
-  Set a yak's workflow state: todo, wip, or done.
+  Set a yak's workflow state: todo, wip, blocked, or done.
   The `yx start` command is a convenience alias for `yx state <name> wip`.
 
   Rule: Setting state explicitly changes the yak's state
@@ -21,7 +21,7 @@ Feature: Setting yak state
       And I add the yak "get milk"
       When I try to set the state of "get milk" to "invalid-state"
       Then the command should fail
-      And the error should contain "Invalid state 'invalid-state'. Valid states are: todo, wip, done"
+      And the error should contain "Invalid state 'invalid-state'. Valid states are: todo, wip, blocked, done"
 
   Rule: Starting a yak is a convenience alias for setting state to wip
 
@@ -113,4 +113,29 @@ Feature: Setting yak state
         - [wip] parent
           - [done] child-b
           - [wip] child-a
+        """
+
+  Rule: Setting state to blocked marks the yak as blocked
+
+    Example: Set a yak to blocked state
+      Given I have a clean git repository
+      And I add the yak "get milk"
+      When I set the state of "get milk" to "blocked"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [blocked] get milk
+        """
+
+  Rule: Starting a blocked yak transitions it to wip
+
+    Example: Starting a blocked yak sets it to wip
+      Given I have a clean git repository
+      And I add the yak "Fix the bug"
+      And I set the state of "Fix the bug" to "blocked"
+      When I start "Fix the bug"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] Fix the bug
         """

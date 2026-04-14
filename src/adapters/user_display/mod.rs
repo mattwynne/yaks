@@ -61,12 +61,14 @@ impl ConsoleDisplay {
 fn style_yak_item(name: &str, state: &str, color: bool) -> String {
     let indicator = match state {
         "wip" => "●",
+        "blocked" => "⏸",
         "done" => "✓",
         _ => "○",
     };
     if color {
         match state {
             "wip" => format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m"),
+            "blocked" => format!("\x1b[33m⏸\x1b[0m \x1b[1m{name}\x1b[0m"),
             "done" => format!("\x1b[90m✓\x1b[0m \x1b[90;9m{name}\x1b[0m"),
             _ => format!("○ \x1b[1m{name}\x1b[0m"),
         }
@@ -159,6 +161,10 @@ impl ConsoleDisplay {
                     out,
                     "{prefix}\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m{dim_tags}"
                 ),
+                "blocked" => writeln!(
+                    out,
+                    "{prefix}\x1b[33m⏸\x1b[0m \x1b[1m{name}\x1b[0m{dim_tags}"
+                ),
                 "done" => writeln!(
                     out,
                     "{prefix}\x1b[90m✓\x1b[0m \x1b[90;9m{name}\x1b[0m{dim_tags}"
@@ -168,6 +174,7 @@ impl ConsoleDisplay {
         } else {
             let indicator = match state {
                 "wip" => "●",
+                "blocked" => "⏸",
                 "done" => "✓",
                 _ => "○",
             };
@@ -258,6 +265,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
 
             let indicator = match state {
                 "wip" => "●",
+                "blocked" => "⏸",
                 "done" => "✓",
                 _ => "○",
             };
@@ -299,6 +307,7 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                     };
                     let ci = match child.state.as_str() {
                         "wip" => "●",
+                        "blocked" => "⏸",
                         "done" => "✓",
                         _ => "○",
                     };

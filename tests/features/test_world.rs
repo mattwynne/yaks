@@ -86,7 +86,7 @@ pub trait TestWorld {
     /// Prune done yaks excluding those with the specified tag
     fn prune_yaks_excluding_tag(&mut self, tag: &str) -> Result<()>;
 
-    /// Set a yak's state (todo, wip, done)
+    /// Set a yak's state (todo, wip, blocked, done)
     fn set_state(&mut self, name: &str, state: &str) -> Result<()>;
 
     /// Try to set a yak's state - captures result without bailing on failure

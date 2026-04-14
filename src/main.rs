@@ -64,7 +64,7 @@ enum Commands {
         /// Nest under this parent yak
         #[arg(long, value_name = "PARENT", visible_aliases = ["below", "in", "into", "to", "blocks"])]
         under: Option<String>,
-        /// Initial state (todo, wip, done)
+        /// Initial state (todo, wip, blocked, done)
         #[arg(long)]
         state: Option<String>,
         /// Set context directly
@@ -188,7 +188,7 @@ enum Commands {
         /// The yak name (space-separated words)
         #[arg(required = true)]
         name: Vec<String>,
-        /// The state to set (e.g., "todo", "wip", "done")
+        /// The state to set (e.g., "todo", "wip", "blocked", "done")
         state: String,
         /// Apply state change recursively to all descendants
         #[arg(long)]

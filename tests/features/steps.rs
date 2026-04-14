@@ -390,6 +390,9 @@ both_worlds!(given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)
 both_worlds!(given(regex = r#"^I mark the yak "(.+)" as done$"#)
     fn given_done_yak_fs / given_done_yak_ip (yak_name: String) -> impl_done_yak);
 
+both_worlds!(given(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)
+    fn given_set_state_fs / given_set_state_ip (name: String, state: String) -> impl_set_state);
+
 both_worlds!(given(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)
     fn given_tag_yak_fs / given_tag_yak_ip (name: String, tag: String) -> impl_tag_yak);
 

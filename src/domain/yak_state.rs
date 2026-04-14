@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-/// The state of a yak: Todo, Wip, or Done.
+/// The state of a yak: Todo, Wip, Blocked, or Done.
 ///
 /// Replaces the old `String` representation. Strings are only
 /// used at serialisation boundaries (events, file storage).
@@ -9,6 +9,7 @@ use std::str::FromStr;
 pub enum YakState {
     Todo,
     Wip,
+    Blocked,
     Done,
 }
 
@@ -17,6 +18,7 @@ impl fmt::Display for YakState {
         match self {
             YakState::Todo => write!(f, "todo"),
             YakState::Wip => write!(f, "wip"),
+            YakState::Blocked => write!(f, "blocked"),
             YakState::Done => write!(f, "done"),
         }
     }
@@ -29,9 +31,10 @@ impl FromStr for YakState {
         match s {
             "todo" => Ok(YakState::Todo),
             "wip" => Ok(YakState::Wip),
+            "blocked" => Ok(YakState::Blocked),
             "done" => Ok(YakState::Done),
             _ => Err(format!(
-                "Invalid state '{}'. Valid states are: todo, wip, done",
+                "Invalid state '{}'. Valid states are: todo, wip, blocked, done",
                 s
             )),
         }
@@ -44,7 +47,12 @@ mod tests {
 
     #[test]
     fn display_round_trips_through_from_str() {
-        for state in [YakState::Todo, YakState::Wip, YakState::Done] {
+        for state in [
+            YakState::Todo,
+            YakState::Wip,
+            YakState::Blocked,
+            YakState::Done,
+        ] {
             let s = state.to_string();
             let parsed: YakState = s.parse().unwrap();
             assert_eq!(parsed, state);
@@ -57,13 +65,14 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("Invalid state"));
-        assert!(err.contains("todo, wip, done"));
+        assert!(err.contains("todo, wip, blocked, done"));
     }
 
     #[test]
     fn display_produces_lowercase_strings() {
         assert_eq!(YakState::Todo.to_string(), "todo");
         assert_eq!(YakState::Wip.to_string(), "wip");
+        assert_eq!(YakState::Blocked.to_string(), "blocked");
         assert_eq!(YakState::Done.to_string(), "done");
     }
 }

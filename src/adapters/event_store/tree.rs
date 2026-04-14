@@ -48,7 +48,7 @@ impl<'r> YakSubtreeBuilder<'r> {
         self
     }
 
-    /// Set the yak's state (todo, wip, done).
+    /// Set the yak's state (todo, wip, blocked, done).
     pub(super) fn state(mut self, state: &str) -> Self {
         self.entries.push((".state", state.to_string()));
         self

@@ -63,3 +63,29 @@ Feature: Mark yaks as done
             - [done] grandchild
           - [done] child2
         """
+
+  Rule: Blocked children prevent marking parent as done
+    A blocked child is not done, so the parent cannot be marked done
+    without --recursive.
+
+    Example: Error when parent has blocked child
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      And I set the state of "child" to "blocked"
+      When I try to mark the yak "parent" as done
+      Then the command should fail
+      And the error should contain "cannot mark 'parent' as done - it has incomplete children"
+
+    Example: Recursive done marks blocked children as done
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      And I set the state of "child" to "blocked"
+      When I mark the yak "parent" as done recursively
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] parent
+          - [done] child
+        """

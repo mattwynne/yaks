@@ -58,6 +58,7 @@ impl TuiDisplay {
         fn indicator_for(state: &str) -> &'static str {
             match state {
                 "wip" => "●",
+                "blocked" => "⏸",
                 "done" => "✓",
                 _ => "○",
             }
@@ -66,6 +67,7 @@ impl TuiDisplay {
         fn state_color(state: &str) -> Color {
             match state {
                 "wip" => Color::Green,
+                "blocked" => Color::Yellow,
                 "done" => Color::DarkGray,
                 _ => Color::Reset,
             }

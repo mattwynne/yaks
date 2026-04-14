@@ -185,6 +185,30 @@ Feature: List yaks
           - [todo] incomplete child
         """
 
+    Example: Blocked yaks are included in not-done filter
+      Given I have a clean git repository
+      And I add the yak "blocked task"
+      And I add the yak "done task"
+      And I set the state of "blocked task" to "blocked"
+      And I mark the yak "done task" as done
+      When I list the yaks in "plain" format filtering by "not-done"
+      Then the output should be:
+        """
+        blocked task
+        """
+
+    Example: Blocked yaks are excluded from done filter
+      Given I have a clean git repository
+      And I add the yak "blocked task"
+      And I add the yak "done task"
+      And I set the state of "blocked task" to "blocked"
+      And I mark the yak "done task" as done
+      When I list the yaks in "plain" format filtering by "done"
+      Then the output should be:
+        """
+        done task
+        """
+
   Rule: Empty list shows appropriate feedback per format
 
     Example: Pretty format shows nothing when empty
