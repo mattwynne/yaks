@@ -53,6 +53,9 @@ expectrl = "0.7"
 [lints.rust]
 warnings = "deny"
 
+[lints.clippy]
+uninlined_format_args = "allow"
+
 [profile.release]
 opt-level = "z"     # Optimize for size
 lto = true          # Enable Link Time Optimization
