@@ -36,7 +36,7 @@ fn styles() -> Styles {
         .error(AnsiColor::Red.on_default() | Effects::BOLD)
 }
 
-/// DAG-based TODO list CLI for software teams
+/// TODO list CLI for software teams
 #[derive(Parser, Debug)]
 #[command(name = "yx")]
 #[command(version, about, long_about = None)]

@@ -3,7 +3,7 @@ name = "yx"
 version = "0.1.0"
 edition = "2021"
 authors = ["Matt Wynne"]
-description = "DAG-based TODO list CLI for software teams"
+description = "TODO list CLI for software teams"
 license = "MIT"
 repository = "https://github.com/mattwynne/yaks"
 

@@ -4,7 +4,7 @@
     "name": "Matt Wynne"
   },
   "metadata": {
-    "description": "Skills for using yaks (yx) — DAG-based TODO list CLI",
+    "description": "Skills for using yaks (yx) — TODO list CLI for software teams",
     "pluginRoot": "./plugins"
   },
   "plugins": [
