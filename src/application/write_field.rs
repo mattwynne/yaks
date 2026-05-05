@@ -41,7 +41,7 @@ impl UseCase for WriteField {
 
         // No content means no-op (e.g., empty piped stdin)
         if let Some(content) = content {
-            let id = app.store.fuzzy_find_yak_id(&self.name)?;
+            let id = app.resolve_yak_id(&self.name)?;
             let field = self.field.clone();
             app.with_yak_map(|yak_map| yak_map.update_field(id, field, content))
         } else {

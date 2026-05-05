@@ -24,7 +24,7 @@ impl UseCase for RenameYak {
     fn execute(&self, app: &mut Application) -> Result<()> {
         validate_yak_name(&self.to).map_err(|e| anyhow::anyhow!(e))?;
 
-        let id = app.store.fuzzy_find_yak_id(&self.from)?;
+        let id = app.resolve_yak_id(&self.from)?;
 
         app.with_yak_map(|yak_map| yak_map.rename_yak(id, self.to.clone()))?;
 

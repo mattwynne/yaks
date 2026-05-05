@@ -5,7 +5,7 @@ use crate::domain::slug::{Name, YakId};
 use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
 use anyhow::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Represents a node in the yak hierarchy tree
 struct YakNode {
@@ -28,9 +28,15 @@ impl TreePrefix {
     }
 
     /// Create prefix for a child node
-    fn for_child(&self, is_last: bool) -> Self {
+    fn for_child(&self, is_last_in_full_tree: bool, hidden_siblings_at_level: bool) -> Self {
         let mut new_lines = self.lines.clone();
-        let continuation = if is_last { "   " } else { "│  " };
+        let continuation = if hidden_siblings_at_level {
+            "┆  "
+        } else if is_last_in_full_tree {
+            "   "
+        } else {
+            "│  "
+        };
         new_lines.push(continuation.to_string());
         Self { lines: new_lines }
     }
@@ -122,12 +128,22 @@ impl ListYaks {
         &self,
         nodes: &[YakNode],
         only: Option<&str>,
+        tag: Option<&str>,
+        visible_ids: Option<&HashSet<YakId>>,
         prefix: &TreePrefix,
     ) -> Vec<YakTreeNode> {
         let mut result = Vec::new();
         for (i, node) in nodes.iter().enumerate() {
-            let is_last = i == nodes.len() - 1;
-            let should_display = self.should_display_node(node, only);
+            let is_last_in_full_tree = i == nodes.len() - 1;
+            let is_visible_by_focus = self.is_visible_by_focus(node, visible_ids);
+            let matches_filter = self.matches_filters(node, only, tag);
+            let has_matching_visible_descendant =
+                self.has_matching_visible_descendant(node, only, tag, visible_ids);
+            let should_display =
+                is_visible_by_focus && (matches_filter || has_matching_visible_descendant);
+            let hidden_siblings_at_level = nodes
+                .iter()
+                .any(|sibling| !self.is_visible_by_focus(sibling, visible_ids));
 
             if should_display {
                 let state_str = node
@@ -166,7 +182,7 @@ impl ListYaks {
                     (String::new(), String::new())
                 } else {
                     let ancestor_continuations = &prefix.lines[1..];
-                    let conn = if is_last {
+                    let conn = if is_last_in_full_tree && !hidden_siblings_at_level {
                         "╰─ ".to_string()
                     } else {
                         "├─ ".to_string()
@@ -174,8 +190,9 @@ impl ListYaks {
                     (conn, ancestor_continuations.join(""))
                 };
 
-                let child_prefix = prefix.for_child(is_last);
-                let children = self.build_view_tree(&node.children, only, &child_prefix);
+                let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
+                let children =
+                    self.build_view_tree(&node.children, only, tag, visible_ids, &child_prefix);
 
                 result.push(YakTreeNode {
                     name: node.name.to_string(),
@@ -193,23 +210,54 @@ impl ListYaks {
                 });
             } else {
                 // Even if this node is filtered out, recurse into children
-                let child_prefix = prefix.for_child(is_last);
-                let mut child_nodes = self.build_view_tree(&node.children, only, &child_prefix);
+                let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
+                let mut child_nodes =
+                    self.build_view_tree(&node.children, only, tag, visible_ids, &child_prefix);
                 result.append(&mut child_nodes);
             }
         }
         result
     }
 
-    /// Check if node matches the filter
-    fn should_display_node(&self, node: &YakNode, only: Option<&str>) -> bool {
-        match only {
+    fn is_visible_by_focus(&self, node: &YakNode, visible_ids: Option<&HashSet<YakId>>) -> bool {
+        visible_ids.is_none_or(|ids| {
+            node.yak
+                .as_ref()
+                .map(|y| ids.contains(&y.id))
+                .unwrap_or(true)
+        })
+    }
+
+    fn has_matching_visible_descendant(
+        &self,
+        node: &YakNode,
+        only: Option<&str>,
+        tag: Option<&str>,
+        visible_ids: Option<&HashSet<YakId>>,
+    ) -> bool {
+        node.children.iter().any(|child| {
+            self.is_visible_by_focus(child, visible_ids)
+                && (self.matches_filters(child, only, tag)
+                    || self.has_matching_visible_descendant(child, only, tag, visible_ids))
+        })
+    }
+
+    /// Check if node matches the filters
+    fn matches_filters(&self, node: &YakNode, only: Option<&str>, tag: Option<&str>) -> bool {
+        let only_matches = match only {
             Some("done") => node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false),
             Some("not-done") => {
                 !node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false) || node.yak.is_none()
             }
             _ => true,
-        }
+        };
+        let tag_matches = tag.is_none_or(|tag| {
+            node.yak
+                .as_ref()
+                .map(|y| y.tags.iter().any(|t| t == tag))
+                .unwrap_or(false)
+        });
+        only_matches && tag_matches
     }
 }
 
@@ -217,7 +265,9 @@ impl UseCase for ListYaks {
     fn execute(&self, app: &mut Application) -> Result<()> {
         let format = self.format.as_str();
         let only = self.only.as_deref();
-        let mut yaks = app.store.list_yaks()?;
+        let tag = self.tag.as_deref();
+        let yaks = app.store.list_yaks()?;
+        let visible_ids = app.focused_yak_ids()?;
 
         // Normalize format
         let normalized_format = match format {
@@ -244,16 +294,19 @@ impl UseCase for ListYaks {
             }
         }
 
-        // Apply tag filter
-        if let Some(ref tag) = self.tag {
-            yaks.retain(|y| y.tags.contains(tag));
-        }
-
         // Handle ids format early (before tree building)
         if normalized_format == "ids" {
             for yak in &yaks {
-                app.display
-                    .message(&Message::Info(yak.id.as_str().to_string()));
+                if visible_ids
+                    .as_ref()
+                    .is_some_and(|ids| !ids.contains(&yak.id))
+                {
+                    continue;
+                }
+                if self.matches_filters(&yak_node_for_filter(yak), only, tag) {
+                    app.display
+                        .message(&Message::Info(yak.id.as_str().to_string()));
+                }
             }
             return Ok(());
         }
@@ -266,7 +319,8 @@ impl UseCase for ListYaks {
         };
 
         // Build YakTreeView from internal tree
-        let view_nodes = self.build_view_tree(&tree, only, &TreePrefix::new());
+        let view_nodes =
+            self.build_view_tree(&tree, only, tag, visible_ids.as_ref(), &TreePrefix::new());
 
         // For markdown format when empty, show a message instead of the list
         if tree.is_empty() && normalized_format == "markdown" {
@@ -287,6 +341,15 @@ impl UseCase for ListYaks {
 }
 
 /// Recursively build a YakNode and its children from parent_id grouping
+fn yak_node_for_filter(yak: &Yak) -> YakNode {
+    YakNode {
+        name: yak.name.clone(),
+        full_path: yak.name.to_string(),
+        yak: Some(yak.clone()),
+        children: vec![],
+    }
+}
+
 fn build_node(
     yak: &Yak,
     children_by_parent: &HashMap<Option<&YakId>, Vec<&Yak>>,
@@ -341,7 +404,9 @@ mod tests {
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
         InMemoryStorage,
     };
+    use crate::application::app::set_focus_override;
     use crate::application::{AddYak, Application, SetState};
+    use crate::domain::ports::ReadYakStore;
     use crate::infrastructure::EventBus;
 
     fn make_app<'a>(
@@ -363,6 +428,97 @@ mod tests {
             None,
             auth,
         )
+    }
+
+    #[test]
+    fn yx_focus_prunes_to_ancestors_focus_and_descendants_with_pruned_markers() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("Project")).unwrap();
+        app.handle(AddYak::new("A").with_parent(Some("Project")))
+            .unwrap();
+        app.handle(AddYak::new("B").with_parent(Some("A"))).unwrap();
+        app.handle(AddYak::new("E").with_parent(Some("B"))).unwrap();
+        app.handle(AddYak::new("F").with_parent(Some("B"))).unwrap();
+        app.handle(AddYak::new("C").with_parent(Some("A"))).unwrap();
+        app.handle(AddYak::new("D").with_parent(Some("Project")))
+            .unwrap();
+        let focus = ReadYakStore::list_yaks(&storage)
+            .unwrap()
+            .into_iter()
+            .find(|y| y.name.as_str() == "B")
+            .unwrap()
+            .id;
+        buffer.clear();
+
+        set_focus_override(Some(focus.as_str()));
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
+        set_focus_override(None);
+        let output = buffer.contents();
+
+        assert!(output.contains("Project"));
+        assert!(output.contains("A"));
+        assert!(output.contains("B"));
+        assert!(output.contains("E"));
+        assert!(output.contains("F"));
+        assert!(!output.contains("C"));
+        assert!(!output.contains("D"));
+        assert!(
+            output.contains("┆  ├─ ○ B"),
+            "expected pruned sibling marker before B, got:\n{output}"
+        );
+        assert!(
+            output.contains("┆  ├─ ○ E"),
+            "expected pruned sibling marker before B descendants, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn yx_focus_invalid_exact_id_errors() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+        app.handle(AddYak::new("B")).unwrap();
+
+        set_focus_override(Some("B"));
+        let err = app
+            .handle(ListYaks::new("plain", None, None))
+            .unwrap_err()
+            .to_string();
+        set_focus_override(None);
+        assert!(err.contains("YX_FOCUS 'B' does not exactly match a yak id"));
     }
 
     // Mutant 1 (line 89): only markdown format shows "You have no yaks"
@@ -589,7 +745,7 @@ mod tests {
         let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("finished", "done");
         assert!(
-            !list.should_display_node(&node, Some("not-done")),
+            !list.matches_filters(&node, Some("not-done"), None),
             "Done yak should be excluded by not-done filter"
         );
     }
@@ -601,7 +757,7 @@ mod tests {
         let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("pending", "todo");
         assert!(
-            list.should_display_node(&node, Some("not-done")),
+            list.matches_filters(&node, Some("not-done"), None),
             "Not-done yak should be included by not-done filter"
         );
     }

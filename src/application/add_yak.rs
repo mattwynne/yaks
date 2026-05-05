@@ -105,9 +105,9 @@ impl UseCase for AddYak {
 
         // Resolve parent to its ID
         let parent_id = if let Some(ref parent_name) = self.parent {
-            Some(app.store.fuzzy_find_yak_id(parent_name)?)
+            Some(app.resolve_yak_id(parent_name)?)
         } else {
-            None
+            app.focus_id()?
         };
 
         // Resolve context: explicit > editor > stdin

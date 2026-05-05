@@ -28,7 +28,7 @@ impl EditContext {
 
 impl UseCase for EditContext {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
 
         // Use pre-provided initial content, or fall back to existing context
         let current_context = match &self.initial_content {

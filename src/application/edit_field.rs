@@ -33,7 +33,7 @@ impl UseCase for EditField {
     fn execute(&self, app: &mut Application) -> Result<()> {
         validate_field_name(&self.field)?;
 
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
 
         // Use provided initial content, or read existing field value
         let initial = if let Some(ref content) = self.initial_content {

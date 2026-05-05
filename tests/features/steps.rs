@@ -122,6 +122,10 @@ macro_rules! both_worlds {
 // Shared step implementations (work with any TestWorld)
 // ============================================================================
 
+fn impl_set_yx_focus(world: &mut dyn TestWorld, focus: String) -> Result<()> {
+    world.set_yx_focus(&focus)
+}
+
 fn impl_add_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
     world.add_yak(&yak_name)
 }
@@ -309,6 +313,15 @@ fn impl_add_yak_with_id(world: &mut dyn TestWorld, yak_name: String, id: String)
     world.add_yak_with_id(&yak_name, &id)
 }
 
+fn impl_add_yak_with_id_under(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    id: String,
+    parent: String,
+) -> Result<()> {
+    world.add_yak_with_id_under(&yak_name, &id, &parent)
+}
+
 fn impl_add_yak_with_field(
     world: &mut dyn TestWorld,
     yak_name: String,
@@ -381,6 +394,9 @@ fn impl_line_of_output_includes(
 
 // -- Given steps --
 
+both_worlds!(given(regex = r#"^YX_FOCUS is set to "([^"]+)"$"#)
+    fn given_yx_focus_fs / given_yx_focus_ip (focus: String) -> impl_set_yx_focus);
+
 both_worlds!(given(regex = r#"^I add the yak "([^"]+)"$"#)
     fn given_add_yak_fs / given_add_yak_ip (yak_name: String) -> impl_add_yak);
 
@@ -399,7 +415,13 @@ both_worlds!(given(regex = r#"^I tag "([^"]+)" with "([^"]+)"$"#)
 both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)
     fn given_add_yak_with_id_fs / given_add_yak_with_id_ip (yak_name: String, id: String) -> impl_add_yak_with_id);
 
+both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)" under "([^"]+)"$"#)
+    fn given_add_yak_with_id_under_fs / given_add_yak_with_id_under_ip (yak_name: String, id: String, parent: String) -> impl_add_yak_with_id_under);
+
 // -- When steps --
+
+both_worlds!(when(regex = r#"^YX_FOCUS is set to "([^"]+)"$"#)
+    fn when_yx_focus_fs / when_yx_focus_ip (focus: String) -> impl_set_yx_focus);
 
 both_worlds!(when(expr = "I list the yaks")
     fn when_list_yaks_fs / when_list_yaks_ip () -> impl_list_yaks);
@@ -521,6 +543,9 @@ both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with context "([^"]+)"$"#)
 
 both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)
     fn when_add_yak_with_id_fs / when_add_yak_with_id_ip (yak_name: String, id: String) -> impl_add_yak_with_id);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)" under "([^"]+)"$"#)
+    fn when_add_yak_with_id_under_fs / when_add_yak_with_id_under_ip (yak_name: String, id: String, parent: String) -> impl_add_yak_with_id_under);
 
 both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)
     fn when_add_yak_with_field_fs / when_add_yak_with_field_ip (yak_name: String, key: String, value: String) -> impl_add_yak_with_field);

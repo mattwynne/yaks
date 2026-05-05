@@ -26,7 +26,7 @@ impl UseCase for ShowField {
         validate_field_name_format(&self.field)?;
 
         // Find yak (handles fuzzy matching)
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
 
         // Read field content
         let content = app.store.read_field(&id, &self.field)?;

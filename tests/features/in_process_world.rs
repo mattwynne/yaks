@@ -12,9 +12,9 @@ use yx::adapters::{
     InMemoryStorage, TestBuffer,
 };
 use yx::application::{
-    AddTag, AddYak, Application, DoneYak, EditContext, GetConfig, ListConfig, ListTags, ListYaks,
-    MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak, SetConfig, SetState, ShowContext,
-    ShowField, StartYak, SyncYaks, WriteField,
+    set_focus_override, AddTag, AddYak, Application, DoneYak, EditContext, GetConfig, ListConfig,
+    ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak, SetConfig, SetState,
+    ShowContext, ShowField, StartYak, SyncYaks, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort, ReadYakStore};
@@ -93,6 +93,8 @@ pub struct InProcessWorld {
     repos: HashMap<String, UserInstance>,
     /// Shared "origin" event store for sync scenarios
     origin: Option<InMemoryEventStore>,
+    /// YX_FOCUS value to set for subsequent commands in this scenario
+    yx_focus: Option<String>,
 }
 
 impl std::fmt::Debug for InProcessWorld {
@@ -127,6 +129,7 @@ impl InProcessWorld {
             exit_code: 0,
             repos: HashMap::new(),
             origin: None,
+            yx_focus: None,
         })
     }
 
@@ -148,7 +151,9 @@ impl InProcessWorld {
             &self.auth,
         )
         .with_user_config(&mut self.user_config);
+        set_focus_override(self.yx_focus.as_deref());
         let result = f(&mut app);
+        set_focus_override(None);
 
         self.exit_code = if result.is_ok() { 0 } else { 1 };
 
@@ -173,7 +178,9 @@ impl InProcessWorld {
             &self.auth,
         )
         .with_user_config(&mut self.user_config);
+        set_focus_override(self.yx_focus.as_deref());
         let result = f(&mut app);
+        set_focus_override(None);
 
         match result {
             Ok(()) => self.exit_code = 0,
@@ -322,6 +329,11 @@ impl InProcessWorld {
 }
 
 impl TestWorld for InProcessWorld {
+    fn set_yx_focus(&mut self, focus: &str) -> Result<()> {
+        self.yx_focus = Some(focus.to_string());
+        Ok(())
+    }
+
     fn add_yak(&mut self, name: &str) -> Result<()> {
         self.execute(|app| app.handle(AddYak::new(name)))
     }
@@ -590,6 +602,19 @@ impl TestWorld for InProcessWorld {
         let name = name.to_string();
         let id = id.to_string();
         self.execute(move |app| app.handle(AddYak::new(&name).with_id(Some(&id))))
+    }
+
+    fn add_yak_with_id_under(&mut self, name: &str, id: &str, parent: &str) -> Result<()> {
+        let name = name.to_string();
+        let id = id.to_string();
+        let parent = parent.to_string();
+        self.execute(move |app| {
+            app.handle(
+                AddYak::new(&name)
+                    .with_id(Some(&id))
+                    .with_parent(Some(&parent)),
+            )
+        })
     }
 
     fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()> {

@@ -9,6 +9,9 @@ use anyhow::Result;
 /// - FullStackWorld: spawns yx binary (real integration test)
 /// - InProcessWorld: calls CommandHandler directly (fast unit-like test)
 pub trait TestWorld {
+    /// Set YX_FOCUS for subsequent commands in this scenario
+    fn set_yx_focus(&mut self, focus: &str) -> Result<()>;
+
     /// Add a yak with the given name
     fn add_yak(&mut self, name: &str) -> Result<()>;
 
@@ -133,6 +136,9 @@ pub trait TestWorld {
 
     /// Add a yak with a specific ID
     fn add_yak_with_id(&mut self, name: &str, id: &str) -> Result<()>;
+
+    /// Add a yak with a specific ID under a parent
+    fn add_yak_with_id_under(&mut self, name: &str, id: &str, parent: &str) -> Result<()>;
 
     /// Add a yak with a custom field
     fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()>;

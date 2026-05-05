@@ -43,12 +43,15 @@ impl RemoveYak {
 
 impl UseCase for RemoveYak {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
 
         let ids_to_remove = if self.recursive {
             let all_yaks = app.store.list_yaks()?;
             let mut descendants = vec![id.clone()];
             Self::collect_descendants(&id, &all_yaks, &mut descendants);
+            for descendant_id in &descendants {
+                app.ensure_yak_visible(descendant_id)?;
+            }
             // Reverse so leaves come first (children before parents)
             descendants.reverse();
             descendants

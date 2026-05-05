@@ -38,6 +38,8 @@ mod write_field;
 
 pub use add_tag::AddTag;
 pub use add_yak::AddYak;
+#[cfg(any(test, feature = "test-support"))]
+pub use app::set_focus_override;
 pub use app::Application;
 pub use command_handler::CommandHandler;
 pub use compact_events::CompactEvents;

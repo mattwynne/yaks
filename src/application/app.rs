@@ -4,9 +4,23 @@ use crate::domain::ports::{
     AuthenticationPort, DisplayPort, EventStore, EventStoreReader, InputPort, LocalWorkspacePort,
     ReadYakStore, UserConfigPort,
 };
+use crate::domain::slug::YakId;
 use crate::domain::YakMap;
 use crate::infrastructure::EventBus;
 use anyhow::Result;
+#[cfg(any(test, feature = "test-support"))]
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    static FOCUS_OVERRIDE: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn set_focus_override(focus: Option<&str>) {
+    FOCUS_OVERRIDE.with(|cell| *cell.borrow_mut() = focus.map(|s| s.to_string()));
+}
 
 use super::{CommandHandler, UseCase};
 
@@ -55,6 +69,57 @@ impl<'a> Application<'a> {
     pub fn with_user_config(mut self, config: &'a mut dyn UserConfigPort) -> Self {
         self.user_config = Some(config);
         self
+    }
+
+    pub fn focus_id(&self) -> Result<Option<YakId>> {
+        #[cfg(any(test, feature = "test-support"))]
+        let override_focus = FOCUS_OVERRIDE.with(|cell| cell.borrow().clone());
+        #[cfg(not(any(test, feature = "test-support")))]
+        let override_focus: Option<String> = None;
+
+        let focus = if let Some(focus) = override_focus {
+            focus
+        } else {
+            let Some(raw) = std::env::var_os("YX_FOCUS") else {
+                return Ok(None);
+            };
+            raw.to_string_lossy().to_string()
+        };
+        let yaks = self.store.list_yaks()?;
+        if yaks.iter().any(|y| y.id.as_str() == focus) {
+            Ok(Some(YakId::from(focus.as_str())))
+        } else {
+            anyhow::bail!("YX_FOCUS '{}' does not exactly match a yak id", focus)
+        }
+    }
+
+    pub fn focused_yak_ids(&self) -> Result<Option<HashSet<YakId>>> {
+        let Some(focus_id) = self.focus_id()? else {
+            return Ok(None);
+        };
+        let yaks = self.store.list_yaks()?;
+        Ok(Some(focused_ids_from_yaks(&yaks, &focus_id)))
+    }
+
+    pub fn is_yak_visible(&self, id: &YakId) -> Result<bool> {
+        Ok(self
+            .focused_yak_ids()?
+            .map(|ids| ids.contains(id))
+            .unwrap_or(true))
+    }
+
+    pub fn ensure_yak_visible(&self, id: &YakId) -> Result<()> {
+        if self.is_yak_visible(id)? {
+            Ok(())
+        } else {
+            anyhow::bail!("yak '{}' is outside YX_FOCUS", id.as_str())
+        }
+    }
+
+    pub fn resolve_yak_id(&self, query: &str) -> Result<YakId> {
+        let id = self.store.fuzzy_find_yak_id(query)?;
+        self.ensure_yak_visible(&id)?;
+        Ok(id)
     }
 
     pub fn with_yak_map<F>(&mut self, f: F) -> Result<()>
@@ -139,6 +204,43 @@ impl<'a> Application<'a> {
     pub fn handle<U: UseCase>(&mut self, use_case: U) -> Result<()> {
         use_case.execute(self)
     }
+}
+
+fn focused_ids_from_yaks(yaks: &[crate::domain::Yak], focus_id: &YakId) -> HashSet<YakId> {
+    let by_id: HashMap<YakId, &crate::domain::Yak> =
+        yaks.iter().map(|y| (y.id.clone(), y)).collect();
+    let mut ids = HashSet::new();
+
+    let mut current = Some(focus_id.clone());
+    while let Some(id) = current {
+        if !ids.insert(id.clone()) {
+            break;
+        }
+        current = by_id.get(&id).and_then(|y| y.parent_id.clone());
+    }
+
+    let mut children_by_parent: HashMap<YakId, Vec<YakId>> = HashMap::new();
+    for yak in yaks {
+        if let Some(parent_id) = &yak.parent_id {
+            children_by_parent
+                .entry(parent_id.clone())
+                .or_default()
+                .push(yak.id.clone());
+        }
+    }
+    let mut stack = children_by_parent
+        .get(focus_id)
+        .cloned()
+        .unwrap_or_default();
+    while let Some(id) = stack.pop() {
+        if ids.insert(id.clone()) {
+            if let Some(children) = children_by_parent.get(&id) {
+                stack.extend(children.iter().cloned());
+            }
+        }
+    }
+
+    ids
 }
 
 impl<'a> CommandHandler for Application<'a> {

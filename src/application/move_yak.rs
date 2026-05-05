@@ -35,7 +35,7 @@ impl MoveYak {
 
 impl UseCase for MoveYak {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
 
         match &self.target {
             MoveTarget::ToRoot => {
@@ -44,7 +44,7 @@ impl UseCase for MoveYak {
                     .message(&Message::Success(format!("Moved '{}' to root", self.name)));
             }
             MoveTarget::Under(parent_name) => {
-                let parent_id = app.store.fuzzy_find_yak_id(parent_name)?;
+                let parent_id = app.resolve_yak_id(parent_name)?;
                 app.with_yak_map(|yak_map| yak_map.move_yak_to(id, Some(parent_id)))?;
                 app.display.message(&Message::Success(format!(
                     "Moved '{}' under '{}'",

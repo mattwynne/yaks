@@ -45,8 +45,9 @@ impl UseCase for ShowYak {
             );
         }
 
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
+        let visible_ids = app.focused_yak_ids()?;
 
         // Breadcrumb: walk parent chain to collect ancestors with id, name, state (root-first)
         let mut ancestors = Vec::new();
@@ -69,6 +70,7 @@ impl UseCase for ShowYak {
             let mut kids: Vec<_> = all_yaks
                 .iter()
                 .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
+                .filter(|y| visible_ids.as_ref().is_none_or(|ids| ids.contains(&y.id)))
                 .map(|c| YakChildView {
                     id: c.id.to_string(),
                     name: c.name.to_string(),

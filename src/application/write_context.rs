@@ -20,7 +20,7 @@ impl WriteContext {
 
 impl UseCase for WriteContext {
     fn execute(&self, app: &mut Application) -> Result<()> {
-        let id = app.store.fuzzy_find_yak_id(&self.name)?;
+        let id = app.resolve_yak_id(&self.name)?;
         app.with_yak_map(|yak_map| yak_map.update_context(id, self.content.clone()))
     }
 }
