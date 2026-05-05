@@ -491,6 +491,166 @@ mod tests {
     }
 
     #[test]
+    fn filtered_tree_keeps_ancestors_of_matching_grandchild() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("branch").with_parent(Some("root")))
+            .unwrap();
+        app.handle(AddYak::new("leaf").with_parent(Some("branch")))
+            .unwrap();
+        app.handle(SetState::new("leaf", "done")).unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("pretty", Some("done"), None))
+            .unwrap();
+        let output = buffer.contents();
+
+        assert!(
+            output.contains("root"),
+            "ancestor of matching grandchild should be visible, got:\n{output}"
+        );
+        assert!(
+            output.contains("branch"),
+            "parent of matching grandchild should be visible, got:\n{output}"
+        );
+        assert!(
+            output.contains("leaf"),
+            "matching grandchild should be visible, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn focused_filtered_tree_hides_visible_descendants_that_do_not_match() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("focus").with_parent(Some("root")))
+            .unwrap();
+        app.handle(AddYak::new("child").with_parent(Some("focus")))
+            .unwrap();
+        let focus = ReadYakStore::list_yaks(&storage)
+            .unwrap()
+            .into_iter()
+            .find(|y| y.name.as_str() == "focus")
+            .unwrap()
+            .id;
+        buffer.clear();
+
+        set_focus_override(Some(focus.as_str()));
+        app.handle(ListYaks::new("pretty", Some("done"), None))
+            .unwrap();
+        set_focus_override(None);
+        let output = buffer.contents();
+
+        assert!(
+            !output.contains("root") && !output.contains("focus") && !output.contains("child"),
+            "focused visible yaks that do not match the filter should stay hidden, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn focused_ids_format_only_lists_visible_yak_ids() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("root")).unwrap();
+        app.handle(AddYak::new("focus").with_parent(Some("root")))
+            .unwrap();
+        app.handle(AddYak::new("child").with_parent(Some("focus")))
+            .unwrap();
+        app.handle(AddYak::new("sibling").with_parent(Some("root")))
+            .unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        let id_for = |name: &str| {
+            yaks.iter()
+                .find(|y| y.name.as_str() == name)
+                .unwrap()
+                .id
+                .as_str()
+                .to_string()
+        };
+        let root_id = id_for("root");
+        let focus_id = id_for("focus");
+        let child_id = id_for("child");
+        let sibling_id = id_for("sibling");
+        buffer.clear();
+
+        set_focus_override(Some(&focus_id));
+        app.handle(ListYaks::new("ids", None, None)).unwrap();
+        set_focus_override(None);
+        let output = buffer.contents();
+        let ids: Vec<&str> = output.lines().collect();
+
+        assert!(
+            ids.contains(&root_id.as_str()),
+            "expected root id in {ids:?}"
+        );
+        assert!(
+            ids.contains(&focus_id.as_str()),
+            "expected focus id in {ids:?}"
+        );
+        assert!(
+            ids.contains(&child_id.as_str()),
+            "expected child id in {ids:?}"
+        );
+        assert!(
+            !ids.contains(&sibling_id.as_str()),
+            "sibling outside focus should not be listed in ids output: {ids:?}"
+        );
+    }
+
+    #[test]
     fn yx_focus_invalid_exact_id_errors() {
         set_focus_override(None);
         let mut event_store = InMemoryEventStore::new();
