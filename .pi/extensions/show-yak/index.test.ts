@@ -1,97 +1,110 @@
 /**
- * Integration tests for the show-yak extension.
+ * Tests for the show-yak extension.
  *
- * Uses the pi SDK to load the extension and invoke the tool directly,
- * running against the real `yx` CLI in this repo.
+ * Loads the extension against a tiny fake ExtensionAPI and invokes the
+ * registered tools directly.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  SessionManager,
-  SettingsManager,
-} from "@mariozechner/pi-coding-agent";
-import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import showYakExtension from "./index.js";
 
-// Helper: find the show_yak tool and call execute
-async function callShowYak(session: AgentSession, name: string) {
-  const tool = session.agent.state.tools.find((t) => t.name === "show_yak");
-  if (!tool) throw new Error("show_yak tool not registered");
-  const result = await tool.execute("test-call-id", { name }, new AbortController().signal);
-  return result;
+type RegisteredTool = {
+  name: string;
+  execute: (toolCallId: string, params: any, signal?: AbortSignal) => Promise<any>;
+};
+
+type ExecCall = { cmd: string; args: string[] };
+
+const tools: RegisteredTool[] = [];
+const execCalls: ExecCall[] = [];
+
+async function fakeExec(cmd: string, args: string[]) {
+  execCalls.push({ cmd, args });
+
+  if (cmd !== "yx") {
+    return { code: 1, stdout: "", stderr: `unexpected command: ${cmd}` };
+  }
+
+  if (args[0] === "list") {
+    if (args.includes("foobar")) {
+      return { code: 1, stdout: "", stderr: "Unknown filter: foobar" };
+    }
+    return { code: 0, stdout: "[]\n", stderr: "" };
+  }
+
+  if (args[0] === "show") {
+    const name = args.slice(3).join(" ");
+    if (name === "this yak does not exist at all") {
+      return { code: 1, stdout: "", stderr: "yak not found" };
+    }
+    return {
+      code: 0,
+      stdout: JSON.stringify({ name, state: "todo", children: [] }),
+      stderr: "",
+    };
+  }
+
+  return { code: 1, stdout: "", stderr: "unexpected yx command" };
 }
 
-// Helper: find the list_yaks tool and call execute
-async function callListYaks(session: AgentSession, params: Record<string, string> = {}) {
-  const tool = session.agent.state.tools.find((t) => t.name === "list_yaks");
-  if (!tool) throw new Error("list_yaks tool not registered");
-  const result = await tool.execute("test-call-id", params, new AbortController().signal);
-  return result;
+beforeAll(() => {
+  tools.length = 0;
+  showYakExtension({
+    registerTool(tool: RegisteredTool) {
+      tools.push(tool);
+    },
+    exec: fakeExec,
+  } as any);
+});
+
+beforeEach(() => {
+  execCalls.length = 0;
+});
+
+function toolNamed(name: string): RegisteredTool {
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) throw new Error(`${name} tool not registered`);
+  return tool;
+}
+
+async function callShowYak(name: string) {
+  return toolNamed("show_yak").execute("test-call-id", { name }, new AbortController().signal);
+}
+
+async function callListYaks(params: Record<string, string> = {}) {
+  return toolNamed("list_yaks").execute("test-call-id", params, new AbortController().signal);
 }
 
 describe("list_yaks tool", () => {
-  let session: AgentSession;
-
-  beforeAll(async () => {
-    const loader = new DefaultResourceLoader({
-      cwd: process.cwd(),
-      extensionFactories: [showYakExtension],
-      skipDiscovery: true,
-    });
-    await loader.reload();
-
-    ({ session } = await createAgentSession({
-      cwd: process.cwd(),
-      resourceLoader: loader,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory(),
-      tools: [],
-    }));
-  });
-
-  afterAll(() => {
-    session?.dispose();
-  });
-
   it("is registered as a tool", () => {
-    const toolNames = session.agent.state.tools.map((t) => t.name);
-    expect(toolNames).toContain("list_yaks");
+    expect(tools.map((t) => t.name)).toContain("list_yaks");
   });
 
   it("returns valid JSON array", async () => {
-    const result = await callListYaks(session);
+    const result = await callListYaks();
 
     expect(result.isError).toBeFalsy();
     const text = result.content.find((c: any) => c.type === "text")?.text;
-    expect(text).toBeDefined();
-
-    const parsed = JSON.parse(text!);
-    expect(Array.isArray(parsed)).toBe(true);
+    expect(JSON.parse(text!)).toEqual([]);
+    expect(execCalls[0]).toEqual({ cmd: "yx", args: ["list", "--format", "json"] });
   });
 
   it("passes --only flag when only param is provided", async () => {
-    // Even with no yaks, this should succeed (not error)
-    const result = await callListYaks(session, { only: "not-done" });
+    const result = await callListYaks({ only: "not-done" });
 
     expect(result.isError).toBeFalsy();
-    const text = result.content.find((c: any) => c.type === "text")?.text;
-    const parsed = JSON.parse(text!);
-    expect(Array.isArray(parsed)).toBe(true);
+    expect(execCalls[0]).toEqual({ cmd: "yx", args: ["list", "--format", "json", "--only", "not-done"] });
   });
 
   it("passes --tag flag when tag param is provided", async () => {
-    const result = await callListYaks(session, { tag: "ready" });
+    const result = await callListYaks({ tag: "ready" });
 
     expect(result.isError).toBeFalsy();
-    const text = result.content.find((c: any) => c.type === "text")?.text;
-    const parsed = JSON.parse(text!);
-    expect(Array.isArray(parsed)).toBe(true);
+    expect(execCalls[0]).toEqual({ cmd: "yx", args: ["list", "--format", "json", "--tag", "ready"] });
   });
 
   it("returns error for invalid filter", async () => {
-    const result = await callListYaks(session, { only: "foobar" });
+    const result = await callListYaks({ only: "foobar" });
 
     expect(result.isError).toBe(true);
     const text = result.content.find((c: any) => c.type === "text")?.text;
@@ -100,50 +113,21 @@ describe("list_yaks tool", () => {
 });
 
 describe("show_yak tool", () => {
-  let session: AgentSession;
-
-  beforeAll(async () => {
-    const loader = new DefaultResourceLoader({
-      cwd: process.cwd(),
-      extensionFactories: [showYakExtension],
-      // Disable discovery of other extensions to isolate the test
-      skipDiscovery: true,
-    });
-    await loader.reload();
-
-    ({ session } = await createAgentSession({
-      cwd: process.cwd(),
-      resourceLoader: loader,
-      sessionManager: SessionManager.inMemory(),
-      settingsManager: SettingsManager.inMemory(),
-      tools: [], // no built-in tools needed
-    }));
-  });
-
-  afterAll(() => {
-    session?.dispose();
-  });
-
   it("is registered as a tool", () => {
-    const toolNames = session.agent.state.tools.map((t) => t.name);
-    expect(toolNames).toContain("show_yak");
+    expect(tools.map((t) => t.name)).toContain("show_yak");
   });
 
   it("returns JSON for an existing yak", async () => {
-    const result = await callShowYak(session, "dx");
+    const result = await callShowYak("dx");
 
     expect(result.isError).toBeFalsy();
     const text = result.content.find((c: any) => c.type === "text")?.text;
-    expect(text).toBeDefined();
-
     const parsed = JSON.parse(text!);
     expect(parsed.name).toBe("dx");
-    expect(parsed).toHaveProperty("state");
-    expect(parsed).toHaveProperty("children");
   });
 
   it("returns an error for a non-existent yak", async () => {
-    const result = await callShowYak(session, "this yak does not exist at all");
+    const result = await callShowYak("this yak does not exist at all");
 
     expect(result.isError).toBe(true);
     const text = result.content.find((c: any) => c.type === "text")?.text;
@@ -151,13 +135,23 @@ describe("show_yak tool", () => {
   });
 
   it("splits multi-word names into separate args", async () => {
-    const result = await callShowYak(session, "protect main from direct changes");
+    const result = await callShowYak("update pi extensions for earendil package rename");
 
     expect(result.isError).toBeFalsy();
-    const text = result.content.find((c: any) => c.type === "text")?.text;
-    expect(text).toBeDefined();
-
-    const parsed = JSON.parse(text!);
-    expect(parsed.name).toBe("protect main from direct changes");
+    expect(execCalls[0]).toEqual({
+      cmd: "yx",
+      args: [
+        "show",
+        "--format",
+        "json",
+        "update",
+        "pi",
+        "extensions",
+        "for",
+        "earendil",
+        "package",
+        "rename",
+      ],
+    });
   });
 });

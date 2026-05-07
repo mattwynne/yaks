@@ -40,7 +40,7 @@ This must be preserved in the custom footer.
 ## Default Footer Source Code
 
 The full source of the default footer is at:
-`/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/components/footer.js`
+`/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/footer.js`
 
 **Read this file** — it contains the exact logic for token formatting, context percentage coloring, path truncation, git branch display, model/thinking display, provider prefix logic, extension status lines, and more. Your implementation should reproduce all of this behavior faithfully, with the only change being the added session name line.
 
@@ -56,15 +56,15 @@ The full source of the default footer is at:
 - Model info: `ctx.model?.id`, thinking level from `pi.getThinkingLevel()`
 - Session name: `pi.getSessionName()`
 - `ctx.cwd` for current working directory
-- Use `truncateToWidth` and `visibleWidth` from `@mariozechner/pi-tui`
+- Use `truncateToWidth` and `visibleWidth` from `@earendil-works/pi-tui`
 - The footer should activate automatically on `session_start` (no command needed to toggle)
 - Use `footerData.onBranchChange()` for reactive updates
 
 ## Reference
 
 - The example extension at the path below demonstrates the `setFooter` API:
-  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@mariozechner/pi-coding-agent/examples/extensions/custom-footer.ts`
+  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/custom-footer.ts`
 - Extension docs:
-  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
+  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/extensions.md`
 - TUI docs:
-  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
+  `/nix/store/mws8dqyglrbr9ljhxk0iabaim63c4gqs-pi-0.55.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/tui.md`
