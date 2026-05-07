@@ -13,6 +13,7 @@ export function isMainRepo(cwd: string): boolean {
 // Read-only commands that are safe to run in the main repo
 const READ_ONLY_COMMANDS = new Set([
   "grep",
+  "rg",
   "find",
   "ls",
   "cat",
@@ -89,7 +90,7 @@ export interface Decision {
 
 const BLOCK_REASON =
   "🛑 Blocked: you're in the main repo, not a worktree. " +
-  "Only `read`, `yx *`, `bin/dev *`, and read-only bash commands (grep, find, ls, cat, etc.) are allowed here. " +
+  "Only `read`, `yx *`, `bin/dev *`, and read-only bash commands (grep, rg, find, ls, cat, etc.) are allowed here. " +
   "To start work on a yak: `bin/dev start <yak-name>`, " +
   "then use a subagent with cwd set to the worktree path.";
 

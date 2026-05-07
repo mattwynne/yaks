@@ -61,6 +61,7 @@ describe("isAllowedBashCommand", () => {
     // Read-only commands
     ["ls -la", "listing files"],
     ["grep -r foo src/", "grep recursively"],
+    ["rg foo src/", "ripgrep recursively"],
     ["cat src/main.rs", "cat a file"],
     ["find . -name '*.rs'", "find files"],
     ["head -20 file.txt", "head of file"],
@@ -80,6 +81,7 @@ describe("isAllowedBashCommand", () => {
     // Pipelines of read-only commands
     ["grep foo | wc -l", "pipeline of read-only"],
     ["find . -name '*.rs' | grep test", "find piped to grep"],
+    ["rg foo | head -10", "rg piped to head"],
     ["cat file.txt | head -10", "cat piped to head"],
     // cd then read-only
     ["cd src && grep foo *.rs", "cd then read-only via &&"],
