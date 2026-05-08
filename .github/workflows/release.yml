@@ -1,14 +1,15 @@
-name: Publish Latest Release
+name: Publish Stable Release
 
 on:
   push:
-    branches: [main, installer-multiplatform]
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +62,8 @@ jobs:
             BINARY_PATH=target/release/yx
           fi
 
+          YX_BIN="$BINARY_PATH" bin/check-release "${GITHUB_REF_NAME}"
+
           mkdir -p release-bundle/bin release-bundle/completions
           cp $BINARY_PATH release-bundle/bin/yx
           chmod +x release-bundle/bin/yx
@@ -74,15 +77,27 @@ jobs:
           path: ${{ matrix.artifact-name }}
 
   publish:
-    needs: release
-    if: always()
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
 
-      - name: Embed checksums in install.sh
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Validate release tag
         run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Stable releases must be tagged vX.Y.Z; got ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          bin/check-release "${GITHUB_REF_NAME}"
+
+      - name: Prepare release notes and installer
+        run: |
+          bin/changelog-section "${GITHUB_REF_NAME}" > release-notes.md
+
           LINUX_SUM=$(sha256sum yx-linux-x86_64.zip/yx-linux-x86_64.zip | cut -d' ' -f1)
           MACOS_SUM=$(sha256sum yx-macos-aarch64.zip/yx-macos-aarch64.zip | cut -d' ' -f1)
           echo "Linux checksum: $LINUX_SUM"
@@ -90,13 +105,14 @@ jobs:
           sed -i "s/^CHECKSUM_LINUX_X86_64=\"\"/CHECKSUM_LINUX_X86_64=\"$LINUX_SUM\"/" install.sh
           sed -i "s/^CHECKSUM_MACOS_AARCH64=\"\"/CHECKSUM_MACOS_AARCH64=\"$MACOS_SUM\"/" install.sh
 
-      - name: Publish to latest
+      - name: Publish stable release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             yx-linux-x86_64.zip/yx-linux-x86_64.zip
             yx-macos-aarch64.zip/yx-macos-aarch64.zip
             install.sh
-          prerelease: true
-          body: "Unstable build from main branch"
+          prerelease: false
+          body_path: release-notes.md
