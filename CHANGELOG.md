@@ -8,6 +8,20 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.0] - 2026-05-08
+
+### Added
+
 - Stable releases can now be cut from immutable `vX.Y.Z` tags, publishing GitHub Releases with packaged binaries and changelog-derived release notes.
 - An `edge` prerelease channel now publishes mutable builds from `main` for users who want the newest unreleased build.
 - Release validation now checks version metadata, lockfile consistency, changelog content, and `yx --version` before publishing.
