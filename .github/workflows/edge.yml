@@ -1,0 +1,114 @@
+name: Publish Edge Prerelease
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact-name: yx-linux-x86_64.zip
+          - os: macos-latest
+            target: ""
+            artifact-name: yx-macos-aarch64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install musl tools and dependencies (Linux only)
+        if: matrix.target != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev linux-libc-dev
+
+      - name: Install musl target (Linux only)
+        if: matrix.target != ''
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install OpenSSL for musl (Linux only)
+        if: matrix.target != ''
+        run: |
+          # Build static OpenSSL for musl
+          wget https://www.openssl.org/source/openssl-3.0.13.tar.gz
+          tar -xzf openssl-3.0.13.tar.gz
+          cd openssl-3.0.13
+          # Use -idirafter to add kernel headers after musl's standard headers
+          CC=musl-gcc CFLAGS="-idirafter /usr/include/x86_64-linux-gnu -idirafter /usr/include" ./Configure no-shared no-async --prefix=/tmp/musl-openssl --openssldir=/tmp/musl-openssl linux-x86_64
+          make -j$(nproc)
+          make install_sw
+          cd ..
+
+      - name: Build release
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            export OPENSSL_DIR=/tmp/musl-openssl
+            export OPENSSL_STATIC=1
+            cargo build --release --target ${{ matrix.target }}
+            BINARY_PATH=target/${{ matrix.target }}/release/yx
+          else
+            cargo build --release
+            BINARY_PATH=target/release/yx
+          fi
+
+          mkdir -p release-bundle/bin release-bundle/completions
+          cp $BINARY_PATH release-bundle/bin/yx
+          chmod +x release-bundle/bin/yx
+          cp -r completions/* release-bundle/completions/
+          cd release-bundle && zip -r ../${{ matrix.artifact-name }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+
+      - name: Embed checksums in install.sh
+        run: |
+          LINUX_SUM=$(sha256sum yx-linux-x86_64.zip/yx-linux-x86_64.zip | cut -d' ' -f1)
+          MACOS_SUM=$(sha256sum yx-macos-aarch64.zip/yx-macos-aarch64.zip | cut -d' ' -f1)
+          echo "Linux checksum: $LINUX_SUM"
+          echo "macOS checksum: $MACOS_SUM"
+          sed -i "s/^CHECKSUM_LINUX_X86_64=\"\"/CHECKSUM_LINUX_X86_64=\"$LINUX_SUM\"/" install.sh
+          sed -i "s/^CHECKSUM_MACOS_AARCH64=\"\"/CHECKSUM_MACOS_AARCH64=\"$MACOS_SUM\"/" install.sh
+          sed -i "s|releases/download/latest/|releases/download/edge/|" install.sh
+
+      - name: Move edge tag to this commit
+        run: |
+          git tag --force edge "$GITHUB_SHA"
+          git push --force origin refs/tags/edge
+
+      - name: Publish edge prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: edge
+          target_commitish: ${{ github.sha }}
+          make_latest: false
+          overwrite_files: true
+          files: |
+            yx-linux-x86_64.zip/yx-linux-x86_64.zip
+            yx-macos-aarch64.zip/yx-macos-aarch64.zip
+            install.sh
+          prerelease: true
+          body: |
+            ## Unstable edge build from main
+
+            This prerelease is rebuilt from `main` branch commits and may change or break without notice.
+            Do not treat it as a stable release; use versioned releases for stable installs.
