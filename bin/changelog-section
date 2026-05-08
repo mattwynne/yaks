@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: changelog-section VERSION [CHANGELOG]
+
+Extract the notes for VERSION from CHANGELOG (default: CHANGELOG.md).
+VERSION may be given with or without a leading "v".
+EOF
+}
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  usage
+  exit 64
+fi
+
+version="$1"
+version="${version#v}"
+changelog="${2:-CHANGELOG.md}"
+
+if [[ -z "$version" ]]; then
+  echo "Error: version must not be empty" >&2
+  usage
+  exit 64
+fi
+
+if [[ ! -f "$changelog" ]]; then
+  echo "Error: changelog not found: $changelog" >&2
+  exit 66
+fi
+
+notes_status=0
+notes="$(
+  awk -v version="$version" '
+    function heading_version(line, rest) {
+      if (line !~ /^## \[/) return ""
+      rest = line
+      sub(/^## \[/, "", rest)
+      sub(/\].*$/, "", rest)
+      return rest
+    }
+
+    /^## \[/ {
+      if (found) exit
+      if (heading_version($0) == version) {
+        found = 1
+        next
+      }
+    }
+
+    found { print }
+
+    END {
+      if (!found) exit 42
+    }
+  ' "$changelog"
+)" || notes_status=$?
+
+if [[ $notes_status -eq 42 ]]; then
+  echo "Error: version $version not found in $changelog" >&2
+  exit 1
+elif [[ $notes_status -ne 0 ]]; then
+  echo "Error: failed to read $changelog" >&2
+  exit "$notes_status"
+fi
+
+if ! printf '%s\n' "$notes" | awk '
+  /^[[:space:]]*$/ { next }
+  /^#{1,6}[[:space:]]/ { next }
+  { has_content = 1 }
+  END { exit(has_content ? 0 : 1) }
+'; then
+  echo "Error: changelog section for version $version is empty or only headings" >&2
+  exit 1
+fi
+
+printf '%s\n' "$notes"
