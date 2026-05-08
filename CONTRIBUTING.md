@@ -20,6 +20,11 @@ dev check  # Runs tests and linting
 Git hooks will prevent commits, merges, and pushes without recent
 verification.
 
+## Changelog
+
+Add user-visible changes to [CHANGELOG.md](CHANGELOG.md) under
+`[Unreleased]` in the appropriate section.
+
 ## Testing
 
 ```bash
