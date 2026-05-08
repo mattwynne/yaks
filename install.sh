@@ -109,12 +109,46 @@ detect_platform() {
 }
 
 # Set up source and temp directory
+VERIFY_EMBEDDED_CHECKSUMS=""
 if [ -z "$YX_SOURCE" ]; then
     PLATFORM=$(detect_platform)
-    SOURCE="https://github.com/mattwynne/yaks/releases/download/latest/yx-${PLATFORM}.zip"
+
+    if [ -n "$YX_VERSION" ] && [ "${YX_CHANNEL:-stable}" != "stable" ]; then
+        echo -e "${RED}Error: Set either YX_VERSION or YX_CHANNEL, not both${NC}" >&2
+        exit 1
+    fi
+
+    case "${YX_CHANNEL:-stable}" in
+        stable)
+            if [ -n "$YX_VERSION" ]; then
+                VERSION="${YX_VERSION#v}"
+                if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo -e "${RED}Error: YX_VERSION must look like X.Y.Z or vX.Y.Z${NC}" >&2
+                    exit 1
+                fi
+                SOURCE="https://github.com/mattwynne/yaks/releases/download/v${VERSION}/yx-${PLATFORM}.zip"
+            else
+                SOURCE="https://github.com/mattwynne/yaks/releases/latest/download/yx-${PLATFORM}.zip"
+                VERIFY_EMBEDDED_CHECKSUMS="1"
+            fi
+            ;;
+        edge)
+            SOURCE="https://github.com/mattwynne/yaks/releases/download/edge/yx-${PLATFORM}.zip"
+            ;;
+        *)
+            echo -e "${RED}Error: YX_CHANNEL must be stable or edge${NC}" >&2
+            exit 1
+            ;;
+    esac
 else
     SOURCE="$YX_SOURCE"
 fi
+
+if [ -n "$YX_INSTALLER_PRINT_SOURCE" ]; then
+    echo "$SOURCE"
+    exit 0
+fi
+
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -143,6 +177,10 @@ case "$PLATFORM" in
   macos-aarch64) EXPECTED="$CHECKSUM_MACOS_AARCH64" ;;
   *)             EXPECTED="" ;;
 esac
+
+if [ -z "$VERIFY_EMBEDDED_CHECKSUMS" ]; then
+  EXPECTED=""
+fi
 
 if [ -n "$EXPECTED" ]; then
   if [ "$ACTUAL_SUM" != "$EXPECTED" ]; then

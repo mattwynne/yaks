@@ -108,9 +108,21 @@ trade-offs.
 curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | bash
 ```
 
-The installer downloads the latest release, validates the checksum
-and installs the binary in `/usr/local/bin`. It also installs shell
+The installer downloads the latest stable GitHub Release, validates the checksum
+when available, and installs the binary in `/usr/local/bin`. It also installs shell
 completions so you can tab-complete yak names.
+
+To install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | YX_VERSION=1.2.3 bash
+```
+
+To install the edge channel:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | YX_CHANNEL=edge bash
+```
 
 ## Contributing
 

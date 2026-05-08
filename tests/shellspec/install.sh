@@ -2,6 +2,37 @@
 Describe 'install.sh'
   docker_unavailable() { ! docker info >/dev/null 2>&1; }
 
+  It 'uses the latest stable GitHub release by default'
+    When run env YX_INSTALLER_PRINT_SOURCE=1 YX_SHELL_CHOICE=2 NO_COLOR=1 bash "$TEST_PROJECT_DIR/install.sh"
+    The status should be success
+    The output should include 'https://github.com/mattwynne/yaks/releases/latest/download/yx-'
+  End
+
+  It 'uses a versioned GitHub release when YX_VERSION is set'
+    When run env YX_INSTALLER_PRINT_SOURCE=1 YX_SHELL_CHOICE=2 NO_COLOR=1 YX_VERSION=1.2.3 bash "$TEST_PROJECT_DIR/install.sh"
+    The status should be success
+    The output should include 'https://github.com/mattwynne/yaks/releases/download/v1.2.3/yx-'
+  End
+
+  It 'accepts a leading v in YX_VERSION'
+    When run env YX_INSTALLER_PRINT_SOURCE=1 YX_SHELL_CHOICE=2 NO_COLOR=1 YX_VERSION=v1.2.3 bash "$TEST_PROJECT_DIR/install.sh"
+    The status should be success
+    The output should include 'https://github.com/mattwynne/yaks/releases/download/v1.2.3/yx-'
+  End
+
+  It 'uses the edge GitHub release when YX_CHANNEL=edge'
+    When run env YX_INSTALLER_PRINT_SOURCE=1 YX_SHELL_CHOICE=2 NO_COLOR=1 YX_CHANNEL=edge bash "$TEST_PROJECT_DIR/install.sh"
+    The status should be success
+    The output should include 'https://github.com/mattwynne/yaks/releases/download/edge/yx-'
+  End
+
+  It 'rejects unknown channels'
+    When run env YX_INSTALLER_PRINT_SOURCE=1 YX_SHELL_CHOICE=2 NO_COLOR=1 YX_CHANNEL=nightly bash "$TEST_PROJECT_DIR/install.sh"
+    The status should be failure
+    The output should include 'Installing yx (yaks CLI)...'
+    The error should include 'Error: YX_CHANNEL must be stable or edge'
+  End
+
   It 'installs yx from release zip and runs smoke tests'
     Skip if "release not present: run \`dev release-linux\`" test ! -f "$TEST_PROJECT_DIR/result-linux/yx-linux.zip"
     Skip if "docker not available" docker_unavailable
