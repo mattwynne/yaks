@@ -25,6 +25,12 @@ verification.
 Add user-visible changes to [CHANGELOG.md](CHANGELOG.md) under
 `[Unreleased]` in the appropriate section.
 
+## Releases
+
+See [docs/releases.md](docs/releases.md) for the versioning policy,
+release channels, changelog discipline, and intended no-think release
+workflow.
+
 ## Testing
 
 ```bash
