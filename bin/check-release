@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 VERSION" >&2
+}
+
+fail() {
+  echo "❌ $*" >&2
+  exit 1
+}
+
+pass() {
+  echo "✓ $*"
+}
+
+warn() {
+  echo "⚠️  $*" >&2
+}
+
+if [ "$#" -ne 1 ]; then
+  usage
+  exit 2
+fi
+
+version="$1"
+release_version="${version#v}"
+
+if [[ ! "$version" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+  fail "Version must look like SemVer (for example: 1.2.3 or v1.2.3)"
+fi
+pass "Version format: $version"
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+cd "$repo_root"
+
+if [ ! -f Cargo.toml ]; then
+  fail "Cargo.toml not found in $repo_root"
+fi
+
+cargo_version=$(awk '
+  /^\[package\]$/ { in_package = 1; next }
+  /^\[/ { in_package = 0 }
+  in_package && /^version[[:space:]]*=/ {
+    value = $0
+    sub(/^[^=]*=[[:space:]]*/, "", value)
+    gsub(/"/, "", value)
+    gsub(/[[:space:]]/, "", value)
+    print value
+    exit
+  }
+' Cargo.toml)
+
+if [ -z "$cargo_version" ]; then
+  fail "Could not read package.version from Cargo.toml"
+fi
+if [ "$cargo_version" != "$release_version" ]; then
+  fail "Cargo.toml package.version is $cargo_version, expected $release_version"
+fi
+pass "Cargo.toml version matches"
+
+if [ ! -f Cargo.lock ]; then
+  fail "Cargo.lock not found"
+fi
+if ! command -v cargo >/dev/null 2>&1; then
+  fail "cargo not found; cannot verify Cargo.lock"
+fi
+if ! cargo metadata --locked --quiet --manifest-path Cargo.toml >/dev/null; then
+  fail "Cargo.lock is not up to date (cargo metadata --locked failed)"
+fi
+pass "Cargo.lock is up to date"
+
+changelog=""
+for candidate in CHANGELOG.md Changelog.md changelog.md; do
+  if [ -f "$candidate" ]; then
+    changelog="$candidate"
+    break
+  fi
+done
+if [ -z "$changelog" ]; then
+  fail "No changelog found (expected CHANGELOG.md)"
+fi
+
+section_script="$repo_root/bin/changelog-section"
+if [ ! -x "$section_script" ]; then
+  fail "Missing executable changelog section helper: $section_script"
+fi
+
+section=$("$section_script" "$release_version" "$changelog")
+if ! printf '%s\n' "$section" | grep -Eq '[^[:space:]]'; then
+  fail "$changelog has no non-empty section for $release_version"
+fi
+pass "$changelog has a non-empty $release_version section"
+
+check_yx_version() {
+  local yx_bin="${YX_BIN:-}"
+  if [ -z "$yx_bin" ] && [ -x target/release/yx ]; then
+    yx_bin="target/release/yx"
+  fi
+  if [ -z "$yx_bin" ]; then
+    yx_bin=$(command -v yx 2>/dev/null || true)
+  fi
+
+  if [ -z "$yx_bin" ] || [ ! -x "$yx_bin" ]; then
+    warn "No built yx binary found; skipping yx --version check"
+    return 0
+  fi
+
+  local output
+  if ! output=$("$yx_bin" --version 2>&1); then
+    fail "$yx_bin --version failed: $output"
+  fi
+
+  local yx_version
+  yx_version=$(printf '%s\n' "$output" \
+    | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?' \
+    | head -n 1 \
+    | sed 's/^v//' || true)
+  if [ "$yx_version" != "$release_version" ]; then
+    fail "$yx_bin --version output '$output' does not include $release_version"
+  fi
+  pass "$yx_bin --version matches"
+}
+
+check_yx_version
+
+echo "✅ Release $release_version is ready"
