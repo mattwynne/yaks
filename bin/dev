@@ -16,9 +16,15 @@ setup() {
   echo "✅ Development environment ready"
 }
 
-# @cmd Create a release zip file
+# @cmd Prepare a release commit and annotated tag
+# @arg version! Version to release (X.Y.Z)
 # @alias r
 release() {
+  bin/release "${argc_version}"
+}
+
+# @cmd Create a release zip file
+release-zip() {
   echo "Building Rust binary..."
   cargo build --release
   echo ""

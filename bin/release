@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: bin/release VERSION
+
+Prepares a release commit and annotated tag for VERSION.
+
+Safety checks:
+  - must be on main
+  - working tree and index must be clean
+  - main must have an upstream and be up to date with it
+  - VERSION must be semver (X.Y.Z)
+
+The command updates Cargo.toml, Cargo.lock, and CHANGELOG.md, runs checks,
+commits "Release vX.Y.Z", creates annotated tag vX.Y.Z, and prints the push
+command to run manually.
+USAGE
+}
+
+fail() {
+  echo "❌ $*" >&2
+  exit 1
+}
+
+run() {
+  echo "+ $*"
+  "$@"
+}
+
+version="${1:-}"
+if [ -z "$version" ] || [ "${version:-}" = "-h" ] || [ "${version:-}" = "--help" ]; then
+  usage
+  if [ -z "$version" ]; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if [ "$#" -ne 1 ]; then
+  usage
+  exit 1
+fi
+
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "VERSION must be semver like 1.2.3 (got '$version')"
+fi
+
+tag="v$version"
+release_date="${YX_RELEASE_DATE:-$(date +%F)}"
+check_command="${YX_RELEASE_CHECK_COMMAND:-bin/dev check --force}"
+
+[ -f Cargo.toml ] || fail "Cargo.toml not found; run from repository root"
+[ -f Cargo.lock ] || fail "Cargo.lock not found; run from repository root"
+[ -f CHANGELOG.md ] || fail "CHANGELOG.md not found"
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git repository"
+
+current_branch=$(git branch --show-current)
+[ "$current_branch" = "main" ] || fail "must be on main (currently on ${current_branch:-detached HEAD})"
+
+if [ -n "$(git status --porcelain)" ]; then
+  fail "working tree must be clean before releasing"
+fi
+
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+[ -n "$upstream" ] || fail "main has no upstream; set one before releasing"
+
+remote=${upstream%%/*}
+run git fetch "$remote"
+
+local_head=$(git rev-parse HEAD)
+upstream_head=$(git rev-parse '@{u}')
+base=$(git merge-base HEAD '@{u}')
+
+if [ "$local_head" = "$upstream_head" ]; then
+  :
+elif [ "$local_head" = "$base" ]; then
+  fail "main is behind $upstream; pull/rebase before releasing"
+elif [ "$upstream_head" = "$base" ]; then
+  fail "main is ahead of $upstream; push or reset before releasing"
+else
+  fail "main has diverged from $upstream"
+fi
+
+if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+  fail "tag $tag already exists"
+fi
+
+if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+  fail "CHANGELOG.md must contain a '## [Unreleased]' section"
+fi
+
+python3 - "$version" "$release_date" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+version, release_date = sys.argv[1], sys.argv[2]
+
+cargo = Path("Cargo.toml")
+text = cargo.read_text()
+new_text, count = re.subn(
+    r'(?m)^(version\s*=\s*)"[^"]+"',
+    rf'\1"{version}"',
+    text,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("could not update package version in Cargo.toml")
+cargo.write_text(new_text)
+
+changelog = Path("CHANGELOG.md")
+text = changelog.read_text()
+replacement = f"## [Unreleased]\n\n## [{version}] - {release_date}"
+new_text, count = re.subn(r'^## \[Unreleased\]', replacement, text, count=1, flags=re.M)
+if count != 1:
+    raise SystemExit("could not promote [Unreleased] in CHANGELOG.md")
+changelog.write_text(new_text)
+PY
+
+# Refresh Cargo.lock with the new package version without building everything.
+run cargo generate-lockfile >/dev/null
+
+if ! grep -q "^version = \"$version\"" Cargo.toml; then
+  fail "Cargo.toml does not contain version $version after bump"
+fi
+
+python3 - "$version" <<'PY'
+from pathlib import Path
+import sys
+version = sys.argv[1]
+lock = Path("Cargo.lock").read_text()
+if f'name = "yx"\nversion = "{version}"' not in lock:
+    raise SystemExit(f"Cargo.lock does not contain yx version {version}")
+changelog = Path("CHANGELOG.md").read_text()
+if f"## [Unreleased]\n\n## [{version}]" not in changelog:
+    raise SystemExit("CHANGELOG.md was not promoted correctly")
+PY
+
+if [ -z "$(git status --porcelain -- Cargo.toml Cargo.lock CHANGELOG.md)" ]; then
+  fail "release produced no changes"
+fi
+
+unexpected=$(git status --porcelain | awk '{print $2}' | grep -Ev '^(Cargo\.toml|Cargo\.lock|CHANGELOG\.md)$' || true)
+if [ -n "$unexpected" ]; then
+  echo "$unexpected" >&2
+  fail "unexpected files changed during release preparation"
+fi
+
+if [ -n "$check_command" ]; then
+  echo "Running release checks: $check_command"
+  # Intentionally split as a shell command so callers can set env/compound commands.
+  bash -c "$check_command"
+fi
+
+run git add Cargo.toml Cargo.lock CHANGELOG.md
+run git commit -m "Release $tag"
+run git tag -a "$tag" -m "Release $tag"
+
+cat <<EOF
+✅ Prepared release $tag
+
+Review the release, then push with:
+  git push $remote main && git push $remote $tag
+EOF
