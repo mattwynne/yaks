@@ -78,22 +78,17 @@ The intended human workflow is:
 
 ```bash
 dev release 0.2.0
-git push origin main v0.2.0
 ```
 
-or, if push support is built into the command:
-
-```bash
-dev release 0.2.0 --push
-```
-
-Then verify that GitHub Actions published the GitHub Release for `v0.2.0` and
-that the expected assets are attached.
+The command pushes `main` and `v0.2.0` to the configured upstream remote after
+checks, commit, and tag creation succeed. Then verify that GitHub Actions
+published the GitHub Release for `v0.2.0` and that the expected assets are
+attached.
 
 ## What `dev release X.Y.Z` should do
 
-The release command should be safe to run and safe to abort before pushing. It
-should fail early with clear messages rather than publishing a partial release.
+The release command should be safe to run and should fail early with clear
+messages rather than publishing a partial release.
 
 Expected behaviour:
 
@@ -116,7 +111,7 @@ Expected behaviour:
 7. Commit the release changes with a predictable message, for example
    `Release vX.Y.Z`.
 8. Create annotated tag `vX.Y.Z` on that commit.
-9. Print the exact push command, or push when `--push` was supplied.
+9. Push `main` and `vX.Y.Z` to the configured upstream remote without prompting.
 
 The command should not hide failures. If any validation, check, build, commit, or
 tag step fails, it should stop and leave the repository in a recoverable state.
@@ -156,9 +151,9 @@ git reset --hard HEAD~1
 
 Then fix the problem and rerun the release command.
 
-### The tag exists locally but was not pushed
+### The commit or tag exists locally but was not pushed
 
-If the tag points at the correct release commit, push it:
+If the release commit and tag point at the correct release, push them:
 
 ```bash
 git push origin main vX.Y.Z

@@ -5,17 +5,18 @@ usage() {
   cat <<'USAGE'
 Usage: bin/release VERSION
 
-Prepares a release commit and annotated tag for VERSION.
+Prepares, tags, and pushes a release for VERSION.
 
 Safety checks:
   - must be on main
   - working tree and index must be clean
   - main must have an upstream and be up to date with it
   - VERSION must be semver (X.Y.Z)
+  - release tag must not exist locally or on the upstream remote
 
 The command updates Cargo.toml, Cargo.lock, and CHANGELOG.md, runs checks,
-commits "Release vX.Y.Z", creates annotated tag vX.Y.Z, and prints the push
-command to run manually.
+commits "Release vX.Y.Z", creates annotated tag vX.Y.Z, then pushes main and
+the tag to the configured upstream remote.
 USAGE
 }
 
@@ -68,7 +69,7 @@ upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null ||
 [ -n "$upstream" ] || fail "main has no upstream; set one before releasing"
 
 remote=${upstream%%/*}
-run git fetch "$remote"
+run git fetch --no-tags "$remote"
 
 local_head=$(git rev-parse HEAD)
 upstream_head=$(git rev-parse '@{u}')
@@ -86,6 +87,10 @@ fi
 
 if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
   fail "tag $tag already exists"
+fi
+
+if git ls-remote --exit-code --tags "$remote" "refs/tags/$tag" >/dev/null 2>&1; then
+  fail "tag $tag already exists on $remote"
 fi
 
 if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
@@ -158,10 +163,10 @@ fi
 run git add Cargo.toml Cargo.lock CHANGELOG.md
 run git commit -m "Release $tag"
 run git tag -a "$tag" -m "Release $tag"
+run git push --quiet --atomic "$remote" main "$tag"
 
 cat <<EOF
-✅ Prepared release $tag
+✅ Released $tag
 
-Review the release, then push with:
-  git push $remote main && git push $remote $tag
+Pushed main and $tag to $remote.
 EOF

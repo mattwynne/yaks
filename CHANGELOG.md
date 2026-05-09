@@ -10,6 +10,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ### Changed
 
+- `bin/release` and `bin/dev release X.Y.Z` now push `main` and the release tag to the configured upstream remote after successful checks, commit, and tag creation.
+
 ### Deprecated
 
 ### Removed

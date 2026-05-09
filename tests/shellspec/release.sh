@@ -42,17 +42,18 @@ EOF
   BeforeEach 'setup_release_repo'
   AfterEach 'cleanup_release_repo'
 
-  It 'prepares a release commit and annotated tag without pushing'
+  It 'prepares a release commit and annotated tag, then pushes them'
     When run sh -c "cd '$RELEASE_REPO' && YX_RELEASE_CHECK_COMMAND=true YX_RELEASE_DATE=2026-05-07 '$TEST_PROJECT_DIR/bin/release' 0.2.0"
     The status should be success
-    The output should include 'Prepared release v0.2.0'
-    The output should include 'git push origin main && git push origin v0.2.0'
+    The output should include 'Released v0.2.0'
+    The output should include 'Pushed main and v0.2.0 to origin.'
     The contents of file "$RELEASE_REPO/Cargo.toml" should include 'version = "0.2.0"'
     The contents of file "$RELEASE_REPO/Cargo.lock" should include 'version = "0.2.0"'
     The contents of file "$RELEASE_REPO/CHANGELOG.md" should include '## [Unreleased]'
     The contents of file "$RELEASE_REPO/CHANGELOG.md" should include '## [0.2.0] - 2026-05-07'
     commit_subject=$(git -C "$RELEASE_REPO" log -1 --pretty=%s)
     tag_name=$(git -C "$RELEASE_REPO" tag -l v0.2.0)
+    origin_main_subject=$(git -C "$RELEASE_ORIGIN" log -1 --pretty=%s refs/heads/main)
     if git -C "$RELEASE_ORIGIN" rev-parse --verify refs/tags/v0.2.0 >/dev/null 2>&1; then
       tag_pushed_status=0
     else
@@ -60,7 +61,8 @@ EOF
     fi
     The variable commit_subject should eq 'Release v0.2.0'
     The variable tag_name should eq 'v0.2.0'
-    The variable tag_pushed_status should eq 1
+    The variable origin_main_subject should eq 'Release v0.2.0'
+    The variable tag_pushed_status should eq 0
   End
 
   It 'refuses to release from a non-main branch'
@@ -75,5 +77,15 @@ EOF
     When run sh -c "cd '$RELEASE_REPO' && YX_RELEASE_CHECK_COMMAND=true '$TEST_PROJECT_DIR/bin/release' 0.2.0"
     The status should be failure
     The error should include 'working tree must be clean'
+  End
+
+  It 'refuses to release when the tag already exists on the remote'
+    git -C "$RELEASE_REPO" tag v0.2.0
+    git -C "$RELEASE_REPO" push --quiet origin v0.2.0
+    git -C "$RELEASE_REPO" tag --delete v0.2.0 >/dev/null
+    When run sh -c "cd '$RELEASE_REPO' && YX_RELEASE_CHECK_COMMAND=true '$TEST_PROJECT_DIR/bin/release' 0.2.0"
+    The status should be failure
+    The output should include '+ git fetch --no-tags origin'
+    The error should include 'tag v0.2.0 already exists on origin'
   End
 End
