@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{CommandFactory, Parser};
-use std::io::{IsTerminal, Write};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::broken_pipe_guard::BrokenPipeGuard;
