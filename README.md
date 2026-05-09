@@ -4,9 +4,17 @@
 >
 > -- Woody Zuill, https://agilemaxims.com
 
-Yaks is a friendly command-line TODO list for software teams. It stores work as a tree of nested goals — a _yak map_ — so you can capture the real shape of the work as you discover it.
+Yaks is a tiny, fast yak map for software teams: a command-line way to capture the work you discover while doing the work.
 
-It's designed for humans and AI coding agents working together in the same codebase. The yak map syncs through git, so everyone can update the plan from any branch, clone, or worktree without merge conflicts or extra infrastructure.
+A yak map is a tree of nested goals. Put prerequisites underneath the larger goal they unlock, and the map shows what can happen now, what can happen in parallel, and what is still blocked.
+
+Yaks is built around three values:
+
+- **Simple**: everything is a yak. No separate epics, stories, tasks, bugs, or chores. Just multi-word names, optional context, tags, and fields when your team needs them. The core flow is `todo` → `wip` → `done`, with `blocked` available when work is explicitly waiting.
+- **Collaborative**: yaks sync through git with conflict-free event merging. Multiple people and coding agents can update the same map from different branches, clones, and worktrees without coordinating edits.
+- **Delightful**: the CLI should feel instant (<100ms for everyday operations), forgiving, and pleasant: fuzzy matching, tab completion, multi-word names, JSON output, and a pretty tree.
+
+It's designed for humans and AI coding agents working together in the same codebase, without adding a server, database, or heavyweight process.
 
 ![demo](demo.gif)
 
@@ -53,6 +61,15 @@ Children block their parent: put prerequisites underneath the larger goal. That 
 
 ## For AI coding agents
 
+Yaks does not need a special agent integration. Agents can use the same CLI as humans:
+
+- `yx list` / `yx show` to discover work and read context
+- `yx start` to claim work
+- `yx add` / `yx context` to record discoveries
+- `yx done` to finish work
+- `yx sync` to share updates
+- `yx list --format json` and `yx show --format json` for structured output
+
 Tell your coding agent that this repo uses yaks. For example:
 
 ```bash
@@ -65,15 +82,7 @@ If your agent reads `AGENTS.md`, you can add the same line there too:
 echo 'This project uses yaks (yx) for task management. See !yx help' > AGENTS.md
 ```
 
-Agents can then use normal `yx` commands to discover work, claim it, add notes, complete it, and sync with everyone else. Multiple agents can update the yak map at the same time; yaks uses an event-sourced CRDT merge so those updates do not conflict.
-
-## Principles
-
-**Simple.** Everything is a yak. No epics, stories, tasks, bugs, or chores. No priority fields, assignees, or estimates. Three states: todo, wip, done. Use tags and custom fields to model your own workflow.
-
-**Collaborative.** Yaks uses event sourcing on a hidden git ref. Changes from any branch, clone, or worktree merge automatically — no conflicts, no coordination, no extra infrastructure. If you can `git push`, you can share yaks.
-
-**Delightful.** The ergonomics are designed for both humans and agents. Robots get forgiving command and argument aliases for clumsy assumptions, plus JSON output as standard. Humans get a thoughtful, responsive UX with fuzzy name matching, tab completion, and useful views of the map.
+Multiple agents can update the yak map at the same time. Yaks uses an event-sourced CRDT-style merge on a hidden git ref, so simultaneous updates sync without normal file merge conflicts.
 
 ## Why "Yaks"?
 
@@ -83,17 +92,27 @@ It's the same idea as a [Mikado Graph](https://mikadomethod.info) or a [Discover
 
 ![image](https://github.com/user-attachments/assets/1e935831-7807-4127-a698-3fdb50615080)
 
-## How is this different from Beads?
+## Related tools and trade-offs
 
-[Beads](https://github.com/steveyegge/beads) is a powerful issue tracker built for AI agents. It has 81 fields per task, 19 dependency types, a SQL/Dolt database, and workflow templates. If you want a comprehensive system for orchestrating agents, it's impressive.
+Yaks is not trying to be the most complete issue tracker. It is trying to be a sharp, dependency-first planning tool that stays light enough for a team to use continuously while coding.
 
-Yaks takes the opposite approach. It's a sharp, simple tool that trusts teams to self-organise:
+### Beads
 
-- **One concept**: everything is a yak, nested under other yaks
-- **Conflict-free sync**: event-sourced CRDT merge means multiple people and agents can update the yak map simultaneously without coordination
-- **Zero infrastructure**: no database server, no config files, no lock files — just git
+[Beads](https://github.com/steveyegge/beads) is a comprehensive issue tracker and agent orchestration system. It offers a rich task schema, many dependency types, database-backed sync, workflow features, and integrations for managing agents.
 
-Yaks grew out of years of practice with XP, mob programming, and collaborative planning on human teams. Beads grew out of the single-user-multi-agent workflow. Different roots, different trade-offs.
+Yaks comes from XP, mob programming, and collaborative planning: make the emerging dependency map visible, keep the model small, and trust the team to self-organise. If you want a capable orchestration platform, Beads is worth a look. If you want a tiny CLI that keeps everyone oriented during the work, Yaks is deliberately smaller.
+
+### git-bug
+
+[git-bug](https://github.com/git-bug/git-bug) is a distributed, offline-first issue tracker that stores issues, comments, identities, and history as git objects in the repository. It can sync through git remotes, offers CLI/TUI/web interfaces, and can bridge to systems like GitHub and GitLab.
+
+Yaks also uses git for sharing, but it is not a GitHub-Issues-style tracker. It optimises for dependency-first yak maps, lightweight CLI workflow, agent-friendly tree/context output, and CRDT-style collaboration through git event sync. Choose git-bug when you want full issue tracking inside git; choose Yaks when the tree of discovered prerequisites is the central artefact.
+
+### kata
+
+[kata](https://github.com/wesm/kata) is a local-first issue ledger for humans and coding agents. It emphasises stable agent commands, JSON output, predictable failure modes, a TUI for human oversight, and auditability through events. Its current architecture uses a local daemon and SQLite store, with future shared-server collaboration planned.
+
+Yaks shares kata's interest in human/agent collaboration and a small complexity budget, but makes different choices: project-local yak maps, git-backed sharing today, no daemon, and a tree-shaped model where dependency structure is primary. kata is a good fit when you want a durable issue ledger with comments, labels, ownership, and a TUI; Yaks is a good fit when you want the fastest possible shared map of what is blocking what.
 
 ## Contributing
 
