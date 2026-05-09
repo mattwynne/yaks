@@ -56,6 +56,7 @@ spec_helper_loaded() {
 # Set up a clean test environment with a git repo
 setup_test_environment() {
   TEST_PROJECT_DIR=$(pwd)
+  export TEST_PROJECT_DIR
   export PATH="$TEST_PROJECT_DIR/bin:$PATH"
   TEST_WORK_DIR=$(mktemp -d)
   cd "$TEST_WORK_DIR" || return
