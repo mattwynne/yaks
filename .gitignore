@@ -37,8 +37,9 @@ target/
 mutants.out/
 mutants.out.old/
 
-# pi agent config (allow prompts, ignore the rest)
+# pi agent config (allow prompts/agents/extensions, ignore the rest)
 .pi/*
 !.pi/prompts/
+!.pi/agents/
 !.pi/extensions/
 node_modules/
