@@ -25,7 +25,6 @@ pub const COMMANDS: &[&str] = &[
     "log",
     "tag",
     "tags",
-    "config",
     "completions",
 ];
 

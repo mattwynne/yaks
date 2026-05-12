@@ -158,15 +158,6 @@ pub trait TestWorld {
     /// Create a clone of a repository for multi-repo tests
     fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()>;
 
-    /// Set a user config value (yx config set <key> <value>)
-    fn set_config(&mut self, key: &str, value: &str) -> Result<()>;
-
-    /// Get a user config value (yx config get <key>)
-    fn get_config(&mut self, key: &str) -> Result<()>;
-
-    /// List all user config values (yx config list)
-    fn list_config(&mut self) -> Result<()>;
-
     /// Get the exit code from the last command
     fn get_exit_code(&self) -> i32;
 }

@@ -31,8 +31,6 @@ pub struct FullStackWorld {
     pub interactive_responses: Vec<String>,
     /// Pending command to execute after collecting interactive responses
     pub pending_command: Option<Vec<String>>,
-    /// Temp directory for XDG_CONFIG_HOME (isolates config tests)
-    config_dir: TempDir,
     /// YX_FOCUS value to set for subsequent yx commands in this scenario
     yx_focus: Option<String>,
 }
@@ -41,8 +39,6 @@ impl FullStackWorld {
     fn new() -> Result<Self> {
         let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
         let repo_path = temp_dir.path().to_path_buf();
-        let config_dir = tempfile::tempdir().context("Failed to create config temp directory")?;
-
         // Initialize as a real git repo with .yaks gitignored
         Self::init_git_repo_with_gitignore(&temp_dir)?;
 
@@ -58,7 +54,6 @@ impl FullStackWorld {
             git_repo_subdir: None,
             interactive_responses: Vec::new(),
             pending_command: None,
-            config_dir,
             yx_focus: None,
         })
     }
@@ -1047,7 +1042,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
             .env("YX_ROOT", &self.repo_path)
-            .env("XDG_CONFIG_HOME", self.config_dir.path())
             .current_dir(&self.repo_path);
 
         if let Some(focus) = &self.yx_focus {
@@ -1070,7 +1064,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
             .env("YX_ROOT", &self.repo_path)
-            .env("XDG_CONFIG_HOME", self.config_dir.path())
             .env_remove("CLAUDECODE")
             .current_dir(&self.repo_path);
 
@@ -1089,7 +1082,6 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         let mut cmd = Command::new(yx_path);
         cmd.args(args)
             .env("YX_ROOT", &self.repo_path)
-            .env("XDG_CONFIG_HOME", self.config_dir.path())
             .current_dir(&self.repo_path);
 
         for (key, value) in envs {
@@ -1336,18 +1328,6 @@ impl TestWorld for FullStackWorld {
 
     fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()> {
         FullStackWorld::create_clone(self, origin, clone)
-    }
-
-    fn set_config(&mut self, key: &str, value: &str) -> Result<()> {
-        self.run_yx(&["config", "set", key, value])
-    }
-
-    fn get_config(&mut self, key: &str) -> Result<()> {
-        self.run_yx(&["config", "get", key])
-    }
-
-    fn list_config(&mut self) -> Result<()> {
-        self.run_yx(&["config", "list"])
     }
 
     fn get_exit_code(&self) -> i32 {

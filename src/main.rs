@@ -10,16 +10,14 @@ use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
 use yx::adapters::json_display::JsonDisplay;
 use yx::adapters::local_workspace::LocalWorkspace;
 use yx::adapters::tui_display::TuiDisplay;
-use yx::adapters::user_config::TomlFileConfig;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
     AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
-    EnsureGitignore, GenerateCompletions, GetConfig, ListConfig, ListTags, ListYaks, MoveYak,
-    PruneYaks, RemoveTag, RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetConfig,
-    SetState, SetSyncRemote, ShowContext, ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak,
-    SyncYaks, WriteContext, WriteField,
+    EnsureGitignore, GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag,
+    RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncRemote, ShowContext,
+    ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort};
@@ -255,37 +253,12 @@ enum Commands {
     /// Show event log from refs/notes/yaks
     #[command(display_order = 23)]
     Log,
-    /// Manage user configuration
-    #[command(display_order = 24)]
-    Config {
-        #[command(subcommand)]
-        action: ConfigAction,
-    },
     /// Generate shell completions (hidden)
     #[command(hide = true)]
     Completions {
         #[arg(last = true)]
         words: Vec<String>,
     },
-}
-
-#[derive(Parser, Debug)]
-enum ConfigAction {
-    /// Set a config value
-    Set {
-        /// Config key
-        key: String,
-        /// Config value
-        value: String,
-    },
-    /// Get a config value
-    Get {
-        /// Config key
-        key: String,
-    },
-    /// List all config values
-    #[command(alias = "ls")]
-    List,
 }
 
 #[derive(Parser, Debug)]
@@ -581,11 +554,6 @@ fn route_command(
             pager::Pager::with_pager("less -R").setup();
             handler.handle(ShowLog::new())
         }
-        Commands::Config { action } => match action {
-            ConfigAction::Set { key, value } => handler.handle(SetConfig::new(&key, &value)),
-            ConfigAction::Get { key } => handler.handle(GetConfig::new(&key)),
-            ConfigAction::List => handler.handle(ListConfig::new()),
-        },
         Commands::Completions { words } => handler.handle(GenerateCompletions::new(words)),
     }
 }
@@ -801,9 +769,6 @@ fn main() -> Result<()> {
         Box::new(NullWorkspace)
     };
 
-    // Initialize user config
-    let mut user_config = TomlFileConfig::new()?;
-
     // Create application with injected dependencies
     let mut app = Application::new(
         event_store.as_mut(),
@@ -816,8 +781,7 @@ fn main() -> Result<()> {
             .as_ref()
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
         auth.as_ref(),
-    )
-    .with_user_config(&mut user_config);
+    );
 
     // Ensure .yaks is gitignored (runs before any other command)
     app.handle(EnsureGitignore::new())?;

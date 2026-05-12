@@ -8,13 +8,13 @@ use super::test_world::TestWorld;
 use yx::adapters::json_display::JsonDisplay;
 use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::{
-    make_test_display, InMemoryAuthentication, InMemoryConfig, InMemoryEventStore, InMemoryInput,
-    InMemoryStorage, TestBuffer,
+    make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput, InMemoryStorage,
+    TestBuffer,
 };
 use yx::application::{
-    set_focus_override, AddTag, AddYak, Application, DoneYak, EditContext, GetConfig, ListConfig,
-    ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak, SetConfig, SetState,
-    ShowContext, ShowField, StartYak, SyncYaks, WriteField,
+    set_focus_override, AddTag, AddYak, Application, DoneYak, EditContext, ListTags, ListYaks,
+    MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak, SetState, ShowContext, ShowField,
+    StartYak, SyncYaks, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort, ReadYakStore};
@@ -86,7 +86,6 @@ pub struct InProcessWorld {
     input: InMemoryInput,
     auth: InMemoryAuthentication,
     workspace: TestWorkspace,
-    user_config: InMemoryConfig,
     error: String,
     exit_code: i32,
     /// Named user instances for multi-repo sync scenarios
@@ -124,7 +123,6 @@ impl InProcessWorld {
             input: InMemoryInput::new(),
             auth: InMemoryAuthentication::new(),
             workspace: TestWorkspace,
-            user_config: InMemoryConfig::new(),
             error: String::new(),
             exit_code: 0,
             repos: HashMap::new(),
@@ -149,8 +147,7 @@ impl InProcessWorld {
             &self.workspace,
             None,
             &self.auth,
-        )
-        .with_user_config(&mut self.user_config);
+        );
         set_focus_override(self.yx_focus.as_deref());
         let result = f(&mut app);
         set_focus_override(None);
@@ -176,8 +173,7 @@ impl InProcessWorld {
             &self.workspace,
             None,
             &self.auth,
-        )
-        .with_user_config(&mut self.user_config);
+        );
         set_focus_override(self.yx_focus.as_deref());
         let result = f(&mut app);
         set_focus_override(None);
@@ -652,21 +648,6 @@ impl TestWorld for InProcessWorld {
 
     fn create_clone(&mut self, origin: &str, clone: &str) -> Result<()> {
         InProcessWorld::create_clone(self, origin, clone)
-    }
-
-    fn set_config(&mut self, key: &str, value: &str) -> Result<()> {
-        let key = key.to_string();
-        let value = value.to_string();
-        self.try_execute(move |app| app.handle(SetConfig::new(&key, &value)))
-    }
-
-    fn get_config(&mut self, key: &str) -> Result<()> {
-        let key = key.to_string();
-        self.try_execute(move |app| app.handle(GetConfig::new(&key)))
-    }
-
-    fn list_config(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListConfig::new()))
     }
 
     fn get_exit_code(&self) -> i32 {

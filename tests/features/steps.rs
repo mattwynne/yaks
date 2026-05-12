@@ -590,17 +590,6 @@ both_worlds!(then(regex = r#"^the output should not include "(.+)"$"#)
 both_worlds!(then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)
     fn then_line_of_output_includes_fs / then_line_of_output_includes_ip (line_num: usize, expected: String) -> impl_line_of_output_includes);
 
-// -- Config steps --
-
-both_worlds!(when(regex = r#"^I set config "(.+)" to "(.+)"$"#)
-    fn when_set_config_fs / when_set_config_ip (key: String, value: String) -> impl_set_config);
-
-both_worlds!(when(regex = r#"^I get config "(.+)"$"#)
-    fn when_get_config_fs / when_get_config_ip (key: String) -> impl_get_config);
-
-both_worlds!(when("I list config")
-    fn when_list_config_fs / when_list_config_ip () -> impl_list_config);
-
 // -- Multi-repo steps shared via matching methods on both worlds --
 
 both_worlds!(given(regex = r#"^a bare git repository called ([\w-]+)$"#)
@@ -608,18 +597,6 @@ both_worlds!(given(regex = r#"^a bare git repository called ([\w-]+)$"#)
 
 both_worlds!(given(regex = r#"^a git clone of ([\w-]+) called ([\w-]+)$"#)
     fn given_git_clone_fs / given_git_clone_ip (origin: String, clone_name: String) -> impl_git_clone);
-
-fn impl_set_config(world: &mut dyn TestWorld, key: String, value: String) -> Result<()> {
-    world.set_config(&key, &value)
-}
-
-fn impl_get_config(world: &mut dyn TestWorld, key: String) -> Result<()> {
-    world.get_config(&key)
-}
-
-fn impl_list_config(world: &mut dyn TestWorld) -> Result<()> {
-    world.list_config()
-}
 
 fn impl_bare_git_repo(world: &mut dyn TestWorld, name: String) -> Result<()> {
     world.create_bare_repo(&name)
