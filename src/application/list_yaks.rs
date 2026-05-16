@@ -1061,6 +1061,53 @@ mod tests {
     }
 
     #[test]
+    fn ids_without_ready_uses_flat_store_order_but_ids_with_ready_uses_tree_order() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("zparent")).unwrap();
+        app.handle(AddYak::new("achild").with_parent(Some("zparent")))
+            .unwrap();
+        let yaks = ReadYakStore::list_yaks(&storage).unwrap();
+        let id_for = |name: &str| {
+            yaks.iter()
+                .find(|yak| yak.name.as_str() == name)
+                .unwrap()
+                .id
+                .as_str()
+                .to_string()
+        };
+        let child_id = id_for("achild");
+        let parent_id = id_for("zparent");
+        buffer.clear();
+
+        app.handle(ListYaks::new("ids", None, None)).unwrap();
+        let ids_without_ready: Vec<String> = buffer.contents().lines().map(String::from).collect();
+        assert_eq!(ids_without_ready, vec![child_id.clone(), parent_id]);
+
+        buffer.clear();
+        app.handle(ListYaks::new("ids", None, None).with_ready(true))
+            .unwrap();
+        let ids_with_ready: Vec<String> = buffer.contents().lines().map(String::from).collect();
+        assert_eq!(ids_with_ready, vec![child_id]);
+    }
+
+    #[test]
     fn ready_filter_includes_only_actionable_todo_yaks() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
