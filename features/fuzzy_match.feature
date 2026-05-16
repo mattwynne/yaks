@@ -15,7 +15,7 @@ Feature: Fuzzy match on yak names
       When I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] ideas
+        - [todo] ideas
           - [done] fix the build
           - [todo] buy a pony
           - [todo] fix the fridge

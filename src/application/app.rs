@@ -588,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn test_application_with_yak_map_state_propagation() {
+    fn test_application_with_yak_map_does_not_promote_parent_when_child_started() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
 
@@ -627,9 +627,9 @@ mod tests {
         })
         .unwrap();
 
-        // Verify parent is also wip
+        // Verify parent remains todo; readiness is derived from child completion.
         let parent_id = ReadYakStore::fuzzy_find_yak_id(&storage, "parent").unwrap();
         let parent = ReadYakStore::get_yak(&storage, &parent_id).unwrap();
-        assert_eq!(parent.state, crate::domain::YakState::Wip);
+        assert_eq!(parent.state, crate::domain::YakState::Todo);
     }
 }

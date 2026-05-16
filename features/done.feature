@@ -17,8 +17,8 @@ Feature: Mark yaks as done
         """
 
   Rule: Children can be marked done independently
-    Marking a child as done does not affect siblings. The parent
-    auto-transitions to "wip" when it has children.
+    Marking a child as done does not affect siblings or implicitly
+    promote the parent.
 
     Example: Marking a nested child as done
       Given I have a clean git repository
@@ -28,7 +28,7 @@ Feature: Mark yaks as done
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [done] child
         """
 

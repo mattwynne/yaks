@@ -35,12 +35,12 @@ Feature: Setting yak state
         - [wip] Fix the bug
         """
 
-  Rule: Done ancestors demote to wip when a child leaves done
+  Rule: Done ancestors demote to todo when a child leaves done
     A parent cannot remain done if any child is not done.
-    This is the symmetric counterpart to the existing rule that
-    promotes todo ancestors to wip when a child starts.
+    Reopening a child demotes done ancestors back to todo without
+    implicitly promoting them to wip.
 
-    Example: Child set from done to wip demotes done parent to wip
+    Example: Child set from done to wip demotes done parent to todo
       Given I have a clean git repository
       And I add the yak "parent"
       And I add the yak "child" under "parent"
@@ -50,11 +50,11 @@ Feature: Setting yak state
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [wip] child
         """
 
-    Example: Child set from done to todo demotes done parent to wip
+    Example: Child set from done to todo demotes done parent to todo
       Given I have a clean git repository
       And I add the yak "parent"
       And I add the yak "child" under "parent"
@@ -64,7 +64,7 @@ Feature: Setting yak state
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [todo] child
         """
 
@@ -80,8 +80,8 @@ Feature: Setting yak state
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] a
-          - [wip] b
+        - [todo] a
+          - [todo] b
             - [wip] c
         """
 
@@ -94,7 +94,7 @@ Feature: Setting yak state
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [wip] child
         """
 
@@ -110,7 +110,7 @@ Feature: Setting yak state
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [done] child-b
           - [wip] child-a
         """

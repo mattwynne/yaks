@@ -25,7 +25,7 @@ Feature: yx compact - Compact the event stream
       When I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] make the tea
+        - [todo] make the tea
           - [wip] buy biscuits
         """
 

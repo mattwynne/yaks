@@ -90,7 +90,7 @@ Feature: yx reset - Rebuild yaks from git tree
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [done] child
         """
 
@@ -120,7 +120,7 @@ Feature: yx reset - Rebuild yaks from git tree
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] alpha
+        - [todo] alpha
           - [wip] beta
         """
 

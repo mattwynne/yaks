@@ -119,7 +119,7 @@ Feature: List yaks
       When I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent a
+        - [todo] parent a
           - [done] child 1
           - [todo] child 2
         - [todo] parent b
@@ -181,7 +181,7 @@ Feature: List yaks
       When I list the yaks in "markdown" format filtering by "not-done"
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [todo] incomplete child
         """
 

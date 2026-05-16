@@ -35,7 +35,7 @@ Feature: Prune done yaks
       And I list the yaks in "markdown" format
       Then the output should be:
         """
-        - [wip] parent
+        - [todo] parent
           - [todo] child2
         """
 
