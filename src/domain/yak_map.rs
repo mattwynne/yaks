@@ -75,106 +75,127 @@ impl YakMap {
 
     /// Apply a single event to update the YakMap state
     fn apply(&mut self, event: YakEvent) -> Result<()> {
-        use crate::domain::YakEvent;
         match event {
-            YakEvent::Added(added, metadata) => {
-                self.yaks.insert(
-                    added.id.clone(),
-                    Yak {
-                        id: added.id.clone(),
-                        name: added.name.clone(),
-                        parent_id: added.parent_id.clone(),
-                        state: YakState::Todo,
-                        context: None,
-                        fields: HashMap::new(),
-                        tags: vec![],
-                        created_by: metadata.author.clone(),
-                        created_at: metadata.timestamp,
-                    },
-                );
-            }
-            YakEvent::Removed(removed, _) => {
-                self.yaks.remove(&removed.id);
-                self.blockers.remove(&removed.id);
-                for blockers in self.blockers.values_mut() {
-                    blockers.remove(&removed.id);
-                }
-            }
-            YakEvent::Moved(moved, _) => {
-                if let Some(yak) = self.yaks.get_mut(&moved.id) {
-                    yak.parent_id = moved.new_parent;
-                }
-            }
-            YakEvent::FieldUpdated(field_updated, _) => {
-                if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
-                    match field_updated.field_name.as_str() {
-                        ".state" => {
-                            if !field_updated.content.is_empty() {
-                                yak.state = field_updated.content.parse().unwrap_or(YakState::Todo);
-                            }
-                        }
-                        ".context.md" => {
-                            yak.context = if field_updated.content.is_empty() {
-                                None
-                            } else {
-                                Some(field_updated.content.clone())
-                            };
-                        }
-                        ".name" => {
-                            yak.name = Name::from(field_updated.content.as_str());
-                        }
-                        ".tags" => {
-                            yak.tags = field_updated
-                                .content
-                                .lines()
-                                .filter(|l| !l.is_empty())
-                                .map(String::from)
-                                .collect();
-                        }
-                        _ => {
-                            // Custom field
-                            if field_updated.content.is_empty() {
-                                yak.fields.remove(&field_updated.field_name);
-                            } else {
-                                yak.fields.insert(
-                                    field_updated.field_name.clone(),
-                                    field_updated.content.clone(),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
+            YakEvent::Added(added, metadata) => self.apply_added(added, metadata),
+            YakEvent::Removed(removed, _) => self.apply_removed(removed),
+            YakEvent::Moved(moved, _) => self.apply_moved(moved),
+            YakEvent::FieldUpdated(field_updated, _) => self.apply_field_updated(field_updated),
             YakEvent::BlockerAdded(e, _) => {
-                self.blockers
-                    .entry(e.target.clone())
-                    .or_default()
-                    .insert(e.blocker.clone(), e.reason.clone());
+                self.apply_blocker_added_or_updated(e.target, e.blocker, e.reason)
             }
             YakEvent::BlockerUpdated(e, _) => {
-                self.blockers
-                    .entry(e.target.clone())
-                    .or_default()
-                    .insert(e.blocker.clone(), e.reason.clone());
+                self.apply_blocker_added_or_updated(e.target, e.blocker, e.reason)
             }
-            YakEvent::BlockerRemoved(e, _) => {
-                if let Some(blockers) = self.blockers.get_mut(&e.target) {
-                    blockers.remove(&e.blocker);
-                    if blockers.is_empty() {
-                        self.blockers.remove(&e.target);
-                    }
-                }
-            }
+            YakEvent::BlockerRemoved(e, _) => self.apply_blocker_removed(e),
             YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
-                // Replace all yaks with the snapshots
-                self.yaks.clear();
-                self.blockers.clear();
-                for yak in snapshots {
-                    self.yaks.insert(yak.id.clone(), yak);
-                }
+                self.apply_compacted(snapshots)
             }
         }
         Ok(())
+    }
+
+    fn apply_added(&mut self, added: AddedEvent, metadata: EventMetadata) {
+        self.yaks.insert(
+            added.id.clone(),
+            Yak {
+                id: added.id,
+                name: added.name,
+                parent_id: added.parent_id,
+                state: YakState::Todo,
+                context: None,
+                fields: HashMap::new(),
+                tags: vec![],
+                created_by: metadata.author,
+                created_at: metadata.timestamp,
+            },
+        );
+    }
+
+    fn apply_removed(&mut self, removed: RemovedEvent) {
+        self.yaks.remove(&removed.id);
+        self.blockers.remove(&removed.id);
+        for blockers in self.blockers.values_mut() {
+            blockers.remove(&removed.id);
+        }
+    }
+
+    fn apply_moved(&mut self, moved: MovedEvent) {
+        if let Some(yak) = self.yaks.get_mut(&moved.id) {
+            yak.parent_id = moved.new_parent;
+        }
+    }
+
+    fn apply_field_updated(&mut self, field_updated: FieldUpdatedEvent) {
+        if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
+            Self::apply_field_update_to_yak(yak, field_updated);
+        }
+    }
+
+    fn apply_field_update_to_yak(yak: &mut Yak, field_updated: FieldUpdatedEvent) {
+        match field_updated.field_name.as_str() {
+            ".state" => {
+                if !field_updated.content.is_empty() {
+                    yak.state = field_updated.content.parse().unwrap_or(YakState::Todo);
+                }
+            }
+            ".context.md" => {
+                yak.context = if field_updated.content.is_empty() {
+                    None
+                } else {
+                    Some(field_updated.content)
+                };
+            }
+            ".name" => {
+                yak.name = Name::from(field_updated.content.as_str());
+            }
+            ".tags" => {
+                yak.tags = field_updated
+                    .content
+                    .lines()
+                    .filter(|l| !l.is_empty())
+                    .map(String::from)
+                    .collect();
+            }
+            _ => Self::apply_custom_field_update(yak, field_updated),
+        }
+    }
+
+    fn apply_custom_field_update(yak: &mut Yak, field_updated: FieldUpdatedEvent) {
+        if field_updated.content.is_empty() {
+            yak.fields.remove(&field_updated.field_name);
+        } else {
+            yak.fields
+                .insert(field_updated.field_name, field_updated.content);
+        }
+    }
+
+    fn apply_blocker_added_or_updated(
+        &mut self,
+        target: YakId,
+        blocker: YakId,
+        reason: Option<String>,
+    ) {
+        self.blockers
+            .entry(target)
+            .or_default()
+            .insert(blocker, reason);
+    }
+
+    fn apply_blocker_removed(&mut self, e: BlockerRemovedEvent) {
+        if let Some(blockers) = self.blockers.get_mut(&e.target) {
+            blockers.remove(&e.blocker);
+            if blockers.is_empty() {
+                self.blockers.remove(&e.target);
+            }
+        }
+    }
+
+    fn apply_compacted(&mut self, snapshots: Vec<Yak>) {
+        self.yaks.clear();
+        self.blockers.clear();
+        for yak in snapshots {
+            self.yaks.insert(yak.id.clone(), yak);
+        }
     }
 
     pub fn take_events(&mut self) -> Vec<YakEvent> {
