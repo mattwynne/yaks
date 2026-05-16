@@ -1738,6 +1738,39 @@ mod tests {
     }
 
     #[test]
+    fn test_update_state_done_child_to_done_does_not_demote_done_parent() {
+        let mut map = YakMap::new();
+        let parent_id = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child_id = map
+            .add_yak("child", Some(parent_id.clone()), None, None, None, vec![])
+            .unwrap();
+        map.update_state(child_id.clone(), "done".to_string())
+            .unwrap();
+        map.update_state(parent_id.clone(), "done".to_string())
+            .unwrap();
+        map.take_events();
+
+        map.update_state(child_id.clone(), "done".to_string())
+            .unwrap();
+
+        assert_eq!(map.yaks.get(&parent_id).unwrap().state, YakState::Done);
+        assert_eq!(map.yaks.get(&child_id).unwrap().state, YakState::Done);
+
+        let events = map.take_events();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            YakEvent::FieldUpdated(event, _) => {
+                assert_eq!(event.id, child_id);
+                assert_eq!(event.field_name, ".state");
+                assert_eq!(event.content, "done");
+            }
+            _ => panic!("Expected child state event"),
+        }
+    }
+
+    #[test]
     fn test_update_state_demotes_done_parent_to_todo_when_child_leaves_done() {
         let mut map = YakMap::new();
         let parent_id = map
