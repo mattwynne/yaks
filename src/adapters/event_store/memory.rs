@@ -54,6 +54,9 @@ fn build_snapshots_from_events(events: &[YakEvent]) -> Result<Vec<crate::domain:
                     }
                 }
             }
+            YakEvent::BlockerAdded(_, _)
+            | YakEvent::BlockerUpdated(_, _)
+            | YakEvent::BlockerRemoved(_, _) => {}
             YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
                 yaks.clear();
                 for snap in snapshots {

@@ -24,6 +24,9 @@ pub trait TestWorld {
     /// List all yaks (default pretty format)
     fn list_yaks(&mut self) -> Result<()>;
 
+    /// List ready yaks (default pretty format)
+    fn list_yaks_ready(&mut self) -> Result<()>;
+
     /// List yaks with a specific format
     fn list_yaks_with_format(&mut self, format: &str) -> Result<()>;
 
@@ -58,6 +61,15 @@ pub trait TestWorld {
 
     /// Try to add a yak under a parent - captures result without bailing on failure
     fn try_add_yak_under(&mut self, name: &str, parent: &str) -> Result<()>;
+
+    /// Add an explicit blocker
+    fn add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()>;
+
+    /// Remove an explicit blocker
+    fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()>;
+
+    /// Show event log
+    fn show_log(&mut self) -> Result<()>;
 
     /// Remove a yak by name
     fn remove_yak(&mut self, name: &str) -> Result<()>;

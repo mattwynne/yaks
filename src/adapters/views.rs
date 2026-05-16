@@ -35,6 +35,16 @@ pub struct YakChildView {
     pub state: String,
 }
 
+/// View model for explicit blocker information in JSON list output.
+#[derive(Debug, Clone, Serialize)]
+pub struct YakBlockerView {
+    pub id: String,
+    pub name: String,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 /// View model for displaying the yak tree structure (used in `yx ls`)
 #[derive(Debug, Clone, Serialize)]
 pub struct YakTreeView {
@@ -53,6 +63,7 @@ pub struct YakTreeNode {
     pub state: String,
     /// Derived actionable status: true when the yak is todo and all direct children are done.
     pub ready: bool,
+    pub blocked_by: Vec<YakBlockerView>,
     pub context: Option<String>,
     pub parent_id: Option<String>,
     pub fields: std::collections::HashMap<String, String>,

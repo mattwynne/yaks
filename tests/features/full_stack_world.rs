@@ -1132,6 +1132,23 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["rm", name])
     }
 
+    fn add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()> {
+        match reason {
+            Some(reason) => self.run_yx(&[
+                "blocker", "add", target, "--by", blocker, "--reason", reason,
+            ]),
+            None => self.run_yx(&["blocker", "add", target, "--by", blocker]),
+        }
+    }
+
+    fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()> {
+        self.run_yx(&["blocker", "rm", target, "--by", blocker])
+    }
+
+    fn show_log(&mut self) -> Result<()> {
+        self.run_yx(&["log"])
+    }
+
     fn get_error(&self) -> String {
         self.error.clone()
     }
@@ -1142,6 +1159,10 @@ impl TestWorld for FullStackWorld {
 
     fn list_yaks(&mut self) -> Result<()> {
         self.run_yx(&["list"])
+    }
+
+    fn list_yaks_ready(&mut self) -> Result<()> {
+        self.run_yx(&["list", "--ready"])
     }
 
     fn list_yaks_with_format(&mut self, format: &str) -> Result<()> {

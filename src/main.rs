@@ -14,10 +14,11 @@ use yx::adapters::user_display::ConsoleDisplay;
 use yx::adapters::user_input::ConsoleInput;
 use yx::adapters::yak_store::DirectoryStorage;
 use yx::application::{
-    AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext, EditField,
-    EnsureGitignore, GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks, RemoveTag,
-    RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetState, SetSyncRemote, ShowContext,
-    ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak, SyncYaks, WriteContext, WriteField,
+    AddBlocker, AddTag, AddYak, Application, CommandHandler, CompactEvents, DoneYak, EditContext,
+    EditField, EnsureGitignore, GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks,
+    RemoveBlocker, RemoveTag, RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetState,
+    SetSyncRemote, ShowContext, ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak, SyncYaks,
+    WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort};
@@ -223,8 +224,14 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Manage explicit blockers on a yak
+    #[command(display_order = 9)]
+    Blocker {
+        #[command(subcommand)]
+        action: BlockerAction,
+    },
     /// Manage tags on a yak
-    #[command(alias = "tags", display_order = 9)]
+    #[command(alias = "tags", display_order = 10)]
     Tag {
         #[command(subcommand)]
         action: TagAction,
@@ -261,6 +268,30 @@ enum Commands {
     Completions {
         #[arg(last = true)]
         words: Vec<String>,
+    },
+}
+
+#[derive(Parser, Debug)]
+enum BlockerAction {
+    /// Add or update an explicit blocker
+    Add {
+        /// The yak being blocked
+        yak: String,
+        /// The yak that is blocking it
+        #[arg(long = "by")]
+        blocker: String,
+        /// Optional blocker reason
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Remove an explicit blocker
+    #[command(alias = "remove")]
+    Rm {
+        /// The yak being blocked
+        yak: String,
+        /// The yak that is blocking it
+        #[arg(long = "by")]
+        blocker: String,
     },
 }
 
@@ -410,6 +441,17 @@ fn handle_tag_command(handler: &mut impl CommandHandler, action: TagAction) -> R
     }
 }
 
+fn handle_blocker_command(handler: &mut impl CommandHandler, action: BlockerAction) -> Result<()> {
+    match action {
+        BlockerAction::Add {
+            yak,
+            blocker,
+            reason,
+        } => handler.handle(AddBlocker::new(&yak, &blocker).with_reason(reason.as_deref())),
+        BlockerAction::Rm { yak, blocker } => handler.handle(RemoveBlocker::new(&yak, &blocker)),
+    }
+}
+
 /// Handle the Add command with its complex context resolution logic
 #[allow(clippy::too_many_arguments)]
 fn handle_add_command(
@@ -549,6 +591,7 @@ fn route_command(
                 handler.handle(ResetDiskFromGit::new())
             }
         }
+        Commands::Blocker { action } => handle_blocker_command(handler, action),
         Commands::Tag { action } => handle_tag_command(handler, action),
         Commands::Compact { yes } => handler.handle(CompactEvents::new().with_skip_confirm(yes)),
         Commands::Sync { url, show } => {

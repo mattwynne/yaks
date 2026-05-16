@@ -1,5 +1,6 @@
 // Application layer - use cases that orchestrate domain + ports
 
+mod add_blocker;
 mod add_tag;
 mod add_yak;
 mod app;
@@ -15,6 +16,7 @@ mod list_tags;
 mod list_yaks;
 mod move_yak;
 mod prune_yaks;
+mod remove_blocker;
 mod remove_tag;
 mod remove_yak;
 mod rename_yak;
@@ -33,6 +35,7 @@ mod use_case;
 mod write_context;
 mod write_field;
 
+pub use add_blocker::AddBlocker;
 pub use add_tag::AddTag;
 pub use add_yak::AddYak;
 #[cfg(any(test, feature = "test-support"))]
@@ -50,6 +53,7 @@ pub use list_tags::ListTags;
 pub use list_yaks::ListYaks;
 pub use move_yak::MoveYak;
 pub use prune_yaks::PruneYaks;
+pub use remove_blocker::RemoveBlocker;
 pub use remove_tag::RemoveTag;
 pub use remove_yak::RemoveYak;
 pub use rename_yak::RenameYak;

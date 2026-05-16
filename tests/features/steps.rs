@@ -142,6 +142,10 @@ fn impl_list_yaks(world: &mut dyn TestWorld) -> Result<()> {
     world.list_yaks()
 }
 
+fn impl_list_yaks_ready(world: &mut dyn TestWorld) -> Result<()> {
+    world.list_yaks_ready()
+}
+
 fn impl_list_yaks_format(world: &mut dyn TestWorld, format: String) -> Result<()> {
     world.list_yaks_with_format(&format)
 }
@@ -193,6 +197,27 @@ fn impl_try_add_yak_under(
     parent: String,
 ) -> Result<()> {
     world.try_add_yak_under(&yak_name, &parent)
+}
+
+fn impl_add_blocker(world: &mut dyn TestWorld, blocker: String, target: String) -> Result<()> {
+    world.add_blocker(&target, &blocker, None)
+}
+
+fn impl_add_blocker_reason(
+    world: &mut dyn TestWorld,
+    blocker: String,
+    target: String,
+    reason: String,
+) -> Result<()> {
+    world.add_blocker(&target, &blocker, Some(&reason))
+}
+
+fn impl_remove_blocker(world: &mut dyn TestWorld, blocker: String, target: String) -> Result<()> {
+    world.remove_blocker(&target, &blocker)
+}
+
+fn impl_show_log(world: &mut dyn TestWorld) -> Result<()> {
+    world.show_log()
 }
 
 fn impl_remove_yak(world: &mut dyn TestWorld, yak_name: String) -> Result<()> {
@@ -388,6 +413,86 @@ fn impl_line_of_output_includes(
     check_line_of_output_includes(world, line_num, &expected)
 }
 
+fn json_nodes(world: &dyn TestWorld) -> Result<Vec<serde_json::Value>> {
+    let output = world.get_output();
+    let json: serde_json::Value = serde_json::from_str(&output)
+        .with_context(|| format!("Expected JSON output, got: {output}"))?;
+    Ok(json.as_array().context("Expected JSON array")?.clone())
+}
+
+fn find_json_yak<'a>(nodes: &'a [serde_json::Value], name: &str) -> Result<&'a serde_json::Value> {
+    nodes
+        .iter()
+        .find(|node| node["name"] == name)
+        .with_context(|| format!("Expected JSON yak named '{name}' in {nodes:?}"))
+}
+
+fn impl_json_yak_ready(world: &dyn TestWorld, name: String, ready: String) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &name)?;
+    let expected = ready == "true";
+    anyhow::ensure!(
+        yak["ready"] == expected,
+        "Expected {name} ready={expected}, got {}",
+        yak["ready"]
+    );
+    Ok(())
+}
+
+fn impl_json_blocked_reason(
+    world: &dyn TestWorld,
+    target: String,
+    blocker: String,
+    reason: String,
+) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &target)?;
+    let blockers = yak["blocked_by"]
+        .as_array()
+        .context("blocked_by should be an array")?;
+    let found = blockers
+        .iter()
+        .any(|b| b["name"] == blocker && b["reason"] == reason);
+    anyhow::ensure!(
+        found,
+        "Expected {target} blocked by {blocker} with reason {reason}, got {blockers:?}"
+    );
+    Ok(())
+}
+
+fn impl_json_blocked_without_reason(
+    world: &dyn TestWorld,
+    target: String,
+    blocker: String,
+) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &target)?;
+    let blockers = yak["blocked_by"]
+        .as_array()
+        .context("blocked_by should be an array")?;
+    let found = blockers
+        .iter()
+        .any(|b| b["name"] == blocker && b["reason"].is_null());
+    anyhow::ensure!(
+        found,
+        "Expected {target} blocked by {blocker} without a reason, got {blockers:?}"
+    );
+    Ok(())
+}
+
+fn impl_json_no_blockers(world: &dyn TestWorld, target: String) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &target)?;
+    let blockers = yak["blocked_by"]
+        .as_array()
+        .context("blocked_by should be an array")?;
+    anyhow::ensure!(
+        blockers.is_empty(),
+        "Expected no blockers, got {blockers:?}"
+    );
+    Ok(())
+}
+
 // ============================================================================
 // Shared step registrations (both FullStackWorld and InProcessWorld)
 // ============================================================================
@@ -405,6 +510,12 @@ both_worlds!(given(regex = r#"^I add the yak "([^"]+)" under "([^"]+)"$"#)
 
 both_worlds!(given(regex = r#"^I mark the yak "(.+)" as done$"#)
     fn given_done_yak_fs / given_done_yak_ip (yak_name: String) -> impl_done_yak);
+
+both_worlds!(given(regex = r#"^I add blocker "([^"]+)" to "([^"]+)"$"#)
+    fn given_add_blocker_fs / given_add_blocker_ip (blocker: String, target: String) -> impl_add_blocker);
+
+both_worlds!(given(regex = r#"^I add blocker "([^"]+)" to "([^"]+)" with reason "([^"]*)"$"#)
+    fn given_add_blocker_reason_fs / given_add_blocker_reason_ip (blocker: String, target: String, reason: String) -> impl_add_blocker_reason);
 
 both_worlds!(given(regex = r#"^I set the state of "(.+)" to "(.+)"$"#)
     fn given_set_state_fs / given_set_state_ip (name: String, state: String) -> impl_set_state);
@@ -425,6 +536,9 @@ both_worlds!(when(regex = r#"^YX_FOCUS is set to "([^"]+)"$"#)
 
 both_worlds!(when(expr = "I list the yaks")
     fn when_list_yaks_fs / when_list_yaks_ip () -> impl_list_yaks);
+
+both_worlds!(when(expr = "I list ready yaks")
+    fn when_list_yaks_ready_fs / when_list_yaks_ready_ip () -> impl_list_yaks_ready);
 
 both_worlds!(when(regex = r#"^I list the yaks in "(.+)" format$"#)
     fn when_list_yaks_format_fs / when_list_yaks_format_ip (format: String) -> impl_list_yaks_format);
@@ -461,6 +575,18 @@ both_worlds!(when(regex = r#"^I try to add the yak "([^"]+)"$"#)
 
 both_worlds!(when(regex = r#"^I try to add the yak "([^"]+)" under "([^"]+)"$"#)
     fn when_try_add_yak_under_fs / when_try_add_yak_under_ip (yak_name: String, parent: String) -> impl_try_add_yak_under);
+
+both_worlds!(when(regex = r#"^I add blocker "([^"]+)" to "([^"]+)"$"#)
+    fn when_add_blocker_fs / when_add_blocker_ip (blocker: String, target: String) -> impl_add_blocker);
+
+both_worlds!(when(regex = r#"^I add blocker "([^"]+)" to "([^"]+)" with reason "([^"]*)"$"#)
+    fn when_add_blocker_reason_fs / when_add_blocker_reason_ip (blocker: String, target: String, reason: String) -> impl_add_blocker_reason);
+
+both_worlds!(when(regex = r#"^I remove blocker "([^"]+)" from "([^"]+)"$"#)
+    fn when_remove_blocker_fs / when_remove_blocker_ip (blocker: String, target: String) -> impl_remove_blocker);
+
+both_worlds!(when(expr = "I show the log")
+    fn when_show_log_fs / when_show_log_ip () -> impl_show_log);
 
 both_worlds!(when(regex = r#"^I remove the yak "(.+)"$"#)
     fn when_remove_yak_fs / when_remove_yak_ip (yak_name: String) -> impl_remove_yak);
@@ -589,6 +715,18 @@ both_worlds!(then(regex = r#"^the output should not include "(.+)"$"#)
 
 both_worlds!(then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)
     fn then_line_of_output_includes_fs / then_line_of_output_includes_ip (line_num: usize, expected: String) -> impl_line_of_output_includes);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should have ready (true|false)$"#)
+    fn then_json_yak_ready_fs / then_json_yak_ready_ip (name: String, ready: String) -> impl_json_yak_ready);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by "([^"]+)" with reason "([^"]+)"$"#)
+    fn then_json_blocked_reason_fs / then_json_blocked_reason_ip (target: String, blocker: String, reason: String) -> impl_json_blocked_reason);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by "([^"]+)" without a reason$"#)
+    fn then_json_blocked_without_reason_fs / then_json_blocked_without_reason_ip (target: String, blocker: String) -> impl_json_blocked_without_reason);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should not have blockers$"#)
+    fn then_json_no_blockers_fs / then_json_no_blockers_ip (target: String) -> impl_json_no_blockers);
 
 // -- Multi-repo steps shared via matching methods on both worlds --
 

@@ -12,9 +12,9 @@ use yx::adapters::{
     TestBuffer,
 };
 use yx::application::{
-    set_focus_override, AddTag, AddYak, Application, DoneYak, EditContext, ListTags, ListYaks,
-    MoveYak, PruneYaks, RemoveTag, RemoveYak, RenameYak, SetState, ShowContext, ShowField,
-    StartYak, SyncYaks, WriteField,
+    set_focus_override, AddBlocker, AddTag, AddYak, Application, DoneYak, EditContext, ListTags,
+    ListYaks, MoveYak, PruneYaks, RemoveBlocker, RemoveTag, RemoveYak, RenameYak, SetState,
+    ShowContext, ShowField, ShowLog, StartYak, SyncYaks, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort, ReadYakStore};
@@ -138,6 +138,7 @@ impl InProcessWorld {
         self.buffer.clear();
         self.error.clear();
 
+        let event_reader = self.event_store.clone();
         let mut app = Application::new(
             &mut self.event_store,
             &mut self.event_bus,
@@ -145,7 +146,7 @@ impl InProcessWorld {
             &self.display,
             &self.input,
             &self.workspace,
-            None,
+            Some(&event_reader),
             &self.auth,
         );
         set_focus_override(self.yx_focus.as_deref());
@@ -164,6 +165,7 @@ impl InProcessWorld {
         self.buffer.clear();
         self.error.clear();
 
+        let event_reader = self.event_store.clone();
         let mut app = Application::new(
             &mut self.event_store,
             &mut self.event_bus,
@@ -171,7 +173,7 @@ impl InProcessWorld {
             &self.display,
             &self.input,
             &self.workspace,
-            None,
+            Some(&event_reader),
             &self.auth,
         );
         set_focus_override(self.yx_focus.as_deref());
@@ -362,6 +364,25 @@ impl TestWorld for InProcessWorld {
         self.try_execute(|app| app.handle(RemoveYak::new(name)))
     }
 
+    fn add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()> {
+        let target = target.to_string();
+        let blocker = blocker.to_string();
+        let reason = reason.map(str::to_string);
+        self.execute(move |app| {
+            app.handle(AddBlocker::new(&target, &blocker).with_reason(reason.as_deref()))
+        })
+    }
+
+    fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()> {
+        let target = target.to_string();
+        let blocker = blocker.to_string();
+        self.execute(move |app| app.handle(RemoveBlocker::new(&target, &blocker)))
+    }
+
+    fn show_log(&mut self) -> Result<()> {
+        self.execute(|app| app.handle(ShowLog::new()))
+    }
+
     fn get_error(&self) -> String {
         self.error.clone()
     }
@@ -372,6 +393,10 @@ impl TestWorld for InProcessWorld {
 
     fn list_yaks(&mut self) -> Result<()> {
         self.execute(|app| app.handle(ListYaks::new("pretty", None, None)))
+    }
+
+    fn list_yaks_ready(&mut self) -> Result<()> {
+        self.execute(|app| app.handle(ListYaks::new("pretty", None, None).with_ready(true)))
     }
 
     fn list_yaks_with_format(&mut self, format: &str) -> Result<()> {
@@ -388,6 +413,7 @@ impl TestWorld for InProcessWorld {
         self.error.clear();
 
         let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+        let event_reader = self.event_store.clone();
         let mut app = Application::new(
             &mut self.event_store,
             &mut self.event_bus,
@@ -395,7 +421,7 @@ impl TestWorld for InProcessWorld {
             &json_display,
             &self.input,
             &self.workspace,
-            None,
+            Some(&event_reader),
             &self.auth,
         );
 
@@ -418,6 +444,7 @@ impl TestWorld for InProcessWorld {
             self.error.clear();
 
             let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+            let event_reader = self.event_store.clone();
             let mut app = Application::new(
                 &mut self.event_store,
                 &mut self.event_bus,
@@ -425,7 +452,7 @@ impl TestWorld for InProcessWorld {
                 &json_display,
                 &self.input,
                 &self.workspace,
-                None,
+                Some(&event_reader),
                 &self.auth,
             );
 
@@ -455,6 +482,7 @@ impl TestWorld for InProcessWorld {
             self.error.clear();
 
             let json_display = JsonDisplay::with_writer(Box::new(self.buffer.clone()));
+            let event_reader = self.event_store.clone();
             let mut app = Application::new(
                 &mut self.event_store,
                 &mut self.event_bus,
@@ -462,7 +490,7 @@ impl TestWorld for InProcessWorld {
                 &json_display,
                 &self.input,
                 &self.workspace,
-                None,
+                Some(&event_reader),
                 &self.auth,
             );
 

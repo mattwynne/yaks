@@ -87,6 +87,10 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             }
         }
 
+        YakEvent::BlockerAdded(_, _)
+        | YakEvent::BlockerUpdated(_, _)
+        | YakEvent::BlockerRemoved(_, _) => {}
+
         YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
             store.clear_all()?;
             for snap in snapshots {

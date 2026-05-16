@@ -14,6 +14,9 @@ pub enum YakEvent {
     Removed(RemovedEvent, EventMetadata),
     Moved(MovedEvent, EventMetadata),
     FieldUpdated(FieldUpdatedEvent, EventMetadata),
+    BlockerAdded(BlockerAddedEvent, EventMetadata),
+    BlockerUpdated(BlockerUpdatedEvent, EventMetadata),
+    BlockerRemoved(BlockerRemovedEvent, EventMetadata),
     Compacted(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
     Migrated(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
 }
@@ -25,6 +28,9 @@ impl YakEvent {
             Self::Removed(_, m) => m,
             Self::Moved(_, m) => m,
             Self::FieldUpdated(_, m) => m,
+            Self::BlockerAdded(_, m) => m,
+            Self::BlockerUpdated(_, m) => m,
+            Self::BlockerRemoved(_, m) => m,
             Self::Compacted(_, _, m) => m,
             Self::Migrated(_, _, m) => m,
         }
@@ -36,6 +42,9 @@ impl YakEvent {
             Self::Removed(e, _) => Self::Removed(e, metadata),
             Self::Moved(e, _) => Self::Moved(e, metadata),
             Self::FieldUpdated(e, _) => Self::FieldUpdated(e, metadata),
+            Self::BlockerAdded(e, _) => Self::BlockerAdded(e, metadata),
+            Self::BlockerUpdated(e, _) => Self::BlockerUpdated(e, metadata),
+            Self::BlockerRemoved(e, _) => Self::BlockerRemoved(e, metadata),
             Self::Compacted(s, r, _) => Self::Compacted(s, r, metadata),
             Self::Migrated(s, r, _) => Self::Migrated(s, r, metadata),
         }
@@ -51,6 +60,9 @@ impl YakEvent {
             Self::Removed(e, _) => e.format_narrative(author, resolve_name),
             Self::Moved(e, _) => e.format_narrative(author, resolve_name),
             Self::FieldUpdated(e, _) => e.format_narrative(author, resolve_name),
+            Self::BlockerAdded(e, _) => e.format_narrative(author, resolve_name),
+            Self::BlockerUpdated(e, _) => e.format_narrative(author, resolve_name),
+            Self::BlockerRemoved(e, _) => e.format_narrative(author, resolve_name),
             Self::Compacted(snapshots, _, _) => {
                 let count = snapshots.len();
                 vec![
@@ -74,6 +86,9 @@ impl YakEvent {
             Self::Removed(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Moved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::FieldUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::BlockerAdded(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::BlockerUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::BlockerRemoved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Compacted(_, _, _) => "Compacted".to_string(),
             Self::Migrated(_, _, _) => "Migrated".to_string(),
         }
@@ -97,6 +112,18 @@ impl YakEvent {
             "Moved" => Ok(Self::Moved(MovedEvent::parse_data(data)?, meta)),
             "FieldUpdated" => Ok(Self::FieldUpdated(
                 FieldUpdatedEvent::parse_data(data)?,
+                meta,
+            )),
+            "BlockerAdded" => Ok(Self::BlockerAdded(
+                BlockerAddedEvent::parse_data(data)?,
+                meta,
+            )),
+            "BlockerUpdated" => Ok(Self::BlockerUpdated(
+                BlockerUpdatedEvent::parse_data(data)?,
+                meta,
+            )),
+            "BlockerRemoved" => Ok(Self::BlockerRemoved(
+                BlockerRemovedEvent::parse_data(data)?,
                 meta,
             )),
             // Backward-compatible parsing of old event formats
@@ -150,6 +177,9 @@ impl YakEvent {
             Self::Removed(e, _) => e.id.as_str(),
             Self::Moved(e, _) => e.id.as_str(),
             Self::FieldUpdated(e, _) => e.id.as_str(),
+            Self::BlockerAdded(e, _) => e.target.as_str(),
+            Self::BlockerUpdated(e, _) => e.target.as_str(),
+            Self::BlockerRemoved(e, _) => e.target.as_str(),
             Self::Compacted(_, _, _) => "",
             Self::Migrated(_, _, _) => "",
         }

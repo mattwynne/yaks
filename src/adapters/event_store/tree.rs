@@ -225,6 +225,16 @@ pub(super) fn build_tree_from_event(
             update_yak_file(repo, current_tree, e.id.as_str(), &e.field_name, &e.content)
         }
 
+        YakEvent::BlockerAdded(_, _)
+        | YakEvent::BlockerUpdated(_, _)
+        | YakEvent::BlockerRemoved(_, _) => match current_tree {
+            Some(tree) => Ok(tree.id()),
+            None => {
+                let builder = repo.treebuilder(None)?;
+                Ok(builder.write()?)
+            }
+        },
+
         YakEvent::Compacted(snapshots, removed_yak_ids, _)
         | YakEvent::Migrated(snapshots, removed_yak_ids, _) => {
             if snapshots.is_empty() {

@@ -7,8 +7,15 @@ use crate::domain::{Yak, YakEvent};
 use anyhow::Result;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveBlocker {
+    pub id: YakId,
+    pub reason: Option<String>,
+}
+
 pub struct YakMap {
     yaks: HashMap<YakId, Yak>,
+    blockers: HashMap<YakId, HashMap<YakId, Option<String>>>,
     pending_events: Vec<YakEvent>,
     metadata: EventMetadata,
 }
@@ -19,6 +26,7 @@ impl YakMap {
     pub fn new() -> Self {
         Self {
             yaks: HashMap::new(),
+            blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata: EventMetadata::default_legacy(),
         }
@@ -27,6 +35,7 @@ impl YakMap {
     pub fn with_metadata(metadata: EventMetadata) -> Self {
         Self {
             yaks: HashMap::new(),
+            blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         }
@@ -42,6 +51,7 @@ impl YakMap {
 
         Ok(Self {
             yaks,
+            blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         })
@@ -51,6 +61,7 @@ impl YakMap {
     pub fn from_events(events: Vec<YakEvent>, metadata: EventMetadata) -> Result<Self> {
         let mut yak_map = Self {
             yaks: HashMap::new(),
+            blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         };
@@ -84,6 +95,10 @@ impl YakMap {
             }
             YakEvent::Removed(removed, _) => {
                 self.yaks.remove(&removed.id);
+                self.blockers.remove(&removed.id);
+                for blockers in self.blockers.values_mut() {
+                    blockers.remove(&removed.id);
+                }
             }
             YakEvent::Moved(moved, _) => {
                 if let Some(yak) = self.yaks.get_mut(&moved.id) {
@@ -130,9 +145,30 @@ impl YakMap {
                     }
                 }
             }
+            YakEvent::BlockerAdded(e, _) => {
+                self.blockers
+                    .entry(e.target.clone())
+                    .or_default()
+                    .insert(e.blocker.clone(), e.reason.clone());
+            }
+            YakEvent::BlockerUpdated(e, _) => {
+                self.blockers
+                    .entry(e.target.clone())
+                    .or_default()
+                    .insert(e.blocker.clone(), e.reason.clone());
+            }
+            YakEvent::BlockerRemoved(e, _) => {
+                if let Some(blockers) = self.blockers.get_mut(&e.target) {
+                    blockers.remove(&e.blocker);
+                    if blockers.is_empty() {
+                        self.blockers.remove(&e.target);
+                    }
+                }
+            }
             YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
                 // Replace all yaks with the snapshots
                 self.yaks.clear();
+                self.blockers.clear();
                 for yak in snapshots {
                     self.yaks.insert(yak.id.clone(), yak);
                 }
@@ -364,6 +400,10 @@ impl YakMap {
             self.metadata.clone(),
         ));
 
+        if new_state == YakState::Done {
+            self.remove_blocked_by(&id);
+        }
+
         // Demote done ancestors if transitioning from done
         if transitioning_from_done {
             self.demote_done_ancestors_to_todo(&id);
@@ -380,10 +420,43 @@ impl YakMap {
             return Ok(false);
         }
 
+        if self
+            .blockers
+            .get(id)
+            .is_some_and(|blockers| !blockers.is_empty())
+        {
+            return Ok(false);
+        }
+
         Ok(self
             .find_children_of(id)
             .iter()
             .all(|cid| self.yaks.get(cid).unwrap().state == YakState::Done))
+    }
+
+    fn remove_blocked_by(&mut self, blocker_id: &YakId) {
+        let targets: Vec<YakId> = self
+            .blockers
+            .iter()
+            .filter(|(_, blockers)| blockers.contains_key(blocker_id))
+            .map(|(target, _)| target.clone())
+            .collect();
+
+        for target in targets {
+            if let Some(blockers) = self.blockers.get_mut(&target) {
+                blockers.remove(blocker_id);
+                if blockers.is_empty() {
+                    self.blockers.remove(&target);
+                }
+            }
+            self.pending_events.push(YakEvent::BlockerRemoved(
+                BlockerRemovedEvent {
+                    target,
+                    blocker: blocker_id.clone(),
+                },
+                self.metadata.clone(),
+            ));
+        }
     }
 
     fn validate_children_complete(&self, parent_id: &YakId) -> Result<()> {
@@ -420,6 +493,79 @@ impl YakMap {
                 }
             }
         }
+    }
+
+    pub fn active_blockers(&self, id: &YakId) -> Vec<ActiveBlocker> {
+        let mut blockers: Vec<ActiveBlocker> = self
+            .blockers
+            .get(id)
+            .into_iter()
+            .flat_map(|blockers| blockers.iter())
+            .map(|(id, reason)| ActiveBlocker {
+                id: id.clone(),
+                reason: reason.clone(),
+            })
+            .collect();
+        blockers.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+        blockers
+    }
+
+    pub fn add_blocker(
+        &mut self,
+        target: YakId,
+        blocker: YakId,
+        reason: Option<String>,
+    ) -> Result<()> {
+        self.ensure_exists(&target)?;
+        self.ensure_exists(&blocker)?;
+        let reason = crate::domain::events::blocker::normalize_reason(reason);
+
+        let existing = self
+            .blockers
+            .get(&target)
+            .and_then(|blockers| blockers.get(&blocker));
+        let event = if existing.is_some() {
+            YakEvent::BlockerUpdated(
+                BlockerUpdatedEvent {
+                    target: target.clone(),
+                    blocker: blocker.clone(),
+                    reason: reason.clone(),
+                },
+                self.metadata.clone(),
+            )
+        } else {
+            YakEvent::BlockerAdded(
+                BlockerAddedEvent {
+                    target: target.clone(),
+                    blocker: blocker.clone(),
+                    reason: reason.clone(),
+                },
+                self.metadata.clone(),
+            )
+        };
+        self.blockers
+            .entry(target)
+            .or_default()
+            .insert(blocker, reason);
+        self.pending_events.push(event);
+        Ok(())
+    }
+
+    pub fn remove_blocker(&mut self, target: YakId, blocker: YakId) -> Result<()> {
+        self.ensure_exists(&target)?;
+        self.ensure_exists(&blocker)?;
+        if let Some(blockers) = self.blockers.get_mut(&target) {
+            if blockers.remove(&blocker).is_some() {
+                if blockers.is_empty() {
+                    self.blockers.remove(&target);
+                }
+                self.pending_events.push(YakEvent::BlockerRemoved(
+                    BlockerRemovedEvent { target, blocker },
+                    self.metadata.clone(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn update_context(&mut self, id: YakId, context: String) -> Result<()> {
@@ -604,6 +750,27 @@ impl YakMap {
 mod tests {
     use super::*;
     use crate::domain::slug::Name;
+
+    #[test]
+    fn add_blocker_normalizes_empty_reason_to_none() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+
+        map.add_blocker(target.clone(), blocker.clone(), Some(String::new()))
+            .unwrap();
+
+        assert_eq!(map.active_blockers(&target)[0].reason, None);
+        let events = map.take_events();
+        let YakEvent::BlockerAdded(event, _) = events.last().unwrap() else {
+            panic!("expected BlockerAdded event");
+        };
+        assert_eq!(event.reason, None);
+    }
 
     // ==================================================================
     // Tests for slug uniqueness among siblings
