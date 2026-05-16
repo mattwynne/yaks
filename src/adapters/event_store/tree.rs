@@ -7,7 +7,7 @@ use anyhow::Result;
 use git2::Repository;
 
 use crate::domain::event_metadata::{Author, Timestamp};
-use crate::domain::YakEvent;
+use crate::domain::{Yak, YakEvent};
 
 /// Builds a git tree object representing a single yak's subtree.
 ///
@@ -175,6 +175,89 @@ pub(super) fn set_yak_in_root(
     Ok(builder.write()?)
 }
 
+fn apply_moved_event(
+    repo: &Repository,
+    current_tree: Option<&git2::Tree>,
+    e: &crate::domain::events::MovedEvent,
+) -> Result<git2::Oid> {
+    // In flat structure, moving just updates the parent_id blob
+    let yak_id = e.id.as_str();
+    let subtree = get_yak_subtree(repo, current_tree, yak_id)?;
+    let mut builder = repo.treebuilder(subtree.as_ref())?;
+
+    match &e.new_parent {
+        Some(parent_id) => {
+            let blob = repo.blob(parent_id.as_str().as_bytes())?;
+            builder.insert(".parent_id", blob, 0o100644)?;
+        }
+        None => {
+            let _ = builder.remove(".parent_id");
+        }
+    }
+
+    let new_subtree_oid = builder.write()?;
+    set_yak_in_root(repo, current_tree, yak_id, Some(new_subtree_oid))
+}
+
+fn preserve_current_or_empty_tree(
+    repo: &Repository,
+    current_tree: Option<&git2::Tree>,
+) -> Result<git2::Oid> {
+    match current_tree {
+        Some(tree) => Ok(tree.id()),
+        None => {
+            let builder = repo.treebuilder(None)?;
+            Ok(builder.write()?)
+        }
+    }
+}
+
+fn apply_compacted_event(
+    repo: &Repository,
+    current_tree: Option<&git2::Tree>,
+    snapshots: &[Yak],
+    removed_yak_ids: &[crate::domain::slug::YakId],
+) -> Result<git2::Oid> {
+    if snapshots.is_empty() {
+        // Legacy: no snapshots, preserve current tree
+        return match current_tree {
+            Some(tree) => Ok(tree.id()),
+            None => anyhow::bail!("Cannot compact: no tree state exists"),
+        };
+    }
+
+    // Build tree from snapshots
+    use super::migration::CURRENT_SCHEMA_VERSION;
+    let mut root_builder = repo.treebuilder(None)?;
+    for snap in snapshots {
+        let yak_tree_oid = YakSubtreeBuilder::new(repo)
+            .name(snap.name.as_str())
+            .state(&snap.state.to_string())
+            .context(snap.context.as_deref().unwrap_or(""))
+            .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
+            .metadata(&snap.created_by, snap.created_at)
+            .custom_fields(&snap.fields)
+            .tags(&snap.tags)
+            .build()?;
+        root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
+    }
+    let version_blob = repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+    root_builder.insert(".schema-version", version_blob, 0o100644)?;
+
+    // Store removed yak IDs
+    if !removed_yak_ids.is_empty() {
+        let removed_ids_content = removed_yak_ids
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let removed_blob = repo.blob(removed_ids_content.as_bytes())?;
+        root_builder.insert(".removed-yaks", removed_blob, 0o100644)?;
+    }
+
+    Ok(root_builder.write()?)
+}
+
 /// Build an updated tree by applying an event to the current tree.
 /// All operations happen in git's object database - no filesystem IO.
 pub(super) fn build_tree_from_event(
@@ -200,25 +283,7 @@ pub(super) fn build_tree_from_event(
             set_yak_in_root(repo, current_tree, e.id.as_str(), None)
         }
 
-        YakEvent::Moved(e, _) => {
-            // In flat structure, moving just updates the parent_id blob
-            let yak_id = e.id.as_str();
-            let subtree = get_yak_subtree(repo, current_tree, yak_id)?;
-            let mut builder = repo.treebuilder(subtree.as_ref())?;
-
-            match &e.new_parent {
-                Some(parent_id) => {
-                    let blob = repo.blob(parent_id.as_str().as_bytes())?;
-                    builder.insert(".parent_id", blob, 0o100644)?;
-                }
-                None => {
-                    let _ = builder.remove(".parent_id");
-                }
-            }
-
-            let new_subtree_oid = builder.write()?;
-            set_yak_in_root(repo, current_tree, yak_id, Some(new_subtree_oid))
-        }
+        YakEvent::Moved(e, _) => apply_moved_event(repo, current_tree, e),
 
         YakEvent::FieldUpdated(e, _) => {
             // Flat: yak is always at root by its ID
@@ -227,56 +292,11 @@ pub(super) fn build_tree_from_event(
 
         YakEvent::BlockerAdded(_, _)
         | YakEvent::BlockerUpdated(_, _)
-        | YakEvent::BlockerRemoved(_, _) => match current_tree {
-            Some(tree) => Ok(tree.id()),
-            None => {
-                let builder = repo.treebuilder(None)?;
-                Ok(builder.write()?)
-            }
-        },
+        | YakEvent::BlockerRemoved(_, _) => preserve_current_or_empty_tree(repo, current_tree),
 
         YakEvent::Compacted(snapshots, removed_yak_ids, _)
         | YakEvent::Migrated(snapshots, removed_yak_ids, _) => {
-            if snapshots.is_empty() {
-                // Legacy: no snapshots, preserve current tree
-                match current_tree {
-                    Some(tree) => Ok(tree.id()),
-                    None => {
-                        anyhow::bail!("Cannot compact: no tree state exists")
-                    }
-                }
-            } else {
-                // Build tree from snapshots
-                use super::migration::CURRENT_SCHEMA_VERSION;
-                let mut root_builder = repo.treebuilder(None)?;
-                for snap in snapshots {
-                    let yak_tree_oid = YakSubtreeBuilder::new(repo)
-                        .name(snap.name.as_str())
-                        .state(&snap.state.to_string())
-                        .context(snap.context.as_deref().unwrap_or(""))
-                        .parent_id(snap.parent_id.as_ref().map(|p| p.as_str()))
-                        .metadata(&snap.created_by, snap.created_at)
-                        .custom_fields(&snap.fields)
-                        .tags(&snap.tags)
-                        .build()?;
-                    root_builder.insert(snap.id.as_str(), yak_tree_oid, 0o040000)?;
-                }
-                let version_blob = repo.blob(CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
-                root_builder.insert(".schema-version", version_blob, 0o100644)?;
-
-                // Store removed yak IDs
-                if !removed_yak_ids.is_empty() {
-                    let removed_ids_content = removed_yak_ids
-                        .iter()
-                        .map(|id| id.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    let removed_blob = repo.blob(removed_ids_content.as_bytes())?;
-                    root_builder.insert(".removed-yaks", removed_blob, 0o100644)?;
-                }
-
-                Ok(root_builder.write()?)
-            }
+            apply_compacted_event(repo, current_tree, snapshots, removed_yak_ids)
         }
     }
 }
