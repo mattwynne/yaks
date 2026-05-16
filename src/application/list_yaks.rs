@@ -22,6 +22,14 @@ struct TreePrefix {
     lines: Vec<String>,
 }
 
+struct ViewBuildContext<'a> {
+    only: Option<&'a str>,
+    tag: Option<&'a str>,
+    ready: bool,
+    readiness_by_id: &'a HashMap<YakId, bool>,
+    visible_ids: Option<&'a HashSet<YakId>>,
+}
+
 impl TreePrefix {
     fn new() -> Self {
         Self { lines: Vec::new() }
@@ -134,32 +142,34 @@ impl ListYaks {
     fn build_view_tree(
         &self,
         nodes: &[YakNode],
-        only: Option<&str>,
-        tag: Option<&str>,
-        ready: bool,
-        readiness_by_id: &HashMap<YakId, bool>,
-        visible_ids: Option<&HashSet<YakId>>,
+        context: &ViewBuildContext<'_>,
         prefix: &TreePrefix,
     ) -> Vec<YakTreeNode> {
         let mut result = Vec::new();
         for (i, node) in nodes.iter().enumerate() {
             let is_last_in_full_tree = i == nodes.len() - 1;
-            let is_visible_by_focus = self.is_visible_by_focus(node, visible_ids);
-            let matches_filter = self.matches_filters(node, only, tag, ready, readiness_by_id);
-            let has_matching_visible_descendant = !ready
+            let is_visible_by_focus = self.is_visible_by_focus(node, context.visible_ids);
+            let matches_filter = self.matches_filters(
+                node,
+                context.only,
+                context.tag,
+                context.ready,
+                context.readiness_by_id,
+            );
+            let has_matching_visible_descendant = !context.ready
                 && self.has_matching_visible_descendant(
                     node,
-                    only,
-                    tag,
-                    ready,
-                    readiness_by_id,
-                    visible_ids,
+                    context.only,
+                    context.tag,
+                    context.ready,
+                    context.readiness_by_id,
+                    context.visible_ids,
                 );
             let should_display =
                 is_visible_by_focus && (matches_filter || has_matching_visible_descendant);
             let hidden_siblings_at_level = nodes
                 .iter()
-                .any(|sibling| !self.is_visible_by_focus(sibling, visible_ids));
+                .any(|sibling| !self.is_visible_by_focus(sibling, context.visible_ids));
 
             if should_display {
                 let state_str = node
@@ -180,9 +190,9 @@ impl ListYaks {
                     .map(|y| y.id.as_str().to_string())
                     .unwrap_or_default();
 
-                let node_ready = ready_for(node, readiness_by_id);
+                let node_ready = ready_for(node, context.readiness_by_id);
 
-                let context = node.yak.as_ref().and_then(|y| y.context.clone());
+                let yak_context = node.yak.as_ref().and_then(|y| y.context.clone());
 
                 let parent_id = node
                     .yak
@@ -209,15 +219,7 @@ impl ListYaks {
                 };
 
                 let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
-                let children = self.build_view_tree(
-                    &node.children,
-                    only,
-                    tag,
-                    ready,
-                    readiness_by_id,
-                    visible_ids,
-                    &child_prefix,
-                );
+                let children = self.build_view_tree(&node.children, context, &child_prefix);
 
                 result.push(YakTreeNode {
                     name: node.name.to_string(),
@@ -225,7 +227,7 @@ impl ListYaks {
                     id,
                     state: state_str,
                     ready: node_ready,
-                    context,
+                    context: yak_context,
                     parent_id,
                     fields,
                     tags,
@@ -237,15 +239,7 @@ impl ListYaks {
             } else {
                 // Even if this node is filtered out, recurse into children
                 let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
-                let mut child_nodes = self.build_view_tree(
-                    &node.children,
-                    only,
-                    tag,
-                    ready,
-                    readiness_by_id,
-                    visible_ids,
-                    &child_prefix,
-                );
+                let mut child_nodes = self.build_view_tree(&node.children, context, &child_prefix);
                 result.append(&mut child_nodes);
             }
         }
@@ -380,15 +374,14 @@ impl UseCase for ListYaks {
         };
 
         // Build YakTreeView from internal tree
-        let view_nodes = self.build_view_tree(
-            &tree,
+        let view_context = ViewBuildContext {
             only,
             tag,
-            self.ready,
-            &readiness_by_id,
-            visible_ids.as_ref(),
-            &TreePrefix::new(),
-        );
+            ready: self.ready,
+            readiness_by_id: &readiness_by_id,
+            visible_ids: visible_ids.as_ref(),
+        };
+        let view_nodes = self.build_view_tree(&tree, &view_context, &TreePrefix::new());
 
         // For markdown format when empty, show a message instead of the list
         if tree.is_empty() && normalized_format == "markdown" {
