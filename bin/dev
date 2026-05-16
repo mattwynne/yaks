@@ -913,7 +913,92 @@ mark_merged_yak_done() {
   return 0
 }
 
-# @cmd Merge a branch into main (check + rebase + fast-forward)
+merge_worktree_must_be_clean() {
+  local status
+  status=$(git status --porcelain)
+  if [ -n "$status" ]; then
+    echo "❌ Cannot merge: worktree has uncommitted changes" >&2
+    echo "   Commit, stash, or discard changes before running dev merge." >&2
+    echo "" >&2
+    echo "$status" >&2
+    return 1
+  fi
+}
+
+changed_paths_for_merge() {
+  git diff --name-only main...HEAD
+}
+
+package_has_npm_test_script() {
+  node -e '
+    const fs = require("fs");
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1);
+  ' >/dev/null 2>&1
+}
+
+run_pi_extension_checks() {
+  local changed_files="$1"
+  local extensions=""
+  local file extension_dir package_json
+
+  while IFS= read -r file; do
+    case "$file" in
+      .pi/extensions/*/*)
+        extension_dir=$(printf '%s\n' "$file" | cut -d/ -f1-3)
+        package_json="$extension_dir/package.json"
+        if [ -f "$package_json" ] && ! printf '%b' "$extensions" | grep -Fxq "$extension_dir"; then
+          extensions="${extensions}${extension_dir}"$'\n'
+        fi
+        ;;
+    esac
+  done <<< "$changed_files"
+
+  if [ -z "$extensions" ]; then
+    echo "No .pi extension checks to run"
+    return 0
+  fi
+
+  local ran_tests=false
+  while IFS= read -r extension_dir; do
+    [ -n "$extension_dir" ] || continue
+    if (cd "$extension_dir" && package_has_npm_test_script); then
+      echo "Running .pi extension tests in $extension_dir..."
+      (cd "$extension_dir" && npm test) || return 1
+      ran_tests=true
+    fi
+  done <<< "$(printf '%b' "$extensions")"
+
+  if [ "$ran_tests" = true ]; then
+    return 0
+  fi
+
+  echo "No .pi extension npm test scripts found; running light npm fallback where possible..."
+  while IFS= read -r extension_dir; do
+    [ -n "$extension_dir" ] || continue
+    echo "Running npm test --if-present in $extension_dir..."
+    (cd "$extension_dir" && npm test --if-present) || return 1
+  done <<< "$(printf '%b' "$extensions")"
+}
+
+check-for-merge() {
+  local changed_files
+  changed_files=$(changed_paths_for_merge)
+
+  if [ -z "$changed_files" ]; then
+    echo "No changed files to check"
+    return 0
+  fi
+
+  if printf '%s\n' "$changed_files" | grep -qv '^\.pi/'; then
+    FORCE_CHECK=1 check
+    return $?
+  fi
+
+  run_pi_extension_checks "$changed_files"
+}
+
+# @cmd Merge a branch into main (cleanliness + rebase + check + fast-forward)
 # @arg branch! Branch to merge
 # @alias mg
 merge() {
@@ -939,24 +1024,29 @@ merge() {
     | grep -B2 "branch refs/heads/$branch" \
     | grep "^worktree " | sed 's/^worktree //')
 
-  # Run checks in the worktree if it exists, otherwise in a temp worktree.
+  # Rebase before running expensive checks, and never check a dirty tree.
   # NEVER switch the main repo away from main.
   if [ -n "$worktree" ]; then
-    echo "Running checks in worktree: $worktree"
-    if ! (cd "$worktree" && FORCE_CHECK=1 check); then
-      echo ""
-      echo "❌ dev check failed on $branch — fix before merging"
+    echo "Preparing worktree: $worktree"
+    if ! (cd "$worktree" && merge_worktree_must_be_clean); then
       return 1
     fi
 
-    echo ""
     echo "Rebasing $branch onto main..."
     if ! (cd "$worktree" && git rebase main --no-verify); then
       echo "❌ Rebase failed — resolve conflicts in $worktree, then run again"
       return 1
     fi
+
+    echo ""
+    echo "Running merge checks in worktree: $worktree"
+    if ! (cd "$worktree" && check-for-merge); then
+      echo ""
+      echo "❌ merge checks failed on $branch — fix before merging"
+      return 1
+    fi
   else
-    # No worktree — create a temporary one for checks and rebase.
+    # No worktree — create a temporary one for rebase and checks.
     # mktemp gives us a unique name; we remove the dir so git worktree
     # can create it (it insists the path not exist yet).
     local tmp_worktree
@@ -965,18 +1055,22 @@ merge() {
     echo "Creating temporary worktree at $tmp_worktree..."
     git worktree add "$tmp_worktree" "$branch"
 
-    echo "Running checks in temporary worktree..."
-    if ! (cd "$tmp_worktree" && FORCE_CHECK=1 check); then
-      echo ""
-      echo "❌ dev check failed on $branch — fix before merging"
+    if ! (cd "$tmp_worktree" && merge_worktree_must_be_clean); then
       git worktree remove "$tmp_worktree"
       return 1
     fi
 
-    echo ""
     echo "Rebasing $branch onto main..."
     if ! (cd "$tmp_worktree" && git rebase main --no-verify); then
-      echo "❌ Rebase failed — resolve conflicts, then run again"
+      echo "❌ Rebase failed — resolve conflicts in $tmp_worktree, then run again"
+      return 1
+    fi
+
+    echo ""
+    echo "Running merge checks in temporary worktree..."
+    if ! (cd "$tmp_worktree" && check-for-merge); then
+      echo ""
+      echo "❌ merge checks failed on $branch — fix before merging"
       git worktree remove "$tmp_worktree"
       return 1
     fi

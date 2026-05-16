@@ -39,6 +39,7 @@ mutants.out.old/
 
 # pi agent config (allow prompts/agents/extensions, ignore the rest)
 .pi/*
+!.pi/.gitignore
 !.pi/prompts/
 !.pi/agents/
 !.pi/extensions/

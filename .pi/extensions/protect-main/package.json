@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.74.0",
+    "typebox": "^1.1.38",
     "vitest": "^4.0.0"
   }
 }
