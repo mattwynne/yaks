@@ -234,6 +234,7 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 }
 
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
+type SubagentToolResult = AgentToolResult<SubagentDetails> & { isError?: boolean };
 
 async function runSingleAgent(
 	defaultCwd: string,
@@ -423,9 +424,12 @@ const SubagentParams = Type.Object({
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
-		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
+		Type.Boolean({ description: "Prompt before running project-local agents. Default: false.", default: false }),
 	),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+	background: Type.Optional(
+		Type.Boolean({ description: "Run asynchronously and return immediately. Default: true.", default: true }),
+	),
 });
 
 export default function (pi: ExtensionAPI) {
@@ -444,12 +448,14 @@ export default function (pi: ExtensionAPI) {
 			const agentScope: AgentScope = params.agentScope ?? "both";
 			const discovery = discoverAgents(ctx.cwd, agentScope);
 			const agents = discovery.agents;
-			const confirmProjectAgents = params.confirmProjectAgents ?? true;
+			const confirmProjectAgents = params.confirmProjectAgents ?? false;
+			const background = params.background ?? true;
 
 			const hasChain = (params.chain?.length ?? 0) > 0;
 			const hasTasks = (params.tasks?.length ?? 0) > 0;
 			const hasSingle = Boolean(params.agent && params.task);
 			const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
+			const mode: "single" | "parallel" | "chain" = hasChain ? "chain" : hasTasks ? "parallel" : "single";
 
 			const makeDetails =
 				(mode: "single" | "parallel" | "chain") =>
@@ -493,179 +499,225 @@ export default function (pi: ExtensionAPI) {
 					if (!ok)
 						return {
 							content: [{ type: "text", text: "Canceled: project-local agents not approved." }],
-							details: makeDetails(hasChain ? "chain" : hasTasks ? "parallel" : "single")([]),
+							details: makeDetails(mode)([]),
 						};
 				}
 			}
 
-			if (params.chain && params.chain.length > 0) {
-				const results: SingleResult[] = [];
-				let previousOutput = "";
-
-				for (let i = 0; i < params.chain.length; i++) {
-					const step = params.chain[i];
-					const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
-
-					// Create update callback that includes all previous results
-					const chainUpdate: OnUpdateCallback | undefined = onUpdate
-						? (partial) => {
-								// Combine completed results with current streaming result
-								const currentResult = partial.details?.results[0];
-								if (currentResult) {
-									const allResults = [...results, currentResult];
-									onUpdate({
-										content: partial.content,
-										details: makeDetails("chain")(allResults),
-									});
-								}
-							}
-						: undefined;
-
-					const result = await runSingleAgent(
-						ctx.cwd,
-						agents,
-						step.agent,
-						taskWithContext,
-						step.cwd,
-						i + 1,
-						signal,
-						chainUpdate,
-						makeDetails("chain"),
-					);
-					results.push(result);
-
-					const isError =
-						result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-					if (isError) {
-						const errorMsg =
-							result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
-						return {
-							content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
-							details: makeDetails("chain")(results),
-							isError: true,
-						};
-					}
-					previousOutput = getFinalOutput(result.messages);
-				}
-				return {
-					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
-					details: makeDetails("chain")(results),
-				};
-			}
-
-			if (params.tasks && params.tasks.length > 0) {
-				if (params.tasks.length > MAX_PARALLEL_TASKS)
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-							},
-						],
-						details: makeDetails("parallel")([]),
-					};
-
-				// Track all results for streaming updates
-				const allResults: SingleResult[] = new Array(params.tasks.length);
-
-				// Initialize placeholder results
-				for (let i = 0; i < params.tasks.length; i++) {
-					allResults[i] = {
-						agent: params.tasks[i].agent,
-						agentSource: "unknown",
-						task: params.tasks[i].task,
-						exitCode: -1, // -1 = still running
-						messages: [],
-						stderr: "",
-						usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-					};
-				}
-
-				const emitParallelUpdate = () => {
-					if (onUpdate) {
-						const running = allResults.filter((r) => r.exitCode === -1).length;
-						const done = allResults.filter((r) => r.exitCode !== -1).length;
-						onUpdate({
-							content: [
-								{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` },
-							],
-							details: makeDetails("parallel")([...allResults]),
-						});
-					}
-				};
-
-				const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
-					const result = await runSingleAgent(
-						ctx.cwd,
-						agents,
-						t.agent,
-						t.task,
-						t.cwd,
-						undefined,
-						signal,
-						// Per-task update callback
-						(partial) => {
-							if (partial.details?.results[0]) {
-								allResults[index] = partial.details.results[0];
-								emitParallelUpdate();
-							}
-						},
-						makeDetails("parallel"),
-					);
-					allResults[index] = result;
-					emitParallelUpdate();
-					return result;
-				});
-
-				const successCount = results.filter((r) => r.exitCode === 0).length;
-				const summaries = results.map((r) => {
-					const output = getFinalOutput(r.messages);
-					const preview = output.slice(0, 100) + (output.length > 100 ? "..." : "");
-					return `[${r.agent}] ${r.exitCode === 0 ? "completed" : "failed"}: ${preview || "(no output)"}`;
-				});
+			if (params.tasks && params.tasks.length > MAX_PARALLEL_TASKS) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n")}`,
+							text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
 						},
 					],
-					details: makeDetails("parallel")(results),
+					details: makeDetails("parallel")([]),
 				};
 			}
 
-			if (params.agent && params.task) {
-				const result = await runSingleAgent(
-					ctx.cwd,
-					agents,
-					params.agent,
-					params.task,
-					params.cwd,
-					undefined,
-					signal,
-					onUpdate,
-					makeDetails("single"),
-				);
-				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-				if (isError) {
-					const errorMsg =
-						result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+			const runJob = async (
+				jobSignal: AbortSignal | undefined,
+				jobOnUpdate: OnUpdateCallback | undefined,
+			): Promise<SubagentToolResult> => {
+				if (params.chain && params.chain.length > 0) {
+					const results: SingleResult[] = [];
+					let previousOutput = "";
+
+					for (let i = 0; i < params.chain.length; i++) {
+						const step = params.chain[i];
+						const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
+
+						const chainUpdate: OnUpdateCallback | undefined = jobOnUpdate
+							? (partial) => {
+									const currentResult = partial.details?.results[0];
+									if (currentResult) {
+										const allResults = [...results, currentResult];
+										jobOnUpdate({
+											content: partial.content,
+											details: makeDetails("chain")(allResults),
+										});
+									}
+								}
+							: undefined;
+
+						const result = await runSingleAgent(
+							ctx.cwd,
+							agents,
+							step.agent,
+							taskWithContext,
+							step.cwd,
+							i + 1,
+							jobSignal,
+							chainUpdate,
+							makeDetails("chain"),
+						);
+						results.push(result);
+
+						const isError =
+							result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+						if (isError) {
+							const errorMsg =
+								result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+							return {
+								content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
+								details: makeDetails("chain")(results),
+								isError: true,
+							};
+						}
+						previousOutput = getFinalOutput(result.messages);
+					}
 					return {
-						content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
-						details: makeDetails("single")([result]),
-						isError: true,
+						content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
+						details: makeDetails("chain")(results),
 					};
 				}
-				return {
-					content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
-					details: makeDetails("single")([result]),
-				};
-			}
 
-			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
+				if (params.tasks && params.tasks.length > 0) {
+					if (params.tasks.length > MAX_PARALLEL_TASKS)
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
+								},
+							],
+							details: makeDetails("parallel")([]),
+						};
+
+					const allResults: SingleResult[] = new Array(params.tasks.length);
+					for (let i = 0; i < params.tasks.length; i++) {
+						allResults[i] = {
+							agent: params.tasks[i].agent,
+							agentSource: "unknown",
+							task: params.tasks[i].task,
+							exitCode: -1,
+							messages: [],
+							stderr: "",
+							usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+						};
+					}
+
+					const emitParallelUpdate = () => {
+						if (jobOnUpdate) {
+							const running = allResults.filter((r) => r.exitCode === -1).length;
+							const done = allResults.filter((r) => r.exitCode !== -1).length;
+							jobOnUpdate({
+								content: [
+									{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` },
+								],
+								details: makeDetails("parallel")([...allResults]),
+							});
+						}
+					};
+
+					const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
+						const result = await runSingleAgent(
+							ctx.cwd,
+							agents,
+							t.agent,
+							t.task,
+							t.cwd,
+							undefined,
+							jobSignal,
+							(partial) => {
+								if (partial.details?.results[0]) {
+									allResults[index] = partial.details.results[0];
+									emitParallelUpdate();
+								}
+							},
+							makeDetails("parallel"),
+						);
+						allResults[index] = result;
+						emitParallelUpdate();
+						return result;
+					});
+
+					const successCount = results.filter((r) => r.exitCode === 0).length;
+					const summaries = results.map((r) => {
+						const output = getFinalOutput(r.messages);
+						const preview = output.slice(0, 100) + (output.length > 100 ? "..." : "");
+						return `[${r.agent}] ${r.exitCode === 0 ? "completed" : "failed"}: ${preview || "(no output)"}`;
+					});
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n")}`,
+							},
+						],
+						details: makeDetails("parallel")(results),
+					};
+				}
+
+				if (params.agent && params.task) {
+					const result = await runSingleAgent(
+						ctx.cwd,
+						agents,
+						params.agent,
+						params.task,
+						params.cwd,
+						undefined,
+						jobSignal,
+						jobOnUpdate,
+						makeDetails("single"),
+					);
+					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+					if (isError) {
+						const errorMsg =
+							result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+						return {
+							content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
+							details: makeDetails("single")([result]),
+							isError: true,
+						};
+					}
+					return {
+						content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+						details: makeDetails("single")([result]),
+					};
+				}
+
+				const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
+				return {
+					content: [{ type: "text", text: `Invalid parameters. Available agents: ${available}` }],
+					details: makeDetails("single")([]),
+				};
+			};
+
+			if (!background) return runJob(signal, onUpdate);
+
+			const jobId = `subagent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+			const backgroundController = new AbortController();
+			void runJob(backgroundController.signal, undefined)
+				.then((result) => {
+					const title = result.isError ? "Subagent background job failed" : "Subagent background job completed";
+					const body = result.content[0]?.type === "text" ? result.content[0].text : "(no output)";
+					pi.sendMessage({
+						customType: "subagent-result",
+						content: `## ${title}\n\nJob: ${jobId}\nMode: ${mode}\n\n${body}`,
+						display: true,
+						details: { jobId, ...result.details },
+					});
+				})
+				.catch((error) => {
+					const message = error instanceof Error ? error.message : String(error);
+					pi.sendMessage({
+						customType: "subagent-result",
+						content: `## Subagent background job failed\n\nJob: ${jobId}\nMode: ${mode}\n\n${message}`,
+						display: true,
+						details: { jobId, mode, agentScope, projectAgentsDir: discovery.projectAgentsDir, results: [] },
+					});
+				});
+
 			return {
-				content: [{ type: "text", text: `Invalid parameters. Available agents: ${available}` }],
-				details: makeDetails("single")([]),
+				content: [
+					{
+						type: "text",
+						text: `Started subagent background job ${jobId} (${mode}). I'll post the result here when it completes.`,
+					},
+				],
+				details: makeDetails(mode)([]),
 			};
 		},
 

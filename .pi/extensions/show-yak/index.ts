@@ -133,8 +133,7 @@ export default function showYakExtension(pi: ExtensionAPI) {
     }),
 
     async execute(toolCallId, params, signal) {
-      const nameWords = params.name.split(/\s+/);
-      const result = await pi.exec("bin/dev", ["start", ...nameWords], {
+      const result = await pi.exec("bin/dev", ["start", params.name], {
         signal,
         timeout: 30000,
       });
