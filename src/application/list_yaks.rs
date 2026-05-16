@@ -49,6 +49,7 @@ pub struct ListYaks {
     format: String,
     only: Option<String>,
     tag: Option<String>,
+    ready: bool,
 }
 
 impl ListYaks {
@@ -57,7 +58,13 @@ impl ListYaks {
             format: format.to_string(),
             only: only.map(|s| s.to_string()),
             tag: tag.map(|t| normalize_tag(t).unwrap_or_else(|_| t.to_string())),
+            ready: false,
         }
+    }
+
+    pub fn with_ready(mut self, ready: bool) -> Self {
+        self.ready = ready;
+        self
     }
 
     /// Build a hierarchical tree from flat list of yaks using parent_id
@@ -129,6 +136,8 @@ impl ListYaks {
         nodes: &[YakNode],
         only: Option<&str>,
         tag: Option<&str>,
+        ready: bool,
+        readiness_by_id: &HashMap<YakId, bool>,
         visible_ids: Option<&HashSet<YakId>>,
         prefix: &TreePrefix,
     ) -> Vec<YakTreeNode> {
@@ -136,9 +145,16 @@ impl ListYaks {
         for (i, node) in nodes.iter().enumerate() {
             let is_last_in_full_tree = i == nodes.len() - 1;
             let is_visible_by_focus = self.is_visible_by_focus(node, visible_ids);
-            let matches_filter = self.matches_filters(node, only, tag);
-            let has_matching_visible_descendant =
-                self.has_matching_visible_descendant(node, only, tag, visible_ids);
+            let matches_filter = self.matches_filters(node, only, tag, ready, readiness_by_id);
+            let has_matching_visible_descendant = !ready
+                && self.has_matching_visible_descendant(
+                    node,
+                    only,
+                    tag,
+                    ready,
+                    readiness_by_id,
+                    visible_ids,
+                );
             let should_display =
                 is_visible_by_focus && (matches_filter || has_matching_visible_descendant);
             let hidden_siblings_at_level = nodes
@@ -163,6 +179,8 @@ impl ListYaks {
                     .as_ref()
                     .map(|y| y.id.as_str().to_string())
                     .unwrap_or_default();
+
+                let node_ready = ready_for(node, readiness_by_id);
 
                 let context = node.yak.as_ref().and_then(|y| y.context.clone());
 
@@ -191,14 +209,22 @@ impl ListYaks {
                 };
 
                 let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
-                let children =
-                    self.build_view_tree(&node.children, only, tag, visible_ids, &child_prefix);
+                let children = self.build_view_tree(
+                    &node.children,
+                    only,
+                    tag,
+                    ready,
+                    readiness_by_id,
+                    visible_ids,
+                    &child_prefix,
+                );
 
                 result.push(YakTreeNode {
                     name: node.name.to_string(),
                     full_path: node.full_path.clone(),
                     id,
                     state: state_str,
+                    ready: node_ready,
                     context,
                     parent_id,
                     fields,
@@ -211,8 +237,15 @@ impl ListYaks {
             } else {
                 // Even if this node is filtered out, recurse into children
                 let child_prefix = prefix.for_child(is_last_in_full_tree, hidden_siblings_at_level);
-                let mut child_nodes =
-                    self.build_view_tree(&node.children, only, tag, visible_ids, &child_prefix);
+                let mut child_nodes = self.build_view_tree(
+                    &node.children,
+                    only,
+                    tag,
+                    ready,
+                    readiness_by_id,
+                    visible_ids,
+                    &child_prefix,
+                );
                 result.append(&mut child_nodes);
             }
         }
@@ -233,17 +266,34 @@ impl ListYaks {
         node: &YakNode,
         only: Option<&str>,
         tag: Option<&str>,
+        ready: bool,
+        readiness_by_id: &HashMap<YakId, bool>,
         visible_ids: Option<&HashSet<YakId>>,
     ) -> bool {
         node.children.iter().any(|child| {
             self.is_visible_by_focus(child, visible_ids)
-                && (self.matches_filters(child, only, tag)
-                    || self.has_matching_visible_descendant(child, only, tag, visible_ids))
+                && (self.matches_filters(child, only, tag, ready, readiness_by_id)
+                    || self.has_matching_visible_descendant(
+                        child,
+                        only,
+                        tag,
+                        ready,
+                        readiness_by_id,
+                        visible_ids,
+                    ))
         })
     }
 
     /// Check if node matches the filters
-    fn matches_filters(&self, node: &YakNode, only: Option<&str>, tag: Option<&str>) -> bool {
+    fn matches_filters(
+        &self,
+        node: &YakNode,
+        only: Option<&str>,
+        tag: Option<&str>,
+        ready: bool,
+        readiness_by_id: &HashMap<YakId, bool>,
+    ) -> bool {
+        let ready_matches = !ready || ready_for(node, readiness_by_id);
         let only_matches = match only {
             Some("done") => node.yak.as_ref().map(|y| y.is_done()).unwrap_or(false),
             Some("not-done") => {
@@ -257,7 +307,7 @@ impl ListYaks {
                 .map(|y| y.tags.iter().any(|t| t == tag))
                 .unwrap_or(false)
         });
-        only_matches && tag_matches
+        ready_matches && only_matches && tag_matches
     }
 }
 
@@ -267,6 +317,11 @@ impl UseCase for ListYaks {
         let only = self.only.as_deref();
         let tag = self.tag.as_deref();
         let yaks = app.store.list_yaks()?;
+        let readiness_by_id: HashMap<YakId, bool> = app.with_yak_map_result(|map| {
+            yaks.iter()
+                .map(|yak| map.is_ready(&yak.id).map(|ready| (yak.id.clone(), ready)))
+                .collect()
+        })?;
         let visible_ids = app.focused_yak_ids()?;
 
         // Normalize format
@@ -294,8 +349,8 @@ impl UseCase for ListYaks {
             }
         }
 
-        // Handle ids format early (before tree building)
-        if normalized_format == "ids" {
+        // Handle ids format early (before tree building) unless readiness needs child state.
+        if normalized_format == "ids" && !self.ready {
             for yak in &yaks {
                 if visible_ids
                     .as_ref()
@@ -303,7 +358,13 @@ impl UseCase for ListYaks {
                 {
                     continue;
                 }
-                if self.matches_filters(&yak_node_for_filter(yak), only, tag) {
+                if self.matches_filters(
+                    &yak_node_for_filter(yak),
+                    only,
+                    tag,
+                    self.ready,
+                    &readiness_by_id,
+                ) {
                     app.display
                         .message(&Message::Info(yak.id.as_str().to_string()));
                 }
@@ -319,8 +380,15 @@ impl UseCase for ListYaks {
         };
 
         // Build YakTreeView from internal tree
-        let view_nodes =
-            self.build_view_tree(&tree, only, tag, visible_ids.as_ref(), &TreePrefix::new());
+        let view_nodes = self.build_view_tree(
+            &tree,
+            only,
+            tag,
+            self.ready,
+            &readiness_by_id,
+            visible_ids.as_ref(),
+            &TreePrefix::new(),
+        );
 
         // For markdown format when empty, show a message instead of the list
         if tree.is_empty() && normalized_format == "markdown" {
@@ -338,6 +406,14 @@ impl UseCase for ListYaks {
         app.display.show_list(&view);
         Ok(())
     }
+}
+
+fn ready_for(node: &YakNode, readiness_by_id: &HashMap<YakId, bool>) -> bool {
+    node.yak
+        .as_ref()
+        .and_then(|yak| readiness_by_id.get(&yak.id))
+        .copied()
+        .unwrap_or(false)
 }
 
 /// Recursively build a YakNode and its children from parent_id grouping
@@ -399,6 +475,7 @@ mod tests {
         }
     }
     use super::*;
+    use crate::adapters::json_display::JsonDisplay;
     use crate::adapters::user_display::ConsoleDisplay;
     use crate::adapters::{
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
@@ -904,8 +981,9 @@ mod tests {
     fn not_done_filter_excludes_done_yaks() {
         let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("finished", "done");
+        let readiness_by_id = HashMap::new();
         assert!(
-            !list.matches_filters(&node, Some("not-done"), None),
+            !list.matches_filters(&node, Some("not-done"), None, false, &readiness_by_id),
             "Done yak should be excluded by not-done filter"
         );
     }
@@ -916,10 +994,157 @@ mod tests {
     fn not_done_filter_includes_not_done_yaks() {
         let list = ListYaks::new("plain", Some("not-done"), None);
         let node = make_yak_node("pending", "todo");
+        let readiness_by_id = HashMap::new();
         assert!(
-            list.matches_filters(&node, Some("not-done"), None),
+            list.matches_filters(&node, Some("not-done"), None, false, &readiness_by_id),
             "Not-done yak should be included by not-done filter"
         );
+    }
+
+    #[test]
+    fn json_list_includes_derived_ready_for_leaf_and_parents() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+
+        {
+            let mut app = make_app(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                &workspace,
+                &auth,
+            );
+            app.handle(AddYak::new("leaf")).unwrap();
+            app.handle(AddYak::new("blocked parent")).unwrap();
+            app.handle(AddYak::new("incomplete child").with_parent(Some("blocked parent")))
+                .unwrap();
+            app.handle(AddYak::new("ready parent")).unwrap();
+            app.handle(AddYak::new("done child").with_parent(Some("ready parent")))
+                .unwrap();
+            app.handle(SetState::new("done child", "done").with_silent(true))
+                .unwrap();
+            app.handle(SetState::new("ready parent", "todo").with_silent(true))
+                .unwrap();
+        }
+
+        let json_buffer = crate::adapters::user_display::TestBuffer::new();
+        let json_display = JsonDisplay::with_writer(Box::new(json_buffer.clone()));
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &json_display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
+
+        let json: serde_json::Value = serde_json::from_str(&json_buffer.contents()).unwrap();
+        let nodes = json.as_array().unwrap();
+        let leaf = nodes.iter().find(|node| node["name"] == "leaf").unwrap();
+        let blocked_parent = nodes
+            .iter()
+            .find(|node| node["name"] == "blocked parent")
+            .unwrap();
+        let ready_parent = nodes
+            .iter()
+            .find(|node| node["name"] == "ready parent")
+            .unwrap();
+
+        assert_eq!(leaf["state"], "todo");
+        assert_eq!(leaf["ready"], true);
+        assert_eq!(blocked_parent["ready"], false);
+        assert_eq!(ready_parent["ready"], true);
+    }
+
+    #[test]
+    fn ready_filter_includes_only_actionable_todo_yaks() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("leaf")).unwrap();
+        app.handle(AddYak::new("unavailable parent")).unwrap();
+        app.handle(AddYak::new("ready child").with_parent(Some("unavailable parent")))
+            .unwrap();
+        app.handle(AddYak::new("wip yak")).unwrap();
+        app.handle(SetState::new("wip yak", "wip").with_silent(true))
+            .unwrap();
+        app.handle(AddYak::new("blocked yak")).unwrap();
+        app.handle(SetState::new("blocked yak", "blocked").with_silent(true))
+            .unwrap();
+        app.handle(AddYak::new("done yak")).unwrap();
+        app.handle(SetState::new("done yak", "done").with_silent(true))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("plain", None, None).with_ready(true))
+            .unwrap();
+        let output = buffer.contents();
+
+        assert!(output.contains("leaf"));
+        assert!(output.contains("unavailable parent/ready child"));
+        assert!(!output.contains("unavailable parent\n"));
+        assert!(!output.contains("wip yak"));
+        assert!(!output.contains("blocked yak"));
+        assert!(!output.contains("done yak"));
+    }
+
+    #[test]
+    fn not_done_filter_remains_stored_state_not_readiness() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("unavailable parent")).unwrap();
+        app.handle(AddYak::new("incomplete child").with_parent(Some("unavailable parent")))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("plain", Some("not-done"), None))
+            .unwrap();
+        let output = buffer.contents();
+
+        assert!(output.contains("unavailable parent"));
+        assert!(output.contains("unavailable parent/incomplete child"));
     }
 
     // Line 67: empty yak list shows message only in markdown format

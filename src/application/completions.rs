@@ -44,7 +44,7 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
             "state" => vec!["--recursive"],
             "context" => vec!["--show"],
             "field" => vec!["--show"],
-            "list" | "ls" => vec!["--format", "--only", "--tag"],
+            "list" | "ls" => vec!["--format", "--only", "--ready", "--tag"],
             "show" => vec!["--format"],
             _ => vec![],
         }

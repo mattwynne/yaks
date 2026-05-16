@@ -51,6 +51,8 @@ pub struct YakTreeNode {
     pub full_path: String,
     pub id: String,
     pub state: String,
+    /// Derived actionable status: true when the yak is todo and all direct children are done.
+    pub ready: bool,
     pub context: Option<String>,
     pub parent_id: Option<String>,
     pub fields: std::collections::HashMap<String, String>,

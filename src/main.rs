@@ -91,6 +91,9 @@ enum Commands {
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
+        /// Filter to yaks that are actionable now (todo with all direct children done)
+        #[arg(long)]
+        ready: bool,
         /// Filter by tag name (exact match, @ prefix stripped)
         #[arg(long)]
         tag: Option<String>,
@@ -461,9 +464,16 @@ fn route_command(
         } => handle_add_command(
             handler, name, under, state, context, edit, id, fields, &stdin,
         ),
-        Commands::List { format, only, tag } => {
+        Commands::List {
+            format,
+            only,
+            ready,
+            tag,
+        } => {
             let use_format = if format == "json" { "pretty" } else { &format };
-            handler.handle(ListYaks::new(use_format, only.as_deref(), tag.as_deref()))
+            handler.handle(
+                ListYaks::new(use_format, only.as_deref(), tag.as_deref()).with_ready(ready),
+            )
         }
         Commands::Done { name, recursive } => {
             let name_str = name.join(" ");
