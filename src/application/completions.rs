@@ -200,6 +200,13 @@ mod tests {
     }
 
     #[test]
+    fn offers_blocker_flags() {
+        let result = complete_with_state(&["yx", "blocker", "--"], &[]);
+        assert!(result.contains(&"--by".to_string()));
+        assert!(result.contains(&"--reason".to_string()));
+    }
+
+    #[test]
     fn offers_show_flag_for_context() {
         let result = complete_with_state(&["yx", "context", "--"], &[]);
         assert!(result.contains(&"--show".to_string()));

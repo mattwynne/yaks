@@ -264,6 +264,45 @@ mod tests {
     }
 
     #[test]
+    fn parse_blocker_events() {
+        let added = YakEvent::parse(
+            "BlockerAdded: \"blocked-yak-a1b2\" \"blocking-yak-c3d4\" \"waiting on API\"",
+        )
+        .unwrap();
+        match added {
+            YakEvent::BlockerAdded(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
+                assert_eq!(event.reason, Some("waiting on API".to_string()));
+            }
+            _ => panic!("Expected BlockerAdded"),
+        }
+
+        let updated = YakEvent::parse(
+            "BlockerUpdated: \"blocked-yak-a1b2\" \"blocking-yak-c3d4\" \"new reason\"",
+        )
+        .unwrap();
+        match updated {
+            YakEvent::BlockerUpdated(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
+                assert_eq!(event.reason, Some("new reason".to_string()));
+            }
+            _ => panic!("Expected BlockerUpdated"),
+        }
+
+        let removed =
+            YakEvent::parse("BlockerRemoved: \"blocked-yak-a1b2\" \"blocking-yak-c3d4\"").unwrap();
+        match removed {
+            YakEvent::BlockerRemoved(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
+            }
+            _ => panic!("Expected BlockerRemoved"),
+        }
+    }
+
+    #[test]
     fn yak_id_returns_correct_id() {
         let event = YakEvent::Moved(
             MovedEvent {
