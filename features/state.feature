@@ -1,6 +1,6 @@
 Feature: Setting yak state
   Set a yak's workflow state: todo, wip, blocked, or done.
-  The `yx start` command is a convenience alias for `yx state <name> wip`.
+  The `yx start` command is a guarded convenience for moving a ready yak to wip.
 
   Rule: Setting state explicitly changes the yak's state
 
@@ -127,15 +127,48 @@ Feature: Setting yak state
         - [blocked] get milk
         """
 
-  Rule: Starting a blocked yak transitions it to wip
+  Rule: Starting a yak requires readiness
 
-    Example: Starting a blocked yak sets it to wip
+    Example: Starting a yak with active explicit blockers fails without a state event
+      Given I have a clean git repository
+      And I add the yak "blocked yak"
+      And I add the yak "blocking yak"
+      And I add blocker "blocking yak" to "blocked yak" with reason "waiting on it"
+      When I try to start "blocked yak"
+      Then the command should fail
+      And the error should contain "cannot start 'blocked yak' - it is not ready"
+      And the error should contain "blocked by blocking yak"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] blocked yak
+        - [todo] blocking yak
+        """
+      When I show the log
+      Then the output should not include "started blocked yak"
+
+    Example: Starting a parent with incomplete children fails without a state event
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      When I try to start "parent"
+      Then the command should fail
+      And the error should contain "cannot start 'parent' - it is not ready"
+      And the error should contain "incomplete children: parent/child"
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] parent
+          - [todo] child
+        """
+      When I show the log
+      Then the output should not include "started parent"
+
+    Example: Starting a yak in a non-todo state fails
       Given I have a clean git repository
       And I add the yak "Fix the bug"
       And I set the state of "Fix the bug" to "blocked"
-      When I start "Fix the bug"
-      And I list the yaks in "markdown" format
-      Then the output should be:
-        """
-        - [wip] Fix the bug
-        """
+      When I try to start "Fix the bug"
+      Then the command should fail
+      And the error should contain "cannot start 'Fix the bug' - it is not ready"
+      And the error should contain "state is blocked"

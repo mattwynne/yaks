@@ -110,6 +110,9 @@ pub trait TestWorld {
     /// Start a yak (alias for setting state to wip)
     fn start_yak(&mut self, name: &str) -> Result<()>;
 
+    /// Try to start a yak - captures result without bailing on failure
+    fn try_start_yak(&mut self, name: &str) -> Result<()>;
+
     /// Move a yak under a parent (--under flag)
     fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()>;
 

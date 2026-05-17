@@ -455,6 +455,50 @@ impl YakMap {
             .all(|cid| self.yaks.get(cid).unwrap().state == YakState::Done))
     }
 
+    pub fn ensure_ready_to_start(&self, id: &YakId) -> Result<()> {
+        self.ensure_exists(id)?;
+
+        let display = self.build_display_name(id);
+        let yak = self.yaks.get(id).unwrap();
+        if yak.state != YakState::Todo {
+            anyhow::bail!(
+                "cannot start '{}' - it is not ready (state is {})",
+                display,
+                yak.state
+            );
+        }
+
+        let active_blockers = self.active_blockers(id);
+        if !active_blockers.is_empty() {
+            let blocker_names = active_blockers
+                .iter()
+                .map(|blocker| self.build_display_name(&blocker.id))
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!(
+                "cannot start '{}' - it is not ready (blocked by {})",
+                display,
+                blocker_names
+            );
+        }
+
+        let incomplete_children = self
+            .find_children_of(id)
+            .into_iter()
+            .filter(|cid| self.yaks.get(cid).unwrap().state != YakState::Done)
+            .map(|cid| self.build_display_name(&cid))
+            .collect::<Vec<_>>();
+        if !incomplete_children.is_empty() {
+            anyhow::bail!(
+                "cannot start '{}' - it is not ready (incomplete children: {})",
+                display,
+                incomplete_children.join(", ")
+            );
+        }
+
+        Ok(())
+    }
+
     fn remove_blocked_by(&mut self, blocker_id: &YakId) {
         let targets: Vec<YakId> = self
             .blockers

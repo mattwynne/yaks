@@ -272,6 +272,10 @@ fn impl_start_yak(world: &mut dyn TestWorld, name: String) -> Result<()> {
     world.start_yak(&name)
 }
 
+fn impl_try_start_yak(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.try_start_yak(&name)
+}
+
 fn impl_move_yak_under(world: &mut dyn TestWorld, name: String, parent: String) -> Result<()> {
     world.move_yak_under(&name, &parent)
 }
@@ -626,6 +630,9 @@ both_worlds!(when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)
 
 both_worlds!(when(regex = r#"^I start "(.+)"$"#)
     fn when_start_yak_fs / when_start_yak_ip (name: String) -> impl_start_yak);
+
+both_worlds!(when(regex = r#"^I try to start "(.+)"$"#)
+    fn when_try_start_yak_fs / when_try_start_yak_ip (name: String) -> impl_try_start_yak);
 
 both_worlds!(when(regex = r#"^I move the yak "(.+)" under "(.+)"$"#)
     fn when_move_yak_under_fs / when_move_yak_under_ip (name: String, parent: String) -> impl_move_yak_under);

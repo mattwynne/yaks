@@ -560,6 +560,10 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(StartYak::new(name, false)))
     }
 
+    fn try_start_yak(&mut self, name: &str) -> Result<()> {
+        self.try_execute(|app| app.handle(StartYak::new(name, false)))
+    }
+
     fn move_yak_under(&mut self, name: &str, parent: &str) -> Result<()> {
         self.execute(|app| app.handle(MoveYak::under(name, parent)))
     }
