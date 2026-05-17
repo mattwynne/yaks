@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import showYakExtension from "./index.js";
+import showYakExtension, { limitTextByLines } from "./index.js";
 
 type RegisteredTool = {
   name: string;
@@ -18,11 +18,29 @@ type ExecCall = { cmd: string; args: string[] };
 const tools: RegisteredTool[] = [];
 const execCalls: ExecCall[] = [];
 
+function makeLines(prefix: string, count: number): string {
+  return Array.from({ length: count }, (_, i) => `${prefix} ${i + 1}`).join("\n");
+}
+
 async function fakeExec(cmd: string, args: string[]) {
   execCalls.push({ cmd, args });
 
+  if (cmd === "bin/dev") {
+    if (args[0] === "merge" && args[1] === "success-branch") {
+      return { code: 0, stdout: `${makeLines("cargo check log", 300)}\nMerged success-branch\n`, stderr: "" };
+    }
+    if (args[0] === "merge" && args[1] === "failing-branch") {
+      return { code: 1, stdout: makeLines("stdout line", 150), stderr: makeLines("stderr line", 10) };
+    }
+    return { code: 1, stdout: "", stderr: `unexpected bin/dev command: ${args.join(" ")}` };
+  }
+
   if (cmd !== "yx") {
     return { code: 1, stdout: "", stderr: `unexpected command: ${cmd}` };
+  }
+
+  if (args[0] === "long-output") {
+    return { code: 0, stdout: makeLines("yx output line", 250), stderr: "" };
   }
 
   if (args[0] === "list") {
@@ -79,6 +97,20 @@ async function callYx(params: { args: string[]; timeoutMs?: number }) {
   return toolNamed("yx").execute("test-call-id", params, new AbortController().signal);
 }
 
+async function callMergeYak(branch: string) {
+  return toolNamed("merge_yak").execute("test-call-id", { branch }, new AbortController().signal);
+}
+
+describe("limitTextByLines", () => {
+  it("returns the tail with a truncation notice when text is too long", () => {
+    const result = limitTextByLines(makeLines("line", 5), 3);
+
+    expect(result.truncated).toBe(true);
+    expect(result.totalLines).toBe(5);
+    expect(result.text).toBe("[output truncated to last 3 of 5 lines]\nline 3\nline 4\nline 5");
+  });
+});
+
 describe("yx tool", () => {
   it("is registered as a tool", () => {
     expect(tools.map((t) => t.name)).toContain("yx");
@@ -99,6 +131,16 @@ describe("yx tool", () => {
     expect(result.isError).toBe(true);
     const text = result.content.find((c: any) => c.type === "text")?.text;
     expect(text).toMatch(/unexpected yx command/i);
+  });
+
+  it("truncates long generic output", async () => {
+    const result = await callYx({ args: ["long-output"] });
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toContain("[output truncated to last 200 of 250 lines]");
+    expect(text!.split("\n")).not.toContain("yx output line 1");
+    expect(text).toContain("yx output line 250");
   });
 });
 
@@ -180,5 +222,29 @@ describe("show_yak tool", () => {
         "rename",
       ],
     });
+  });
+});
+
+describe("merge_yak tool", () => {
+  it("returns a concise success message without verbose check logs", async () => {
+    const result = await callMergeYak("success-branch");
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toBe("Merged yak branch 'success-branch' successfully.");
+    expect(text).not.toContain("cargo check log");
+    expect(execCalls[0]).toEqual({ cmd: "bin/dev", args: ["merge", "success-branch"] });
+  });
+
+  it("returns a truncated tail on failure", async () => {
+    const result = await callMergeYak("failing-branch");
+
+    expect(result.isError).toBe(true);
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toContain("Merge failed for branch 'failing-branch'. Showing last 120 of 160 lines:");
+    expect(text).toContain("[output truncated to last 120 of 160 lines]");
+    expect(text!.split("\n")).not.toContain("stdout line 1");
+    expect(text).toContain("stdout line 41");
+    expect(text).toContain("stderr line 10");
   });
 });

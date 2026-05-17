@@ -16,6 +16,31 @@ import { writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const DEFAULT_YX_OUTPUT_LINES = 200;
+const DEFAULT_MERGE_FAILURE_LINES = 120;
+
+function combinedOutput(stdout: string, stderr: string): string {
+  return (stderr ? `${stdout}\n${stderr}` : stdout).trim();
+}
+
+export function limitTextByLines(text: string, maxLines: number): { text: string; truncated: boolean; totalLines: number } {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { text: "", truncated: false, totalLines: 0 };
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  if (lines.length <= maxLines) {
+    return { text: trimmed, truncated: false, totalLines: lines.length };
+  }
+
+  return {
+    text: `[output truncated to last ${maxLines} of ${lines.length} lines]\n${lines.slice(-maxLines).join("\n")}`,
+    truncated: true,
+    totalLines: lines.length,
+  };
+}
+
 export default function showYakExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "yx",
@@ -32,7 +57,7 @@ export default function showYakExtension(pi: ExtensionAPI) {
         timeout: params.timeoutMs ?? 30000,
       });
 
-      const output = (result.stderr ? `${result.stdout}\n${result.stderr}` : result.stdout).trim();
+      const output = limitTextByLines(combinedOutput(result.stdout, result.stderr), DEFAULT_YX_OUTPUT_LINES).text;
 
       if (result.code !== 0) {
         return {
@@ -169,7 +194,7 @@ export default function showYakExtension(pi: ExtensionAPI) {
         timeout: 30000,
       });
 
-      const output = (result.stdout + "\n" + result.stderr).trim();
+      const output = limitTextByLines(combinedOutput(result.stdout, result.stderr), DEFAULT_YX_OUTPUT_LINES).text;
 
       if (result.code !== 0) {
         return {
@@ -224,17 +249,21 @@ export default function showYakExtension(pi: ExtensionAPI) {
         timeout: 300000,
       });
 
-      const output = (result.stdout + "\n" + result.stderr).trim();
+      const output = combinedOutput(result.stdout, result.stderr);
 
       if (result.code !== 0) {
+        const limited = limitTextByLines(output, DEFAULT_MERGE_FAILURE_LINES);
+        const header = limited.truncated
+          ? `Merge failed for branch '${params.branch}'. Showing last ${DEFAULT_MERGE_FAILURE_LINES} of ${limited.totalLines} lines:`
+          : `Merge failed for branch '${params.branch}':`;
         return {
-          content: [{ type: "text", text: `Merge failed:\n${output}` }],
+          content: [{ type: "text", text: `${header}\n${limited.text}` }],
           isError: true,
         };
       }
 
       return {
-        content: [{ type: "text", text: output }],
+        content: [{ type: "text", text: `Merged yak branch '${params.branch}' successfully.` }],
       };
     },
   });
