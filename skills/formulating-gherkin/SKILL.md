@@ -30,7 +30,8 @@ Rule: Manual blockers replace the existing manual blocker
 - If a scenario discovers a new rule, add or split out a new `Rule:` section.
 - Keep scenario names as concrete examples of the rule, not restatements of it.
 - Prefer several small `Rule:` groups over one long pile of loosely related scenarios.
-- When reviewing a feature, ask: “What rule does this scenario prove?” If the answer is unclear, reformulate.
+- When reviewing a feature, ask: “What rule does this scenario prove?” If the answer is unclear, reformulate, or discuss with your human
+- If a scenario appears to illustate multiple rules, consider splitting it
 
 ## Smell
 
