@@ -29,6 +29,7 @@ ADRs document significant architectural and design decisions.
 | [0021](0021-local-workspace-port-for-onboarding.md) | LocalWorkspacePort for onboarding | accepted |
 | [0022](0022-lazy-migration-replaces-boundary-events.md) | Lazy migration replaces boundary events | accepted |
 | [0023](0023-agent-aware-help-via-displayport.md) | Agent-aware help via DisplayPort | proposed |
+| [0024](0024-content-addressed-check-verification.md) | Content-addressed check verification | proposed |
 
 ## When to Write an ADR
 
