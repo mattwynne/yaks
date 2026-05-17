@@ -1,53 +1,8 @@
-# CLAUDE.md
+This file provides guidance to Agents working in this repository.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+We use yaks for task tasking. See !yx help
 
-## CRITICAL: No specs or plans in git
-
-We use superpowers skills for planning and development, but specs and
-plans are **ephemeral artefacts that belong on yaks, not in git**.
-NEVER commit files under `docs/superpowers/`. Instead, move them to
-the yak's context and delete the file:
-
-```bash
-cat docs/superpowers/specs/my-spec.md | yx context "my yak name"
-rm docs/superpowers/specs/my-spec.md
-
-cat docs/superpowers/plans/my-plan.md | yx field "my yak name" plan.md
-rm docs/superpowers/plans/my-plan.md
-```
-
-# Yak - DAG-based TODO List CLI
-
-A CLI tool for managing TODO lists as a directed acyclic graph (DAG), designed for teams working on software projects. The name comes from "yak shaving" - when you set out to do task A but discover you need B first, which requires C.
-
-## Core Commands
-
-```bash
-# Quality checks - ALWAYS run before committing
-dev check                    # Run all checks (tests + lint + audit)
-
-# Testing
-cargo test --test cucumber --features test-support  # Cucumber acceptance tests
-shellspec                    # ShellSpec tests (tmux, git checks, installer)
-
-# Linting
-dev lint                     # Rust clippy + rustfmt
-```
-
-Commands like `yx` and `dev` are installed in PATH via direnv.
-
-For the full list of yx commands: `yx --help`. Key examples:
-
-```bash
-yx add make the tea          # Multi-word names without quotes
-yx add buy biscuits --under "make the tea"  # Nest under parent
-yx ls                        # Show the tree
-yx context make the tea      # Edit context (stdin or $EDITOR)
-yx state make the tea wip    # Set state (todo, wip, done)
-yx done make the tea         # Mark complete
-yx sync                      # Sync with git remote
-```
+See [CONTRIBUTING](./CONTRIBUTING.md) for dev tooling and commands.
 
 ## Architecture
 
@@ -66,10 +21,10 @@ When making architectural decisions, invoke the `cqrs-event-sourcing`
 skill for guidance on aggregate boundaries, event design, read models,
 policies, and sagas.
 
-## Testing
+## Testing layers
 
-- **Cucumber acceptance tests** (`features/*.feature`): Primary test
-  framework. Dual-mode execution via
+- **Cucumber acceptance tests** (`features/*.feature`): For executable
+  specifications, agreed with human partner. Dual-mode execution via
   `cargo test --test cucumber --features test-support`:
   - FullStackWorld: spawns yx binary (real integration test)
   - InProcessWorld: calls Rust directly with in-memory adapters (fast)
@@ -123,7 +78,8 @@ off course. The only exceptions are trivial one-line fixes.
 2. Run tests (RED)
 3. Implement minimal code to pass (GREEN)
 4. Run tests to verify
-5. Refactor if needed
+5. Refactor. Mercilessly. Simplicity is your friend. Loop multiple
+   times here until the code is exemplary
 6. Run `dev check` to verify all checks pass
 7. Commit
 8. Repeat
@@ -131,18 +87,11 @@ off course. The only exceptions are trivial one-line fixes.
 **TRUST THE TESTS**: When tests pass, the feature works. Do NOT run
 redundant manual verification.
 
-## Plans
-
-Do NOT use `EnterPlanMode` for yak work. Instead, store plans on the
-yak's `plan` field using `yx field <yak-name> plan` (pipe content via
-stdin). Read existing plans with `yx field --show <yak-name> plan`.
-Do NOT store plans in `docs/superpowers/plans/`.
-
-## CRITICAL: Dogfooding Rule
+## Don't interfere with this project's yak map
 
 **NEVER touch the `.yaks` folder in this project!**
 
-We're using yaks to build yaks (dogfooding). The `.yaks` folder
+We're using yaks to build yaks. The `.yaks` folder
 contains the actual work tracker for this project.
 
 - **For testing**: Use `YX_ROOT` (tests set this to temp repo directories)
@@ -153,38 +102,6 @@ contains the actual work tracker for this project.
 
 **Never modify existing accepted ADRs.** Write new ADRs that supersede
 them instead.
-
-## Looking at a Yak
-
-**Use `yx show <name>` to look at a yak.** It displays the tree,
-context, worktree location, and metadata in one shot. NEVER browse
-the `.yaks` directory to read yak state — always use `yx` commands.
-
-```bash
-yx show make the tea         # Full view of one yak
-yx ls                        # Tree overview of all yaks
-yx context --show make the tea  # Just the context
-yx field --show make the tea plan  # Just a specific field
-```
-
-## CRITICAL: Picking Up a Yak
-
-**First action when picking up ANY yak: mark it as WIP.**
-
-```bash
-yx state "<yak-name>" wip
-```
-
-Do this BEFORE reading context, creating worktrees, or starting any
-work. This signals to other agents and to the human what's being
-worked on.
-
-**If a yak needs requirements fleshed out**, use the `preparing-a-yak`
-skill first.
-
-**When ready to implement**, use the `yak-worktree-workflow` skill.
-Follow it exactly. Do NOT implement directly on `main` — always
-use a worktree, even if the change seems small.
 
 ## Completing a Yak
 
@@ -199,20 +116,6 @@ if all checks pass. Never use `git merge` directly.
 After merging:
 1. `yx done "<yak-name>"` — mark the yak complete
 2. Clean up the worktree and branch
-
-## CRITICAL: Branch and Merge Rules
-
-**NEVER push directly to main.** All changes reach main through
-`dev merge <branch>` only.
-
-**NEVER create branches manually.** Use `dev start "<yak-name>"`
-which creates the worktree and branch with the correct naming.
-
-**NEVER use `git merge`, `git push`, or `--no-verify`.** The only
-merge path is `dev merge`, which runs `dev check` first.
-
-If you find yourself wanting to bypass these rules, STOP and ask
-the human.
 
 ## Commit Message Policy
 
