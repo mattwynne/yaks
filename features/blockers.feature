@@ -24,6 +24,38 @@ Feature: Explicit blockers affect readiness
     When I show the log
     Then the output should include "removed blocker"
 
+  Scenario: A yak with an active explicit blocker cannot be marked done
+    Given I add the yak "blocked yak"
+    And I add the yak "blocking yak"
+    And I add blocker "blocking yak" to "blocked yak"
+    When I try to mark the yak "blocked yak" as done
+    Then the command should fail
+    And the error should contain "cannot mark 'blocked yak' as done - it is blocked by blocking yak"
+    When I list the yaks in "markdown" format
+    Then the output should be:
+      """
+      - [todo] blocked yak
+      - [todo] blocking yak
+      """
+    When I show the log
+    Then the output should not include "marked blocked yak done"
+
+  Scenario: A yak with an active explicit blocker cannot be set to done
+    Given I add the yak "blocked yak"
+    And I add the yak "blocking yak"
+    And I add blocker "blocking yak" to "blocked yak"
+    When I try to set the state of "blocked yak" to "done"
+    Then the command should fail
+    And the error should contain "cannot mark 'blocked yak' as done - it is blocked by blocking yak"
+    When I list the yaks in "markdown" format
+    Then the output should be:
+      """
+      - [todo] blocked yak
+      - [todo] blocking yak
+      """
+    When I show the log
+    Then the output should not include "set blocked yak state to done"
+
   Scenario: A blocker can be manually removed
     Given I add the yak "blocked yak"
     And I add the yak "blocking yak"

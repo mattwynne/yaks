@@ -420,8 +420,9 @@ impl YakMap {
 
         self.ensure_exists(&id)?;
 
-        // Validate children if marking done
+        // Validate blockers and children if marking done
         if new_state == YakState::Done {
+            self.validate_no_active_blockers(&id)?;
             self.validate_children_complete(&id)?;
         }
 
@@ -542,6 +543,25 @@ impl YakMap {
                 self.metadata.clone(),
             ));
         }
+    }
+
+    fn validate_no_active_blockers(&self, id: &YakId) -> Result<()> {
+        let active_blockers = self.active_blockers(id);
+        if !active_blockers.is_empty() {
+            let display = self.build_display_name(id);
+            let blocker_names = active_blockers
+                .iter()
+                .map(|blocker| self.build_display_name(&blocker.id))
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!(
+                "cannot mark '{}' as done - it is blocked by {}",
+                display,
+                blocker_names
+            );
+        }
+
+        Ok(())
     }
 
     fn validate_children_complete(&self, parent_id: &YakId) -> Result<()> {
@@ -2268,6 +2288,29 @@ mod tests {
         map.update_state(child_id, "done".to_string()).unwrap();
         let result = map.update_state(parent_id, "done".to_string());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_state_prevents_marking_explicitly_blocked_yak_done_without_event() {
+        let mut map = YakMap::new();
+        let target_id = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker_id = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target_id.clone(), blocker_id, None)
+            .unwrap();
+        map.take_events();
+
+        let result = map.update_state(target_id.clone(), "done".to_string());
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("cannot mark 'blocked yak' as done"));
+        assert!(err.contains("blocked by blocking yak"));
+        assert_eq!(map.yaks.get(&target_id).unwrap().state, YakState::Todo);
+        assert!(map.take_events().is_empty());
     }
 
     #[test]
