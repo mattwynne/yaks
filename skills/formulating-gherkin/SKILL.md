@@ -36,3 +36,5 @@ Rule: Manual blockers replace the existing manual blocker
 ## Smell
 
 A feature with many scenarios and no `Rule:` sections is probably hiding the acceptance criteria. Extract the rules and group the scenarios around them.
+
+For broader scenario formulation and BRIEF review, use `bdd-formulation`.
