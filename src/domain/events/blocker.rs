@@ -155,6 +155,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn formats_blocker_added_event_with_reason() {
+        let event = BlockerAddedEvent {
+            target: YakId::from("blocked-yak"),
+            blocker: YakId::from("blocking-yak"),
+            reason: Some("waiting on review".to_string()),
+        };
+
+        assert_eq!(event.event_tag(), "BlockerAdded");
+        assert_eq!(
+            event.format_data(),
+            "\"blocked-yak\" \"blocking-yak\" \"waiting on review\""
+        );
+    }
+
+    #[test]
+    fn formats_blocker_added_event_with_empty_reason_without_reason_value() {
+        let event = BlockerAddedEvent {
+            target: YakId::from("blocked-yak"),
+            blocker: YakId::from("blocking-yak"),
+            reason: Some(String::new()),
+        };
+
+        assert_eq!(event.event_tag(), "BlockerAdded");
+        assert_eq!(event.format_data(), "\"blocked-yak\" \"blocking-yak\"");
+    }
+
+    #[test]
+    fn formats_blocker_updated_event_with_no_reason() {
+        let event = BlockerUpdatedEvent {
+            target: YakId::from("blocked-yak"),
+            blocker: YakId::from("blocking-yak"),
+            reason: None,
+        };
+
+        assert_eq!(event.event_tag(), "BlockerUpdated");
+        assert_eq!(event.format_data(), "\"blocked-yak\" \"blocking-yak\"");
+    }
+
+    #[test]
+    fn formats_blocker_removed_event() {
+        let event = BlockerRemovedEvent {
+            target: YakId::from("blocked-yak"),
+            blocker: YakId::from("blocking-yak"),
+        };
+
+        assert_eq!(event.event_tag(), "BlockerRemoved");
+        assert_eq!(event.format_data(), "\"blocked-yak\" \"blocking-yak\"");
+    }
+
+    #[test]
     fn parses_empty_added_reason_as_none() {
         let parsed =
             BlockerAddedEvent::parse_data("\"blocked-yak\" \"blocking-yak\" \"\"").unwrap();
