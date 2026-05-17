@@ -2,6 +2,7 @@
  * Yak Tools Extension
  *
  * Registers tools for interacting with yaks:
+ * - "yx": run the `yx` CLI with structured arguments
  * - "show_yak": retrieve yak details via `yx show --format json`
  * - "list_yaks": list all yaks via `yx list --format json`
  * - "update_yak_context": update a yak's context via `yx context`
@@ -16,6 +17,36 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 export default function showYakExtension(pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "yx",
+    label: "YX",
+    description: "Run the `yx` CLI with structured arguments (no shell).",
+    parameters: Type.Object({
+      args: Type.Array(Type.String(), { description: "Arguments to pass to yx" }),
+      timeoutMs: Type.Optional(Type.Number({ description: "Timeout in milliseconds (default: 30000)" })),
+    }),
+
+    async execute(toolCallId, params, signal) {
+      const result = await pi.exec("yx", params.args, {
+        signal,
+        timeout: params.timeoutMs ?? 30000,
+      });
+
+      const output = (result.stderr ? `${result.stdout}\n${result.stderr}` : result.stdout).trim();
+
+      if (result.code !== 0) {
+        return {
+          content: [{ type: "text", text: output }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: output }],
+      };
+    },
+  });
+
   pi.registerTool({
     name: "list_yaks",
     label: "List Yaks",

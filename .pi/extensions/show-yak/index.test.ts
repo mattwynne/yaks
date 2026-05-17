@@ -75,6 +75,33 @@ async function callListYaks(params: Record<string, string> = {}) {
   return toolNamed("list_yaks").execute("test-call-id", params, new AbortController().signal);
 }
 
+async function callYx(params: { args: string[]; timeoutMs?: number }) {
+  return toolNamed("yx").execute("test-call-id", params, new AbortController().signal);
+}
+
+describe("yx tool", () => {
+  it("is registered as a tool", () => {
+    expect(tools.map((t) => t.name)).toContain("yx");
+  });
+
+  it("runs yx with structured args", async () => {
+    const result = await callYx({ args: ["list", "--format", "json"] });
+
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(JSON.parse(text!)).toEqual([]);
+    expect(execCalls[0]).toEqual({ cmd: "yx", args: ["list", "--format", "json"] });
+  });
+
+  it("returns an error for nonzero exits", async () => {
+    const result = await callYx({ args: ["unknown"] });
+
+    expect(result.isError).toBe(true);
+    const text = result.content.find((c: any) => c.type === "text")?.text;
+    expect(text).toMatch(/unexpected yx command/i);
+  });
+});
+
 describe("list_yaks tool", () => {
   it("is registered as a tool", () => {
     expect(tools.map((t) => t.name)).toContain("list_yaks");
