@@ -1,6 +1,8 @@
 Feature: Explicit blockers affect readiness
   Explicit blocker relationships make otherwise actionable yaks not ready.
 
+  Rule: Explicit yak blockers affect readiness
+
   Scenario: A yak blocked by another yak is not ready
     Given I add the yak "blocked yak"
     And I add the yak "blocking yak"
@@ -10,6 +12,37 @@ Feature: Explicit blockers affect readiness
     When I list the yaks as json
     Then the JSON yak "blocked yak" should have ready false
     And the JSON yak "blocked yak" should be blocked by "blocking yak" with reason "waiting on it"
+
+  Rule: A yak can have at most one manual blocker
+
+  Scenario: Adding another manual blocker replaces the existing manual blocker
+    Given I add the yak "blocked yak"
+    When I add manual blocker to "blocked yak" with reason "waiting on vendor"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should have ready false
+    And the JSON yak "blocked yak" should have exactly one manual blocker with reason "waiting on vendor"
+    When I add manual blocker to "blocked yak" with reason "waiting on review"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should have exactly one manual blocker with reason "waiting on review"
+    When I remove manual blocker from "blocked yak"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should have ready true
+    And the JSON yak "blocked yak" should not have blockers
+
+  Scenario: Manual blockers require a reason
+    Given I add the yak "blocked yak"
+    When I try to add manual blocker to "blocked yak" without a reason
+    Then the command should fail
+    And the error should contain "manual blockers require a non-empty --reason"
+
+  Rule: Blocker JSON identifies blocker kinds
+
+  Scenario: JSON distinguishes yak blockers from manual blockers
+    Given I add the yak "blocked yak"
+    And I add the yak "blocking yak"
+    When I add blocker "blocking yak" to "blocked yak" with reason "waiting on it"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should be blocked by yak "blocking yak"
 
   Scenario: Completing a blocker makes the blocked yak ready
     Given I add the yak "blocked yak"

@@ -118,11 +118,9 @@ pub(super) fn get_yak(base_path: &Path, id: &YakId) -> Result<Yak> {
         .ok()
         .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
-    let state: YakState = fs::read_to_string(dir.join(STATE_FIELD))
-        .unwrap_or_else(|_| "todo".to_string())
-        .trim()
-        .parse()
-        .unwrap_or(YakState::Todo);
+    let state_content =
+        fs::read_to_string(dir.join(STATE_FIELD)).unwrap_or_else(|_| "todo".to_string());
+    let state: YakState = YakState::from_storage(state_content.trim()).unwrap_or(YakState::Todo);
 
     let fields = read_custom_fields(&dir);
     let tags: Vec<String> = fs::read_to_string(dir.join(TAGS_FIELD))
@@ -190,11 +188,10 @@ pub(super) fn list_yaks(base_path: &Path) -> Result<Vec<Yak>> {
             .ok()
             .and_then(|c| if c.is_empty() { None } else { Some(c) });
 
-        let state: YakState = fs::read_to_string(path.join(STATE_FIELD))
-            .unwrap_or_else(|_| "todo".to_string())
-            .trim()
-            .parse()
-            .unwrap_or(YakState::Todo);
+        let state_content =
+            fs::read_to_string(path.join(STATE_FIELD)).unwrap_or_else(|_| "todo".to_string());
+        let state: YakState =
+            YakState::from_storage(state_content.trim()).unwrap_or(YakState::Todo);
 
         let fields = read_custom_fields(path);
         let tags: Vec<String> = fs::read_to_string(path.join(TAGS_FIELD))

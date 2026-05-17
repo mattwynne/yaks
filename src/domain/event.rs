@@ -17,6 +17,9 @@ pub enum YakEvent {
     BlockerAdded(BlockerAddedEvent, EventMetadata),
     BlockerUpdated(BlockerUpdatedEvent, EventMetadata),
     BlockerRemoved(BlockerRemovedEvent, EventMetadata),
+    ManualBlockerAdded(ManualBlockerAddedEvent, EventMetadata),
+    ManualBlockerUpdated(ManualBlockerUpdatedEvent, EventMetadata),
+    ManualBlockerRemoved(ManualBlockerRemovedEvent, EventMetadata),
     Compacted(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
     Migrated(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
 }
@@ -31,6 +34,9 @@ impl YakEvent {
             Self::BlockerAdded(_, m) => m,
             Self::BlockerUpdated(_, m) => m,
             Self::BlockerRemoved(_, m) => m,
+            Self::ManualBlockerAdded(_, m) => m,
+            Self::ManualBlockerUpdated(_, m) => m,
+            Self::ManualBlockerRemoved(_, m) => m,
             Self::Compacted(_, _, m) => m,
             Self::Migrated(_, _, m) => m,
         }
@@ -45,6 +51,9 @@ impl YakEvent {
             Self::BlockerAdded(e, _) => Self::BlockerAdded(e, metadata),
             Self::BlockerUpdated(e, _) => Self::BlockerUpdated(e, metadata),
             Self::BlockerRemoved(e, _) => Self::BlockerRemoved(e, metadata),
+            Self::ManualBlockerAdded(e, _) => Self::ManualBlockerAdded(e, metadata),
+            Self::ManualBlockerUpdated(e, _) => Self::ManualBlockerUpdated(e, metadata),
+            Self::ManualBlockerRemoved(e, _) => Self::ManualBlockerRemoved(e, metadata),
             Self::Compacted(s, r, _) => Self::Compacted(s, r, metadata),
             Self::Migrated(s, r, _) => Self::Migrated(s, r, metadata),
         }
@@ -63,6 +72,9 @@ impl YakEvent {
             Self::BlockerAdded(e, _) => e.format_narrative(author, resolve_name),
             Self::BlockerUpdated(e, _) => e.format_narrative(author, resolve_name),
             Self::BlockerRemoved(e, _) => e.format_narrative(author, resolve_name),
+            Self::ManualBlockerAdded(e, _) => e.format_narrative(author, resolve_name),
+            Self::ManualBlockerUpdated(e, _) => e.format_narrative(author, resolve_name),
+            Self::ManualBlockerRemoved(e, _) => e.format_narrative(author, resolve_name),
             Self::Compacted(snapshots, _, _) => {
                 let count = snapshots.len();
                 vec![
@@ -89,6 +101,9 @@ impl YakEvent {
             Self::BlockerAdded(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::BlockerUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::BlockerRemoved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::ManualBlockerAdded(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::ManualBlockerUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
+            Self::ManualBlockerRemoved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::Compacted(_, _, _) => "Compacted".to_string(),
             Self::Migrated(_, _, _) => "Migrated".to_string(),
         }
@@ -124,6 +139,18 @@ impl YakEvent {
             )),
             "BlockerRemoved" => Ok(Self::BlockerRemoved(
                 BlockerRemovedEvent::parse_data(data)?,
+                meta,
+            )),
+            "ManualBlockerAdded" => Ok(Self::ManualBlockerAdded(
+                ManualBlockerAddedEvent::parse_data(data)?,
+                meta,
+            )),
+            "ManualBlockerUpdated" => Ok(Self::ManualBlockerUpdated(
+                ManualBlockerUpdatedEvent::parse_data(data)?,
+                meta,
+            )),
+            "ManualBlockerRemoved" => Ok(Self::ManualBlockerRemoved(
+                ManualBlockerRemovedEvent::parse_data(data)?,
                 meta,
             )),
             // Backward-compatible parsing of old event formats
@@ -180,6 +207,9 @@ impl YakEvent {
             Self::BlockerAdded(e, _) => e.target.as_str(),
             Self::BlockerUpdated(e, _) => e.target.as_str(),
             Self::BlockerRemoved(e, _) => e.target.as_str(),
+            Self::ManualBlockerAdded(e, _) => e.target.as_str(),
+            Self::ManualBlockerUpdated(e, _) => e.target.as_str(),
+            Self::ManualBlockerRemoved(e, _) => e.target.as_str(),
             Self::Compacted(_, _, _) => "",
             Self::Migrated(_, _, _) => "",
         }
@@ -299,6 +329,36 @@ mod tests {
                 assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
             }
             _ => panic!("Expected BlockerRemoved"),
+        }
+
+        let manual_added =
+            YakEvent::parse("ManualBlockerAdded: \"blocked-yak-a1b2\" \"waiting on vendor\"")
+                .unwrap();
+        match manual_added {
+            YakEvent::ManualBlockerAdded(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.reason, "waiting on vendor");
+            }
+            _ => panic!("Expected ManualBlockerAdded"),
+        }
+
+        let manual_updated =
+            YakEvent::parse("ManualBlockerUpdated: \"blocked-yak-a1b2\" \"waiting on review\"")
+                .unwrap();
+        match manual_updated {
+            YakEvent::ManualBlockerUpdated(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.reason, "waiting on review");
+            }
+            _ => panic!("Expected ManualBlockerUpdated"),
+        }
+
+        let manual_removed = YakEvent::parse("ManualBlockerRemoved: \"blocked-yak-a1b2\"").unwrap();
+        match manual_removed {
+            YakEvent::ManualBlockerRemoved(event, _) => {
+                assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+            }
+            _ => panic!("Expected ManualBlockerRemoved"),
         }
     }
 

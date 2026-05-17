@@ -1154,6 +1154,21 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["blocker", "rm", target, "--by", blocker])
     }
 
+    fn add_manual_blocker(&mut self, target: &str, reason: &str) -> Result<()> {
+        self.run_yx(&["blocker", "add", target, "--reason", reason])
+    }
+
+    fn try_add_manual_blocker(&mut self, target: &str, reason: Option<&str>) -> Result<()> {
+        match reason {
+            Some(reason) => self.run_yx_unchecked(&["blocker", "add", target, "--reason", reason]),
+            None => self.run_yx_unchecked(&["blocker", "add", target]),
+        }
+    }
+
+    fn remove_manual_blocker(&mut self, target: &str) -> Result<()> {
+        self.run_yx(&["blocker", "rm", target, "--manual"])
+    }
+
     fn show_log(&mut self) -> Result<()> {
         self.run_yx(&["log"])
     }

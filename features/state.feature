@@ -1,5 +1,5 @@
 Feature: Setting yak state
-  Set a yak's workflow state: todo, wip, blocked, or done.
+  Set a yak's workflow state: todo, wip, or done.
   The `yx start` command is a guarded convenience for moving a ready yak to wip.
 
   Rule: Setting state explicitly changes the yak's state
@@ -21,7 +21,7 @@ Feature: Setting yak state
       And I add the yak "get milk"
       When I try to set the state of "get milk" to "invalid-state"
       Then the command should fail
-      And the error should contain "Invalid state 'invalid-state'. Valid states are: todo, wip, blocked, done"
+      And the error should contain "Invalid state 'invalid-state'. Valid states are: todo, wip, done"
 
   Rule: Starting a yak is a convenience alias for setting state to wip
 
@@ -129,17 +129,17 @@ Feature: Setting yak state
           - [wip] child-a
         """
 
-  Rule: Setting state to blocked marks the yak as blocked
+  Rule: Blocked is no longer a workflow state
 
-    Example: Set a yak to blocked state
+    Example: Setting state to blocked is rejected with guidance
       Given I have a clean git repository
       And I add the yak "get milk"
-      When I set the state of "get milk" to "blocked"
-      And I list the yaks in "markdown" format
-      Then the output should be:
-        """
-        - [blocked] get milk
-        """
+      When I try to set the state of "get milk" to "blocked"
+      Then the command should fail
+      And the error should contain "Invalid state 'blocked'. Valid states are: todo, wip, done"
+      And the error should contain "yx blocker add <yak> --reason"
+      When I show the log
+      Then the output should not include "set get milk state to blocked"
 
   Rule: Starting a yak requires readiness
 
@@ -193,8 +193,8 @@ Feature: Setting yak state
     Example: Starting a yak in a non-todo state fails
       Given I have a clean git repository
       And I add the yak "Fix the bug"
-      And I set the state of "Fix the bug" to "blocked"
+      And I set the state of "Fix the bug" to "done"
       When I try to start "Fix the bug"
       Then the command should fail
       And the error should contain "cannot start 'Fix the bug' - it is not ready"
-      And the error should contain "state is blocked"
+      And the error should contain "state is done"

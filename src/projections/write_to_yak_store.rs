@@ -3,6 +3,7 @@ use anyhow::Result;
 use crate::domain::events::*;
 use crate::domain::ports::{EventListener, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
+use crate::domain::yak_map::MANUAL_BLOCKER_FIELD;
 use crate::domain::{YakEvent, CONTEXT_FIELD, CREATED_FIELD, NAME_FIELD, STATE_FIELD};
 
 impl<T: WriteYakStore> EventListener for T {
@@ -35,7 +36,51 @@ fn migrate_field_name(field_name: &str) -> &str {
     }
 }
 
+fn apply_field_updated_event<T: WriteYakStore>(
+    store: &mut T,
+    id: &YakId,
+    field_name: &str,
+    content: &str,
+) -> Result<()> {
+    let actual_name = migrate_field_name(field_name);
+    if actual_name == NAME_FIELD {
+        store.rename_yak(id, &Name::from(content))?;
+    } else if actual_name == STATE_FIELD && content == "blocked" {
+        store.write_field(id, STATE_FIELD, "todo")?;
+        store.write_field(
+            id,
+            MANUAL_BLOCKER_FIELD,
+            crate::domain::yak_map::MIGRATED_BLOCKED_REASON,
+        )?;
+    } else {
+        store.write_field(id, actual_name, content)?;
+    }
+    Ok(())
+}
+
+fn apply_manual_blocker_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<bool> {
+    match event {
+        YakEvent::ManualBlockerAdded(e, _) => {
+            store.write_field(&e.target, MANUAL_BLOCKER_FIELD, &e.reason)?;
+            Ok(true)
+        }
+        YakEvent::ManualBlockerUpdated(e, _) => {
+            store.write_field(&e.target, MANUAL_BLOCKER_FIELD, &e.reason)?;
+            Ok(true)
+        }
+        YakEvent::ManualBlockerRemoved(e, _) => {
+            store.write_field(&e.target, MANUAL_BLOCKER_FIELD, "")?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> {
+    if apply_manual_blocker_event(store, event)? {
+        return Ok(());
+    }
+
     match event {
         YakEvent::Added(
             AddedEvent {
@@ -78,18 +123,14 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 content,
             },
             _,
-        ) => {
-            let actual_name = migrate_field_name(field_name);
-            if actual_name == NAME_FIELD {
-                store.rename_yak(id, &Name::from(content.as_str()))?;
-            } else {
-                store.write_field(id, actual_name, content)?;
-            }
-        }
+        ) => apply_field_updated_event(store, id, field_name, content)?,
 
         YakEvent::BlockerAdded(_, _)
         | YakEvent::BlockerUpdated(_, _)
-        | YakEvent::BlockerRemoved(_, _) => {}
+        | YakEvent::BlockerRemoved(_, _)
+        | YakEvent::ManualBlockerAdded(_, _)
+        | YakEvent::ManualBlockerUpdated(_, _)
+        | YakEvent::ManualBlockerRemoved(_, _) => {}
 
         YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
             store.clear_all()?;
@@ -271,6 +312,97 @@ mod tests {
         assert_eq!(yak.tags, vec!["v1".to_string(), "urgent".to_string()]);
         // Should NOT appear as a custom field named "tags"
         assert!(!yak.fields.contains_key("tags"));
+    }
+
+    #[test]
+    fn legacy_blocked_state_projects_as_todo_with_manual_blocker() {
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
+
+        listener
+            .on_event(&added_event("blocked yak", "blocked-yak-a1b2"))
+            .unwrap();
+        listener
+            .on_event(&YakEvent::FieldUpdated(
+                FieldUpdatedEvent {
+                    id: YakId::from("blocked-yak-a1b2"),
+                    field_name: STATE_FIELD.to_string(),
+                    content: "blocked".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+
+        let yak = storage.get_yak(&YakId::from("blocked-yak-a1b2")).unwrap();
+        assert_eq!(yak.state, crate::domain::YakState::Todo);
+        assert_eq!(
+            yak.fields.get(MANUAL_BLOCKER_FIELD).map(String::as_str),
+            Some(crate::domain::yak_map::MIGRATED_BLOCKED_REASON)
+        );
+    }
+
+    #[test]
+    fn manual_blocker_events_update_projection_field() {
+        let storage = InMemoryStorage::new();
+        let mut listener: Box<dyn EventListener> = Box::new(storage.clone());
+        let id = YakId::from("blocked-yak-a1b2");
+
+        listener
+            .on_event(&added_event("blocked yak", id.as_str()))
+            .unwrap();
+        listener
+            .on_event(&YakEvent::ManualBlockerAdded(
+                ManualBlockerAddedEvent {
+                    target: id.clone(),
+                    reason: "waiting on vendor".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        assert_eq!(
+            storage
+                .get_yak(&id)
+                .unwrap()
+                .fields
+                .get(MANUAL_BLOCKER_FIELD)
+                .map(String::as_str),
+            Some("waiting on vendor")
+        );
+
+        listener
+            .on_event(&YakEvent::ManualBlockerUpdated(
+                ManualBlockerUpdatedEvent {
+                    target: id.clone(),
+                    reason: "waiting on review".to_string(),
+                },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        assert_eq!(
+            storage
+                .get_yak(&id)
+                .unwrap()
+                .fields
+                .get(MANUAL_BLOCKER_FIELD)
+                .map(String::as_str),
+            Some("waiting on review")
+        );
+
+        listener
+            .on_event(&YakEvent::ManualBlockerRemoved(
+                ManualBlockerRemovedEvent { target: id.clone() },
+                EventMetadata::default_legacy(),
+            ))
+            .unwrap();
+        assert_eq!(
+            storage
+                .get_yak(&id)
+                .unwrap()
+                .fields
+                .get(MANUAL_BLOCKER_FIELD)
+                .map(String::as_str),
+            Some("")
+        );
     }
 
     #[test]

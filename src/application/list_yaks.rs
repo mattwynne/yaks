@@ -2,6 +2,7 @@
 
 use crate::adapters::views::{Message, YakBlockerView, YakTreeNode, YakTreeView};
 use crate::domain::slug::{Name, YakId};
+use crate::domain::yak_map::BlockerKind;
 use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
 use anyhow::Result;
@@ -338,13 +339,23 @@ impl UseCase for ListYaks {
                     let blocked_by = map
                         .active_blockers(&yak.id)
                         .into_iter()
-                        .filter_map(|blocker| {
-                            yaks_by_id.get(&blocker.id).map(|yak| YakBlockerView {
-                                id: yak.id.as_str().to_string(),
-                                name: yak.name.to_string(),
-                                state: yak.state.to_string(),
+                        .filter_map(|blocker| match blocker.kind {
+                            BlockerKind::Yak => {
+                                yaks_by_id.get(&blocker.id).map(|yak| YakBlockerView {
+                                    kind: "yak".to_string(),
+                                    id: Some(yak.id.as_str().to_string()),
+                                    name: yak.name.to_string(),
+                                    state: Some(yak.state.to_string()),
+                                    reason: blocker.reason,
+                                })
+                            }
+                            BlockerKind::Manual => Some(YakBlockerView {
+                                kind: "manual".to_string(),
+                                id: None,
+                                name: "manual".to_string(),
+                                state: None,
                                 reason: blocker.reason,
-                            })
+                            }),
                         })
                         .collect::<Vec<_>>();
                     (yak.id.clone(), blocked_by)
@@ -1234,8 +1245,11 @@ mod tests {
         app.handle(SetState::new("wip yak", "wip").with_silent(true))
             .unwrap();
         app.handle(AddYak::new("blocked yak")).unwrap();
-        app.handle(SetState::new("blocked yak", "blocked").with_silent(true))
-            .unwrap();
+        app.handle(crate::application::AddBlocker::manual(
+            "blocked yak",
+            "waiting",
+        ))
+        .unwrap();
         app.handle(AddYak::new("done yak")).unwrap();
         app.handle(SetState::new("done yak", "done").with_silent(true))
             .unwrap();

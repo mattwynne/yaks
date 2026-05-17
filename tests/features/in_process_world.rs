@@ -388,6 +388,26 @@ impl TestWorld for InProcessWorld {
         self.execute(move |app| app.handle(RemoveBlocker::new(&target, &blocker)))
     }
 
+    fn add_manual_blocker(&mut self, target: &str, reason: &str) -> Result<()> {
+        let target = target.to_string();
+        let reason = reason.to_string();
+        self.execute(move |app| app.handle(AddBlocker::manual(&target, &reason)))
+    }
+
+    fn try_add_manual_blocker(&mut self, target: &str, reason: Option<&str>) -> Result<()> {
+        let target = target.to_string();
+        let reason = reason.map(str::to_string);
+        self.try_execute(move |app| match reason {
+            Some(reason) => app.handle(AddBlocker::manual(&target, &reason)),
+            None => anyhow::bail!("manual blockers require a non-empty --reason"),
+        })
+    }
+
+    fn remove_manual_blocker(&mut self, target: &str) -> Result<()> {
+        let target = target.to_string();
+        self.execute(move |app| app.handle(RemoveBlocker::manual(&target)))
+    }
+
     fn show_log(&mut self) -> Result<()> {
         self.execute(|app| app.handle(ShowLog::new()))
     }

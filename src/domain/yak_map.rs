@@ -7,9 +7,19 @@ use crate::domain::{Yak, YakEvent};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
+pub const MIGRATED_BLOCKED_REASON: &str = "Migrated from blocked state";
+pub const MANUAL_BLOCKER_FIELD: &str = ".manual-blocker";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockerKind {
+    Yak,
+    Manual,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveBlocker {
     pub id: YakId,
+    pub kind: BlockerKind,
     pub reason: Option<String>,
 }
 
@@ -30,6 +40,7 @@ pub enum RemoveBlockerOutcome {
 pub struct YakMap {
     yaks: HashMap<YakId, Yak>,
     blockers: HashMap<YakId, HashMap<YakId, Option<String>>>,
+    manual_blockers: HashMap<YakId, String>,
     pending_events: Vec<YakEvent>,
     metadata: EventMetadata,
 }
@@ -41,6 +52,7 @@ impl YakMap {
         Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
+            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata: EventMetadata::default_legacy(),
         }
@@ -50,6 +62,7 @@ impl YakMap {
         Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
+            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         }
@@ -59,13 +72,24 @@ impl YakMap {
         let yaks_list = store.list_yaks()?;
 
         let mut yaks = HashMap::new();
-        for yak in yaks_list {
+        let mut manual_blockers = HashMap::new();
+        for mut yak in yaks_list {
+            if yak.state == YakState::Blocked {
+                yak.state = YakState::Todo;
+                manual_blockers.insert(yak.id.clone(), MIGRATED_BLOCKED_REASON.to_string());
+            }
+            if let Some(reason) = yak.fields.remove(MANUAL_BLOCKER_FIELD) {
+                if !reason.trim().is_empty() {
+                    manual_blockers.insert(yak.id.clone(), reason);
+                }
+            }
             yaks.insert(yak.id.clone(), yak);
         }
 
         Ok(Self {
             yaks,
             blockers: HashMap::new(),
+            manual_blockers,
             pending_events: Vec::new(),
             metadata,
         })
@@ -76,6 +100,7 @@ impl YakMap {
         let mut yak_map = Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
+            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         };
@@ -101,6 +126,15 @@ impl YakMap {
                 self.apply_blocker_added_or_updated(e.target, e.blocker, e.reason)
             }
             YakEvent::BlockerRemoved(e, _) => self.apply_blocker_removed(e),
+            YakEvent::ManualBlockerAdded(e, _) => {
+                self.manual_blockers.insert(e.target, e.reason);
+            }
+            YakEvent::ManualBlockerUpdated(e, _) => {
+                self.manual_blockers.insert(e.target, e.reason);
+            }
+            YakEvent::ManualBlockerRemoved(e, _) => {
+                self.manual_blockers.remove(&e.target);
+            }
             YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
                 self.apply_compacted(snapshots)
             }
@@ -128,6 +162,7 @@ impl YakMap {
     fn apply_removed(&mut self, removed: RemovedEvent) {
         self.yaks.remove(&removed.id);
         self.blockers.remove(&removed.id);
+        self.manual_blockers.remove(&removed.id);
         for blockers in self.blockers.values_mut() {
             blockers.remove(&removed.id);
         }
@@ -140,6 +175,25 @@ impl YakMap {
     }
 
     fn apply_field_updated(&mut self, field_updated: FieldUpdatedEvent) {
+        if field_updated.field_name == ".state" {
+            if field_updated.content == "blocked" {
+                if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
+                    yak.state = YakState::Todo;
+                    self.manual_blockers.insert(
+                        field_updated.id.clone(),
+                        MIGRATED_BLOCKED_REASON.to_string(),
+                    );
+                }
+                return;
+            }
+            if self
+                .manual_blockers
+                .get(&field_updated.id)
+                .is_some_and(|reason| reason == MIGRATED_BLOCKED_REASON)
+            {
+                self.manual_blockers.remove(&field_updated.id);
+            }
+        }
         if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
             Self::apply_field_update_to_yak(yak, field_updated);
         }
@@ -207,7 +261,18 @@ impl YakMap {
     fn apply_compacted(&mut self, snapshots: Vec<Yak>) {
         self.yaks.clear();
         self.blockers.clear();
-        for yak in snapshots {
+        self.manual_blockers.clear();
+        for mut yak in snapshots {
+            if yak.state == YakState::Blocked {
+                yak.state = YakState::Todo;
+                self.manual_blockers
+                    .insert(yak.id.clone(), MIGRATED_BLOCKED_REASON.to_string());
+            }
+            if let Some(reason) = yak.fields.remove(MANUAL_BLOCKER_FIELD) {
+                if !reason.trim().is_empty() {
+                    self.manual_blockers.insert(yak.id.clone(), reason);
+                }
+            }
             self.yaks.insert(yak.id.clone(), yak);
         }
     }
@@ -462,11 +527,7 @@ impl YakMap {
             return Ok(false);
         }
 
-        if self
-            .blockers
-            .get(id)
-            .is_some_and(|blockers| !blockers.is_empty())
-        {
+        if !self.active_blockers(id).is_empty() {
             return Ok(false);
         }
 
@@ -491,11 +552,7 @@ impl YakMap {
 
         let active_blockers = self.active_blockers(id);
         if !active_blockers.is_empty() {
-            let blocker_names = active_blockers
-                .iter()
-                .map(|blocker| self.build_display_name(&blocker.id))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let blocker_names = self.format_active_blockers(&active_blockers);
             anyhow::bail!(
                 "cannot start '{}' - it is not ready (blocked by {})",
                 display,
@@ -575,11 +632,7 @@ impl YakMap {
         let active_blockers = self.active_blockers(id);
         if !active_blockers.is_empty() {
             let display = self.build_display_name(id);
-            let blocker_names = active_blockers
-                .iter()
-                .map(|blocker| self.build_display_name(&blocker.id))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let blocker_names = self.format_active_blockers(&active_blockers);
             anyhow::bail!(
                 "cannot mark '{}' as done - it is blocked by {}",
                 display,
@@ -588,6 +641,20 @@ impl YakMap {
         }
 
         Ok(())
+    }
+
+    fn format_active_blockers(&self, active_blockers: &[ActiveBlocker]) -> String {
+        active_blockers
+            .iter()
+            .map(|blocker| match blocker.kind {
+                BlockerKind::Yak => self.build_display_name(&blocker.id),
+                BlockerKind::Manual => blocker
+                    .reason
+                    .clone()
+                    .unwrap_or_else(|| "manual blocker".to_string()),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn validate_children_complete(&self, parent_id: &YakId) -> Result<()> {
@@ -634,10 +701,21 @@ impl YakMap {
             .flat_map(|blockers| blockers.iter())
             .map(|(id, reason)| ActiveBlocker {
                 id: id.clone(),
+                kind: BlockerKind::Yak,
                 reason: reason.clone(),
             })
             .collect();
-        blockers.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+        if let Some(reason) = self.manual_blockers.get(id) {
+            blockers.push(ActiveBlocker {
+                id: id.clone(),
+                kind: BlockerKind::Manual,
+                reason: Some(reason.clone()),
+            });
+        }
+        blockers.sort_by(|a, b| {
+            (matches!(a.kind, BlockerKind::Manual), a.id.as_str())
+                .cmp(&(matches!(b.kind, BlockerKind::Manual), b.id.as_str()))
+        });
         blockers
     }
 
@@ -927,6 +1005,51 @@ impl YakMap {
         Ok(outcome)
     }
 
+    pub fn add_manual_blocker(
+        &mut self,
+        target: YakId,
+        reason: String,
+    ) -> Result<AddBlockerOutcome> {
+        self.ensure_exists(&target)?;
+        anyhow::ensure!(
+            !reason.trim().is_empty(),
+            "manual blockers require a non-empty --reason"
+        );
+        let reason = reason.trim().to_string();
+        match self.manual_blockers.get(&target) {
+            Some(existing) if existing == &reason => Ok(AddBlockerOutcome::AlreadyExplicit),
+            Some(_) => {
+                self.manual_blockers.insert(target.clone(), reason.clone());
+                self.pending_events.push(YakEvent::ManualBlockerUpdated(
+                    ManualBlockerUpdatedEvent { target, reason },
+                    self.metadata.clone(),
+                ));
+                Ok(AddBlockerOutcome::Updated)
+            }
+            None => {
+                self.manual_blockers.insert(target.clone(), reason.clone());
+                self.pending_events.push(YakEvent::ManualBlockerAdded(
+                    ManualBlockerAddedEvent { target, reason },
+                    self.metadata.clone(),
+                ));
+                Ok(AddBlockerOutcome::Added)
+            }
+        }
+    }
+
+    pub fn remove_manual_blocker(&mut self, target: YakId) -> Result<RemoveBlockerOutcome> {
+        self.ensure_exists(&target)?;
+        if self.manual_blockers.remove(&target).is_some() {
+            self.pending_events.push(YakEvent::ManualBlockerRemoved(
+                ManualBlockerRemovedEvent { target },
+                self.metadata.clone(),
+            ));
+            Ok(RemoveBlockerOutcome::Removed)
+        } else {
+            Ok(RemoveBlockerOutcome::NotPresent)
+        }
+    }
+
     pub fn remove_blocker(
         &mut self,
         target: YakId,
@@ -1143,6 +1266,152 @@ impl YakMap {
 mod tests {
     use super::*;
     use crate::domain::slug::Name;
+    use std::collections::HashMap;
+
+    #[test]
+    fn legacy_blocked_state_replays_as_todo_with_manual_blocker() {
+        let id = YakId::from("legacy-a1b2");
+        let map = YakMap::from_events(
+            vec![
+                YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("legacy"),
+                        id: id.clone(),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ),
+                YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: ".state".to_string(),
+                        content: "blocked".to_string(),
+                    },
+                    EventMetadata::default_legacy(),
+                ),
+            ],
+            EventMetadata::default_legacy(),
+        )
+        .unwrap();
+
+        assert_eq!(map.yaks.get(&id).unwrap().state, YakState::Todo);
+        assert_eq!(map.active_blockers(&id)[0].kind, BlockerKind::Manual);
+        assert_eq!(
+            map.active_blockers(&id)[0].reason.as_deref(),
+            Some(MIGRATED_BLOCKED_REASON)
+        );
+        assert!(!map.is_ready(&id).unwrap());
+    }
+
+    #[test]
+    fn non_blocked_state_change_clears_migrated_manual_blocker() {
+        let id = YakId::from("legacy-a1b2");
+        let map = YakMap::from_events(
+            vec![
+                YakEvent::Added(
+                    AddedEvent {
+                        name: Name::from("legacy"),
+                        id: id.clone(),
+                        parent_id: None,
+                    },
+                    EventMetadata::default_legacy(),
+                ),
+                YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: ".state".to_string(),
+                        content: "blocked".to_string(),
+                    },
+                    EventMetadata::default_legacy(),
+                ),
+                YakEvent::FieldUpdated(
+                    FieldUpdatedEvent {
+                        id: id.clone(),
+                        field_name: ".state".to_string(),
+                        content: "todo".to_string(),
+                    },
+                    EventMetadata::default_legacy(),
+                ),
+            ],
+            EventMetadata::default_legacy(),
+        )
+        .unwrap();
+
+        assert_eq!(map.yaks.get(&id).unwrap().state, YakState::Todo);
+        assert!(map.active_blockers(&id).is_empty());
+        assert!(map.is_ready(&id).unwrap());
+    }
+
+    #[test]
+    fn compacted_legacy_blocked_state_replays_as_todo_with_manual_blocker() {
+        let id = YakId::from("legacy-a1b2");
+        let snapshot = Yak {
+            id: id.clone(),
+            name: Name::from("legacy"),
+            parent_id: None,
+            state: YakState::Blocked,
+            context: None,
+            fields: HashMap::new(),
+            tags: vec![],
+            created_by: crate::domain::event_metadata::Author::unknown(),
+            created_at: crate::domain::event_metadata::Timestamp::zero(),
+        };
+
+        let map = YakMap::from_events(
+            vec![YakEvent::Compacted(
+                vec![snapshot],
+                vec![],
+                EventMetadata::default_legacy(),
+            )],
+            EventMetadata::default_legacy(),
+        )
+        .unwrap();
+
+        assert_eq!(map.yaks.get(&id).unwrap().state, YakState::Todo);
+        assert_eq!(
+            map.active_blockers(&id)[0].reason.as_deref(),
+            Some(MIGRATED_BLOCKED_REASON)
+        );
+    }
+
+    #[test]
+    fn compacted_manual_blocker_field_replays_manual_blocker() {
+        let id = YakId::from("manual-a1b2");
+        let mut fields = HashMap::new();
+        fields.insert(MANUAL_BLOCKER_FIELD.to_string(), "waiting".to_string());
+        let snapshot = Yak {
+            id: id.clone(),
+            name: Name::from("manual"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields,
+            tags: vec![],
+            created_by: crate::domain::event_metadata::Author::unknown(),
+            created_at: crate::domain::event_metadata::Timestamp::zero(),
+        };
+
+        let map = YakMap::from_events(
+            vec![YakEvent::Compacted(
+                vec![snapshot],
+                vec![],
+                EventMetadata::default_legacy(),
+            )],
+            EventMetadata::default_legacy(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            map.active_blockers(&id)[0].reason.as_deref(),
+            Some("waiting")
+        );
+        assert!(!map
+            .yaks
+            .get(&id)
+            .unwrap()
+            .fields
+            .contains_key(MANUAL_BLOCKER_FIELD));
+    }
 
     #[test]
     fn add_blocker_normalizes_empty_reason_to_none() {

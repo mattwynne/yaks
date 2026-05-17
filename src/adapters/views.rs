@@ -38,9 +38,12 @@ pub struct YakChildView {
 /// View model for explicit blocker information in JSON list output.
 #[derive(Debug, Clone, Serialize)]
 pub struct YakBlockerView {
-    pub id: String,
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub name: String,
-    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }

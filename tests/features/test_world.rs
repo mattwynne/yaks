@@ -71,6 +71,15 @@ pub trait TestWorld {
     /// Remove an explicit blocker
     fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()>;
 
+    /// Add/update a manual blocker
+    fn add_manual_blocker(&mut self, target: &str, reason: &str) -> Result<()>;
+
+    /// Try to add/update a manual blocker
+    fn try_add_manual_blocker(&mut self, target: &str, reason: Option<&str>) -> Result<()>;
+
+    /// Remove a manual blocker
+    fn remove_manual_blocker(&mut self, target: &str) -> Result<()>;
+
     /// Show event log
     fn show_log(&mut self) -> Result<()>;
 

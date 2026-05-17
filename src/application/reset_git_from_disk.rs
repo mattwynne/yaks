@@ -12,6 +12,7 @@ use crate::adapters::views::Message;
 use anyhow::Result;
 
 use crate::domain::slug::YakId;
+use crate::domain::yak_map::{MANUAL_BLOCKER_FIELD, MIGRATED_BLOCKED_REASON};
 use crate::domain::Yak;
 
 use super::{AddYak, Application, UseCase};
@@ -137,15 +138,27 @@ fn replay_single_yak(app: &mut Application, yak: &Yak, parent_id: Option<&str>) 
         } else {
             None
         });
-    if yak.state != crate::domain::YakState::Todo {
-        let state_str = yak.state.to_string();
-        use_case = use_case.with_state(Some(&state_str));
+    let migrated_blocked = yak.state == crate::domain::YakState::Blocked;
+    let state_to_replay = match yak.state {
+        crate::domain::YakState::Todo | crate::domain::YakState::Blocked => None,
+        crate::domain::YakState::Wip | crate::domain::YakState::Done => Some(yak.state.to_string()),
+    };
+    if let Some(state_str) = state_to_replay.as_deref() {
+        use_case = use_case.with_state(Some(state_str));
     }
     if let Some(pid) = parent_id {
         use_case = use_case.with_parent(Some(pid));
     }
+    let manual_blocker_reason = yak
+        .fields
+        .get(MANUAL_BLOCKER_FIELD)
+        .filter(|reason| !reason.trim().is_empty())
+        .cloned()
+        .or_else(|| migrated_blocked.then(|| MIGRATED_BLOCKED_REASON.to_string()));
     for (key, value) in &yak.fields {
-        use_case = use_case.with_field(key, value);
+        if key != MANUAL_BLOCKER_FIELD {
+            use_case = use_case.with_field(key, value);
+        }
     }
     if !yak.tags.is_empty() {
         let tag_content = yak.tags.join(
@@ -155,6 +168,9 @@ fn replay_single_yak(app: &mut Application, yak: &Yak, parent_id: Option<&str>) 
         use_case = use_case.with_field(crate::domain::field::TAGS_FIELD, &tag_content);
     }
     app.handle(use_case)?;
+    if let Some(reason) = manual_blocker_reason {
+        app.handle(super::AddBlocker::manual(yak.name.as_str(), &reason))?;
+    }
     Ok(())
 }
 
@@ -672,5 +688,98 @@ mod tests {
             Some(&parent_id),
             "child-b should be under parent"
         );
+    }
+
+    #[test]
+    fn replay_single_yak_preserves_custom_fields_alongside_manual_blocker() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("plan".to_string(), "step one".to_string());
+        fields.insert(MANUAL_BLOCKER_FIELD.to_string(), "waiting".to_string());
+        let yak = Yak {
+            id: YakId::from("blocked-yak"),
+            name: crate::domain::slug::Name::from("blocked yak"),
+            parent_id: None,
+            state: crate::domain::YakState::Todo,
+            context: None,
+            fields,
+            tags: vec![],
+            created_by: crate::domain::event_metadata::Author::unknown(),
+            created_at: crate::domain::event_metadata::Timestamp::zero(),
+        };
+
+        replay_single_yak(&mut app, &yak, None).unwrap();
+
+        let replayed = ReadYakStore::get_yak(&storage, &YakId::from("blocked-yak")).unwrap();
+        assert_eq!(
+            replayed.fields.get("plan").map(String::as_str),
+            Some("step one")
+        );
+        assert_eq!(
+            replayed
+                .fields
+                .get(MANUAL_BLOCKER_FIELD)
+                .map(String::as_str),
+            Some("waiting")
+        );
+    }
+
+    #[test]
+    fn replay_single_yak_ignores_empty_manual_blocker_field() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+
+        let mut fields = std::collections::HashMap::new();
+        fields.insert(MANUAL_BLOCKER_FIELD.to_string(), "   ".to_string());
+        let yak = Yak {
+            id: YakId::from("unblocked-yak"),
+            name: crate::domain::slug::Name::from("unblocked yak"),
+            parent_id: None,
+            state: crate::domain::YakState::Todo,
+            context: None,
+            fields,
+            tags: vec![],
+            created_by: crate::domain::event_metadata::Author::unknown(),
+            created_at: crate::domain::event_metadata::Timestamp::zero(),
+        };
+
+        replay_single_yak(&mut app, &yak, None).unwrap();
+
+        let replayed = ReadYakStore::get_yak(&storage, &YakId::from("unblocked-yak")).unwrap();
+        assert!(!replayed.fields.contains_key(MANUAL_BLOCKER_FIELD));
     }
 }

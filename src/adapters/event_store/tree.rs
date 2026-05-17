@@ -292,7 +292,12 @@ pub(super) fn build_tree_from_event(
 
         YakEvent::BlockerAdded(_, _)
         | YakEvent::BlockerUpdated(_, _)
-        | YakEvent::BlockerRemoved(_, _) => preserve_current_or_empty_tree(repo, current_tree),
+        | YakEvent::BlockerRemoved(_, _)
+        | YakEvent::ManualBlockerAdded(_, _)
+        | YakEvent::ManualBlockerUpdated(_, _)
+        | YakEvent::ManualBlockerRemoved(_, _) => {
+            preserve_current_or_empty_tree(repo, current_tree)
+        }
 
         YakEvent::Compacted(snapshots, removed_yak_ids, _)
         | YakEvent::Migrated(snapshots, removed_yak_ids, _) => {
@@ -450,7 +455,7 @@ pub(super) fn read_snapshots_from_tree(
         let (created_by, created_at) = read_created_metadata(repo, &subtree);
 
         let state: YakState = read_blob_str(repo, &subtree, ".state")?
-            .and_then(|s| s.parse().ok())
+            .and_then(|s| YakState::from_storage(s.trim()))
             .unwrap_or(YakState::Todo);
 
         let context = read_blob_str(repo, &subtree, ".context.md")?.filter(|s| !s.is_empty());

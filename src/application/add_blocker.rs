@@ -6,7 +6,7 @@ use super::{Application, UseCase};
 
 pub struct AddBlocker {
     target: String,
-    blocker: String,
+    blocker: Option<String>,
     reason: Option<String>,
 }
 
@@ -14,8 +14,16 @@ impl AddBlocker {
     pub fn new(target: &str, blocker: &str) -> Self {
         Self {
             target: target.to_string(),
-            blocker: blocker.to_string(),
+            blocker: Some(blocker.to_string()),
             reason: None,
+        }
+    }
+
+    pub fn manual(target: &str, reason: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            blocker: None,
+            reason: Some(reason.to_string()),
         }
     }
 
@@ -28,28 +36,42 @@ impl AddBlocker {
 impl UseCase for AddBlocker {
     fn execute(&self, app: &mut Application) -> Result<()> {
         let target_id = app.resolve_yak_id(&self.target)?;
-        let blocker_id = app.resolve_yak_id(&self.blocker)?;
         let reason = self.reason.clone();
-        let outcome =
-            app.with_yak_map_result(|yak_map| yak_map.add_blocker(target_id, blocker_id, reason))?;
+        let outcome = if let Some(blocker) = &self.blocker {
+            let blocker_id = app.resolve_yak_id(blocker)?;
+            app.with_yak_map_result(|yak_map| yak_map.add_blocker(target_id, blocker_id, reason))?
+        } else {
+            let reason = reason.unwrap_or_default();
+            app.with_yak_map_result(|yak_map| yak_map.add_manual_blocker(target_id, reason))?
+        };
         match outcome {
-            AddBlockerOutcome::Added => app.display.message(&Message::Success(format!(
-                "Marked '{}' blocked by '{}'",
-                self.target, self.blocker
-            ))),
-            AddBlockerOutcome::Updated => app.display.message(&Message::Success(format!(
-                "Updated blocker '{}' for '{}'",
-                self.blocker, self.target
-            ))),
-            AddBlockerOutcome::AlreadyExplicit => bail!(
-                "'{}' already blocks '{}'; nothing changed",
-                self.blocker,
-                self.target
-            ),
+            AddBlockerOutcome::Added => {
+                app.display.message(&Message::Success(match &self.blocker {
+                    Some(blocker) => format!("Marked '{}' blocked by '{}'", self.target, blocker),
+                    None => format!("Added manual blocker for '{}'", self.target),
+                }))
+            }
+            AddBlockerOutcome::Updated => {
+                app.display.message(&Message::Success(match &self.blocker {
+                    Some(blocker) => format!("Updated blocker '{}' for '{}'", blocker, self.target),
+                    None => format!("Updated manual blocker for '{}'", self.target),
+                }))
+            }
+            AddBlockerOutcome::AlreadyExplicit => bail!(match &self.blocker {
+                Some(blocker) => format!(
+                    "'{}' already blocks '{}'; nothing changed",
+                    blocker, self.target
+                ),
+                None => format!(
+                    "manual blocker already present on '{}'; nothing changed",
+                    self.target
+                ),
+            }),
             AddBlockerOutcome::AlreadyImpliedByHierarchy => {
                 app.display.message(&Message::Hint(format!(
                     "'{}' already blocks '{}' through hierarchy; no explicit blocker added",
-                    self.blocker, self.target
+                    self.blocker.clone().unwrap_or_default(),
+                    self.target
                 )))
             }
         }

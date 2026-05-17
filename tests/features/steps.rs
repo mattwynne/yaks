@@ -229,6 +229,25 @@ fn impl_remove_blocker(world: &mut dyn TestWorld, blocker: String, target: Strin
     world.remove_blocker(&target, &blocker)
 }
 
+fn impl_add_manual_blocker(
+    world: &mut dyn TestWorld,
+    target: String,
+    reason: String,
+) -> Result<()> {
+    world.add_manual_blocker(&target, &reason)
+}
+
+fn impl_try_add_manual_blocker_without_reason(
+    world: &mut dyn TestWorld,
+    target: String,
+) -> Result<()> {
+    world.try_add_manual_blocker(&target, None)
+}
+
+fn impl_remove_manual_blocker(world: &mut dyn TestWorld, target: String) -> Result<()> {
+    world.remove_manual_blocker(&target)
+}
+
 fn impl_show_log(world: &mut dyn TestWorld) -> Result<()> {
     world.show_log()
 }
@@ -501,6 +520,40 @@ fn impl_json_blocked_without_reason(
     Ok(())
 }
 
+fn impl_json_manual_blocker(world: &dyn TestWorld, target: String, reason: String) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &target)?;
+    let blockers = yak["blocked_by"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("blocked_by is not an array"))?;
+    let manual_blockers: Vec<_> = blockers.iter().filter(|b| b["kind"] == "manual").collect();
+    anyhow::ensure!(
+        manual_blockers.len() == 1 && manual_blockers[0]["reason"] == reason,
+        "Expected exactly one manual blocker for {target} with reason {reason}, got {blockers:?}"
+    );
+    Ok(())
+}
+
+fn impl_json_yak_blocker_kind(
+    world: &dyn TestWorld,
+    target: String,
+    blocker: String,
+) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &target)?;
+    let blockers = yak["blocked_by"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("blocked_by is not an array"))?;
+    let found = blockers
+        .iter()
+        .any(|b| b["kind"] == "yak" && b["name"] == blocker);
+    anyhow::ensure!(
+        found,
+        "Expected {target} blocked by yak {blocker}, got {blockers:?}"
+    );
+    Ok(())
+}
+
 fn impl_json_no_blockers(world: &dyn TestWorld, target: String) -> Result<()> {
     let nodes = json_nodes(world)?;
     let yak = find_json_yak(&nodes, &target)?;
@@ -611,6 +664,18 @@ both_worlds!(when(regex = r#"^I try to add blocker "([^"]+)" to "([^"]+)" with r
 
 both_worlds!(when(regex = r#"^I remove blocker "([^"]+)" from "([^"]+)"$"#)
     fn when_remove_blocker_fs / when_remove_blocker_ip (blocker: String, target: String) -> impl_remove_blocker);
+
+both_worlds!(given(regex = r#"^I add manual blocker to "([^"]+)" with reason "([^"]+)"$"#)
+    fn given_add_manual_blocker_fs / given_add_manual_blocker_ip (target: String, reason: String) -> impl_add_manual_blocker);
+
+both_worlds!(when(regex = r#"^I add manual blocker to "([^"]+)" with reason "([^"]+)"$"#)
+    fn when_add_manual_blocker_fs / when_add_manual_blocker_ip (target: String, reason: String) -> impl_add_manual_blocker);
+
+both_worlds!(when(regex = r#"^I try to add manual blocker to "([^"]+)" without a reason$"#)
+    fn when_try_add_manual_blocker_without_reason_fs / when_try_add_manual_blocker_without_reason_ip (target: String) -> impl_try_add_manual_blocker_without_reason);
+
+both_worlds!(when(regex = r#"^I remove manual blocker from "([^"]+)"$"#)
+    fn when_remove_manual_blocker_fs / when_remove_manual_blocker_ip (target: String) -> impl_remove_manual_blocker);
 
 both_worlds!(when(expr = "I show the log")
     fn when_show_log_fs / when_show_log_ip () -> impl_show_log);
@@ -757,6 +822,12 @@ both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by "([^"]
 
 both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by "([^"]+)" without a reason$"#)
     fn then_json_blocked_without_reason_fs / then_json_blocked_without_reason_ip (target: String, blocker: String) -> impl_json_blocked_without_reason);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should have exactly one manual blocker with reason "([^"]+)"$"#)
+    fn then_json_manual_blocker_fs / then_json_manual_blocker_ip (target: String, reason: String) -> impl_json_manual_blocker);
+
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by yak "([^"]+)"$"#)
+    fn then_json_yak_blocker_kind_fs / then_json_yak_blocker_kind_ip (target: String, blocker: String) -> impl_json_yak_blocker_kind);
 
 both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should not have blockers$"#)
     fn then_json_no_blockers_fs / then_json_no_blockers_ip (target: String) -> impl_json_no_blockers);

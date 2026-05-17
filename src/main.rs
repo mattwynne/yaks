@@ -63,7 +63,7 @@ enum Commands {
         /// Nest under this parent yak
         #[arg(long, value_name = "PARENT", visible_aliases = ["below", "in", "into", "to", "blocks"])]
         under: Option<String>,
-        /// Initial state (todo, wip, blocked, done)
+        /// Initial state (todo, wip, done)
         #[arg(long)]
         state: Option<String>,
         /// Set context directly
@@ -190,7 +190,7 @@ enum Commands {
         /// The yak name (space-separated words)
         #[arg(required = true)]
         name: Vec<String>,
-        /// The state to set (e.g., "todo", "wip", "blocked", "done")
+        /// The state to set (e.g., "todo", "wip", "done")
         state: String,
         /// Apply state change recursively to all descendants
         #[arg(long)]
@@ -224,7 +224,7 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
-    /// Manage explicit blockers on a yak
+    /// Manage blockers on a yak
     #[command(display_order = 9)]
     Blocker {
         #[command(subcommand)]
@@ -273,25 +273,28 @@ enum Commands {
 
 #[derive(Parser, Debug)]
 enum BlockerAction {
-    /// Add or update an explicit blocker
+    /// Add or update a blocker. Use --by for yak blockers; omit it for a manual/external blocker.
     Add {
         /// The yak being blocked
         yak: String,
         /// The yak that is blocking it
         #[arg(long = "by")]
-        blocker: String,
-        /// Optional blocker reason
+        blocker: Option<String>,
+        /// Blocker reason (required for manual blockers)
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Remove an explicit blocker
+    /// Remove a blocker
     #[command(alias = "remove")]
     Rm {
         /// The yak being blocked
         yak: String,
         /// The yak that is blocking it
-        #[arg(long = "by")]
-        blocker: String,
+        #[arg(long = "by", conflicts_with = "manual")]
+        blocker: Option<String>,
+        /// Remove the manual/external blocker
+        #[arg(long)]
+        manual: bool,
     },
 }
 
@@ -447,8 +450,29 @@ fn handle_blocker_command(handler: &mut impl CommandHandler, action: BlockerActi
             yak,
             blocker,
             reason,
-        } => handler.handle(AddBlocker::new(&yak, &blocker).with_reason(reason.as_deref())),
-        BlockerAction::Rm { yak, blocker } => handler.handle(RemoveBlocker::new(&yak, &blocker)),
+        } => match blocker {
+            Some(blocker) => {
+                handler.handle(AddBlocker::new(&yak, &blocker).with_reason(reason.as_deref()))
+            }
+            None => {
+                let reason = reason.unwrap_or_default();
+                if reason.trim().is_empty() {
+                    anyhow::bail!("manual blockers require a non-empty --reason");
+                }
+                handler.handle(AddBlocker::manual(&yak, &reason))
+            }
+        },
+        BlockerAction::Rm {
+            yak,
+            blocker,
+            manual,
+        } => match (blocker, manual) {
+            (Some(blocker), false) => handler.handle(RemoveBlocker::new(&yak, &blocker)),
+            (None, true) => handler.handle(RemoveBlocker::manual(&yak)),
+            _ => anyhow::bail!(
+                "use `yx blocker rm <yak> --by <blocker>` or `yx blocker rm <yak> --manual`"
+            ),
+        },
     }
 }
 

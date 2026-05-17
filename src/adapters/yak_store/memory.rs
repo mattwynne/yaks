@@ -237,7 +237,7 @@ impl ReadYakStore for InMemoryStorage {
         // Read state field, default to "todo" if not present
         let state: YakState = fields
             .get(STATE_FIELD)
-            .and_then(|s| s.trim().parse().ok())
+            .and_then(|s| YakState::from_storage(s.trim()))
             .unwrap_or(YakState::Todo);
 
         // Extract tags directly from fields (before custom_fields filtering,
@@ -319,7 +319,7 @@ impl ReadYakStore for InMemoryStorage {
 
             let state: YakState = fields
                 .get(STATE_FIELD)
-                .and_then(|s| s.trim().parse().ok())
+                .and_then(|s| YakState::from_storage(s.trim()))
                 .unwrap_or(YakState::Todo);
 
             // Extract tags directly from fields (before custom_fields filtering,

@@ -95,13 +95,24 @@ impl GitEventStore {
                 metadata,
             ));
 
-            // State (skip default "todo")
-            if snap.state != crate::domain::YakState::Todo {
+            let migrated_blocked = snap.state == crate::domain::YakState::Blocked;
+            // State (skip default "todo" and legacy blocked, which becomes a manual blocker)
+            if snap.state != crate::domain::YakState::Todo && !migrated_blocked {
                 events.push(YakEvent::FieldUpdated(
                     crate::domain::events::FieldUpdatedEvent {
                         id: snap.id.clone(),
                         field_name: ".state".to_string(),
                         content: snap.state.to_string(),
+                    },
+                    crate::domain::event_metadata::EventMetadata::default_legacy(),
+                ));
+            }
+
+            if migrated_blocked {
+                events.push(YakEvent::ManualBlockerAdded(
+                    crate::domain::events::ManualBlockerAddedEvent {
+                        target: snap.id.clone(),
+                        reason: crate::domain::yak_map::MIGRATED_BLOCKED_REASON.to_string(),
                     },
                     crate::domain::event_metadata::EventMetadata::default_legacy(),
                 ));
@@ -123,6 +134,18 @@ impl GitEventStore {
 
             // Custom fields
             for (field_name, content) in &snap.fields {
+                if field_name == crate::domain::yak_map::MANUAL_BLOCKER_FIELD {
+                    if !content.trim().is_empty() {
+                        events.push(YakEvent::ManualBlockerAdded(
+                            crate::domain::events::ManualBlockerAddedEvent {
+                                target: snap.id.clone(),
+                                reason: content.clone(),
+                            },
+                            crate::domain::event_metadata::EventMetadata::default_legacy(),
+                        ));
+                    }
+                    continue;
+                }
                 events.push(YakEvent::FieldUpdated(
                     crate::domain::events::FieldUpdatedEvent {
                         id: snap.id.clone(),

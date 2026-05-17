@@ -189,7 +189,7 @@ Feature: List yaks
       Given I have a clean git repository
       And I add the yak "blocked task"
       And I add the yak "done task"
-      And I set the state of "blocked task" to "blocked"
+      And I add manual blocker to "blocked task" with reason "waiting"
       And I mark the yak "done task" as done
       When I list the yaks in "plain" format filtering by "not-done"
       Then the output should be:
@@ -201,7 +201,7 @@ Feature: List yaks
       Given I have a clean git repository
       And I add the yak "blocked task"
       And I add the yak "done task"
-      And I set the state of "blocked task" to "blocked"
+      And I add manual blocker to "blocked task" with reason "waiting"
       And I mark the yak "done task" as done
       When I list the yaks in "plain" format filtering by "done"
       Then the output should be:
