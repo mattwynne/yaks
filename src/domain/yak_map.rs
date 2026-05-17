@@ -430,6 +430,10 @@ impl YakMap {
         let old_state = self.yaks.get(&id).unwrap().state;
         let transitioning_from_done = old_state == YakState::Done && new_state != YakState::Done;
 
+        if new_state == YakState::Done {
+            self.remove_blocked_by(&id);
+        }
+
         // Update this yak
         let yak = self.yaks.get_mut(&id).unwrap();
         yak.state = new_state;
@@ -441,10 +445,6 @@ impl YakMap {
             },
             self.metadata.clone(),
         ));
-
-        if new_state == YakState::Done {
-            self.remove_blocked_by(&id);
-        }
 
         // Demote done ancestors if transitioning from done
         if transitioning_from_done {
@@ -521,27 +521,53 @@ impl YakMap {
     }
 
     fn remove_blocked_by(&mut self, blocker_id: &YakId) {
-        let targets: Vec<YakId> = self
+        let relationships: Vec<(YakId, YakId)> = self
             .blockers
             .iter()
             .filter(|(_, blockers)| blockers.contains_key(blocker_id))
-            .map(|(target, _)| target.clone())
+            .map(|(target, _)| (target.clone(), blocker_id.clone()))
             .collect();
 
-        for target in targets {
+        self.remove_explicit_blocker_relationships(relationships);
+    }
+
+    fn remove_blockers_touching(&mut self, id: &YakId) {
+        let mut relationships: Vec<(YakId, YakId)> = self
+            .blockers
+            .iter()
+            .flat_map(|(target, blockers)| {
+                blockers.keys().filter_map(move |blocker| {
+                    if target == id || blocker == id {
+                        Some((target.clone(), blocker.clone()))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        relationships.sort_by(|(a_target, a_blocker), (b_target, b_blocker)| {
+            a_target
+                .as_str()
+                .cmp(b_target.as_str())
+                .then_with(|| a_blocker.as_str().cmp(b_blocker.as_str()))
+        });
+
+        self.remove_explicit_blocker_relationships(relationships);
+    }
+
+    fn remove_explicit_blocker_relationships(&mut self, relationships: Vec<(YakId, YakId)>) {
+        for (target, blocker) in relationships {
             if let Some(blockers) = self.blockers.get_mut(&target) {
-                blockers.remove(blocker_id);
-                if blockers.is_empty() {
-                    self.blockers.remove(&target);
+                if blockers.remove(&blocker).is_some() {
+                    if blockers.is_empty() {
+                        self.blockers.remove(&target);
+                    }
+                    self.pending_events.push(YakEvent::BlockerRemoved(
+                        BlockerRemovedEvent { target, blocker },
+                        self.metadata.clone(),
+                    ));
                 }
             }
-            self.pending_events.push(YakEvent::BlockerRemoved(
-                BlockerRemovedEvent {
-                    target,
-                    blocker: blocker_id.clone(),
-                },
-                self.metadata.clone(),
-            ));
         }
     }
 
@@ -809,6 +835,7 @@ impl YakMap {
             );
         }
 
+        self.remove_blockers_touching(&id);
         self.yaks.remove(&id);
         self.pending_events.push(YakEvent::Removed(
             RemovedEvent { id },
@@ -836,6 +863,7 @@ impl YakMap {
             }
 
             for id in done_leaves {
+                self.remove_blockers_touching(&id);
                 self.yaks.remove(&id);
                 self.pending_events.push(YakEvent::Removed(
                     RemovedEvent { id },
@@ -2660,6 +2688,88 @@ mod tests {
         assert!(err_msg.contains("child"));
     }
 
+    #[test]
+    fn done_removes_explicit_relationships_where_yak_is_blocker_before_state_change() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocker", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.update_state(blocker.clone(), "done".to_string())
+            .unwrap();
+        let events = map.take_events();
+
+        assert!(map.active_blockers(&target).is_empty());
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::FieldUpdated(FieldUpdatedEvent { id, field_name, content }, _)
+            ] if removed_target == &target
+                && removed_blocker == &blocker
+                && id == &blocker
+                && field_name == ".state"
+                && content == "done"
+        ));
+    }
+
+    #[test]
+    fn remove_yak_emits_blocker_removed_for_relationships_where_yak_is_target() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocker", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.remove_yak(target.clone()).unwrap();
+        let events = map.take_events();
+
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::Removed(RemovedEvent { id }, _)
+            ] if removed_target == &target && removed_blocker == &blocker && id == &target
+        ));
+    }
+
+    #[test]
+    fn remove_yak_emits_blocker_removed_for_relationships_where_yak_is_blocker() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocker", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.remove_yak(blocker.clone()).unwrap();
+        let events = map.take_events();
+
+        assert!(map.active_blockers(&target).is_empty());
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::Removed(RemovedEvent { id }, _)
+            ] if removed_target == &target && removed_blocker == &blocker && id == &blocker
+        ));
+    }
+
     // Tests for rename_yak
     #[test]
     fn test_rename_preserves_context() {
@@ -2841,6 +2951,54 @@ mod tests {
             }
             _ => panic!("Expected Removed event"),
         }
+    }
+
+    #[test]
+    fn prune_emits_blocker_removed_for_relationships_touching_pruned_yak() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocker", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.update_state(blocker.clone(), "done".to_string())
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.prune(None).unwrap();
+        let events = map.take_events();
+
+        assert!(map.active_blockers(&target).is_empty());
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::Removed(RemovedEvent { id }, _)
+            ] if removed_target == &target && removed_blocker == &blocker && id == &blocker
+        ));
+    }
+
+    #[test]
+    fn replaying_removed_event_clears_active_blockers_touching_removed_yak() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocker", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.apply_removed(RemovedEvent { id: blocker });
+
+        assert!(map.active_blockers(&target).is_empty());
     }
 
     // Tests for enriched add_yak parameters

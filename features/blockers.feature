@@ -67,6 +67,49 @@ Feature: Explicit blockers affect readiness
     When I list ready yaks
     Then the output should include "blocked yak"
 
+  Scenario: Recursively completing a subtree removes blockers supplied by descendants
+    Given I add the yak "blocked yak"
+    And I add the yak "parent"
+    And I add the yak "child" under "parent"
+    And I add blocker "child" to "blocked yak"
+    When I mark the yak "parent" as done recursively
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should not have blockers
+    When I show the log
+    Then the output should include "removed blocker"
+
+  Scenario: Removing a blocker yak removes its active explicit blocker relationships
+    Given I add the yak "blocked yak"
+    And I add the yak "blocking yak"
+    And I add blocker "blocking yak" to "blocked yak"
+    When I remove the yak "blocking yak"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should not have blockers
+    When I show the log
+    Then the output should include "removed blocker"
+
+  Scenario: Recursively removing a subtree removes blockers touching descendants
+    Given I add the yak "blocked yak"
+    And I add the yak "parent"
+    And I add the yak "child" under "parent"
+    And I add blocker "child" to "blocked yak"
+    When I remove the yak "parent" recursively
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should not have blockers
+    When I show the log
+    Then the output should include "removed blocker"
+
+  Scenario: Pruning a blocker yak removes its active explicit blocker relationships
+    Given I add the yak "blocked yak"
+    And I add the yak "blocking yak"
+    And I mark the yak "blocking yak" as done
+    And I add blocker "blocking yak" to "blocked yak"
+    When I prune done yaks
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should not have blockers
+    When I show the log
+    Then the output should include "removed blocker"
+
   Scenario: Updating and clearing blocker reasons
     Given I add the yak "blocked yak"
     And I add the yak "blocking yak"
