@@ -708,9 +708,13 @@ impl YakMap {
         new_parent_id: &Option<YakId>,
     ) -> Vec<YakId> {
         let mut ancestors = Vec::new();
+        let mut visited = HashSet::new();
         let mut current_id = self.parent_after_move(id, moved_id, new_parent_id);
 
         while let Some(pid) = current_id {
+            if !visited.insert(pid.clone()) {
+                break;
+            }
             ancestors.push(pid.clone());
             current_id = self.parent_after_move(&pid, moved_id, new_parent_id);
         }
@@ -3052,6 +3056,34 @@ mod tests {
             err.contains("descendant"),
             "Expected 'descendant' in: {}",
             err
+        );
+    }
+
+    #[test]
+    fn ancestor_ids_after_move_uses_proposed_parent_for_moved_yak() {
+        let mut map = YakMap::new();
+        let old_parent = map.add_yak("old", None, None, None, None, vec![]).unwrap();
+        let moved = map
+            .add_yak("moved", Some(old_parent), None, None, None, vec![])
+            .unwrap();
+        let new_parent = map.add_yak("new", None, None, None, None, vec![]).unwrap();
+
+        assert_eq!(
+            map.ancestor_ids_after_move(&moved, &moved, &Some(new_parent.clone())),
+            vec![new_parent]
+        );
+    }
+
+    #[test]
+    fn ancestor_ids_after_move_stops_at_cycle_in_proposed_parent_chain() {
+        let mut map = YakMap::new();
+        let moved = map
+            .add_yak("moved", None, None, None, None, vec![])
+            .unwrap();
+
+        assert_eq!(
+            map.ancestor_ids_after_move(&moved, &moved, &Some(moved.clone())),
+            vec![moved]
         );
     }
 
