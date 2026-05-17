@@ -4,7 +4,7 @@
 >
 > -- Woody Zuill, https://agilemaxims.com
 
-Yaks is a tiny, fast discovery tree for software teams: a command-line way to capture the work you discover while doing the work.
+Yaks is a tiny, fast discovery tree for software teams: a command-line way to capture and manage the work you discover while doing the work.
 
 A discovery tree is a tree of nested goals. Put prerequisites underneath the larger goal they unlock, and the tree shows what can happen now, what can happen in parallel, and what is still blocked.
 
@@ -40,43 +40,9 @@ To install the edge channel:
 curl -fsSL https://raw.githubusercontent.com/mattwynne/yaks/main/install.sh | YX_CHANNEL=edge bash
 ```
 
-## Quick start
-
-Run these commands from a git repository:
-
-```bash
-yx add "Fix the bug"                     # Add a yak
-yx add "Write a failing test" --under "Fix the bug"
-yx context "Fix the bug"                 # Add notes/context
-yx list                                  # Show the tree
-yx show "Fix the bug"                    # Show yak details
-yx start "Write a failing test"          # Mark as work-in-progress
-yx done "Write a failing test"           # Mark as complete
-yx sync                                  # Sync with teammates
-yx remove "Fix the bug"                  # Remove a yak
-yx prune                                 # Remove all done yaks
-```
-
-Children block their parent: put prerequisites underneath the larger goal. That way the discovery tree shows what can be done now, what can happen in parallel, and what is waiting on something else.
-
-## For AI coding agents
-
-Yaks does not need a special agent integration. Agents can use the same CLI as humans:
-
-- `yx list` / `yx show` to discover work and read context
-- `yx start` to claim work
-- `yx add` / `yx context` to record discoveries
-- `yx done` to finish work
-- `yx sync` to share updates
-- `yx list --format json` and `yx show --format json` for structured output
+### Quick start
 
 Tell your coding agent that this repo uses yaks by adding a note to a file it already reads. For example:
-
-```bash
-echo 'This project uses yaks (yx) for task management. See !yx help' > CLAUDE.md
-```
-
-If your agent reads `AGENTS.md`, you can add the same line there too:
 
 ```bash
 echo 'This project uses yaks (yx) for task management. See !yx help' > AGENTS.md
