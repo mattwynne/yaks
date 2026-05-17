@@ -365,6 +365,37 @@ enum CasResult {
     Error(git2::Error),
 }
 
+fn legacy_added_state_update(
+    store: &GitEventStore,
+    event: &mut YakEvent,
+    commit: &git2::Commit<'_>,
+    metadata: &crate::domain::event_metadata::EventMetadata,
+) -> Result<Option<YakEvent>> {
+    let YakEvent::Added(e, _) = event else {
+        return Ok(None);
+    };
+    if !e.id.as_str().is_empty() {
+        return Ok(None);
+    }
+
+    store.enrich_added_event_id(e, commit)?;
+    let raw_tree = commit.tree()?;
+    let tree = super::migration::migrate_tree_to_current(&store.repo, &raw_tree)?;
+    let state = store.read_field_updated_content(&tree, &e.id, ".state")?;
+    if state == "todo" {
+        return Ok(None);
+    }
+
+    Ok(Some(YakEvent::FieldUpdated(
+        crate::domain::events::FieldUpdatedEvent {
+            id: e.id.clone(),
+            field_name: ".state".to_string(),
+            content: state,
+        },
+        metadata.clone(),
+    )))
+}
+
 impl EventStore for GitEventStore {
     fn append(&mut self, event: &YakEvent) -> Result<()> {
         let event = super::ensure_event_id(event.clone());
@@ -435,10 +466,55 @@ impl EventStore for GitEventStore {
             })
             .collect();
 
-        let snapshots = {
+        let mut manual_blockers = std::collections::HashMap::new();
+        for event in &pre_compaction_events {
+            match event {
+                YakEvent::ManualBlockerAdded(e, _) => {
+                    manual_blockers.insert(e.target.clone(), e.reason.clone());
+                }
+                YakEvent::ManualBlockerUpdated(e, _) => {
+                    manual_blockers.insert(e.target.clone(), e.reason.clone());
+                }
+                YakEvent::ManualBlockerRemoved(e, _) => {
+                    manual_blockers.remove(&e.target);
+                }
+                YakEvent::FieldUpdated(e, _)
+                    if e.field_name == ".state" && e.content == "blocked" =>
+                {
+                    manual_blockers.insert(
+                        e.id.clone(),
+                        crate::domain::yak_map::MIGRATED_BLOCKED_REASON.to_string(),
+                    );
+                }
+                YakEvent::FieldUpdated(e, _) if e.field_name == ".state" => {
+                    if manual_blockers.get(&e.id).is_some_and(|reason| {
+                        reason == crate::domain::yak_map::MIGRATED_BLOCKED_REASON
+                    }) {
+                        manual_blockers.remove(&e.id);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut snapshots = {
             let tree = self.get_current_tree()?.unwrap();
             tree::read_snapshots_from_tree(&self.repo, &tree)?
         };
+        for snapshot in &mut snapshots {
+            if snapshot.state == crate::domain::YakState::Blocked {
+                snapshot.state = crate::domain::YakState::Todo;
+                manual_blockers
+                    .entry(snapshot.id.clone())
+                    .or_insert_with(|| crate::domain::yak_map::MIGRATED_BLOCKED_REASON.to_string());
+            }
+            if let Some(reason) = manual_blockers.get(&snapshot.id) {
+                snapshot.fields.insert(
+                    crate::domain::yak_map::MANUAL_BLOCKER_FIELD.to_string(),
+                    reason.clone(),
+                );
+            }
+        }
         let event = YakEvent::Compacted(snapshots, removed_yak_ids, metadata);
         self.append(&event)
     }
@@ -487,11 +563,11 @@ impl EventStore for GitEventStore {
 
                     // For Added events from v1/v2 format (empty id), enrich
                     // from the lazily migrated tree which has an id blob.
-                    if let YakEvent::Added(ref mut e, _) = event {
-                        if e.id.as_str().is_empty() {
-                            self.enrich_added_event_id(e, &commit)?;
-                        }
-                    }
+                    // Legacy Added commits also carried the whole yak snapshot in
+                    // their tree, so synthesize a state update when that snapshot
+                    // was not todo (including the removed `blocked` state).
+                    let legacy_added_state_update =
+                        legacy_added_state_update(self, &mut event, &commit, &metadata)?;
 
                     // For FieldUpdated events, read the actual content
                     // from the git tree (not stored in commit message).
@@ -510,6 +586,9 @@ impl EventStore for GitEventStore {
                         e.content = self.read_field_updated_content(&tree, &e.id, &e.field_name)?;
                     }
 
+                    if let Some(state_update) = legacy_added_state_update {
+                        post_compaction_events.push(state_update);
+                    }
                     post_compaction_events.push(event.with_metadata(metadata));
                 }
                 Err(_) => continue, // Skip unparseable commits

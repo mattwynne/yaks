@@ -35,6 +35,25 @@ Feature: Explicit blockers affect readiness
     Then the command should fail
     And the error should contain "manual blockers require a non-empty --reason"
 
+  Rule: Manual blockers prevent workflow transitions
+
+  Scenario: A yak with an active manual blocker cannot be started or completed
+    Given I add the yak "blocked yak"
+    And I add manual blocker to "blocked yak" with reason "waiting on vendor"
+    When I try to start "blocked yak"
+    Then the command should fail
+    And the error should contain "cannot start 'blocked yak' - it is not ready"
+    And the error should contain "blocked by waiting on vendor"
+    When I try to mark the yak "blocked yak" as done
+    Then the command should fail
+    And the error should contain "cannot mark 'blocked yak' as done - it is blocked by waiting on vendor"
+    When I try to set the state of "blocked yak" to "done"
+    Then the command should fail
+    And the error should contain "cannot mark 'blocked yak' as done - it is blocked by waiting on vendor"
+    When I remove manual blocker from "blocked yak"
+    And I list the yaks as json
+    Then the JSON yak "blocked yak" should have ready true
+
   Rule: Blocker JSON identifies blocker kinds
 
   Scenario: JSON distinguishes yak blockers from manual blockers

@@ -136,7 +136,16 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
             store.clear_all()?;
             for snap in snapshots {
                 store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
-                store.write_field(&snap.id, STATE_FIELD, &snap.state.to_string())?;
+                if snap.state == crate::domain::YakState::Blocked {
+                    store.write_field(&snap.id, STATE_FIELD, "todo")?;
+                    store.write_field(
+                        &snap.id,
+                        MANUAL_BLOCKER_FIELD,
+                        crate::domain::yak_map::MIGRATED_BLOCKED_REASON,
+                    )?;
+                } else {
+                    store.write_field(&snap.id, STATE_FIELD, &snap.state.to_string())?;
+                }
                 store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
                 if let Some(ref ctx) = snap.context {
                     if !ctx.is_empty() {

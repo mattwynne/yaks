@@ -479,6 +479,17 @@ fn impl_json_yak_ready(world: &dyn TestWorld, name: String, ready: String) -> Re
     Ok(())
 }
 
+fn impl_json_yak_state(world: &dyn TestWorld, name: String, state: String) -> Result<()> {
+    let nodes = json_nodes(world)?;
+    let yak = find_json_yak(&nodes, &name)?;
+    anyhow::ensure!(
+        yak["state"] == state,
+        "Expected {name} state={state}, got {}",
+        yak["state"]
+    );
+    Ok(())
+}
+
 fn impl_json_blocked_reason(
     world: &dyn TestWorld,
     target: String,
@@ -817,6 +828,9 @@ both_worlds!(then(regex = r#"^line (\d+) of the output should include "(.+)"$"#)
 both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should have ready (true|false)$"#)
     fn then_json_yak_ready_fs / then_json_yak_ready_ip (name: String, ready: String) -> impl_json_yak_ready);
 
+both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should have state "([^"]+)"$"#)
+    fn then_json_yak_state_fs / then_json_yak_state_ip (name: String, state: String) -> impl_json_yak_state);
+
 both_worlds!(then(regex = r#"^the JSON yak "([^"]+)" should be blocked by "([^"]+)" with reason "([^"]+)"$"#)
     fn then_json_blocked_reason_fs / then_json_blocked_reason_ip (target: String, blocker: String, reason: String) -> impl_json_blocked_reason);
 
@@ -968,6 +982,120 @@ async fn v2_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
     Ok(())
 }
 
+/// Create a yak with the legacy removed `blocked` workflow state stored on disk and in git.
+#[given(regex = r#"^a yak "(.+)" created with legacy blocked state$"#)]
+async fn legacy_blocked_yak(world: &mut FullStackWorld, yak_name: String) -> Result<()> {
+    world.init_git()?;
+    let repo_path = world.default_repo_path();
+
+    let state_oid = git_hash_object(repo_path, "blocked")?;
+    let context_oid = git_hash_object(repo_path, "")?;
+    let version_oid = git_hash_object(repo_path, "2")?;
+
+    let yak_tree_input = format!(
+        "100644 blob {}\tstate\n100644 blob {}\tcontext.md\n",
+        state_oid, context_oid
+    );
+    let yak_tree_oid = git_mktree(repo_path, &yak_tree_input)?;
+
+    let root_tree_input = format!(
+        "040000 tree {}\t{}\n100644 blob {}\t.schema-version\n",
+        yak_tree_oid, yak_name, version_oid
+    );
+    let root_tree_oid = git_mktree(repo_path, &root_tree_input)?;
+
+    let message = format!("Added: \"{}\"", yak_name);
+    let commit_oid = git_commit_tree(repo_path, &root_tree_oid, &message, None)?;
+    git_update_ref(repo_path, "refs/notes/yaks", &commit_oid)?;
+
+    let yak_dir = repo_path.join(".yaks").join(slug_for_fixture(&yak_name));
+    std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
+    std::fs::write(yak_dir.join(".state"), "blocked").context("Failed to write state")?;
+    std::fs::write(yak_dir.join(".context.md"), "").context("Failed to write context.md")?;
+    std::fs::write(yak_dir.join(".name"), &yak_name).context("Failed to write name")?;
+
+    Ok(())
+}
+
+/// Create a current-format stream that contains a historical state update to `blocked`.
+#[given(regex = r#"^a yak "(.+)" has a historical blocked state event$"#)]
+async fn historical_blocked_state_event(
+    world: &mut FullStackWorld,
+    yak_name: String,
+) -> Result<()> {
+    world.init_git()?;
+    let repo_path = world.default_repo_path();
+    let yak_id = format!("{}-a1b2", slug_for_fixture(&yak_name));
+
+    let name_oid = git_hash_object(repo_path, &yak_name)?;
+    let todo_oid = git_hash_object(repo_path, "todo")?;
+    let blocked_oid = git_hash_object(repo_path, "blocked")?;
+    let context_oid = git_hash_object(repo_path, "")?;
+    let created_oid = git_hash_object(
+        repo_path,
+        r#"{"created_by":{"name":"Test User","email":"test@example.com"},"created_at":0}"#,
+    )?;
+    let version_oid = git_hash_object(repo_path, "7")?;
+
+    let added_yak_tree_input = format!(
+        "100644 blob {}\t.name\n100644 blob {}\t.state\n100644 blob {}\t.context.md\n100644 blob {}\t.created.json\n",
+        name_oid, todo_oid, context_oid, created_oid
+    );
+    let added_yak_tree_oid = git_mktree(repo_path, &added_yak_tree_input)?;
+    let added_root_tree_input = format!(
+        "040000 tree {}\t{}\n100644 blob {}\t.schema-version\n",
+        added_yak_tree_oid, yak_id, version_oid
+    );
+    let added_root_tree_oid = git_mktree(repo_path, &added_root_tree_input)?;
+    let added_message = format!("Added: \"{}\" \"{}\"", yak_name, yak_id);
+    let added_commit = git_commit_tree(repo_path, &added_root_tree_oid, &added_message, None)?;
+
+    let blocked_yak_tree_input = format!(
+        "100644 blob {}\t.name\n100644 blob {}\t.state\n100644 blob {}\t.context.md\n100644 blob {}\t.created.json\n",
+        name_oid, blocked_oid, context_oid, created_oid
+    );
+    let blocked_yak_tree_oid = git_mktree(repo_path, &blocked_yak_tree_input)?;
+    let blocked_root_tree_input = format!(
+        "040000 tree {}\t{}\n100644 blob {}\t.schema-version\n",
+        blocked_yak_tree_oid, yak_id, version_oid
+    );
+    let blocked_root_tree_oid = git_mktree(repo_path, &blocked_root_tree_input)?;
+    let blocked_message = format!("FieldUpdated: \"{}\" \".state\"", yak_id);
+    let blocked_commit = git_commit_tree(
+        repo_path,
+        &blocked_root_tree_oid,
+        &blocked_message,
+        Some(&added_commit),
+    )?;
+    git_update_ref(repo_path, "refs/notes/yaks", &blocked_commit)?;
+
+    let yak_dir = repo_path.join(".yaks").join(slug_for_fixture(&yak_name));
+    std::fs::create_dir_all(&yak_dir).context("Failed to create yak directory")?;
+    std::fs::write(yak_dir.join(".state"), "blocked").context("Failed to write state")?;
+    std::fs::write(yak_dir.join(".context.md"), "").context("Failed to write context.md")?;
+    std::fs::write(yak_dir.join(".name"), &yak_name).context("Failed to write name")?;
+    std::fs::write(yak_dir.join(".id"), &yak_id).context("Failed to write id")?;
+
+    Ok(())
+}
+
+fn slug_for_fixture(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
 // ============================================================================
 // Corrupted git tree fixture (full-stack only)
 // ============================================================================
@@ -1001,6 +1129,21 @@ async fn corrupted_duplicate_tree(world: &mut FullStackWorld, yak_name: String) 
 }
 
 // -- Git plumbing helpers --
+
+fn git_capture(repo_path: &std::path::Path, args: &[&str]) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .current_dir(repo_path)
+        .output()
+        .with_context(|| format!("git {} failed", args.join(" ")))?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
 
 fn git_hash_object(repo_path: &std::path::Path, content: &str) -> Result<String> {
     let output = std::process::Command::new("git")
@@ -1505,6 +1648,29 @@ async fn file_still_exists_in_yak_dir(world: &mut FullStackWorld, filename: Stri
     let path = world.default_repo_path().join(&filename);
     if !path.exists() {
         anyhow::bail!("Expected file '{}' to still exist after reset", filename);
+    }
+    Ok(())
+}
+
+#[then(expr = "the git event store should not contain a blocked state field")]
+async fn git_event_store_should_not_contain_blocked_state(
+    world: &mut FullStackWorld,
+) -> Result<()> {
+    let repo_path = world.default_repo_path();
+    let paths = git_capture(
+        repo_path,
+        &["ls-tree", "-r", "--name-only", "refs/notes/yaks"],
+    )?;
+    for path in paths
+        .lines()
+        .filter(|p| p.ends_with("state") || p.ends_with(".state"))
+    {
+        let spec = format!("refs/notes/yaks:{path}");
+        let content = git_capture(repo_path, &["show", &spec])?;
+        anyhow::ensure!(
+            content.trim() != "blocked",
+            "Expected no blocked state field in git event store, but {path} was blocked"
+        );
     }
     Ok(())
 }
