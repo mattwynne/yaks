@@ -164,6 +164,18 @@ Feature: Setting yak state
       When I show the log
       Then the output should not include "started parent"
 
+    Example: Recursive start preserves bulk state behavior for parents with incomplete children
+      Given I have a clean git repository
+      And I add the yak "parent"
+      And I add the yak "child" under "parent"
+      When I start "parent" recursively
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [wip] parent
+          - [wip] child
+        """
+
     Example: Starting a yak in a non-todo state fails
       Given I have a clean git repository
       And I add the yak "Fix the bug"

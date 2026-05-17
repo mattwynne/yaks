@@ -1238,6 +1238,10 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["start", name])
     }
 
+    fn start_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.run_yx(&["start", "--recursive", name])
+    }
+
     fn try_start_yak(&mut self, name: &str) -> Result<()> {
         self.run_yx_unchecked(&["start", name])
     }

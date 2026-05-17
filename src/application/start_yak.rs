@@ -22,7 +22,9 @@ impl StartYak {
 impl UseCase for StartYak {
     fn execute(&self, app: &mut Application) -> Result<()> {
         let id = app.resolve_yak_id(&self.name)?;
-        app.with_yak_map_result(|yak_map| yak_map.ensure_ready_to_start(&id))?;
+        if !self.recursive {
+            app.with_yak_map_result(|yak_map| yak_map.ensure_ready_to_start(&id))?;
+        }
 
         SetState::new(&self.name, "wip")
             .with_recursive(self.recursive)

@@ -560,6 +560,10 @@ impl TestWorld for InProcessWorld {
         self.execute(|app| app.handle(StartYak::new(name, false)))
     }
 
+    fn start_yak_recursive(&mut self, name: &str) -> Result<()> {
+        self.execute(|app| app.handle(StartYak::new(name, true)))
+    }
+
     fn try_start_yak(&mut self, name: &str) -> Result<()> {
         self.try_execute(|app| app.handle(StartYak::new(name, false)))
     }

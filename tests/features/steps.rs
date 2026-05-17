@@ -272,6 +272,10 @@ fn impl_start_yak(world: &mut dyn TestWorld, name: String) -> Result<()> {
     world.start_yak(&name)
 }
 
+fn impl_start_yak_recursive(world: &mut dyn TestWorld, name: String) -> Result<()> {
+    world.start_yak_recursive(&name)
+}
+
 fn impl_try_start_yak(world: &mut dyn TestWorld, name: String) -> Result<()> {
     world.try_start_yak(&name)
 }
@@ -630,6 +634,9 @@ both_worlds!(when(regex = r#"^I try to set the state of "(.+)" to "(.+)"$"#)
 
 both_worlds!(when(regex = r#"^I start "(.+)"$"#)
     fn when_start_yak_fs / when_start_yak_ip (name: String) -> impl_start_yak);
+
+both_worlds!(when(regex = r#"^I start "(.+)" recursively$"#)
+    fn when_start_yak_recursive_fs / when_start_yak_recursive_ip (name: String) -> impl_start_yak_recursive);
 
 both_worlds!(when(regex = r#"^I try to start "(.+)"$"#)
     fn when_try_start_yak_fs / when_try_start_yak_ip (name: String) -> impl_try_start_yak);
