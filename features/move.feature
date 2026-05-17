@@ -156,6 +156,19 @@ Feature: Move yaks in hierarchy
       Then the output should include "removed blocker"
       And the output should include "moved"
 
+    Example: Moving a subtree makes descendant blockers implicit
+      Given I have a clean git repository
+      And I add the yak "a"
+      And I add the yak "b"
+      And I add the yak "c" under "b"
+      And I add blocker "c" to "a"
+      When I move the yak "b" under "a"
+      And I list the yaks as json
+      Then the JSON yak "a" should not have blockers
+      When I show the log
+      Then the output should include "removed blocker"
+      And the output should include "moved"
+
     Example: Cannot move a blocked yak under its blocker
       Given I have a clean git repository
       And I add the yak "a"

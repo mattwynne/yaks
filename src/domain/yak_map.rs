@@ -718,23 +718,46 @@ impl YakMap {
         ancestors
     }
 
+    fn subtree_ids(&self, root_id: &YakId) -> Vec<YakId> {
+        let mut ids = vec![root_id.clone()];
+        let mut stack = self.find_children_of(root_id);
+        stack.sort_by(|a, b| b.as_str().cmp(a.as_str()));
+
+        while let Some(id) = stack.pop() {
+            let mut children = self.find_children_of(&id);
+            children.sort_by(|a, b| b.as_str().cmp(a.as_str()));
+            stack.extend(children);
+            ids.push(id);
+        }
+
+        ids
+    }
+
     fn explicit_blockers_replaced_by_hierarchy_after_move(
         &self,
         id: &YakId,
         new_parent_id: &Option<YakId>,
     ) -> Vec<(YakId, YakId)> {
-        let mut relationships: Vec<_> = self
-            .ancestor_ids_after_move(id, id, new_parent_id)
-            .into_iter()
-            .filter(|target| {
-                self.blockers
-                    .get(target)
-                    .is_some_and(|blockers| blockers.contains_key(id))
-            })
-            .map(|target| (target, id.clone()))
-            .collect();
-        relationships
-            .sort_by(|(a_target, _), (b_target, _)| a_target.as_str().cmp(b_target.as_str()));
+        let mut relationships = Vec::new();
+
+        for blocker in self.subtree_ids(id) {
+            for target in self.ancestor_ids_after_move(&blocker, id, new_parent_id) {
+                if self
+                    .blockers
+                    .get(&target)
+                    .is_some_and(|blockers| blockers.contains_key(&blocker))
+                {
+                    relationships.push((target, blocker.clone()));
+                }
+            }
+        }
+
+        relationships.sort_by(|(a_target, a_blocker), (b_target, b_blocker)| {
+            a_target
+                .as_str()
+                .cmp(b_target.as_str())
+                .then_with(|| a_blocker.as_str().cmp(b_blocker.as_str()))
+        });
         relationships
     }
 
@@ -795,21 +818,27 @@ impl YakMap {
         };
 
         let excluded: HashSet<_> = explicit_relationships_to_remove.iter().cloned().collect();
-        if let Some((path, uses_hierarchy)) =
-            self.path_to_blocker_after_move(new_parent, id, id, new_parent_id, &excluded)
-        {
-            let hierarchy_detail = if uses_hierarchy {
-                " through hierarchy"
-            } else {
-                ""
-            };
-            anyhow::bail!(
-                "moving '{}' under '{}' would create blocker cycle{}: {}",
-                self.build_display_name(id),
-                self.build_display_name(new_parent),
-                hierarchy_detail,
-                self.format_blocker_cycle_path(id, &path)
-            );
+        for subtree_id in self.subtree_ids(id) {
+            if let Some((path, uses_hierarchy)) = self.path_to_blocker_after_move(
+                new_parent,
+                &subtree_id,
+                id,
+                new_parent_id,
+                &excluded,
+            ) {
+                let hierarchy_detail = if uses_hierarchy {
+                    " through hierarchy"
+                } else {
+                    ""
+                };
+                anyhow::bail!(
+                    "moving '{}' under '{}' would create blocker cycle{}: {}",
+                    self.build_display_name(id),
+                    self.build_display_name(new_parent),
+                    hierarchy_detail,
+                    self.format_blocker_cycle_path(&subtree_id, &path)
+                );
+            }
         }
 
         Ok(())
@@ -3054,6 +3083,68 @@ mod tests {
                 && id == &blocker
                 && new_parent.as_ref() == Some(&target)
         ));
+    }
+
+    #[test]
+    fn move_subtree_under_blocked_yak_removes_descendant_redundant_explicit_blocker() {
+        let mut map = YakMap::new();
+        let target = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let moved = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        let descendant = map
+            .add_yak("c", Some(moved.clone()), None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), descendant.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.move_yak_to(moved.clone(), Some(target.clone()))
+            .unwrap();
+        let events = map.take_events();
+
+        assert!(map.active_blockers(&target).is_empty());
+        assert_eq!(
+            map.yaks.get(&moved).unwrap().parent_id,
+            Some(target.clone())
+        );
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::Moved(MovedEvent { id, new_parent }, _)
+            ] if removed_target == &target
+                && removed_blocker == &descendant
+                && id == &moved
+                && new_parent.as_ref() == Some(&target)
+        ));
+    }
+
+    #[test]
+    fn move_subtree_under_descendant_blocker_is_rejected_as_blocker_cycle() {
+        let mut map = YakMap::new();
+        let new_parent = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let moved = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        let descendant = map
+            .add_yak("c", Some(moved.clone()), None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(descendant.clone(), new_parent.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        let err = map
+            .move_yak_to(moved.clone(), Some(new_parent.clone()))
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("a"));
+        assert!(err.contains("b/c"));
+        assert_eq!(map.yaks.get(&moved).unwrap().parent_id, None);
+        assert!(map
+            .active_blockers(&descendant)
+            .iter()
+            .any(|b| b.id == new_parent));
+        assert!(map.take_events().is_empty());
     }
 
     #[test]
