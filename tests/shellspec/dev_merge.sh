@@ -98,6 +98,32 @@ JSON
     The error should include "Preparing worktree (checking out 'yak-123')"
   End
 
+  It 'reuses a recent successful check for non-.pi merges'
+    When run bash -c '
+      set -e
+      repo=$(mktemp -d)
+      trap "rm -rf \"$repo\"" EXIT
+      cd "$repo"
+      git init --initial-branch=main --quiet
+      git config user.email test@example.com
+      git config user.name "Test User"
+      mkdir -p .githooks src
+      cat > .githooks/verify-checks <<SH
+#!/usr/bin/env bash
+exit 0
+SH
+      chmod +x .githooks/verify-checks
+
+      YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
+      changed_paths_for_merge() { echo src/lib.rs; }
+      unset FORCE_CHECK
+      check-for-merge
+    '
+    The status should be success
+    The output should include '✅ Already verified — nothing changed since last check'
+    The output should not include 'Building release binary'
+  End
+
   It 'marks the matching yak done after a successful merge cleanup'
     When run bash -c '
       YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"

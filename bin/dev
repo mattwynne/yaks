@@ -991,7 +991,7 @@ check-for-merge() {
   fi
 
   if printf '%s\n' "$changed_files" | grep -qv '^\.pi/'; then
-    FORCE_CHECK=1 check
+    check
     return $?
   fi
 
