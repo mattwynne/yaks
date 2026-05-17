@@ -688,6 +688,133 @@ impl YakMap {
         names.join(" -> ")
     }
 
+    fn parent_after_move(
+        &self,
+        id: &YakId,
+        moved_id: &YakId,
+        new_parent_id: &Option<YakId>,
+    ) -> Option<YakId> {
+        if id == moved_id {
+            new_parent_id.clone()
+        } else {
+            self.yaks.get(id).and_then(|yak| yak.parent_id.clone())
+        }
+    }
+
+    fn ancestor_ids_after_move(
+        &self,
+        id: &YakId,
+        moved_id: &YakId,
+        new_parent_id: &Option<YakId>,
+    ) -> Vec<YakId> {
+        let mut ancestors = Vec::new();
+        let mut current_id = self.parent_after_move(id, moved_id, new_parent_id);
+
+        while let Some(pid) = current_id {
+            ancestors.push(pid.clone());
+            current_id = self.parent_after_move(&pid, moved_id, new_parent_id);
+        }
+
+        ancestors
+    }
+
+    fn explicit_blockers_replaced_by_hierarchy_after_move(
+        &self,
+        id: &YakId,
+        new_parent_id: &Option<YakId>,
+    ) -> Vec<(YakId, YakId)> {
+        let mut relationships: Vec<_> = self
+            .ancestor_ids_after_move(id, id, new_parent_id)
+            .into_iter()
+            .filter(|target| {
+                self.blockers
+                    .get(target)
+                    .is_some_and(|blockers| blockers.contains_key(id))
+            })
+            .map(|target| (target, id.clone()))
+            .collect();
+        relationships
+            .sort_by(|(a_target, _), (b_target, _)| a_target.as_str().cmp(b_target.as_str()));
+        relationships
+    }
+
+    fn path_to_blocker_after_move(
+        &self,
+        start: &YakId,
+        goal: &YakId,
+        moved_id: &YakId,
+        new_parent_id: &Option<YakId>,
+        excluded_explicit_relationships: &HashSet<(YakId, YakId)>,
+    ) -> Option<(Vec<YakId>, bool)> {
+        let mut stack = vec![(start.clone(), vec![start.clone()], false)];
+        let mut visited = HashSet::new();
+
+        while let Some((current, path, used_hierarchy)) = stack.pop() {
+            if !visited.insert((current.clone(), used_hierarchy)) {
+                continue;
+            }
+            if &current == goal {
+                return Some((path, used_hierarchy));
+            }
+
+            let mut explicit_targets: Vec<_> = self
+                .blockers
+                .iter()
+                .filter(|(target, blockers)| {
+                    blockers.contains_key(&current)
+                        && !excluded_explicit_relationships
+                            .contains(&((*target).clone(), current.clone()))
+                })
+                .map(|(target, _)| target.clone())
+                .collect();
+            explicit_targets.sort_by(|a, b| b.as_str().cmp(a.as_str()));
+            for target in explicit_targets {
+                let mut next_path = path.clone();
+                next_path.push(target.clone());
+                stack.push((target, next_path, used_hierarchy));
+            }
+
+            if let Some(parent) = self.parent_after_move(&current, moved_id, new_parent_id) {
+                let mut next_path = path;
+                next_path.push(parent.clone());
+                stack.push((parent, next_path, true));
+            }
+        }
+
+        None
+    }
+
+    fn validate_move_preserves_acyclic_blocker_graph(
+        &self,
+        id: &YakId,
+        new_parent_id: &Option<YakId>,
+        explicit_relationships_to_remove: &[(YakId, YakId)],
+    ) -> Result<()> {
+        let Some(new_parent) = new_parent_id else {
+            return Ok(());
+        };
+
+        let excluded: HashSet<_> = explicit_relationships_to_remove.iter().cloned().collect();
+        if let Some((path, uses_hierarchy)) =
+            self.path_to_blocker_after_move(new_parent, id, id, new_parent_id, &excluded)
+        {
+            let hierarchy_detail = if uses_hierarchy {
+                " through hierarchy"
+            } else {
+                ""
+            };
+            anyhow::bail!(
+                "moving '{}' under '{}' would create blocker cycle{}: {}",
+                self.build_display_name(id),
+                self.build_display_name(new_parent),
+                hierarchy_detail,
+                self.format_blocker_cycle_path(id, &path)
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn add_blocker(
         &mut self,
         target: YakId,
@@ -951,6 +1078,16 @@ impl YakMap {
         // Check slug uniqueness among siblings at the destination
         let name = self.yaks.get(&id).unwrap().name.as_str().to_string();
         self.check_sibling_slug_uniqueness(&name, &new_parent_id, Some(&id))?;
+
+        let explicit_relationships_to_remove =
+            self.explicit_blockers_replaced_by_hierarchy_after_move(&id, &new_parent_id);
+        self.validate_move_preserves_acyclic_blocker_graph(
+            &id,
+            &new_parent_id,
+            &explicit_relationships_to_remove,
+        )?;
+
+        self.remove_explicit_blocker_relationships(explicit_relationships_to_remove);
 
         // Update the yak's parent
         let yak = self.yaks.get_mut(&id).unwrap();
@@ -2887,6 +3024,84 @@ mod tests {
             "Expected 'descendant' in: {}",
             err
         );
+    }
+
+    #[test]
+    fn move_blocker_under_blocked_yak_removes_redundant_explicit_blocker() {
+        let mut map = YakMap::new();
+        let target = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let blocker = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        map.move_yak_to(blocker.clone(), Some(target.clone()))
+            .unwrap();
+        let events = map.take_events();
+
+        assert!(map.active_blockers(&target).is_empty());
+        assert_eq!(
+            map.yaks.get(&blocker).unwrap().parent_id,
+            Some(target.clone())
+        );
+        assert!(matches!(
+            &events[..],
+            [
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::Moved(MovedEvent { id, new_parent }, _)
+            ] if removed_target == &target
+                && removed_blocker == &blocker
+                && id == &blocker
+                && new_parent.as_ref() == Some(&target)
+        ));
+    }
+
+    #[test]
+    fn move_blocked_yak_under_its_blocker_is_rejected_as_blocker_cycle() {
+        let mut map = YakMap::new();
+        let target = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let blocker = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        let err = map
+            .move_yak_to(target.clone(), Some(blocker.clone()))
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("a -> b -> a"));
+        assert_eq!(map.yaks.get(&target).unwrap().parent_id, None);
+        assert!(map.active_blockers(&target).iter().any(|b| b.id == blocker));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn move_ancestor_under_explicit_blocker_is_rejected_as_blocker_cycle() {
+        let mut map = YakMap::new();
+        let project = map
+            .add_yak("project", None, None, None, None, vec![])
+            .unwrap();
+        let target = map
+            .add_yak("a", Some(project.clone()), None, None, None, vec![])
+            .unwrap();
+        let blocker = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        let err = map
+            .move_yak_to(project.clone(), Some(blocker.clone()))
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("project -> b -> project/a -> project"));
+        assert_eq!(map.yaks.get(&project).unwrap().parent_id, None);
+        assert!(map.active_blockers(&target).iter().any(|b| b.id == blocker));
+        assert!(map.take_events().is_empty());
     }
 
     // Tests for prune

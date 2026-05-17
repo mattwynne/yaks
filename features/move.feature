@@ -143,3 +143,34 @@ Feature: Move yaks in hierarchy
       When I try to move the yak "parent" under "child"
       Then the command should fail
       And the error should contain "descendant"
+
+  Rule: Moving yaks keeps the blocker graph acyclic
+
+    Example: Moving a blocker under the yak it blocks makes the blocker implicit
+      Given I have a clean git repository
+      And I add the yak "a"
+      And I add the yak "b"
+      And I add blocker "b" to "a"
+      When I move the yak "b" under "a"
+      And I show the log
+      Then the output should include "removed blocker"
+      And the output should include "moved"
+
+    Example: Cannot move a blocked yak under its blocker
+      Given I have a clean git repository
+      And I add the yak "a"
+      And I add the yak "b"
+      And I add blocker "b" to "a"
+      When I try to move the yak "a" under "b"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
+
+    Example: Cannot move an ancestor under an explicit blocker when that would create a cycle
+      Given I have a clean git repository
+      And I add the yak "project"
+      And I add the yak "a" under "project"
+      And I add the yak "b"
+      And I add blocker "b" to "a"
+      When I try to move the yak "project" under "b"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
