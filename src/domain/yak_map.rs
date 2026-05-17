@@ -13,6 +13,20 @@ pub struct ActiveBlocker {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AddBlockerOutcome {
+    Added,
+    Updated,
+    AlreadyExplicit,
+    AlreadyImpliedByHierarchy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoveBlockerOutcome {
+    Removed,
+    NotPresent,
+}
+
 pub struct YakMap {
     yaks: HashMap<YakId, Yak>,
     blockers: HashMap<YakId, HashMap<YakId, Option<String>>>,
@@ -249,6 +263,12 @@ impl YakMap {
         }
 
         ancestors
+    }
+
+    fn is_descendant_of(&self, descendant: &YakId, ancestor: &YakId) -> bool {
+        self.get_ancestor_ids(descendant)
+            .iter()
+            .any(|id| id == ancestor)
     }
 
     /// Check that no sibling under the same parent has the same slug.
@@ -580,43 +600,65 @@ impl YakMap {
         target: YakId,
         blocker: YakId,
         reason: Option<String>,
-    ) -> Result<()> {
+    ) -> Result<AddBlockerOutcome> {
         self.ensure_exists(&target)?;
         self.ensure_exists(&blocker)?;
-        let reason = crate::domain::events::blocker::normalize_reason(reason);
+        let requested_reason =
+            reason.map(|reason| crate::domain::events::blocker::normalize_reason(Some(reason)));
 
         let existing = self
             .blockers
             .get(&target)
             .and_then(|blockers| blockers.get(&blocker));
-        let event = if existing.is_some() {
-            YakEvent::BlockerUpdated(
-                BlockerUpdatedEvent {
-                    target: target.clone(),
-                    blocker: blocker.clone(),
-                    reason: reason.clone(),
-                },
-                self.metadata.clone(),
+        let (event, outcome, new_reason) = if let Some(existing_reason) = existing {
+            let Some(new_reason) = requested_reason else {
+                return Ok(AddBlockerOutcome::AlreadyExplicit);
+            };
+            if existing_reason == &new_reason {
+                return Ok(AddBlockerOutcome::AlreadyExplicit);
+            }
+            (
+                YakEvent::BlockerUpdated(
+                    BlockerUpdatedEvent {
+                        target: target.clone(),
+                        blocker: blocker.clone(),
+                        reason: new_reason.clone(),
+                    },
+                    self.metadata.clone(),
+                ),
+                AddBlockerOutcome::Updated,
+                new_reason,
             )
+        } else if self.is_descendant_of(&blocker, &target) {
+            return Ok(AddBlockerOutcome::AlreadyImpliedByHierarchy);
         } else {
-            YakEvent::BlockerAdded(
-                BlockerAddedEvent {
-                    target: target.clone(),
-                    blocker: blocker.clone(),
-                    reason: reason.clone(),
-                },
-                self.metadata.clone(),
+            let new_reason = requested_reason.unwrap_or(None);
+            (
+                YakEvent::BlockerAdded(
+                    BlockerAddedEvent {
+                        target: target.clone(),
+                        blocker: blocker.clone(),
+                        reason: new_reason.clone(),
+                    },
+                    self.metadata.clone(),
+                ),
+                AddBlockerOutcome::Added,
+                new_reason,
             )
         };
         self.blockers
             .entry(target)
             .or_default()
-            .insert(blocker, reason);
+            .insert(blocker, new_reason);
         self.pending_events.push(event);
-        Ok(())
+        Ok(outcome)
     }
 
-    pub fn remove_blocker(&mut self, target: YakId, blocker: YakId) -> Result<()> {
+    pub fn remove_blocker(
+        &mut self,
+        target: YakId,
+        blocker: YakId,
+    ) -> Result<RemoveBlockerOutcome> {
         self.ensure_exists(&target)?;
         self.ensure_exists(&blocker)?;
         if let Some(blockers) = self.blockers.get_mut(&target) {
@@ -628,9 +670,10 @@ impl YakMap {
                     BlockerRemovedEvent { target, blocker },
                     self.metadata.clone(),
                 ));
+                return Ok(RemoveBlockerOutcome::Removed);
             }
         }
-        Ok(())
+        Ok(RemoveBlockerOutcome::NotPresent)
     }
 
     pub fn update_context(&mut self, id: YakId, context: String) -> Result<()> {
@@ -826,15 +869,185 @@ mod tests {
             .add_yak("blocking yak", None, None, None, None, vec![])
             .unwrap();
 
-        map.add_blocker(target.clone(), blocker.clone(), Some(String::new()))
+        let outcome = map
+            .add_blocker(target.clone(), blocker.clone(), Some(String::new()))
             .unwrap();
 
+        assert_eq!(outcome, AddBlockerOutcome::Added);
         assert_eq!(map.active_blockers(&target)[0].reason, None);
         let events = map.take_events();
         let YakEvent::BlockerAdded(event, _) = events.last().unwrap() else {
             panic!("expected BlockerAdded event");
         };
         assert_eq!(event.reason, None);
+    }
+
+    #[test]
+    fn add_blocker_with_same_reason_is_noop() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), Some("same".to_string()))
+            .unwrap();
+        map.take_events();
+
+        let outcome = map
+            .add_blocker(target.clone(), blocker, Some("same".to_string()))
+            .unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::AlreadyExplicit);
+        assert_eq!(
+            map.active_blockers(&target)[0].reason,
+            Some("same".to_string())
+        );
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_without_reason_preserves_existing_reason_as_noop() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(
+            target.clone(),
+            blocker.clone(),
+            Some("existing".to_string()),
+        )
+        .unwrap();
+        map.take_events();
+
+        let outcome = map.add_blocker(target.clone(), blocker, None).unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::AlreadyExplicit);
+        assert_eq!(
+            map.active_blockers(&target)[0].reason,
+            Some("existing".to_string())
+        );
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_with_empty_reason_clears_existing_reason() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(
+            target.clone(),
+            blocker.clone(),
+            Some("existing".to_string()),
+        )
+        .unwrap();
+        map.take_events();
+
+        let outcome = map
+            .add_blocker(target.clone(), blocker, Some(String::new()))
+            .unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::Updated);
+        assert_eq!(map.active_blockers(&target)[0].reason, None);
+        let events = map.take_events();
+        assert!(matches!(
+            events.as_slice(),
+            [YakEvent::BlockerUpdated(_, _)]
+        ));
+    }
+
+    #[test]
+    fn add_blocker_with_empty_reason_when_reason_absent_is_noop() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), None)
+            .unwrap();
+        map.take_events();
+
+        let outcome = map
+            .add_blocker(target.clone(), blocker, Some(String::new()))
+            .unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::AlreadyExplicit);
+        assert_eq!(map.active_blockers(&target)[0].reason, None);
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_with_changed_reason_updates() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(target.clone(), blocker.clone(), Some("old".to_string()))
+            .unwrap();
+        map.take_events();
+
+        let outcome = map
+            .add_blocker(target.clone(), blocker, Some("new".to_string()))
+            .unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::Updated);
+        assert_eq!(
+            map.active_blockers(&target)[0].reason,
+            Some("new".to_string())
+        );
+        let events = map.take_events();
+        assert!(matches!(
+            events.as_slice(),
+            [YakEvent::BlockerUpdated(_, _)]
+        ));
+    }
+
+    #[test]
+    fn add_blocker_implied_by_hierarchy_is_noop() {
+        let mut map = YakMap::new();
+        let parent = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child = map
+            .add_yak("child", Some(parent.clone()), None, None, None, vec![])
+            .unwrap();
+        map.take_events();
+
+        let outcome = map.add_blocker(parent.clone(), child, None).unwrap();
+
+        assert_eq!(outcome, AddBlockerOutcome::AlreadyImpliedByHierarchy);
+        assert!(map.active_blockers(&parent).is_empty());
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn remove_absent_blocker_is_noop() {
+        let mut map = YakMap::new();
+        let target = map
+            .add_yak("blocked yak", None, None, None, None, vec![])
+            .unwrap();
+        let blocker = map
+            .add_yak("blocking yak", None, None, None, None, vec![])
+            .unwrap();
+        map.take_events();
+
+        let outcome = map.remove_blocker(target, blocker).unwrap();
+
+        assert_eq!(outcome, RemoveBlockerOutcome::NotPresent);
+        assert!(map.take_events().is_empty());
     }
 
     // ==================================================================

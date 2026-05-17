@@ -65,6 +65,9 @@ pub trait TestWorld {
     /// Add an explicit blocker
     fn add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()>;
 
+    /// Try to add an explicit blocker - captures result without bailing on failure
+    fn try_add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()>;
+
     /// Remove an explicit blocker
     fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()>;
 

@@ -212,6 +212,19 @@ fn impl_add_blocker_reason(
     world.add_blocker(&target, &blocker, Some(&reason))
 }
 
+fn impl_try_add_blocker(world: &mut dyn TestWorld, blocker: String, target: String) -> Result<()> {
+    world.try_add_blocker(&target, &blocker, None)
+}
+
+fn impl_try_add_blocker_reason(
+    world: &mut dyn TestWorld,
+    blocker: String,
+    target: String,
+    reason: String,
+) -> Result<()> {
+    world.try_add_blocker(&target, &blocker, Some(&reason))
+}
+
 fn impl_remove_blocker(world: &mut dyn TestWorld, blocker: String, target: String) -> Result<()> {
     world.remove_blocker(&target, &blocker)
 }
@@ -589,6 +602,12 @@ both_worlds!(when(regex = r#"^I add blocker "([^"]+)" to "([^"]+)"$"#)
 
 both_worlds!(when(regex = r#"^I add blocker "([^"]+)" to "([^"]+)" with reason "([^"]*)"$"#)
     fn when_add_blocker_reason_fs / when_add_blocker_reason_ip (blocker: String, target: String, reason: String) -> impl_add_blocker_reason);
+
+both_worlds!(when(regex = r#"^I try to add blocker "([^"]+)" to "([^"]+)"$"#)
+    fn when_try_add_blocker_fs / when_try_add_blocker_ip (blocker: String, target: String) -> impl_try_add_blocker);
+
+both_worlds!(when(regex = r#"^I try to add blocker "([^"]+)" to "([^"]+)" with reason "([^"]*)"$"#)
+    fn when_try_add_blocker_reason_fs / when_try_add_blocker_reason_ip (blocker: String, target: String, reason: String) -> impl_try_add_blocker_reason);
 
 both_worlds!(when(regex = r#"^I remove blocker "([^"]+)" from "([^"]+)"$"#)
     fn when_remove_blocker_fs / when_remove_blocker_ip (blocker: String, target: String) -> impl_remove_blocker);

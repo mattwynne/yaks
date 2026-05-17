@@ -373,6 +373,15 @@ impl TestWorld for InProcessWorld {
         })
     }
 
+    fn try_add_blocker(&mut self, target: &str, blocker: &str, reason: Option<&str>) -> Result<()> {
+        let target = target.to_string();
+        let blocker = blocker.to_string();
+        let reason = reason.map(str::to_string);
+        self.try_execute(move |app| {
+            app.handle(AddBlocker::new(&target, &blocker).with_reason(reason.as_deref()))
+        })
+    }
+
     fn remove_blocker(&mut self, target: &str, blocker: &str) -> Result<()> {
         let target = target.to_string();
         let blocker = blocker.to_string();
