@@ -35,6 +35,20 @@ Feature: Setting yak state
         - [wip] Fix the bug
         """
 
+  Rule: Stored workflow state reflects direct work only
+
+    Example: Parent remains todo when a descendant is started
+      Given I have a clean git repository
+      And I add the yak "deploy"
+      And I add the yak "fix bug" under "deploy"
+      When I start "fix bug"
+      And I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [todo] deploy
+          - [wip] fix bug
+        """
+
   Rule: Done ancestors demote to todo when a child leaves done
     A parent cannot remain done if any child is not done.
     Reopening a child demotes done ancestors back to todo without

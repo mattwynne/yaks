@@ -44,7 +44,13 @@ impl ConsoleDisplay {
                 "pretty" => {
                     let node_prefix = format!(" {}{}", node.prefix, node.connector);
                     let name_ref = Name::from(node.name.as_str());
-                    self.display_yak_pretty(&node_prefix, &name_ref, &node.state, &node.tags);
+                    self.display_yak_pretty(
+                        &node_prefix,
+                        &name_ref,
+                        &node.state,
+                        &node.tags,
+                        node.has_wip_descendant,
+                    );
                 }
                 _ => {
                     // markdown
@@ -143,7 +149,14 @@ impl ConsoleDisplay {
         eprintln!("Warning: {message}");
     }
 
-    fn display_yak_pretty(&self, prefix: &str, name: &Name, state: &str, tags: &[String]) {
+    fn display_yak_pretty(
+        &self,
+        prefix: &str,
+        name: &Name,
+        state: &str,
+        tags: &[String],
+        has_wip_descendant: bool,
+    ) {
         let mut out = self.output.lock().unwrap();
         let tag_suffix = if tags.is_empty() {
             String::new()
@@ -169,6 +182,9 @@ impl ConsoleDisplay {
                     out,
                     "{prefix}\x1b[90m✓\x1b[0m \x1b[90;9m{name}\x1b[0m{dim_tags}"
                 ),
+                "todo" if has_wip_descendant => {
+                    writeln!(out, "{prefix}\x1b[38;5;64m●\x1b[0m {name}{dim_tags}")
+                }
                 _ => writeln!(out, "{prefix}○ {name}{dim_tags}"),
             }
         } else {
@@ -176,6 +192,7 @@ impl ConsoleDisplay {
                 "wip" => "●",
                 "blocked" => "⏸",
                 "done" => "✓",
+                "todo" if has_wip_descendant => "●",
                 _ => "○",
             };
             writeln!(out, "{prefix}{indicator} {name}{tag_suffix}")
@@ -635,7 +652,7 @@ mod tests {
     fn pretty_wip_with_color_has_ansi() {
         let (display, buffer) = make_display(true);
         let name = Name::from("my yak");
-        display.display_yak_pretty("", &name, "wip", &[]);
+        display.display_yak_pretty("", &name, "wip", &[], false);
         let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
         assert!(output.contains("my yak"));
@@ -645,7 +662,7 @@ mod tests {
     fn pretty_done_with_color_has_ansi() {
         let (display, buffer) = make_display(true);
         let name = Name::from("finished yak");
-        display.display_yak_pretty("", &name, "done", &[]);
+        display.display_yak_pretty("", &name, "done", &[], false);
         let output = buffer.contents();
         assert!(output.contains("\x1b["), "expected ANSI codes in: {output}");
     }
@@ -654,7 +671,7 @@ mod tests {
     fn pretty_wip_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("my yak");
-        display.display_yak_pretty("", &name, "wip", &[]);
+        display.display_yak_pretty("", &name, "wip", &[], false);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -668,7 +685,7 @@ mod tests {
     fn pretty_done_without_color_has_no_ansi() {
         let (display, buffer) = make_display(false);
         let name = Name::from("done yak");
-        display.display_yak_pretty("", &name, "done", &[]);
+        display.display_yak_pretty("", &name, "done", &[], false);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
@@ -681,13 +698,56 @@ mod tests {
     fn pretty_todo_without_color_uses_open_circle() {
         let (display, buffer) = make_display(false);
         let name = Name::from("todo yak");
-        display.display_yak_pretty("", &name, "todo", &[]);
+        display.display_yak_pretty("", &name, "todo", &[], false);
         let output = buffer.contents();
         assert!(
             !output.contains("\x1b["),
             "unexpected ANSI codes in: {output}"
         );
         assert!(output.contains("○"));
+    }
+
+    #[test]
+    fn pretty_todo_with_wip_descendant_uses_muted_green_indicator_only() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("deploy");
+        display.display_yak_pretty("", &name, "todo", &[], true);
+        let output = buffer.contents();
+        assert_eq!(output, "\x1b[38;5;64m●\x1b[0m deploy\n");
+        assert!(
+            !output.contains("\x1b[38;5;64mdeploy"),
+            "yak text should not be green: {output}"
+        );
+    }
+
+    #[test]
+    fn pretty_todo_without_wip_descendant_uses_plain_open_indicator() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("deploy");
+        display.display_yak_pretty("", &name, "todo", &[], false);
+        let output = buffer.contents();
+        assert_eq!(output, "○ deploy\n");
+        assert!(!output.contains("38;5;64"));
+    }
+
+    #[test]
+    fn pretty_wip_keeps_active_indicator_not_descendant_progress_style() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("fix bug");
+        display.display_yak_pretty("", &name, "wip", &[], true);
+        let output = buffer.contents();
+        assert_eq!(output, "\x1b[32m●\x1b[0m \x1b[1mfix bug\x1b[0m\n");
+        assert!(!output.contains("38;5;64"));
+    }
+
+    #[test]
+    fn pretty_done_with_wip_descendant_is_not_shown_as_in_progress_underneath() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("deploy");
+        display.display_yak_pretty("", &name, "done", &[], true);
+        let output = buffer.contents();
+        assert_eq!(output, "\x1b[90m✓\x1b[0m \x1b[90;9mdeploy\x1b[0m\n");
+        assert!(!output.contains("38;5;64"));
     }
 
     #[test]

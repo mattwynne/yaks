@@ -63,6 +63,9 @@ pub struct YakTreeNode {
     pub state: String,
     /// Derived actionable status: true when the yak is todo and all direct children are done.
     pub ready: bool,
+    /// Presentation hint: true when any descendant is actively wip.
+    #[serde(skip)]
+    pub has_wip_descendant: bool,
     pub blocked_by: Vec<YakBlockerView>,
     pub context: Option<String>,
     pub parent_id: Option<String>,

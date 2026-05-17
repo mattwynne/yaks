@@ -192,6 +192,7 @@ impl ListYaks {
                     .unwrap_or_default();
 
                 let node_ready = ready_for(node, context.readiness_by_id);
+                let has_wip_descendant = has_wip_descendant(node);
                 let blocked_by = node
                     .yak
                     .as_ref()
@@ -233,6 +234,7 @@ impl ListYaks {
                     id,
                     state: state_str,
                     ready: node_ready,
+                    has_wip_descendant,
                     blocked_by,
                     context: yak_context,
                     parent_id,
@@ -444,6 +446,16 @@ fn ready_for(node: &YakNode, readiness_by_id: &HashMap<YakId, bool>) -> bool {
         .unwrap_or(false)
 }
 
+fn has_wip_descendant(node: &YakNode) -> bool {
+    node.children.iter().any(|child| {
+        child
+            .yak
+            .as_ref()
+            .is_some_and(|yak| yak.state == YakState::Wip)
+            || has_wip_descendant(child)
+    })
+}
+
 /// Recursively build a YakNode and its children from parent_id grouping
 fn yak_node_for_filter(yak: &Yak) -> YakNode {
     YakNode {
@@ -504,7 +516,7 @@ mod tests {
     }
     use super::*;
     use crate::adapters::json_display::JsonDisplay;
-    use crate::adapters::user_display::ConsoleDisplay;
+    use crate::adapters::user_display::{ConsoleDisplay, ConsoleDisplayOptions, TestBuffer};
     use crate::adapters::{
         make_test_display, InMemoryAuthentication, InMemoryEventStore, InMemoryInput,
         InMemoryStorage,
@@ -592,6 +604,58 @@ mod tests {
         assert!(
             output.contains("┆  ├─ ○ E"),
             "expected pruned sibling marker before B descendants, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn pretty_tree_shows_todo_parent_with_wip_descendant_as_muted_green_indicator_only() {
+        set_focus_override(None);
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let buffer = TestBuffer::new();
+        let display = ConsoleDisplay::new(
+            Box::new(buffer.clone()),
+            ConsoleDisplayOptions {
+                color: true,
+                width: 60,
+            },
+        );
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+
+        app.handle(AddYak::new("deploy")).unwrap();
+        app.handle(AddYak::new("fix bug").with_parent(Some("deploy")))
+            .unwrap();
+        app.handle(SetState::new("fix bug", "wip").with_silent(true))
+            .unwrap();
+        buffer.clear();
+
+        app.handle(ListYaks::new("pretty", None, None)).unwrap();
+        let output = buffer.contents();
+
+        assert!(
+            output.contains("\x1b[38;5;64m●\x1b[0m deploy"),
+            "expected muted green progress-underneath indicator for parent, got:\n{output}"
+        );
+        assert!(
+            !output.contains("\x1b[38;5;64mdeploy"),
+            "parent name should not be green, got:\n{output}"
+        );
+        assert!(
+            output.contains("\x1b[32m●\x1b[0m \x1b[1mfix bug\x1b[0m"),
+            "expected normal active wip styling for child, got:\n{output}"
         );
     }
 
