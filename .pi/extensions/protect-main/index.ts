@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { isMainRepo, decide } from "./rules.js";
 import type { ToolType } from "./rules.js";
 import {
@@ -11,7 +12,7 @@ import {
   BLOCKED_BASH_LOG_RELATIVE_PATH,
 } from "./log.js";
 
-function resolveRepoPath(requestedPath = "."): string {
+export function resolveRepoPath(requestedPath = "."): string {
   const root = process.cwd();
   const resolved = path.resolve(root, requestedPath);
   const relative = path.relative(root, resolved);
@@ -21,6 +22,30 @@ function resolveRepoPath(requestedPath = "."): string {
   }
 
   throw new Error(`Path escapes repository root: ${requestedPath}`);
+}
+
+export function resolveWorktreePath(requestedPath: string): string {
+  const root = process.cwd();
+  const resolved = resolveRepoPath(requestedPath);
+  const relative = path.relative(root, resolved);
+
+  if (relative === ".worktrees" || !relative.startsWith(`.worktrees${path.sep}`)) {
+    throw new Error(`Path must name a child path under .worktrees/: ${requestedPath}`);
+  }
+
+  const gitFile = path.join(resolved, ".git");
+  let stats: fs.Stats;
+  try {
+    stats = fs.statSync(gitFile);
+  } catch {
+    throw new Error(`Path is not a git worktree (missing .git file): ${requestedPath}`);
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(`Path is not a git worktree (.git is not a file): ${requestedPath}`);
+  }
+
+  return resolved;
 }
 
 function errorResult(error: unknown) {
@@ -35,6 +60,15 @@ function commandError(command: string, stdout: string, stderr: string) {
   const output = (stderr || stdout).trim();
   return {
     content: [{ type: "text" as const, text: `Error running ${command}: ${output}` }],
+    isError: true,
+  };
+}
+
+function bashCommandError(exitCode: number, stdout: string, stderr: string) {
+  const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+  const text = output ? `Command exited with code ${exitCode}:\n${output}` : `Command exited with code ${exitCode}`;
+  return {
+    content: [{ type: "text" as const, text }],
     isError: true,
   };
 }
@@ -176,6 +210,41 @@ export default function (pi: ExtensionAPI) {
       }
 
       return { content: [{ type: "text", text: result.stdout.trim() }] };
+    },
+  });
+
+  pi.registerTool({
+    name: "worktree_bash",
+    label: "Worktree Bash",
+    description:
+      "Execute a bash command in a selected git worktree under .worktrees/. Bash runs in the selected worktree, not main. Returns stdout and stderr trimmed.",
+    parameters: Type.Object({
+      path: Type.String({ description: "Path to a git worktree under .worktrees/" }),
+      command: Type.String({ description: "Bash command to execute in the selected worktree" }),
+      timeoutMs: Type.Optional(Type.Integer({ minimum: 0, description: "Timeout in milliseconds (default: 30000)" })),
+    }),
+
+    async execute(_toolCallId, params, signal) {
+      let worktreePath: string;
+      try {
+        worktreePath = resolveWorktreePath(params.path);
+      } catch (error) {
+        return errorResult(error);
+      }
+
+      try {
+        const result = await pi.exec("bash", ["-lc", params.command], {
+          cwd: worktreePath,
+          signal,
+          timeout: params.timeoutMs ?? 30000,
+        });
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        if (result.code !== 0) return bashCommandError(result.code, result.stdout, result.stderr);
+
+        return { content: [{ type: "text" as const, text: output }] };
+      } catch (error) {
+        return errorResult(error);
+      }
     },
   });
 
