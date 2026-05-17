@@ -12,7 +12,7 @@
  * Uses JSON mode to capture structured output from subagents.
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -151,6 +151,8 @@ interface SingleResult {
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
+	sessionId?: string;
+	sessionFile?: string;
 }
 
 interface SubagentDetails {
@@ -217,6 +219,58 @@ async function writePromptToTempFile(agentName: string, prompt: string): Promise
 	return { dir: tmpDir, filePath };
 }
 
+function getAgentDir(): string {
+	const envDir = process.env.PI_CODING_AGENT_DIR;
+	if (!envDir) return path.join(os.homedir(), ".pi", "agent");
+	if (envDir === "~") return os.homedir();
+	if (envDir.startsWith("~/")) return path.join(os.homedir(), envDir.slice(2));
+	return envDir;
+}
+
+function getDefaultSessionDir(cwd: string): string {
+	const safePath = `--${path.resolve(cwd).replace(/^[\\/]/, "").replace(/[\\/:]/g, "-")}--`;
+	return path.join(getAgentDir(), "sessions", safePath);
+}
+
+function getCurrentYakId(cwd: string): string | null {
+	const envYakId = process.env.YAK_ID?.trim();
+	if (envYakId) return envYakId;
+
+	try {
+		const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+			cwd,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+		if (!branch || branch === "HEAD" || branch === "main" || branch === "master") return null;
+		return branch;
+	} catch {
+		return null;
+	}
+}
+
+function ensureYakSessionFile(cwd: string): { id: string; file: string } | null {
+	const yakId = getCurrentYakId(cwd);
+	if (!yakId) return null;
+
+	const sessionDir = getDefaultSessionDir(cwd);
+	fs.mkdirSync(sessionDir, { recursive: true });
+	const sessionFile = path.join(sessionDir, `${yakId}.jsonl`);
+
+	if (!fs.existsSync(sessionFile) || fs.statSync(sessionFile).size === 0) {
+		const header = {
+			type: "session",
+			version: 3,
+			id: yakId,
+			timestamp: new Date().toISOString(),
+			cwd: path.resolve(cwd),
+		};
+		fs.writeFileSync(sessionFile, `${JSON.stringify(header)}\n`, { encoding: "utf8", mode: 0o600 });
+	}
+
+	return { id: yakId, file: sessionFile };
+}
+
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	const currentScript = process.argv[1];
 	const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
@@ -263,7 +317,11 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const runCwd = cwd ?? defaultCwd;
+	const yakSession = ensureYakSessionFile(runCwd);
+	const args: string[] = ["--mode", "json", "-p"];
+	if (yakSession) args.push("--session", yakSession.file);
+	else args.push("--no-session");
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
@@ -280,6 +338,8 @@ async function runSingleAgent(
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model: agent.model,
 		step,
+		sessionId: yakSession?.id,
+		sessionFile: yakSession?.file,
 	};
 
 	const emitUpdate = () => {
@@ -305,7 +365,7 @@ async function runSingleAgent(
 		const exitCode = await new Promise<number>((resolve) => {
 			const invocation = getPiInvocation(args);
 			const proc = spawn(invocation.command, invocation.args, {
-				cwd: cwd ?? defaultCwd,
+				cwd: runCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
 			});
