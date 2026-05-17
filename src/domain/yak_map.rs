@@ -5,7 +5,7 @@ use crate::domain::slug::{generate_id, slugify, Name, YakId};
 use crate::domain::yak_state::YakState;
 use crate::domain::{Yak, YakEvent};
 use anyhow::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveBlocker {
@@ -595,6 +595,53 @@ impl YakMap {
         blockers
     }
 
+    fn path_to_blocker(&self, start: &YakId, goal: &YakId) -> Option<(Vec<YakId>, bool)> {
+        let mut stack = vec![(start.clone(), vec![start.clone()], false)];
+        let mut visited = HashSet::new();
+
+        while let Some((current, path, used_hierarchy)) = stack.pop() {
+            if !visited.insert((current.clone(), used_hierarchy)) {
+                continue;
+            }
+            if &current == goal {
+                return Some((path, used_hierarchy));
+            }
+
+            let mut explicit_targets: Vec<_> = self
+                .blockers
+                .iter()
+                .filter(|(_, blockers)| blockers.contains_key(&current))
+                .map(|(target, _)| target.clone())
+                .collect();
+            explicit_targets.sort_by(|a, b| b.as_str().cmp(a.as_str()));
+            for target in explicit_targets {
+                let mut next_path = path.clone();
+                next_path.push(target.clone());
+                stack.push((target, next_path, used_hierarchy));
+            }
+
+            if let Some(parent) = self
+                .yaks
+                .get(&current)
+                .and_then(|yak| yak.parent_id.clone())
+            {
+                let mut next_path = path;
+                next_path.push(parent.clone());
+                stack.push((parent, next_path, true));
+            }
+        }
+
+        None
+    }
+
+    fn format_blocker_cycle_path(&self, blocker: &YakId, path: &[YakId]) -> String {
+        let mut names = Vec::with_capacity(path.len() + 2);
+        names.push(self.build_display_name(blocker));
+        names.extend(path.iter().map(|id| self.build_display_name(id)));
+        names.push(self.build_display_name(blocker));
+        names.join(" -> ")
+    }
+
     pub fn add_blocker(
         &mut self,
         target: YakId,
@@ -603,6 +650,12 @@ impl YakMap {
     ) -> Result<AddBlockerOutcome> {
         self.ensure_exists(&target)?;
         self.ensure_exists(&blocker)?;
+        if target == blocker {
+            anyhow::bail!(
+                "yak '{}' cannot block itself",
+                self.build_display_name(&target)
+            );
+        }
         let requested_reason =
             reason.map(|reason| crate::domain::events::blocker::normalize_reason(Some(reason)));
 
@@ -632,6 +685,20 @@ impl YakMap {
         } else if self.is_descendant_of(&blocker, &target) {
             return Ok(AddBlockerOutcome::AlreadyImpliedByHierarchy);
         } else {
+            if let Some((path, uses_hierarchy)) = self.path_to_blocker(&target, &blocker) {
+                let hierarchy_detail = if uses_hierarchy {
+                    " through hierarchy"
+                } else {
+                    ""
+                };
+                anyhow::bail!(
+                    "adding '{}' as a blocker for '{}' would create blocker cycle{}: {}",
+                    self.build_display_name(&blocker),
+                    self.build_display_name(&target),
+                    hierarchy_detail,
+                    self.format_blocker_cycle_path(&blocker, &path)
+                );
+            }
             let new_reason = requested_reason.unwrap_or(None);
             (
                 YakEvent::BlockerAdded(
@@ -1030,6 +1097,128 @@ mod tests {
 
         assert_eq!(outcome, AddBlockerOutcome::AlreadyImpliedByHierarchy);
         assert!(map.active_blockers(&parent).is_empty());
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_self_blocking() {
+        let mut map = YakMap::new();
+        let yak = map.add_yak("yak", None, None, None, None, vec![]).unwrap();
+        map.take_events();
+
+        let err = map
+            .add_blocker(yak.clone(), yak, None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("cannot block itself"));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_mutual_explicit_cycle() {
+        let mut map = YakMap::new();
+        let a = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        map.add_blocker(a.clone(), b.clone(), None).unwrap();
+        map.take_events();
+
+        let err = map.add_blocker(b, a, None).unwrap_err().to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("a -> b -> a"));
+        assert!(!err.contains("through hierarchy"));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_longer_explicit_cycle() {
+        let mut map = YakMap::new();
+        let a = map.add_yak("a", None, None, None, None, vec![]).unwrap();
+        let b = map.add_yak("b", None, None, None, None, vec![]).unwrap();
+        let c = map.add_yak("c", None, None, None, None, vec![]).unwrap();
+        map.add_blocker(a.clone(), b.clone(), None).unwrap();
+        map.add_blocker(b.clone(), c.clone(), None).unwrap();
+        map.take_events();
+
+        let err = map.add_blocker(c, a, None).unwrap_err().to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("a -> c -> b -> a"));
+        assert!(!err.contains("through hierarchy"));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_ancestor_blocking_descendant_through_hierarchy() {
+        let mut map = YakMap::new();
+        let parent = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child = map
+            .add_yak("child", Some(parent.clone()), None, None, None, vec![])
+            .unwrap();
+        map.take_events();
+
+        let err = map
+            .add_blocker(child, parent, None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("parent -> parent/child -> parent"));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_multi_ancestor_hierarchy_cycle() {
+        let mut map = YakMap::new();
+        let parent = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child = map
+            .add_yak("child", Some(parent.clone()), None, None, None, vec![])
+            .unwrap();
+        let grandchild = map
+            .add_yak("grandchild", Some(child), None, None, None, vec![])
+            .unwrap();
+        map.take_events();
+
+        let err = map
+            .add_blocker(grandchild, parent, None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("parent -> parent/child/grandchild -> parent/child -> parent"));
+        assert!(map.take_events().is_empty());
+    }
+
+    #[test]
+    fn add_blocker_rejects_explicit_cycle_through_hierarchy() {
+        let mut map = YakMap::new();
+        let parent = map
+            .add_yak("parent", None, None, None, None, vec![])
+            .unwrap();
+        let child = map
+            .add_yak("child", Some(parent.clone()), None, None, None, vec![])
+            .unwrap();
+        let other = map
+            .add_yak("other", None, None, None, None, vec![])
+            .unwrap();
+        map.add_blocker(child, other.clone(), None).unwrap();
+        map.take_events();
+
+        let err = map
+            .add_blocker(other, parent, None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("parent -> other -> parent/child -> parent"));
         assert!(map.take_events().is_empty());
     }
 

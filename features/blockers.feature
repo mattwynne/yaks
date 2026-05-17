@@ -112,3 +112,56 @@ Feature: Explicit blockers affect readiness
       And the output should include "no explicit blocker added"
       When I show the log
       Then the output should not include "marked parent blocked by child"
+
+  Rule: Blocker commands reject cycles
+
+    Example: A yak cannot block itself
+      Given I add the yak "yak"
+      When I try to add blocker "yak" to "yak"
+      Then the command should fail
+      And the error should contain "cannot block itself"
+      When I show the log
+      Then the output should not include "marked yak blocked by yak"
+
+    Example: Mutual explicit blockers are rejected
+      Given I add the yak "a"
+      And I add the yak "b"
+      And I add blocker "b" to "a"
+      When I try to add blocker "a" to "b"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
+      When I show the log
+      Then the output should not include "marked b blocked by a"
+
+    Example: Longer explicit blocker cycles are rejected
+      Given I add the yak "a"
+      And I add the yak "b"
+      And I add the yak "c"
+      And I add blocker "b" to "a"
+      And I add blocker "c" to "b"
+      When I try to add blocker "a" to "c"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
+      When I show the log
+      Then the output should not include "marked c blocked by a"
+
+    Example: An ancestor cannot explicitly block a descendant
+      Given I add the yak "parent"
+      And I add the yak "child" under "parent"
+      When I try to add blocker "parent" to "child"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
+      And the error should contain "through hierarchy"
+      When I show the log
+      Then the output should not include "marked child blocked by parent"
+
+    Example: A multi-ancestor hierarchy cannot explicitly block a descendant
+      Given I add the yak "parent"
+      And I add the yak "child" under "parent"
+      And I add the yak "grandchild" under "child"
+      When I try to add blocker "parent" to "grandchild"
+      Then the command should fail
+      And the error should contain "would create blocker cycle"
+      And the error should contain "through hierarchy"
+      When I show the log
+      Then the output should not include "marked grandchild blocked by parent"
