@@ -11,6 +11,8 @@ devenv.local.yaml
 
 # verification marker for git hooks
 .last-checked
+.last-checked.json
+.last-checked.json.tmp
 
 # Claude Code
 !.claude/

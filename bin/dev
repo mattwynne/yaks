@@ -411,13 +411,171 @@ mutate-sync() {
   echo "Sync complete. Run 'yx sync' to push changes."
 }
 
+CHECK_RECORD_FILE=".last-checked.json"
+CHECK_POLICY_VERSION="content-addressed-check-v1"
+
+verification_fingerprint_files() {
+  printf '%s\n' \
+    "Cargo.lock" \
+    "Cargo.toml" \
+    ".cargo/config.toml" \
+    ".pre-commit-config.yaml" \
+    ".shellspec"
+}
+
+write_check_record() {
+  local tmp_record="${CHECK_RECORD_FILE}.tmp"
+  CHECK_RECORD_FILE="$CHECK_RECORD_FILE" \
+  CHECK_POLICY_VERSION="$CHECK_POLICY_VERSION" \
+  node <<'NODE' > "$tmp_record"
+const { execFileSync } = require('child_process');
+const fs = require('fs');
+
+function git(args) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+}
+
+function maybeGit(args) {
+  try { return git(args); } catch (_) { return null; }
+}
+
+function blob(path) {
+  return fs.existsSync(path) ? git(['hash-object', path]) : null;
+}
+
+const fingerprintFiles = [
+  'Cargo.lock',
+  'Cargo.toml',
+  '.cargo/config.toml',
+  '.pre-commit-config.yaml',
+  '.shellspec',
+];
+
+const record = {
+  schema_version: 1,
+  checked_at: new Date().toISOString(),
+  check_version: process.env.CHECK_POLICY_VERSION,
+  head: git(['rev-parse', 'HEAD']),
+  tree: git(['rev-parse', 'HEAD^{tree}']),
+  merge_base_main: maybeGit(['merge-base', 'main', 'HEAD']),
+  dev_script_blob: blob('bin/dev'),
+  verify_script_blob: blob('.githooks/verify-checks'),
+  files: Object.fromEntries(fingerprintFiles.map((path) => [path, blob(path)])),
+};
+
+process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);
+NODE
+  mv "$tmp_record" "$CHECK_RECORD_FILE"
+}
+
+verify_check_record() {
+  local marker="${CHECK_RECORD_FILE:-.last-checked.json}"
+
+  if [ ! -f "$marker" ]; then
+    echo '❌ You have un-verified changes. Run `dev check`'
+    echo "   Reason: missing $marker"
+    return 1
+  fi
+
+  if ! git diff --quiet --no-ext-diff; then
+    echo '❌ You have un-verified changes. Run `dev check`'
+    echo '   Reason: tracked files have unstaged changes'
+    return 1
+  fi
+
+  if ! git diff --cached --quiet --no-ext-diff; then
+    echo '❌ You have un-verified changes. Run `dev check`'
+    echo '   Reason: index has staged changes'
+    return 1
+  fi
+
+  # Untracked-file policy: reject every non-ignored untracked file.
+  # The only exceptions are local verification marker files themselves.
+  local untracked
+  untracked=$(git ls-files --others --exclude-standard \
+    | grep -Ev '^(\.last-checked|\.last-checked\.json|\.last-checked\.json\.tmp)$' || true)
+  if [ -n "$untracked" ]; then
+    echo '❌ You have un-verified changes. Run `dev check`'
+    echo '   Reason: untracked files are present'
+    echo "$untracked" | sed 's/^/     /'
+    return 1
+  fi
+
+  CHECK_RECORD_FILE="$marker" \
+  CHECK_POLICY_VERSION="$CHECK_POLICY_VERSION" \
+  node <<'NODE'
+const { execFileSync } = require('child_process');
+const fs = require('fs');
+
+const marker = process.env.CHECK_RECORD_FILE;
+const expectedVersion = process.env.CHECK_POLICY_VERSION;
+
+function git(args) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+}
+
+function maybeGit(args) {
+  try { return git(args); } catch (_) { return null; }
+}
+
+function blob(path) {
+  return fs.existsSync(path) ? git(['hash-object', path]) : null;
+}
+
+function reject(reason) {
+  console.log('❌ You have un-verified changes. Run `dev check`');
+  console.log(`   Reason: ${reason}`);
+  process.exit(1);
+}
+
+let recorded;
+try {
+  recorded = JSON.parse(fs.readFileSync(marker, 'utf8'));
+} catch (error) {
+  reject(`${marker} is not valid JSON`);
+}
+
+const current = {
+  schema_version: 1,
+  check_version: expectedVersion,
+  head: git(['rev-parse', 'HEAD']),
+  tree: git(['rev-parse', 'HEAD^{tree}']),
+  merge_base_main: maybeGit(['merge-base', 'main', 'HEAD']),
+  dev_script_blob: blob('bin/dev'),
+  verify_script_blob: blob('.githooks/verify-checks'),
+  files: {
+    'Cargo.lock': blob('Cargo.lock'),
+    'Cargo.toml': blob('Cargo.toml'),
+    '.cargo/config.toml': blob('.cargo/config.toml'),
+    '.pre-commit-config.yaml': blob('.pre-commit-config.yaml'),
+    '.shellspec': blob('.shellspec'),
+  },
+};
+
+if (recorded.schema_version !== current.schema_version) reject('check record schema changed');
+if (recorded.check_version !== current.check_version) reject('check policy version changed');
+if (recorded.head !== current.head) reject('HEAD changed');
+if (recorded.tree !== current.tree) reject('git tree changed');
+if (recorded.merge_base_main !== current.merge_base_main) reject('merge base with main changed');
+if (recorded.dev_script_blob !== current.dev_script_blob) reject('bin/dev fingerprint changed');
+if (recorded.verify_script_blob !== current.verify_script_blob) reject('.githooks/verify-checks fingerprint changed');
+
+for (const [path, hash] of Object.entries(current.files)) {
+  if (!recorded.files || recorded.files[path] !== hash) {
+    reject(`${path} fingerprint changed`);
+  }
+}
+
+console.log(`✅ Already verified — current content matches ${marker}`);
+NODE
+}
+
 # @cmd Run all checks (tests + lint + audit) and mark as verified
 # @alias c
 # @flag --force Force re-run even if nothing changed
 check() {
   # Skip if nothing has changed since last check
-  if [ -z "${argc_force:-}" ] && [ -z "${FORCE_CHECK:-}" ] && .githooks/verify-checks 2>/dev/null; then
-    echo "✅ Already verified — nothing changed since last check"
+  if [ -z "${argc_force:-}" ] && [ -z "${FORCE_CHECK:-}" ] && .githooks/verify-checks; then
     return 0
   fi
 
@@ -489,7 +647,7 @@ check() {
   fi
 
   echo ""
-  touch .last-checked
+  write_check_record
   echo "✅ All checks passed - changes verified"
 }
 

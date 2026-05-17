@@ -98,7 +98,7 @@ JSON
     The error should include "Preparing worktree (checking out 'yak-123')"
   End
 
-  It 'reuses a recent successful check for non-.pi merges'
+  It 'reuses a content-addressed successful check for non-.pi merges'
     When run bash -c '
       set -e
       repo=$(mktemp -d)
@@ -107,20 +107,25 @@ JSON
       git init --initial-branch=main --quiet
       git config user.email test@example.com
       git config user.name "Test User"
-      mkdir -p .githooks src
-      cat > .githooks/verify-checks <<SH
-#!/usr/bin/env bash
-exit 0
-SH
-      chmod +x .githooks/verify-checks
+      mkdir -p .githooks bin src
+      cp "$TEST_PROJECT_DIR/bin/dev" bin/dev
+      cp "$TEST_PROJECT_DIR/.githooks/verify-checks" .githooks/verify-checks
+      chmod +x bin/dev .githooks/verify-checks
+      printf "[package]\nname = \"example\"\nversion = \"0.1.0\"\n" > Cargo.toml
+      printf "version = 3\n" > Cargo.lock
+      printf "# shellspec config\n" > .shellspec
+      printf "base\n" > src/lib.rs
+      git add .
+      git commit --quiet -m base
 
-      YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
+      YX_DEV_SOURCE_ONLY=1 . ./bin/dev
+      write_check_record
       changed_paths_for_merge() { echo src/lib.rs; }
       unset FORCE_CHECK
       check-for-merge
     '
     The status should be success
-    The output should include '✅ Already verified — nothing changed since last check'
+    The output should include '✅ Already verified — current content matches .last-checked.json'
     The output should not include 'Building release binary'
   End
 
