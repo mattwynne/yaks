@@ -783,6 +783,59 @@ mod tests {
     }
 
     #[test]
+    fn manual_blockers_blob_not_written_when_empty() {
+        let (_tmp, repo) = setup_test_repo();
+
+        let yak = Yak {
+            id: YakId::from("test-yak-a1b2"),
+            name: Name::from("test yak"),
+            parent_id: None,
+            state: YakState::Todo,
+            context: None,
+            fields: std::collections::HashMap::new(),
+            tags: vec![],
+            created_by: Author::unknown(),
+            created_at: Timestamp::zero(),
+        };
+
+        let event = crate::domain::YakEvent::Compacted(
+            crate::domain::YakMapSnapshot::legacy(vec![yak], vec![]),
+            crate::domain::event_metadata::EventMetadata::default_legacy(),
+        );
+
+        let tree_oid = build_tree_from_event(&repo, &event, None).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        assert!(
+            tree.get_name(".manual-blockers.json").is_none(),
+            ".manual-blockers.json should not be written when there are no manual blockers"
+        );
+    }
+
+    #[test]
+    fn reading_yak_map_snapshot_ignores_blank_removed_yak_lines() {
+        let (_tmp, repo) = setup_test_repo();
+        let removed_blob = repo
+            .blob(b"\nremoved-yak-c3d4\n\nremoved-yak-e5f6\n")
+            .unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder
+            .insert(".removed-yaks", removed_blob, 0o100644)
+            .unwrap();
+        let tree_oid = builder.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        let snapshot = read_yak_map_snapshot_from_tree(&repo, &tree).unwrap();
+
+        let removed: Vec<&str> = snapshot
+            .removed_yak_ids
+            .iter()
+            .map(|id| id.as_str())
+            .collect();
+        assert_eq!(removed, vec!["removed-yak-c3d4", "removed-yak-e5f6"]);
+    }
+
+    #[test]
     fn removed_yaks_blob_not_written_when_empty() {
         // Create a test git repo
         let (_tmp, repo) = setup_test_repo();

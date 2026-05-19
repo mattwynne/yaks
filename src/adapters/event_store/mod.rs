@@ -354,6 +354,36 @@ mod merge_event_streams_tests {
     }
 
     #[test]
+    fn migrated_events_do_not_count_as_pushed_or_pulled() {
+        let migrated = {
+            let mut metadata = EventMetadata::new(
+                Author {
+                    name: "alice".into(),
+                    email: "".into(),
+                },
+                Timestamp(10),
+            );
+            metadata.event_id = Some("evt-migrated".to_string());
+            YakEvent::Migrated(crate::domain::YakMapSnapshot::default(), metadata)
+        };
+        let shared = make_added("alpha", "alpha-a1b2", 20, "evt-shared");
+
+        let result = merge_event_streams(&[migrated], &[shared]);
+
+        assert_eq!(
+            result.pushed, 0,
+            "Migrated events are local-only boundaries"
+        );
+        assert_eq!(result.pulled, 1);
+        let event_ids: Vec<&str> = result
+            .events
+            .iter()
+            .map(|e| e.metadata().event_id.as_deref().unwrap())
+            .collect();
+        assert_eq!(event_ids, vec!["evt-shared"]);
+    }
+
+    #[test]
     fn multiple_orphans_preserve_order_after_compacted() {
         // Alice has: shared yak A, then compacted (snapshot contains A)
         // Bob has: shared yak A, orphan B at T=70, orphan C at T=80
