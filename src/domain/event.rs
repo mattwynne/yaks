@@ -7,6 +7,7 @@ use super::event_metadata::EventMetadata;
 use super::events::*;
 use super::narrative::{highlight, plain, NarrativeSpan};
 use super::slug::YakId;
+use super::yak_map_snapshot::YakMapSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum YakEvent {
@@ -20,8 +21,8 @@ pub enum YakEvent {
     ManualBlockerAdded(ManualBlockerAddedEvent, EventMetadata),
     ManualBlockerUpdated(ManualBlockerUpdatedEvent, EventMetadata),
     ManualBlockerRemoved(ManualBlockerRemovedEvent, EventMetadata),
-    Compacted(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
-    Migrated(Vec<super::yak::Yak>, Vec<super::slug::YakId>, EventMetadata),
+    Compacted(YakMapSnapshot, EventMetadata),
+    Migrated(YakMapSnapshot, EventMetadata),
 }
 
 impl YakEvent {
@@ -37,8 +38,8 @@ impl YakEvent {
             Self::ManualBlockerAdded(_, m) => m,
             Self::ManualBlockerUpdated(_, m) => m,
             Self::ManualBlockerRemoved(_, m) => m,
-            Self::Compacted(_, _, m) => m,
-            Self::Migrated(_, _, m) => m,
+            Self::Compacted(_, m) => m,
+            Self::Migrated(_, m) => m,
         }
     }
 
@@ -54,8 +55,8 @@ impl YakEvent {
             Self::ManualBlockerAdded(e, _) => Self::ManualBlockerAdded(e, metadata),
             Self::ManualBlockerUpdated(e, _) => Self::ManualBlockerUpdated(e, metadata),
             Self::ManualBlockerRemoved(e, _) => Self::ManualBlockerRemoved(e, metadata),
-            Self::Compacted(s, r, _) => Self::Compacted(s, r, metadata),
-            Self::Migrated(s, r, _) => Self::Migrated(s, r, metadata),
+            Self::Compacted(s, _) => Self::Compacted(s, metadata),
+            Self::Migrated(s, _) => Self::Migrated(s, metadata),
         }
     }
 
@@ -75,15 +76,15 @@ impl YakEvent {
             Self::ManualBlockerAdded(e, _) => e.format_narrative(author, resolve_name),
             Self::ManualBlockerUpdated(e, _) => e.format_narrative(author, resolve_name),
             Self::ManualBlockerRemoved(e, _) => e.format_narrative(author, resolve_name),
-            Self::Compacted(snapshots, _, _) => {
-                let count = snapshots.len();
+            Self::Compacted(snapshot, _) => {
+                let count = snapshot.yak_count();
                 vec![
                     highlight(author),
                     plain(&format!(" compacted the event stream ({} yaks)", count)),
                 ]
             }
-            Self::Migrated(snapshots, _, _) => {
-                let count = snapshots.len();
+            Self::Migrated(snapshot, _) => {
+                let count = snapshot.yak_count();
                 vec![
                     highlight(author),
                     plain(&format!(" migrated the event stream ({} yaks)", count)),
@@ -104,8 +105,8 @@ impl YakEvent {
             Self::ManualBlockerAdded(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::ManualBlockerUpdated(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
             Self::ManualBlockerRemoved(e, _) => format!("{}: {}", e.event_tag(), e.format_data()),
-            Self::Compacted(_, _, _) => "Compacted".to_string(),
-            Self::Migrated(_, _, _) => "Migrated".to_string(),
+            Self::Compacted(_, _) => "Compacted".to_string(),
+            Self::Migrated(_, _) => "Migrated".to_string(),
         }
     }
 
@@ -113,10 +114,10 @@ impl YakEvent {
         let meta = EventMetadata::default_legacy();
         // Handle dataless events (no ": " separator)
         if message == "Compacted" {
-            return Ok(Self::Compacted(vec![], vec![], meta));
+            return Ok(Self::Compacted(YakMapSnapshot::default(), meta));
         }
         if message == "Migrated" {
-            return Ok(Self::Migrated(vec![], vec![], meta));
+            return Ok(Self::Migrated(YakMapSnapshot::default(), meta));
         }
         let (tag, data) = message
             .split_once(": ")
@@ -210,8 +211,8 @@ impl YakEvent {
             Self::ManualBlockerAdded(e, _) => e.target.as_str(),
             Self::ManualBlockerUpdated(e, _) => e.target.as_str(),
             Self::ManualBlockerRemoved(e, _) => e.target.as_str(),
-            Self::Compacted(_, _, _) => "",
-            Self::Migrated(_, _, _) => "",
+            Self::Compacted(_, _) => "",
+            Self::Migrated(_, _) => "",
         }
     }
 }
@@ -402,7 +403,7 @@ mod tests {
 
     #[test]
     fn format_message_compacted() {
-        let event = YakEvent::Compacted(vec![], vec![], EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(YakMapSnapshot::default(), EventMetadata::default_legacy());
         assert_eq!(event.format_message(), "Compacted");
     }
 
@@ -441,7 +442,10 @@ mod tests {
                 created_at: Timestamp(0),
             },
         ];
-        let event = YakEvent::Compacted(snapshots, vec![], EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(
+            YakMapSnapshot::legacy(snapshots, vec![]),
+            EventMetadata::default_legacy(),
+        );
         let spans = event.format_narrative("Matt", &|id: &str| id.to_string());
         assert_eq!(
             to_plain_text(&spans),
@@ -451,7 +455,7 @@ mod tests {
 
     #[test]
     fn parse_compacted_roundtrip() {
-        let event = YakEvent::Compacted(vec![], vec![], EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(YakMapSnapshot::default(), EventMetadata::default_legacy());
         let msg = event.format_message();
         let parsed = YakEvent::parse(&msg).unwrap();
         assert_eq!(parsed, event);
@@ -459,7 +463,7 @@ mod tests {
 
     #[test]
     fn compacted_yak_id_is_empty() {
-        let event = YakEvent::Compacted(vec![], vec![], EventMetadata::default_legacy());
+        let event = YakEvent::Compacted(YakMapSnapshot::default(), EventMetadata::default_legacy());
         assert_eq!(event.yak_id(), "");
     }
 

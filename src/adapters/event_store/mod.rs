@@ -59,7 +59,7 @@ pub(crate) fn merge_event_streams(
     for event in local_events.iter().chain(peer_events.iter()) {
         // Skip Migrated events — they are schema migration boundaries
         // that should not participate in the merge at all.
-        if matches!(event, YakEvent::Migrated(_, _, _)) {
+        if matches!(event, YakEvent::Migrated(_, _)) {
             continue;
         }
         if let Some(id) = &event.metadata().event_id {
@@ -90,13 +90,16 @@ pub(crate) fn merge_event_streams(
     // migration boundaries, not user-triggered compactions.
     if let Some(compact_idx) = all_events
         .iter()
-        .position(|e| matches!(e, YakEvent::Compacted(_, _, _)))
+        .position(|e| matches!(e, YakEvent::Compacted(_, _)))
     {
-        if let YakEvent::Compacted(ref snapshots, ref removed_yak_ids, _) = all_events[compact_idx]
-        {
-            let snapshot_yak_ids: HashSet<&str> = snapshots.iter().map(|s| s.id.as_str()).collect();
-            let removed_yak_id_set: HashSet<&str> =
-                removed_yak_ids.iter().map(|id| id.as_str()).collect();
+        if let YakEvent::Compacted(ref snapshot, _) = all_events[compact_idx] {
+            let snapshot_yak_ids: HashSet<&str> =
+                snapshot.yaks.iter().map(|s| s.id.as_str()).collect();
+            let removed_yak_id_set: HashSet<&str> = snapshot
+                .removed_yak_ids
+                .iter()
+                .map(|id| id.as_str())
+                .collect();
 
             // Collect indices of events before Compacted that affect
             // yak IDs not in the snapshot (they'd be lost on replay).
@@ -122,7 +125,7 @@ pub(crate) fn merge_event_streams(
                 // Compacted has shifted left by the number of removals
                 let new_compact_idx = all_events
                     .iter()
-                    .position(|e| matches!(e, YakEvent::Compacted(_, _, _)))
+                    .position(|e| matches!(e, YakEvent::Compacted(_, _)))
                     .unwrap();
 
                 // Insert orphans right after Compacted
@@ -135,12 +138,12 @@ pub(crate) fn merge_event_streams(
 
     let local_ids: HashSet<String> = local_events
         .iter()
-        .filter(|e| !matches!(e, YakEvent::Migrated(_, _, _)))
+        .filter(|e| !matches!(e, YakEvent::Migrated(_, _)))
         .filter_map(|e| e.metadata().event_id.clone())
         .collect();
     let peer_ids: HashSet<String> = peer_events
         .iter()
-        .filter(|e| !matches!(e, YakEvent::Migrated(_, _, _)))
+        .filter(|e| !matches!(e, YakEvent::Migrated(_, _)))
         .filter_map(|e| e.metadata().event_id.clone())
         .collect();
 
@@ -254,7 +257,7 @@ mod merge_event_streams_tests {
             Timestamp(timestamp),
         );
         m.event_id = Some(event_id.to_string());
-        YakEvent::Compacted(snapshots, vec![], m)
+        YakEvent::Compacted(crate::domain::YakMapSnapshot::legacy(snapshots, vec![]), m)
     }
 
     fn snapshot(name: &str, id: &str) -> Yak {

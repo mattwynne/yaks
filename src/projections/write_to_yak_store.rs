@@ -132,9 +132,9 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
         | YakEvent::ManualBlockerUpdated(_, _)
         | YakEvent::ManualBlockerRemoved(_, _) => {}
 
-        YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
+        YakEvent::Compacted(snapshot, _) | YakEvent::Migrated(snapshot, _) => {
             store.clear_all()?;
-            for snap in snapshots {
+            for snap in &snapshot.yaks {
                 store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
                 if snap.state == crate::domain::YakState::Blocked {
                     store.write_field(&snap.id, STATE_FIELD, "todo")?;
@@ -164,6 +164,9 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                     let actual_name = migrate_field_name(field_name);
                     store.write_field(&snap.id, actual_name, content)?;
                 }
+            }
+            for blocker in &snapshot.manual_blockers {
+                store.write_field(&blocker.target, MANUAL_BLOCKER_FIELD, &blocker.reason)?;
             }
         }
     }
@@ -234,7 +237,10 @@ mod tests {
             },
         ];
 
-        let compacted = YakEvent::Compacted(snapshots, vec![], EventMetadata::default_legacy());
+        let compacted = YakEvent::Compacted(
+            crate::domain::YakMapSnapshot::legacy(snapshots, vec![]),
+            EventMetadata::default_legacy(),
+        );
         listener.on_event(&compacted).unwrap();
 
         let yaks = storage.list_yaks().unwrap();
@@ -442,7 +448,10 @@ mod tests {
             created_at: Timestamp(1000),
         }];
 
-        let compacted = YakEvent::Compacted(snapshots, vec![], EventMetadata::default_legacy());
+        let compacted = YakEvent::Compacted(
+            crate::domain::YakMapSnapshot::legacy(snapshots, vec![]),
+            EventMetadata::default_legacy(),
+        );
         listener.on_event(&compacted).unwrap();
 
         let yak = storage.get_yak(&YakId::from("yak-a1b2")).unwrap();

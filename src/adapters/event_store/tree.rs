@@ -7,7 +7,7 @@ use anyhow::Result;
 use git2::Repository;
 
 use crate::domain::event_metadata::{Author, Timestamp};
-use crate::domain::{Yak, YakEvent};
+use crate::domain::{ManualBlockerSnapshot, YakBlockerSnapshot, YakEvent, YakMapSnapshot};
 
 /// Builds a git tree object representing a single yak's subtree.
 ///
@@ -215,10 +215,9 @@ fn preserve_current_or_empty_tree(
 fn apply_compacted_event(
     repo: &Repository,
     current_tree: Option<&git2::Tree>,
-    snapshots: &[Yak],
-    removed_yak_ids: &[crate::domain::slug::YakId],
+    snapshot: &YakMapSnapshot,
 ) -> Result<git2::Oid> {
-    if snapshots.is_empty() {
+    if snapshot.yaks.is_empty() {
         // Legacy: no snapshots, preserve current tree
         return match current_tree {
             Some(tree) => Ok(tree.id()),
@@ -229,7 +228,7 @@ fn apply_compacted_event(
     // Build tree from snapshots
     use super::migration::CURRENT_SCHEMA_VERSION;
     let mut root_builder = repo.treebuilder(None)?;
-    for snap in snapshots {
+    for snap in &snapshot.yaks {
         let yak_tree_oid = YakSubtreeBuilder::new(repo)
             .name(snap.name.as_str())
             .state(&snap.state.to_string())
@@ -245,14 +244,50 @@ fn apply_compacted_event(
     root_builder.insert(".schema-version", version_blob, 0o100644)?;
 
     // Store removed yak IDs
-    if !removed_yak_ids.is_empty() {
-        let removed_ids_content = removed_yak_ids
+    if !snapshot.removed_yak_ids.is_empty() {
+        let removed_ids_content = snapshot
+            .removed_yak_ids
             .iter()
             .map(|id| id.as_str())
             .collect::<Vec<_>>()
             .join("\n");
         let removed_blob = repo.blob(removed_ids_content.as_bytes())?;
         root_builder.insert(".removed-yaks", removed_blob, 0o100644)?;
+    }
+
+    if !snapshot.blockers.is_empty() {
+        let blockers_json = serde_json::Value::Array(
+            snapshot
+                .blockers
+                .iter()
+                .map(|b| {
+                    serde_json::json!({
+                        "target": b.target.as_str(),
+                        "blocker": b.blocker.as_str(),
+                        "reason": b.reason,
+                    })
+                })
+                .collect(),
+        );
+        let blob = repo.blob(blockers_json.to_string().as_bytes())?;
+        root_builder.insert(".blockers.json", blob, 0o100644)?;
+    }
+
+    if !snapshot.manual_blockers.is_empty() {
+        let manual_json = serde_json::Value::Array(
+            snapshot
+                .manual_blockers
+                .iter()
+                .map(|b| {
+                    serde_json::json!({
+                        "target": b.target.as_str(),
+                        "reason": b.reason,
+                    })
+                })
+                .collect(),
+        );
+        let blob = repo.blob(manual_json.to_string().as_bytes())?;
+        root_builder.insert(".manual-blockers.json", blob, 0o100644)?;
     }
 
     Ok(root_builder.write()?)
@@ -299,9 +334,8 @@ pub(super) fn build_tree_from_event(
             preserve_current_or_empty_tree(repo, current_tree)
         }
 
-        YakEvent::Compacted(snapshots, removed_yak_ids, _)
-        | YakEvent::Migrated(snapshots, removed_yak_ids, _) => {
-            apply_compacted_event(repo, current_tree, snapshots, removed_yak_ids)
+        YakEvent::Compacted(snapshot, _) | YakEvent::Migrated(snapshot, _) => {
+            apply_compacted_event(repo, current_tree, snapshot)
         }
     }
 }
@@ -489,6 +523,66 @@ pub(super) fn read_snapshots_from_tree(
     Ok(snapshots)
 }
 
+pub(super) fn read_yak_map_snapshot_from_tree(
+    repo: &Repository,
+    tree: &git2::Tree,
+) -> Result<YakMapSnapshot> {
+    use crate::domain::slug::YakId;
+
+    let yaks = read_snapshots_from_tree(repo, tree)?;
+    let removed_yak_ids = match tree.get_name(".removed-yaks") {
+        Some(entry) => {
+            let blob = repo.find_blob(entry.id())?;
+            std::str::from_utf8(blob.content())?
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| YakId::from(line.trim()))
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
+    let blockers = match tree.get_name(".blockers.json") {
+        Some(entry) => {
+            let blob = repo.find_blob(entry.id())?;
+            let json: serde_json::Value = serde_json::from_slice(blob.content())?;
+            json.as_array()
+                .into_iter()
+                .flatten()
+                .map(|item| YakBlockerSnapshot {
+                    target: YakId::from(item["target"].as_str().unwrap_or_default()),
+                    blocker: YakId::from(item["blocker"].as_str().unwrap_or_default()),
+                    reason: item["reason"].as_str().map(ToString::to_string),
+                })
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
+    let manual_blockers = match tree.get_name(".manual-blockers.json") {
+        Some(entry) => {
+            let blob = repo.find_blob(entry.id())?;
+            let json: serde_json::Value = serde_json::from_slice(blob.content())?;
+            json.as_array()
+                .into_iter()
+                .flatten()
+                .map(|item| ManualBlockerSnapshot {
+                    target: YakId::from(item["target"].as_str().unwrap_or_default()),
+                    reason: item["reason"].as_str().unwrap_or_default().to_string(),
+                })
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
+    Ok(YakMapSnapshot {
+        yaks,
+        removed_yak_ids,
+        blockers,
+        manual_blockers,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,8 +623,7 @@ mod tests {
 
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
-            vec![yak.clone()],
-            vec![],
+            crate::domain::YakMapSnapshot::legacy(vec![yak.clone()], vec![]),
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -570,8 +663,7 @@ mod tests {
 
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
-            vec![yak],
-            vec![],
+            crate::domain::YakMapSnapshot::legacy(vec![yak], vec![]),
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -619,8 +711,7 @@ mod tests {
 
         // Create a Compacted event with the yak
         let event = crate::domain::YakEvent::Compacted(
-            vec![yak],
-            vec![],
+            crate::domain::YakMapSnapshot::legacy(vec![yak], vec![]),
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -665,8 +756,7 @@ mod tests {
 
         // Create a Compacted event with snapshots and removed yak IDs
         let event = crate::domain::YakEvent::Compacted(
-            vec![yak],
-            removed_yak_ids.clone(),
+            crate::domain::YakMapSnapshot::legacy(vec![yak], removed_yak_ids.clone()),
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 
@@ -712,8 +802,7 @@ mod tests {
 
         // Create a Compacted event with no removed yak IDs
         let event = crate::domain::YakEvent::Compacted(
-            vec![yak],
-            vec![],
+            crate::domain::YakMapSnapshot::legacy(vec![yak], vec![]),
             crate::domain::event_metadata::EventMetadata::default_legacy(),
         );
 

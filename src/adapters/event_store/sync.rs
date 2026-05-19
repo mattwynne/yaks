@@ -130,7 +130,7 @@ pub(super) fn sync_with_remote(
         .filter_map(|e| e.metadata().event_id.clone())
         .collect();
     let received_compaction = peer_events.iter().find(|e| {
-        matches!(e, YakEvent::Compacted(_, _, _))
+        matches!(e, YakEvent::Compacted(_, _))
             && e.metadata()
                 .event_id
                 .as_ref()

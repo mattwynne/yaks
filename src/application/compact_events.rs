@@ -133,7 +133,7 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _, _))),
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Expected a Compacted event after compaction"
         );
     }
@@ -174,7 +174,7 @@ mod tests {
         assert!(
             !events
                 .iter()
-                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _, _))),
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Should not compact when user declines"
         );
     }
@@ -212,7 +212,7 @@ mod tests {
         assert!(
             events
                 .iter()
-                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _, _))),
+                .any(|e| matches!(e, crate::domain::YakEvent::Compacted(_, _))),
             "Should compact when skip_confirm is true"
         );
     }

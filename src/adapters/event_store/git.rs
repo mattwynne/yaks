@@ -305,22 +305,6 @@ impl GitEventStore {
         Ok(content.to_string())
     }
 
-    /// Read removed yak IDs from a compaction tree.
-    fn read_removed_yak_ids(&self, tree: &git2::Tree) -> Result<Vec<crate::domain::slug::YakId>> {
-        match tree.get_name(".removed-yaks") {
-            Some(entry) => {
-                let blob = self.repo.find_blob(entry.id())?;
-                let content = std::str::from_utf8(blob.content())?;
-                Ok(content
-                    .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .map(|line| crate::domain::slug::YakId::from(line.trim()))
-                    .collect())
-            }
-            None => Ok(vec![]),
-        }
-    }
-
     /// Enrich a v1/v2 Added event (which has an empty id) by reading the
     /// yak's `.id` blob from the lazily migrated commit tree. After
     /// migration, tree entry names are slug-based, so we scan entries and
@@ -466,56 +450,9 @@ impl EventStore for GitEventStore {
             })
             .collect();
 
-        let mut manual_blockers = std::collections::HashMap::new();
-        for event in &pre_compaction_events {
-            match event {
-                YakEvent::ManualBlockerAdded(e, _) => {
-                    manual_blockers.insert(e.target.clone(), e.reason.clone());
-                }
-                YakEvent::ManualBlockerUpdated(e, _) => {
-                    manual_blockers.insert(e.target.clone(), e.reason.clone());
-                }
-                YakEvent::ManualBlockerRemoved(e, _) => {
-                    manual_blockers.remove(&e.target);
-                }
-                YakEvent::FieldUpdated(e, _)
-                    if e.field_name == ".state" && e.content == "blocked" =>
-                {
-                    manual_blockers.insert(
-                        e.id.clone(),
-                        crate::domain::yak_map::MIGRATED_BLOCKED_REASON.to_string(),
-                    );
-                }
-                YakEvent::FieldUpdated(e, _) if e.field_name == ".state" => {
-                    if manual_blockers.get(&e.id).is_some_and(|reason| {
-                        reason == crate::domain::yak_map::MIGRATED_BLOCKED_REASON
-                    }) {
-                        manual_blockers.remove(&e.id);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let mut snapshots = {
-            let tree = self.get_current_tree()?.unwrap();
-            tree::read_snapshots_from_tree(&self.repo, &tree)?
-        };
-        for snapshot in &mut snapshots {
-            if snapshot.state == crate::domain::YakState::Blocked {
-                snapshot.state = crate::domain::YakState::Todo;
-                manual_blockers
-                    .entry(snapshot.id.clone())
-                    .or_insert_with(|| crate::domain::yak_map::MIGRATED_BLOCKED_REASON.to_string());
-            }
-            if let Some(reason) = manual_blockers.get(&snapshot.id) {
-                snapshot.fields.insert(
-                    crate::domain::yak_map::MANUAL_BLOCKER_FIELD.to_string(),
-                    reason.clone(),
-                );
-            }
-        }
-        let event = YakEvent::Compacted(snapshots, removed_yak_ids, metadata);
+        let yak_map = crate::domain::YakMap::from_events(pre_compaction_events, metadata.clone())?;
+        let snapshot = yak_map.snapshot(removed_yak_ids);
+        let event = YakEvent::Compacted(snapshot, metadata);
         self.append(&event)
     }
 
@@ -601,17 +538,15 @@ impl EventStore for GitEventStore {
             // Lazily migrate old-format trees before reading snapshots
             let tree = super::migration::migrate_tree_to_current(&self.repo, &raw_tree)?;
 
-            // Read snapshots from the (possibly migrated) compaction tree
-            let snapshots = tree::read_snapshots_from_tree(&self.repo, &tree)?;
-
-            // Read removed yak IDs from .removed-yaks blob
-            let removed_yak_ids = self.read_removed_yak_ids(&tree)?;
+            // Read aggregate snapshot from the (possibly migrated) compaction tree.
+            // Old compacted trees will simply have empty blocker collections.
+            let snapshot = tree::read_yak_map_snapshot_from_tree(&self.repo, &tree)?;
 
             let mut result = Vec::new();
             let boundary_event = if is_migrated {
-                YakEvent::Migrated(snapshots, removed_yak_ids, metadata)
+                YakEvent::Migrated(snapshot, metadata)
             } else {
-                YakEvent::Compacted(snapshots, removed_yak_ids, metadata)
+                YakEvent::Compacted(snapshot, metadata)
             };
             result.push(boundary_event);
 
@@ -1928,7 +1863,8 @@ mod tests {
             let events = EventStore::get_all_events(&store).unwrap();
             assert_eq!(events.len(), 1);
             match &events[0] {
-                YakEvent::Compacted(snapshots, _, _) => {
+                YakEvent::Compacted(snapshot, _) => {
+                    let snapshots = &snapshot.yaks;
                     assert_eq!(snapshots.len(), 1);
                     assert_eq!(snapshots[0].id.as_str(), "my-yak-a1b2");
                     assert_eq!(snapshots[0].name.as_str(), "My Yak");

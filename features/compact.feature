@@ -15,6 +15,25 @@ Feature: yx compact - Compact the event stream
 
   Rule: Compacting preserves all yaks
 
+    Example: Explicit blockers survive compaction
+      Given I add the yak "deploy"
+      And I add the yak "security review"
+      And I add blocker "security review" to "deploy" with reason "waiting for approval"
+      When I run yx compact --yes
+      Then it should succeed
+      When I show the yak "deploy" in JSON format
+      Then the JSON yak "deploy" should have ready false
+      And the JSON yak "deploy" should be blocked by "security review" with reason "waiting for approval"
+
+    Example: Manual blockers survive compaction
+      Given I add the yak "deploy"
+      And I add manual blocker to "deploy" with reason "waiting for maintenance window"
+      When I run yx compact --yes
+      Then it should succeed
+      When I show the yak "deploy" in JSON format
+      Then the JSON yak "deploy" should have ready false
+      And the JSON yak "deploy" should have exactly one manual blocker with reason "waiting for maintenance window"
+
     Example: Yaks survive compaction
       Given I add the yak "make the tea"
       And I add the yak "buy biscuits" under "make the tea"

@@ -3,7 +3,7 @@ use crate::domain::events::*;
 use crate::domain::ports::ReadYakStore;
 use crate::domain::slug::{generate_id, slugify, Name, YakId};
 use crate::domain::yak_state::YakState;
-use crate::domain::{Yak, YakEvent};
+use crate::domain::{ManualBlockerSnapshot, Yak, YakBlockerSnapshot, YakEvent, YakMapSnapshot};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
@@ -135,8 +135,8 @@ impl YakMap {
             YakEvent::ManualBlockerRemoved(e, _) => {
                 self.manual_blockers.remove(&e.target);
             }
-            YakEvent::Compacted(snapshots, _, _) | YakEvent::Migrated(snapshots, _, _) => {
-                self.apply_compacted(snapshots)
+            YakEvent::Compacted(snapshot, _) | YakEvent::Migrated(snapshot, _) => {
+                self.apply_compacted(snapshot)
             }
         }
         Ok(())
@@ -258,11 +258,11 @@ impl YakMap {
         }
     }
 
-    fn apply_compacted(&mut self, snapshots: Vec<Yak>) {
+    fn apply_compacted(&mut self, snapshot: YakMapSnapshot) {
         self.yaks.clear();
         self.blockers.clear();
         self.manual_blockers.clear();
-        for mut yak in snapshots {
+        for mut yak in snapshot.yaks {
             if yak.state == YakState::Blocked {
                 yak.state = YakState::Todo;
                 self.manual_blockers
@@ -274,6 +274,55 @@ impl YakMap {
                 }
             }
             self.yaks.insert(yak.id.clone(), yak);
+        }
+        for blocker in snapshot.blockers {
+            self.blockers
+                .entry(blocker.target)
+                .or_default()
+                .insert(blocker.blocker, blocker.reason);
+        }
+        for blocker in snapshot.manual_blockers {
+            self.manual_blockers.insert(blocker.target, blocker.reason);
+        }
+    }
+
+    pub fn snapshot(&self, removed_yak_ids: Vec<YakId>) -> YakMapSnapshot {
+        let mut yaks: Vec<_> = self.yaks.values().cloned().collect();
+        yaks.sort_by_key(|yak| yak.id.as_str().to_string());
+
+        let mut blockers: Vec<_> = self
+            .blockers
+            .iter()
+            .flat_map(|(target, blockers)| {
+                blockers.iter().map(|(blocker, reason)| YakBlockerSnapshot {
+                    target: target.clone(),
+                    blocker: blocker.clone(),
+                    reason: reason.clone(),
+                })
+            })
+            .collect();
+        blockers.sort_by(|a, b| {
+            a.target
+                .as_str()
+                .cmp(b.target.as_str())
+                .then_with(|| a.blocker.as_str().cmp(b.blocker.as_str()))
+        });
+
+        let mut manual_blockers: Vec<_> = self
+            .manual_blockers
+            .iter()
+            .map(|(target, reason)| ManualBlockerSnapshot {
+                target: target.clone(),
+                reason: reason.clone(),
+            })
+            .collect();
+        manual_blockers.sort_by(|a, b| a.target.as_str().cmp(b.target.as_str()));
+
+        YakMapSnapshot {
+            yaks,
+            removed_yak_ids,
+            blockers,
+            manual_blockers,
         }
     }
 
@@ -1359,8 +1408,7 @@ mod tests {
 
         let map = YakMap::from_events(
             vec![YakEvent::Compacted(
-                vec![snapshot],
-                vec![],
+                YakMapSnapshot::legacy(vec![snapshot], vec![]),
                 EventMetadata::default_legacy(),
             )],
             EventMetadata::default_legacy(),
@@ -1393,8 +1441,7 @@ mod tests {
 
         let map = YakMap::from_events(
             vec![YakEvent::Compacted(
-                vec![snapshot],
-                vec![],
+                YakMapSnapshot::legacy(vec![snapshot], vec![]),
                 EventMetadata::default_legacy(),
             )],
             EventMetadata::default_legacy(),
@@ -1411,6 +1458,69 @@ mod tests {
             .unwrap()
             .fields
             .contains_key(MANUAL_BLOCKER_FIELD));
+    }
+
+    #[test]
+    fn compacted_snapshot_replays_explicit_and_manual_blockers() {
+        let target = YakId::from("deploy-a1b2");
+        let blocker = YakId::from("security-review-c3d4");
+        let yaks = vec![
+            Yak {
+                id: target.clone(),
+                name: Name::from("deploy"),
+                parent_id: None,
+                state: YakState::Todo,
+                context: None,
+                fields: HashMap::new(),
+                tags: vec![],
+                created_by: crate::domain::event_metadata::Author::unknown(),
+                created_at: crate::domain::event_metadata::Timestamp::zero(),
+            },
+            Yak {
+                id: blocker.clone(),
+                name: Name::from("security review"),
+                parent_id: None,
+                state: YakState::Todo,
+                context: None,
+                fields: HashMap::new(),
+                tags: vec![],
+                created_by: crate::domain::event_metadata::Author::unknown(),
+                created_at: crate::domain::event_metadata::Timestamp::zero(),
+            },
+        ];
+        let snapshot = YakMapSnapshot {
+            yaks,
+            removed_yak_ids: vec![],
+            blockers: vec![YakBlockerSnapshot {
+                target: target.clone(),
+                blocker: blocker.clone(),
+                reason: Some("waiting for approval".to_string()),
+            }],
+            manual_blockers: vec![ManualBlockerSnapshot {
+                target: target.clone(),
+                reason: "manual hold".to_string(),
+            }],
+        };
+
+        let map = YakMap::from_events(
+            vec![YakEvent::Compacted(
+                snapshot,
+                EventMetadata::default_legacy(),
+            )],
+            EventMetadata::default_legacy(),
+        )
+        .unwrap();
+
+        let active_blockers = map.active_blockers(&target);
+        assert!(active_blockers.iter().any(|b| {
+            b.kind == BlockerKind::Yak
+                && b.id == blocker
+                && b.reason.as_deref() == Some("waiting for approval")
+        }));
+        assert!(active_blockers.iter().any(|b| {
+            b.kind == BlockerKind::Manual && b.reason.as_deref() == Some("manual hold")
+        }));
+        assert!(!map.is_ready(&target).unwrap());
     }
 
     #[test]
@@ -2187,7 +2297,10 @@ mod tests {
             },
         ];
 
-        let events = vec![YakEvent::Compacted(snapshots, vec![], metadata.clone())];
+        let events = vec![YakEvent::Compacted(
+            crate::domain::YakMapSnapshot::legacy(snapshots, vec![]),
+            metadata.clone(),
+        )];
 
         let map = YakMap::from_events(events, metadata).unwrap();
 
