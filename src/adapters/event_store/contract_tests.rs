@@ -14,7 +14,8 @@ macro_rules! event_store_tests {
         use crate::domain::ports::EventStore;
         use crate::domain::slug::{Name, YakId};
         use crate::domain::{
-            AddedEvent, BlockerAddedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent, YakEvent,
+            AddedEvent, Blocker, BlockerAddedEvent, BlockerSource, FieldUpdatedEvent, MovedEvent,
+            RemovedEvent, YakEvent,
         };
 
         #[test]
@@ -301,8 +302,10 @@ macro_rules! event_store_tests {
                 .append(&YakEvent::BlockerAdded(
                     BlockerAddedEvent {
                         target: YakId::from("deploy-a1b2"),
-                        blocker: YakId::from("security-review-c3d4"),
-                        reason: Some("waiting for approval".to_string()),
+                        blocker: Blocker {
+                            source: BlockerSource::Yak(YakId::from("security-review-c3d4")),
+                            reason: Some("waiting for approval".to_string()),
+                        },
                     },
                     EventMetadata::default_legacy(),
                 ))

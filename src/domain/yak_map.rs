@@ -11,16 +11,14 @@ pub const MIGRATED_BLOCKED_REASON: &str = "Migrated from blocked state";
 pub const MANUAL_BLOCKER_FIELD: &str = ".manual-blocker";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BlockerKind {
-    Yak,
-    Manual,
+pub struct BlockingDependency {
+    pub source: BlockerSource,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveBlocker {
-    pub id: YakId,
-    pub kind: BlockerKind,
-    pub reason: Option<String>,
+pub struct BlockerPath {
+    pub yaks: Vec<YakId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,8 +37,7 @@ pub enum RemoveBlockerOutcome {
 
 pub struct YakMap {
     yaks: HashMap<YakId, Yak>,
-    blockers: HashMap<YakId, HashMap<YakId, Option<String>>>,
-    manual_blockers: HashMap<YakId, String>,
+    blockers: HashMap<YakId, HashMap<BlockerSource, Option<String>>>,
     pending_events: Vec<YakEvent>,
     metadata: EventMetadata,
 }
@@ -52,7 +49,6 @@ impl YakMap {
         Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
-            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata: EventMetadata::default_legacy(),
         }
@@ -62,7 +58,6 @@ impl YakMap {
         Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
-            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         }
@@ -72,15 +67,21 @@ impl YakMap {
         let yaks_list = store.list_yaks()?;
 
         let mut yaks = HashMap::new();
-        let mut manual_blockers = HashMap::new();
+        let mut blockers: HashMap<YakId, HashMap<BlockerSource, Option<String>>> = HashMap::new();
         for mut yak in yaks_list {
             if yak.state == YakState::Blocked {
                 yak.state = YakState::Todo;
-                manual_blockers.insert(yak.id.clone(), MIGRATED_BLOCKED_REASON.to_string());
+                blockers.entry(yak.id.clone()).or_default().insert(
+                    BlockerSource::Manual,
+                    Some(MIGRATED_BLOCKED_REASON.to_string()),
+                );
             }
             if let Some(reason) = yak.fields.remove(MANUAL_BLOCKER_FIELD) {
                 if !reason.trim().is_empty() {
-                    manual_blockers.insert(yak.id.clone(), reason);
+                    blockers
+                        .entry(yak.id.clone())
+                        .or_default()
+                        .insert(BlockerSource::Manual, Some(reason));
                 }
             }
             yaks.insert(yak.id.clone(), yak);
@@ -88,8 +89,7 @@ impl YakMap {
 
         Ok(Self {
             yaks,
-            blockers: HashMap::new(),
-            manual_blockers,
+            blockers,
             pending_events: Vec::new(),
             metadata,
         })
@@ -100,7 +100,6 @@ impl YakMap {
         let mut yak_map = Self {
             yaks: HashMap::new(),
             blockers: HashMap::new(),
-            manual_blockers: HashMap::new(),
             pending_events: Vec::new(),
             metadata,
         };
@@ -120,21 +119,27 @@ impl YakMap {
             YakEvent::Moved(moved, _) => self.apply_moved(moved),
             YakEvent::FieldUpdated(field_updated, _) => self.apply_field_updated(field_updated),
             YakEvent::BlockerAdded(e, _) => {
-                self.apply_blocker_added_or_updated(e.target, e.blocker, e.reason)
+                self.apply_blocker_added_or_updated(e.target, e.blocker)
             }
             YakEvent::BlockerUpdated(e, _) => {
-                self.apply_blocker_added_or_updated(e.target, e.blocker, e.reason)
+                self.apply_blocker_added_or_updated(e.target, e.blocker)
             }
             YakEvent::BlockerRemoved(e, _) => self.apply_blocker_removed(e),
-            YakEvent::ManualBlockerAdded(e, _) => {
-                self.manual_blockers.insert(e.target, e.reason);
-            }
-            YakEvent::ManualBlockerUpdated(e, _) => {
-                self.manual_blockers.insert(e.target, e.reason);
-            }
-            YakEvent::ManualBlockerRemoved(e, _) => {
-                self.manual_blockers.remove(&e.target);
-            }
+            YakEvent::ManualBlockerAdded(e, _) => self.apply_blocker_added_or_updated(
+                e.target,
+                Blocker {
+                    source: BlockerSource::Manual,
+                    reason: Some(e.reason),
+                },
+            ),
+            YakEvent::ManualBlockerUpdated(e, _) => self.apply_blocker_added_or_updated(
+                e.target,
+                Blocker {
+                    source: BlockerSource::Manual,
+                    reason: Some(e.reason),
+                },
+            ),
+            YakEvent::ManualBlockerRemoved(e, _) => self.apply_blocker_removed(e.into()),
             YakEvent::Compacted(snapshot, _) | YakEvent::Migrated(snapshot, _) => {
                 self.apply_compacted(snapshot)
             }
@@ -162,9 +167,8 @@ impl YakMap {
     fn apply_removed(&mut self, removed: RemovedEvent) {
         self.yaks.remove(&removed.id);
         self.blockers.remove(&removed.id);
-        self.manual_blockers.remove(&removed.id);
         for blockers in self.blockers.values_mut() {
-            blockers.remove(&removed.id);
+            blockers.remove(&BlockerSource::Yak(removed.id.clone()));
         }
     }
 
@@ -179,19 +183,25 @@ impl YakMap {
             if field_updated.content == "blocked" {
                 if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
                     yak.state = YakState::Todo;
-                    self.manual_blockers.insert(
-                        field_updated.id.clone(),
-                        MIGRATED_BLOCKED_REASON.to_string(),
-                    );
+                    self.blockers
+                        .entry(field_updated.id.clone())
+                        .or_default()
+                        .insert(
+                            BlockerSource::Manual,
+                            Some(MIGRATED_BLOCKED_REASON.to_string()),
+                        );
                 }
                 return;
             }
             if self
-                .manual_blockers
+                .blockers
                 .get(&field_updated.id)
-                .is_some_and(|reason| reason == MIGRATED_BLOCKED_REASON)
+                .and_then(|blockers| blockers.get(&BlockerSource::Manual))
+                .is_some_and(|reason| reason.as_deref() == Some(MIGRATED_BLOCKED_REASON))
             {
-                self.manual_blockers.remove(&field_updated.id);
+                if let Some(blockers) = self.blockers.get_mut(&field_updated.id) {
+                    blockers.remove(&BlockerSource::Manual);
+                }
             }
         }
         if let Some(yak) = self.yaks.get_mut(&field_updated.id) {
@@ -237,21 +247,16 @@ impl YakMap {
         }
     }
 
-    fn apply_blocker_added_or_updated(
-        &mut self,
-        target: YakId,
-        blocker: YakId,
-        reason: Option<String>,
-    ) {
+    fn apply_blocker_added_or_updated(&mut self, target: YakId, blocker: Blocker) {
         self.blockers
             .entry(target)
             .or_default()
-            .insert(blocker, reason);
+            .insert(blocker.source, blocker.reason);
     }
 
     fn apply_blocker_removed(&mut self, e: BlockerRemovedEvent) {
         if let Some(blockers) = self.blockers.get_mut(&e.target) {
-            blockers.remove(&e.blocker);
+            blockers.remove(&e.source);
             if blockers.is_empty() {
                 self.blockers.remove(&e.target);
             }
@@ -261,16 +266,20 @@ impl YakMap {
     fn apply_compacted(&mut self, snapshot: YakMapSnapshot) {
         self.yaks.clear();
         self.blockers.clear();
-        self.manual_blockers.clear();
         for mut yak in snapshot.yaks {
             if yak.state == YakState::Blocked {
                 yak.state = YakState::Todo;
-                self.manual_blockers
-                    .insert(yak.id.clone(), MIGRATED_BLOCKED_REASON.to_string());
+                self.blockers.entry(yak.id.clone()).or_default().insert(
+                    BlockerSource::Manual,
+                    Some(MIGRATED_BLOCKED_REASON.to_string()),
+                );
             }
             if let Some(reason) = yak.fields.remove(MANUAL_BLOCKER_FIELD) {
                 if !reason.trim().is_empty() {
-                    self.manual_blockers.insert(yak.id.clone(), reason);
+                    self.blockers
+                        .entry(yak.id.clone())
+                        .or_default()
+                        .insert(BlockerSource::Manual, Some(reason));
                 }
             }
             self.yaks.insert(yak.id.clone(), yak);
@@ -279,10 +288,13 @@ impl YakMap {
             self.blockers
                 .entry(blocker.target)
                 .or_default()
-                .insert(blocker.blocker, blocker.reason);
+                .insert(BlockerSource::Yak(blocker.blocker), blocker.reason);
         }
         for blocker in snapshot.manual_blockers {
-            self.manual_blockers.insert(blocker.target, blocker.reason);
+            self.blockers
+                .entry(blocker.target)
+                .or_default()
+                .insert(BlockerSource::Manual, Some(blocker.reason));
         }
     }
 
@@ -294,10 +306,13 @@ impl YakMap {
             .blockers
             .iter()
             .flat_map(|(target, blockers)| {
-                blockers.iter().map(|(blocker, reason)| YakBlockerSnapshot {
-                    target: target.clone(),
-                    blocker: blocker.clone(),
-                    reason: reason.clone(),
+                blockers.iter().filter_map(|(source, reason)| match source {
+                    BlockerSource::Yak(blocker) => Some(YakBlockerSnapshot {
+                        target: target.clone(),
+                        blocker: blocker.clone(),
+                        reason: reason.clone(),
+                    }),
+                    BlockerSource::Manual => None,
                 })
             })
             .collect();
@@ -309,11 +324,15 @@ impl YakMap {
         });
 
         let mut manual_blockers: Vec<_> = self
-            .manual_blockers
+            .blockers
             .iter()
-            .map(|(target, reason)| ManualBlockerSnapshot {
-                target: target.clone(),
-                reason: reason.clone(),
+            .filter_map(|(target, blockers)| {
+                blockers.get(&BlockerSource::Manual).and_then(|reason| {
+                    reason.clone().map(|reason| ManualBlockerSnapshot {
+                        target: target.clone(),
+                        reason,
+                    })
+                })
             })
             .collect();
         manual_blockers.sort_by(|a, b| a.target.as_str().cmp(b.target.as_str()));
@@ -627,10 +646,11 @@ impl YakMap {
     }
 
     fn remove_blocked_by(&mut self, blocker_id: &YakId) {
+        let source = BlockerSource::Yak(blocker_id.clone());
         let relationships: Vec<(YakId, YakId)> = self
             .blockers
             .iter()
-            .filter(|(_, blockers)| blockers.contains_key(blocker_id))
+            .filter(|(_, blockers)| blockers.contains_key(&source))
             .map(|(target, _)| (target.clone(), blocker_id.clone()))
             .collect();
 
@@ -642,12 +662,11 @@ impl YakMap {
             .blockers
             .iter()
             .flat_map(|(target, blockers)| {
-                blockers.keys().filter_map(move |blocker| {
-                    if target == id || blocker == id {
+                blockers.keys().filter_map(move |source| match source {
+                    BlockerSource::Yak(blocker) if target == id || blocker == id => {
                         Some((target.clone(), blocker.clone()))
-                    } else {
-                        None
                     }
+                    _ => None,
                 })
             })
             .collect();
@@ -664,12 +683,13 @@ impl YakMap {
     fn remove_explicit_blocker_relationships(&mut self, relationships: Vec<(YakId, YakId)>) {
         for (target, blocker) in relationships {
             if let Some(blockers) = self.blockers.get_mut(&target) {
-                if blockers.remove(&blocker).is_some() {
+                let source = BlockerSource::Yak(blocker);
+                if blockers.remove(&source).is_some() {
                     if blockers.is_empty() {
                         self.blockers.remove(&target);
                     }
                     self.pending_events.push(YakEvent::BlockerRemoved(
-                        BlockerRemovedEvent { target, blocker },
+                        BlockerRemovedEvent { target, source },
                         self.metadata.clone(),
                     ));
                 }
@@ -692,12 +712,12 @@ impl YakMap {
         Ok(())
     }
 
-    fn format_active_blockers(&self, active_blockers: &[ActiveBlocker]) -> String {
+    fn format_active_blockers(&self, active_blockers: &[BlockingDependency]) -> String {
         active_blockers
             .iter()
-            .map(|blocker| match blocker.kind {
-                BlockerKind::Yak => self.build_display_name(&blocker.id),
-                BlockerKind::Manual => blocker
+            .map(|blocker| match &blocker.source {
+                BlockerSource::Yak(id) => self.build_display_name(id),
+                BlockerSource::Manual => blocker
                     .reason
                     .clone()
                     .unwrap_or_else(|| "manual blocker".to_string()),
@@ -742,55 +762,44 @@ impl YakMap {
         }
     }
 
-    pub fn active_blockers(&self, id: &YakId) -> Vec<ActiveBlocker> {
-        let mut blockers: Vec<ActiveBlocker> = self
+    pub fn active_blockers(&self, id: &YakId) -> Vec<BlockingDependency> {
+        let mut blockers: Vec<BlockingDependency> = self
             .blockers
             .get(id)
             .into_iter()
             .flat_map(|blockers| blockers.iter())
-            .map(|(id, reason)| ActiveBlocker {
-                id: id.clone(),
-                kind: BlockerKind::Yak,
+            .map(|(source, reason)| BlockingDependency {
+                source: source.clone(),
                 reason: reason.clone(),
             })
             .collect();
-        if let Some(reason) = self.manual_blockers.get(id) {
-            blockers.push(ActiveBlocker {
-                id: id.clone(),
-                kind: BlockerKind::Manual,
-                reason: Some(reason.clone()),
-            });
-        }
-        blockers.sort_by(|a, b| {
-            (matches!(a.kind, BlockerKind::Manual), a.id.as_str())
-                .cmp(&(matches!(b.kind, BlockerKind::Manual), b.id.as_str()))
-        });
+        blockers.sort_by(|a, b| a.source.sort_key().cmp(&b.source.sort_key()));
         blockers
     }
 
-    fn path_to_blocker(&self, start: &YakId, goal: &YakId) -> Option<(Vec<YakId>, bool)> {
-        let mut stack = vec![(start.clone(), vec![start.clone()], false)];
+    fn path_to_blocker(&self, start: &YakId, goal: &YakId) -> Option<BlockerPath> {
+        let mut stack = vec![(start.clone(), vec![start.clone()])];
         let mut visited = HashSet::new();
 
-        while let Some((current, path, used_hierarchy)) = stack.pop() {
-            if !visited.insert((current.clone(), used_hierarchy)) {
+        while let Some((current, path)) = stack.pop() {
+            if !visited.insert(current.clone()) {
                 continue;
             }
             if &current == goal {
-                return Some((path, used_hierarchy));
+                return Some(BlockerPath { yaks: path });
             }
 
             let mut explicit_targets: Vec<_> = self
                 .blockers
                 .iter()
-                .filter(|(_, blockers)| blockers.contains_key(&current))
+                .filter(|(_, blockers)| blockers.contains_key(&BlockerSource::Yak(current.clone())))
                 .map(|(target, _)| target.clone())
                 .collect();
             explicit_targets.sort_by(|a, b| b.as_str().cmp(a.as_str()));
             for target in explicit_targets {
                 let mut next_path = path.clone();
                 next_path.push(target.clone());
-                stack.push((target, next_path, used_hierarchy));
+                stack.push((target, next_path));
             }
 
             if let Some(parent) = self
@@ -800,14 +809,14 @@ impl YakMap {
             {
                 let mut next_path = path;
                 next_path.push(parent.clone());
-                stack.push((parent, next_path, true));
+                stack.push((parent, next_path));
             }
         }
 
         None
     }
 
-    fn format_blocker_cycle_path(&self, blocker: &YakId, path: &[YakId]) -> String {
+    fn format_circular_dependency_path(&self, blocker: &YakId, path: &[YakId]) -> String {
         let mut names = Vec::with_capacity(path.len() + 2);
         names.push(self.build_display_name(blocker));
         names.extend(path.iter().map(|id| self.build_display_name(id)));
@@ -873,11 +882,9 @@ impl YakMap {
 
         for blocker in self.subtree_ids(id) {
             for target in self.ancestor_ids_after_move(&blocker, id, new_parent_id) {
-                if self
-                    .blockers
-                    .get(&target)
-                    .is_some_and(|blockers| blockers.contains_key(&blocker))
-                {
+                if self.blockers.get(&target).is_some_and(|blockers| {
+                    blockers.contains_key(&BlockerSource::Yak(blocker.clone()))
+                }) {
                     relationships.push((target, blocker.clone()));
                 }
             }
@@ -899,23 +906,23 @@ impl YakMap {
         moved_id: &YakId,
         new_parent_id: &Option<YakId>,
         excluded_explicit_relationships: &HashSet<(YakId, YakId)>,
-    ) -> Option<(Vec<YakId>, bool)> {
-        let mut stack = vec![(start.clone(), vec![start.clone()], false)];
+    ) -> Option<BlockerPath> {
+        let mut stack = vec![(start.clone(), vec![start.clone()])];
         let mut visited = HashSet::new();
 
-        while let Some((current, path, used_hierarchy)) = stack.pop() {
-            if !visited.insert((current.clone(), used_hierarchy)) {
+        while let Some((current, path)) = stack.pop() {
+            if !visited.insert(current.clone()) {
                 continue;
             }
             if &current == goal {
-                return Some((path, used_hierarchy));
+                return Some(BlockerPath { yaks: path });
             }
 
             let mut explicit_targets: Vec<_> = self
                 .blockers
                 .iter()
                 .filter(|(target, blockers)| {
-                    blockers.contains_key(&current)
+                    blockers.contains_key(&BlockerSource::Yak(current.clone()))
                         && !excluded_explicit_relationships
                             .contains(&((*target).clone(), current.clone()))
                 })
@@ -925,13 +932,13 @@ impl YakMap {
             for target in explicit_targets {
                 let mut next_path = path.clone();
                 next_path.push(target.clone());
-                stack.push((target, next_path, used_hierarchy));
+                stack.push((target, next_path));
             }
 
             if let Some(parent) = self.parent_after_move(&current, moved_id, new_parent_id) {
                 let mut next_path = path;
                 next_path.push(parent.clone());
-                stack.push((parent, next_path, true));
+                stack.push((parent, next_path));
             }
         }
 
@@ -950,24 +957,18 @@ impl YakMap {
 
         let excluded: HashSet<_> = explicit_relationships_to_remove.iter().cloned().collect();
         for subtree_id in self.subtree_ids(id) {
-            if let Some((path, uses_hierarchy)) = self.path_to_blocker_after_move(
+            if let Some(path) = self.path_to_blocker_after_move(
                 new_parent,
                 &subtree_id,
                 id,
                 new_parent_id,
                 &excluded,
             ) {
-                let hierarchy_detail = if uses_hierarchy {
-                    " through hierarchy"
-                } else {
-                    ""
-                };
                 anyhow::bail!(
-                    "moving '{}' under '{}' would create blocker cycle{}: {}",
+                    "moving '{}' under '{}' would create circular dependency: {}",
                     self.build_display_name(id),
                     self.build_display_name(new_parent),
-                    hierarchy_detail,
-                    self.format_blocker_cycle_path(&subtree_id, &path)
+                    self.format_circular_dependency_path(&subtree_id, &path.yaks)
                 );
             }
         }
@@ -992,10 +993,11 @@ impl YakMap {
         let requested_reason =
             reason.map(|reason| crate::domain::events::blocker::normalize_reason(Some(reason)));
 
+        let source = BlockerSource::Yak(blocker.clone());
         let existing = self
             .blockers
             .get(&target)
-            .and_then(|blockers| blockers.get(&blocker));
+            .and_then(|blockers| blockers.get(&source));
         let (event, outcome, new_reason) = if let Some(existing_reason) = existing {
             let Some(new_reason) = requested_reason else {
                 return Ok(AddBlockerOutcome::AlreadyExplicit);
@@ -1007,8 +1009,10 @@ impl YakMap {
                 YakEvent::BlockerUpdated(
                     BlockerUpdatedEvent {
                         target: target.clone(),
-                        blocker: blocker.clone(),
-                        reason: new_reason.clone(),
+                        blocker: Blocker {
+                            source: source.clone(),
+                            reason: new_reason.clone(),
+                        },
                     },
                     self.metadata.clone(),
                 ),
@@ -1018,18 +1022,12 @@ impl YakMap {
         } else if self.is_descendant_of(&blocker, &target) {
             return Ok(AddBlockerOutcome::AlreadyImpliedByHierarchy);
         } else {
-            if let Some((path, uses_hierarchy)) = self.path_to_blocker(&target, &blocker) {
-                let hierarchy_detail = if uses_hierarchy {
-                    " through hierarchy"
-                } else {
-                    ""
-                };
+            if let Some(path) = self.path_to_blocker(&target, &blocker) {
                 anyhow::bail!(
-                    "adding '{}' as a blocker for '{}' would create blocker cycle{}: {}",
+                    "adding '{}' as a blocker for '{}' would create circular dependency: {}",
                     self.build_display_name(&blocker),
                     self.build_display_name(&target),
-                    hierarchy_detail,
-                    self.format_blocker_cycle_path(&blocker, &path)
+                    self.format_circular_dependency_path(&blocker, &path.yaks)
                 );
             }
             let new_reason = requested_reason.unwrap_or(None);
@@ -1037,8 +1035,10 @@ impl YakMap {
                 YakEvent::BlockerAdded(
                     BlockerAddedEvent {
                         target: target.clone(),
-                        blocker: blocker.clone(),
-                        reason: new_reason.clone(),
+                        blocker: Blocker {
+                            source: source.clone(),
+                            reason: new_reason.clone(),
+                        },
                     },
                     self.metadata.clone(),
                 ),
@@ -1049,7 +1049,7 @@ impl YakMap {
         self.blockers
             .entry(target)
             .or_default()
-            .insert(blocker, new_reason);
+            .insert(source, new_reason);
         self.pending_events.push(event);
         Ok(outcome)
     }
@@ -1065,20 +1065,45 @@ impl YakMap {
             "manual blockers require a non-empty --reason"
         );
         let reason = reason.trim().to_string();
-        match self.manual_blockers.get(&target) {
-            Some(existing) if existing == &reason => Ok(AddBlockerOutcome::AlreadyExplicit),
+        let source = BlockerSource::Manual;
+        let existing = self
+            .blockers
+            .get(&target)
+            .and_then(|blockers| blockers.get(&source))
+            .cloned()
+            .flatten();
+        match existing {
+            Some(existing) if existing == reason => Ok(AddBlockerOutcome::AlreadyExplicit),
             Some(_) => {
-                self.manual_blockers.insert(target.clone(), reason.clone());
-                self.pending_events.push(YakEvent::ManualBlockerUpdated(
-                    ManualBlockerUpdatedEvent { target, reason },
+                self.blockers
+                    .entry(target.clone())
+                    .or_default()
+                    .insert(source.clone(), Some(reason.clone()));
+                self.pending_events.push(YakEvent::BlockerUpdated(
+                    BlockerUpdatedEvent {
+                        target,
+                        blocker: Blocker {
+                            source,
+                            reason: Some(reason),
+                        },
+                    },
                     self.metadata.clone(),
                 ));
                 Ok(AddBlockerOutcome::Updated)
             }
             None => {
-                self.manual_blockers.insert(target.clone(), reason.clone());
-                self.pending_events.push(YakEvent::ManualBlockerAdded(
-                    ManualBlockerAddedEvent { target, reason },
+                self.blockers
+                    .entry(target.clone())
+                    .or_default()
+                    .insert(source.clone(), Some(reason.clone()));
+                self.pending_events.push(YakEvent::BlockerAdded(
+                    BlockerAddedEvent {
+                        target,
+                        blocker: Blocker {
+                            source,
+                            reason: Some(reason),
+                        },
+                    },
                     self.metadata.clone(),
                 ));
                 Ok(AddBlockerOutcome::Added)
@@ -1088,15 +1113,20 @@ impl YakMap {
 
     pub fn remove_manual_blocker(&mut self, target: YakId) -> Result<RemoveBlockerOutcome> {
         self.ensure_exists(&target)?;
-        if self.manual_blockers.remove(&target).is_some() {
-            self.pending_events.push(YakEvent::ManualBlockerRemoved(
-                ManualBlockerRemovedEvent { target },
-                self.metadata.clone(),
-            ));
-            Ok(RemoveBlockerOutcome::Removed)
-        } else {
-            Ok(RemoveBlockerOutcome::NotPresent)
+        let source = BlockerSource::Manual;
+        if let Some(blockers) = self.blockers.get_mut(&target) {
+            if blockers.remove(&source).is_some() {
+                if blockers.is_empty() {
+                    self.blockers.remove(&target);
+                }
+                self.pending_events.push(YakEvent::BlockerRemoved(
+                    BlockerRemovedEvent { target, source },
+                    self.metadata.clone(),
+                ));
+                return Ok(RemoveBlockerOutcome::Removed);
+            }
         }
+        Ok(RemoveBlockerOutcome::NotPresent)
     }
 
     pub fn remove_blocker(
@@ -1106,13 +1136,14 @@ impl YakMap {
     ) -> Result<RemoveBlockerOutcome> {
         self.ensure_exists(&target)?;
         self.ensure_exists(&blocker)?;
+        let source = BlockerSource::Yak(blocker);
         if let Some(blockers) = self.blockers.get_mut(&target) {
-            if blockers.remove(&blocker).is_some() {
+            if blockers.remove(&source).is_some() {
                 if blockers.is_empty() {
                     self.blockers.remove(&target);
                 }
                 self.pending_events.push(YakEvent::BlockerRemoved(
-                    BlockerRemovedEvent { target, blocker },
+                    BlockerRemovedEvent { target, source },
                     self.metadata.clone(),
                 ));
                 return Ok(RemoveBlockerOutcome::Removed);
@@ -1344,7 +1375,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(map.yaks.get(&id).unwrap().state, YakState::Todo);
-        assert_eq!(map.active_blockers(&id)[0].kind, BlockerKind::Manual);
+        assert_eq!(map.active_blockers(&id)[0].source, BlockerSource::Manual);
         assert_eq!(
             map.active_blockers(&id)[0].reason.as_deref(),
             Some(MIGRATED_BLOCKED_REASON)
@@ -1513,12 +1544,11 @@ mod tests {
 
         let active_blockers = map.active_blockers(&target);
         assert!(active_blockers.iter().any(|b| {
-            b.kind == BlockerKind::Yak
-                && b.id == blocker
+            b.source == BlockerSource::Yak(blocker.clone())
                 && b.reason.as_deref() == Some("waiting for approval")
         }));
         assert!(active_blockers.iter().any(|b| {
-            b.kind == BlockerKind::Manual && b.reason.as_deref() == Some("manual hold")
+            b.source == BlockerSource::Manual && b.reason.as_deref() == Some("manual hold")
         }));
         assert!(!map.is_ready(&target).unwrap());
     }
@@ -1543,7 +1573,7 @@ mod tests {
         let YakEvent::BlockerAdded(event, _) = events.last().unwrap() else {
             panic!("expected BlockerAdded event");
         };
-        assert_eq!(event.reason, None);
+        assert_eq!(event.blocker.reason, None);
     }
 
     #[test]
@@ -1722,7 +1752,7 @@ mod tests {
 
         let err = map.add_blocker(b, a, None).unwrap_err().to_string();
 
-        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("would create circular dependency"));
         assert!(err.contains("a -> b -> a"));
         assert!(!err.contains("through hierarchy"));
         assert!(map.take_events().is_empty());
@@ -1740,7 +1770,7 @@ mod tests {
 
         let err = map.add_blocker(c, a, None).unwrap_err().to_string();
 
-        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("would create circular dependency"));
         assert!(err.contains("a -> c -> b -> a"));
         assert!(!err.contains("through hierarchy"));
         assert!(map.take_events().is_empty());
@@ -1762,8 +1792,8 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
-        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("would create circular dependency"));
+        assert!(!err.contains("through hierarchy"));
         assert!(err.contains("parent -> parent/child -> parent"));
         assert!(map.take_events().is_empty());
     }
@@ -1787,8 +1817,8 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
-        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("would create circular dependency"));
+        assert!(!err.contains("through hierarchy"));
         assert!(err.contains("parent -> parent/child/grandchild -> parent/child -> parent"));
         assert!(map.take_events().is_empty());
     }
@@ -1813,8 +1843,8 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
-        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("would create circular dependency"));
+        assert!(!err.contains("through hierarchy"));
         assert!(err.contains("parent -> other -> parent/child -> parent"));
         assert!(map.take_events().is_empty());
     }
@@ -3261,7 +3291,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::FieldUpdated(FieldUpdatedEvent { id, field_name, content }, _)
             ] if removed_target == &target
                 && removed_blocker == &blocker
@@ -3290,7 +3320,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::Removed(RemovedEvent { id }, _)
             ] if removed_target == &target && removed_blocker == &blocker && id == &target
         ));
@@ -3316,7 +3346,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::Removed(RemovedEvent { id }, _)
             ] if removed_target == &target && removed_blocker == &blocker && id == &blocker
         ));
@@ -3490,7 +3520,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::Moved(MovedEvent { id, new_parent }, _)
             ] if removed_target == &target
                 && removed_blocker == &blocker
@@ -3523,7 +3553,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::Moved(MovedEvent { id, new_parent }, _)
             ] if removed_target == &target
                 && removed_blocker == &descendant
@@ -3533,7 +3563,7 @@ mod tests {
     }
 
     #[test]
-    fn move_subtree_under_descendant_blocker_is_rejected_as_blocker_cycle() {
+    fn move_subtree_under_descendant_blocker_is_rejected_as_circular_dependency() {
         let mut map = YakMap::new();
         let new_parent = map.add_yak("a", None, None, None, None, vec![]).unwrap();
         let moved = map.add_yak("b", None, None, None, None, vec![]).unwrap();
@@ -3549,20 +3579,20 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
-        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("would create circular dependency"));
+        assert!(!err.contains("through hierarchy"));
         assert!(err.contains("a"));
         assert!(err.contains("b/c"));
         assert_eq!(map.yaks.get(&moved).unwrap().parent_id, None);
         assert!(map
             .active_blockers(&descendant)
             .iter()
-            .any(|b| b.id == new_parent));
+            .any(|b| b.source == BlockerSource::Yak(new_parent.clone())));
         assert!(map.take_events().is_empty());
     }
 
     #[test]
-    fn move_blocked_yak_under_its_blocker_is_rejected_as_blocker_cycle() {
+    fn move_blocked_yak_under_its_blocker_is_rejected_as_circular_dependency() {
         let mut map = YakMap::new();
         let target = map.add_yak("a", None, None, None, None, vec![]).unwrap();
         let blocker = map.add_yak("b", None, None, None, None, vec![]).unwrap();
@@ -3575,15 +3605,18 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
+        assert!(err.contains("would create circular dependency"));
         assert!(err.contains("a -> b -> a"));
         assert_eq!(map.yaks.get(&target).unwrap().parent_id, None);
-        assert!(map.active_blockers(&target).iter().any(|b| b.id == blocker));
+        assert!(map
+            .active_blockers(&target)
+            .iter()
+            .any(|b| b.source == BlockerSource::Yak(blocker.clone())));
         assert!(map.take_events().is_empty());
     }
 
     #[test]
-    fn move_ancestor_under_explicit_blocker_is_rejected_as_blocker_cycle() {
+    fn move_ancestor_under_explicit_blocker_is_rejected_as_circular_dependency() {
         let mut map = YakMap::new();
         let project = map
             .add_yak("project", None, None, None, None, vec![])
@@ -3601,11 +3634,14 @@ mod tests {
             .unwrap_err()
             .to_string();
 
-        assert!(err.contains("would create blocker cycle"));
-        assert!(err.contains("through hierarchy"));
+        assert!(err.contains("would create circular dependency"));
+        assert!(!err.contains("through hierarchy"));
         assert!(err.contains("project -> b -> project/a -> project"));
         assert_eq!(map.yaks.get(&project).unwrap().parent_id, None);
-        assert!(map.active_blockers(&target).iter().any(|b| b.id == blocker));
+        assert!(map
+            .active_blockers(&target)
+            .iter()
+            .any(|b| b.source == BlockerSource::Yak(blocker.clone())));
         assert!(map.take_events().is_empty());
     }
 
@@ -3697,7 +3733,7 @@ mod tests {
         assert!(matches!(
             &events[..],
             [
-                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, blocker: removed_blocker }, _),
+                YakEvent::BlockerRemoved(BlockerRemovedEvent { target: removed_target, source: BlockerSource::Yak(removed_blocker) }, _),
                 YakEvent::Removed(RemovedEvent { id }, _)
             ] if removed_target == &target && removed_blocker == &blocker && id == &blocker
         ));

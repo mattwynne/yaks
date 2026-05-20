@@ -142,16 +142,16 @@ impl YakEvent {
                 BlockerRemovedEvent::parse_data(data)?,
                 meta,
             )),
-            "ManualBlockerAdded" => Ok(Self::ManualBlockerAdded(
-                ManualBlockerAddedEvent::parse_data(data)?,
+            "ManualBlockerAdded" => Ok(Self::BlockerAdded(
+                ManualBlockerAddedEvent::parse_data(data)?.into(),
                 meta,
             )),
-            "ManualBlockerUpdated" => Ok(Self::ManualBlockerUpdated(
-                ManualBlockerUpdatedEvent::parse_data(data)?,
+            "ManualBlockerUpdated" => Ok(Self::BlockerUpdated(
+                ManualBlockerUpdatedEvent::parse_data(data)?.into(),
                 meta,
             )),
-            "ManualBlockerRemoved" => Ok(Self::ManualBlockerRemoved(
-                ManualBlockerRemovedEvent::parse_data(data)?,
+            "ManualBlockerRemoved" => Ok(Self::BlockerRemoved(
+                ManualBlockerRemovedEvent::parse_data(data)?.into(),
                 meta,
             )),
             // Backward-compatible parsing of old event formats
@@ -303,8 +303,11 @@ mod tests {
         match added {
             YakEvent::BlockerAdded(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
-                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
-                assert_eq!(event.reason, Some("waiting on API".to_string()));
+                assert_eq!(
+                    event.blocker.source,
+                    BlockerSource::Yak(YakId::from("blocking-yak-c3d4"))
+                );
+                assert_eq!(event.blocker.reason, Some("waiting on API".to_string()));
             }
             _ => panic!("Expected BlockerAdded"),
         }
@@ -316,8 +319,11 @@ mod tests {
         match updated {
             YakEvent::BlockerUpdated(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
-                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
-                assert_eq!(event.reason, Some("new reason".to_string()));
+                assert_eq!(
+                    event.blocker.source,
+                    BlockerSource::Yak(YakId::from("blocking-yak-c3d4"))
+                );
+                assert_eq!(event.blocker.reason, Some("new reason".to_string()));
             }
             _ => panic!("Expected BlockerUpdated"),
         }
@@ -327,7 +333,10 @@ mod tests {
         match removed {
             YakEvent::BlockerRemoved(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
-                assert_eq!(event.blocker, YakId::from("blocking-yak-c3d4"));
+                assert_eq!(
+                    event.source,
+                    BlockerSource::Yak(YakId::from("blocking-yak-c3d4"))
+                );
             }
             _ => panic!("Expected BlockerRemoved"),
         }
@@ -336,30 +345,33 @@ mod tests {
             YakEvent::parse("ManualBlockerAdded: \"blocked-yak-a1b2\" \"waiting on vendor\"")
                 .unwrap();
         match manual_added {
-            YakEvent::ManualBlockerAdded(event, _) => {
+            YakEvent::BlockerAdded(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
-                assert_eq!(event.reason, "waiting on vendor");
+                assert_eq!(event.blocker.source, BlockerSource::Manual);
+                assert_eq!(event.blocker.reason.as_deref(), Some("waiting on vendor"));
             }
-            _ => panic!("Expected ManualBlockerAdded"),
+            _ => panic!("Expected BlockerAdded"),
         }
 
         let manual_updated =
             YakEvent::parse("ManualBlockerUpdated: \"blocked-yak-a1b2\" \"waiting on review\"")
                 .unwrap();
         match manual_updated {
-            YakEvent::ManualBlockerUpdated(event, _) => {
+            YakEvent::BlockerUpdated(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
-                assert_eq!(event.reason, "waiting on review");
+                assert_eq!(event.blocker.source, BlockerSource::Manual);
+                assert_eq!(event.blocker.reason.as_deref(), Some("waiting on review"));
             }
-            _ => panic!("Expected ManualBlockerUpdated"),
+            _ => panic!("Expected BlockerUpdated"),
         }
 
         let manual_removed = YakEvent::parse("ManualBlockerRemoved: \"blocked-yak-a1b2\"").unwrap();
         match manual_removed {
-            YakEvent::ManualBlockerRemoved(event, _) => {
+            YakEvent::BlockerRemoved(event, _) => {
                 assert_eq!(event.target, YakId::from("blocked-yak-a1b2"));
+                assert_eq!(event.source, BlockerSource::Manual);
             }
-            _ => panic!("Expected ManualBlockerRemoved"),
+            _ => panic!("Expected BlockerRemoved"),
         }
     }
 

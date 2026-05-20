@@ -176,7 +176,7 @@ Feature: Move yaks in hierarchy
       And I add blocker "b" to "a"
       When I try to move the yak "a" under "b"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
+      And the error should contain "would create circular dependency"
 
     Example: Cannot move an ancestor under an explicit blocker when that would create a cycle
       Given I have a clean git repository
@@ -186,4 +186,4 @@ Feature: Move yaks in hierarchy
       And I add blocker "b" to "a"
       When I try to move the yak "project" under "b"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
+      And the error should contain "would create circular dependency"

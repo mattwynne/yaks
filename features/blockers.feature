@@ -235,7 +235,6 @@ Feature: Explicit blockers affect readiness
       And I add the yak "child" under "parent"
       When I add blocker "child" to "parent"
       Then the output should include "already blocks"
-      And the output should include "through hierarchy"
       And the output should include "no explicit blocker added"
       When I show the log
       Then the output should not include "marked parent blocked by child"
@@ -256,11 +255,11 @@ Feature: Explicit blockers affect readiness
       And I add blocker "b" to "a"
       When I try to add blocker "a" to "b"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
+      And the error should contain "would create circular dependency"
       When I show the log
       Then the output should not include "marked b blocked by a"
 
-    Example: Longer explicit blocker cycles are rejected
+    Example: Longer explicit circular dependencies are rejected
       Given I add the yak "a"
       And I add the yak "b"
       And I add the yak "c"
@@ -268,7 +267,7 @@ Feature: Explicit blockers affect readiness
       And I add blocker "c" to "b"
       When I try to add blocker "a" to "c"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
+      And the error should contain "would create circular dependency"
       When I show the log
       Then the output should not include "marked c blocked by a"
 
@@ -277,8 +276,7 @@ Feature: Explicit blockers affect readiness
       And I add the yak "child" under "parent"
       When I try to add blocker "parent" to "child"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
-      And the error should contain "through hierarchy"
+      And the error should contain "would create circular dependency"
       When I show the log
       Then the output should not include "marked child blocked by parent"
 
@@ -288,7 +286,6 @@ Feature: Explicit blockers affect readiness
       And I add the yak "grandchild" under "child"
       When I try to add blocker "parent" to "grandchild"
       Then the command should fail
-      And the error should contain "would create blocker cycle"
-      And the error should contain "through hierarchy"
+      And the error should contain "would create circular dependency"
       When I show the log
       Then the output should not include "marked grandchild blocked by parent"

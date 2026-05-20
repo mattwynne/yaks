@@ -25,7 +25,7 @@ pub use field::{
 pub use slug::{generate_id, slugify, Name, Slug, YakId};
 pub use tag::{format_tag, normalize_tag};
 pub use yak::{validate_yak_name, Yak};
-pub use yak_map::{ActiveBlocker, YakMap};
+pub use yak_map::{BlockingDependency, YakMap};
 pub use yak_map_snapshot::{ManualBlockerSnapshot, YakBlockerSnapshot, YakMapSnapshot};
 pub use yak_snapshot::YakSnapshot;
 pub use yak_state::YakState;
@@ -33,6 +33,6 @@ pub use yak_state::YakState;
 // Re-exports used only in tests
 #[cfg(test)]
 pub use events::{
-    AddedEvent, BlockerAddedEvent, BlockerRemovedEvent, BlockerUpdatedEvent, FieldUpdatedEvent,
-    MovedEvent, RemovedEvent,
+    AddedEvent, Blocker, BlockerAddedEvent, BlockerRemovedEvent, BlockerSource,
+    BlockerUpdatedEvent, FieldUpdatedEvent, MovedEvent, RemovedEvent,
 };

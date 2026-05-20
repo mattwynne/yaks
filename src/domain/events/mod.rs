@@ -6,8 +6,8 @@ pub mod removed;
 
 pub use added::AddedEvent;
 pub use blocker::{
-    BlockerAddedEvent, BlockerRemovedEvent, BlockerUpdatedEvent, ManualBlockerAddedEvent,
-    ManualBlockerRemovedEvent, ManualBlockerUpdatedEvent,
+    Blocker, BlockerAddedEvent, BlockerRemovedEvent, BlockerSource, BlockerUpdatedEvent,
+    ManualBlockerAddedEvent, ManualBlockerRemovedEvent, ManualBlockerUpdatedEvent,
 };
 pub use field_updated::FieldUpdatedEvent;
 pub use moved::MovedEvent;

@@ -60,6 +60,26 @@ fn apply_field_updated_event<T: WriteYakStore>(
 
 fn apply_manual_blocker_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<bool> {
     match event {
+        YakEvent::BlockerAdded(e, _) if e.blocker.source == BlockerSource::Manual => {
+            store.write_field(
+                &e.target,
+                MANUAL_BLOCKER_FIELD,
+                e.blocker.reason.as_deref().unwrap_or(""),
+            )?;
+            Ok(true)
+        }
+        YakEvent::BlockerUpdated(e, _) if e.blocker.source == BlockerSource::Manual => {
+            store.write_field(
+                &e.target,
+                MANUAL_BLOCKER_FIELD,
+                e.blocker.reason.as_deref().unwrap_or(""),
+            )?;
+            Ok(true)
+        }
+        YakEvent::BlockerRemoved(e, _) if e.source == BlockerSource::Manual => {
+            store.write_field(&e.target, MANUAL_BLOCKER_FIELD, "")?;
+            Ok(true)
+        }
         YakEvent::ManualBlockerAdded(e, _) => {
             store.write_field(&e.target, MANUAL_BLOCKER_FIELD, &e.reason)?;
             Ok(true)

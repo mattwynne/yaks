@@ -1,8 +1,8 @@
 // ListYaks use case - displays all yaks
 
 use crate::adapters::views::{Message, YakBlockerView, YakTreeNode, YakTreeView};
+use crate::domain::events::BlockerSource;
 use crate::domain::slug::{Name, YakId};
-use crate::domain::yak_map::BlockerKind;
 use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
 use anyhow::Result;
@@ -339,9 +339,9 @@ impl UseCase for ListYaks {
                     let blocked_by = map
                         .active_blockers(&yak.id)
                         .into_iter()
-                        .filter_map(|blocker| match blocker.kind {
-                            BlockerKind::Yak => {
-                                yaks_by_id.get(&blocker.id).map(|yak| YakBlockerView {
+                        .filter_map(|blocker| match blocker.source {
+                            BlockerSource::Yak(id) => {
+                                yaks_by_id.get(&id).map(|yak| YakBlockerView {
                                     kind: "yak".to_string(),
                                     id: Some(yak.id.as_str().to_string()),
                                     name: yak.name.to_string(),
@@ -349,7 +349,7 @@ impl UseCase for ListYaks {
                                     reason: blocker.reason,
                                 })
                             }
-                            BlockerKind::Manual => Some(YakBlockerView {
+                            BlockerSource::Manual => Some(YakBlockerView {
                                 kind: "manual".to_string(),
                                 id: None,
                                 name: "manual".to_string(),
