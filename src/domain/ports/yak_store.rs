@@ -1,7 +1,7 @@
 // Yak store port traits - read/write abstractions for yak persistence
 
 use crate::domain::slug::{Name, YakId};
-use crate::domain::Yak;
+use crate::domain::{Yak, YakBlockerSnapshot};
 use anyhow::Result;
 
 pub trait ReadYakStore {
@@ -9,6 +9,9 @@ pub trait ReadYakStore {
     fn list_yaks(&self) -> Result<Vec<Yak>>;
     fn fuzzy_find_yak_id(&self, query: &str) -> Result<YakId>;
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String>;
+
+    /// Read-side projection of explicit yak-to-yak blocker facts.
+    fn list_blockers(&self) -> Result<Vec<YakBlockerSnapshot>>;
 }
 
 pub trait WriteYakStore {
@@ -27,6 +30,21 @@ pub trait WriteYakStore {
 
     /// Write a field for a yak
     fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()>;
+
+    /// Add or replace an explicit yak-to-yak blocker in the read model.
+    fn write_blocker(
+        &self,
+        _target: &YakId,
+        _blocker: &YakId,
+        _reason: Option<&str>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Remove an explicit yak-to-yak blocker from the read model.
+    fn remove_blocker(&self, _target: &YakId, _blocker: &YakId) -> Result<()> {
+        Ok(())
+    }
 
     /// Remove all yaks, preparing for a full replay of events.
     fn clear_all(&self) -> Result<()>;
@@ -64,6 +82,10 @@ mod tests {
 
         fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
             anyhow::bail!("Field reading not implemented in test store")
+        }
+
+        fn list_blockers(&self) -> Result<Vec<YakBlockerSnapshot>> {
+            Ok(Vec::new())
         }
     }
 

@@ -49,14 +49,12 @@ impl UseCase for ShowYak {
         let id = app.resolve_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
         let all_yaks = app.store.list_yaks()?;
-        let readiness = app.with_yak_map_result(|map| {
-            Ok(build_readiness_views(map, &all_yaks).remove(&id).unwrap_or(
-                crate::adapters::views::ReadinessView {
-                    ready: false,
-                    reasons: vec![],
-                },
-            ))
-        })?;
+        let readiness = build_readiness_views(&all_yaks, &app.store.list_blockers()?)
+            .remove(&id)
+            .unwrap_or(crate::adapters::views::ReadinessView {
+                ready: false,
+                reasons: vec![],
+            });
         let visible_ids = app.focused_yak_ids()?;
 
         // Breadcrumb: walk parent chain to collect ancestors with id, name, state (root-first)

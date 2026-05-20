@@ -323,24 +323,18 @@ impl UseCase for ListYaks {
         let only = self.only.as_deref();
         let tag = self.tag.as_deref();
         let yaks = app.store.list_yaks()?;
-        let (readiness_by_id, blockers_by_id): (
-            HashMap<YakId, ReadinessView>,
-            HashMap<YakId, Vec<YakBlockerView>>,
-        ) = app.with_yak_map_result(|map| {
-            let readiness = build_readiness_views(map, &yaks);
-            let blockers = readiness
-                .iter()
-                .map(|(id, view)| {
-                    let blocked_by = view
-                        .reasons
-                        .iter()
-                        .filter_map(|reason| reason.blocker.clone())
-                        .collect::<Vec<_>>();
-                    (id.clone(), blocked_by)
-                })
-                .collect();
-            Ok((readiness, blockers))
-        })?;
+        let readiness_by_id = build_readiness_views(&yaks, &app.store.list_blockers()?);
+        let blockers_by_id: HashMap<YakId, Vec<YakBlockerView>> = readiness_by_id
+            .iter()
+            .map(|(id, view)| {
+                let blocked_by = view
+                    .reasons
+                    .iter()
+                    .filter_map(|reason| reason.blocker.clone())
+                    .collect::<Vec<_>>();
+                (id.clone(), blocked_by)
+            })
+            .collect();
         let visible_ids = app.focused_yak_ids()?;
 
         // Normalize format

@@ -7,6 +7,7 @@ mod query;
 
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
+use crate::domain::YakBlockerSnapshot;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -53,7 +54,10 @@ impl WriteYakStore for DirectoryStorage {
     }
 
     fn delete_yak(&self, id: &YakId) -> Result<()> {
-        io::delete_yak(&self.base_path, id)
+        io::delete_yak(&self.base_path, id)?;
+        let mut blockers = self.list_blockers()?;
+        blockers.retain(|b| &b.target != id && &b.blocker != id);
+        io::write_blockers(&self.base_path, &blockers)
     }
 
     fn rename_yak(&self, id: &YakId, new_name: &Name) -> Result<()> {
@@ -66,6 +70,35 @@ impl WriteYakStore for DirectoryStorage {
 
     fn write_field(&self, id: &YakId, field_name: &str, content: &str) -> Result<()> {
         io::write_field(&self.base_path, id, field_name, content)
+    }
+
+    fn write_blocker(&self, target: &YakId, blocker: &YakId, reason: Option<&str>) -> Result<()> {
+        let mut blockers = self.list_blockers()?;
+        if let Some(existing) = blockers
+            .iter_mut()
+            .find(|b| &b.target == target && &b.blocker == blocker)
+        {
+            existing.reason = reason.map(str::to_string);
+        } else {
+            blockers.push(YakBlockerSnapshot {
+                target: target.clone(),
+                blocker: blocker.clone(),
+                reason: reason.map(str::to_string),
+            });
+        }
+        blockers.sort_by(|a, b| {
+            a.target
+                .as_str()
+                .cmp(b.target.as_str())
+                .then_with(|| a.blocker.as_str().cmp(b.blocker.as_str()))
+        });
+        io::write_blockers(&self.base_path, &blockers)
+    }
+
+    fn remove_blocker(&self, target: &YakId, blocker: &YakId) -> Result<()> {
+        let mut blockers = self.list_blockers()?;
+        blockers.retain(|b| &b.target != target || &b.blocker != blocker);
+        io::write_blockers(&self.base_path, &blockers)
     }
 
     fn clear_all(&self) -> Result<()> {
@@ -88,6 +121,10 @@ impl ReadYakStore for DirectoryStorage {
 
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
         io::read_field(&self.base_path, id, field_name)
+    }
+
+    fn list_blockers(&self) -> Result<Vec<YakBlockerSnapshot>> {
+        io::read_blockers(&self.base_path)
     }
 }
 
@@ -114,6 +151,74 @@ mod tests {
         let result = DirectoryStorage::without_git(temp_dir.path());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().base_path, temp_dir.path());
+    }
+
+    #[test]
+    fn deleting_yak_removes_blockers_where_it_is_target_or_blocker() {
+        let (storage, _temp) = setup_test_storage();
+        let target = YakId::from("target");
+        let blocker = YakId::from("blocker");
+        let unrelated_target = YakId::from("unrelated-target");
+        let unrelated_blocker = YakId::from("unrelated-blocker");
+
+        storage
+            .write_blocker(&target, &unrelated_blocker, Some("target blocked"))
+            .unwrap();
+        storage
+            .write_blocker(&unrelated_target, &blocker, Some("blocker blocks"))
+            .unwrap();
+        storage
+            .write_blocker(&unrelated_target, &unrelated_blocker, Some("keep"))
+            .unwrap();
+
+        storage.delete_yak(&target).unwrap();
+        storage.delete_yak(&blocker).unwrap();
+
+        assert_eq!(
+            storage.list_blockers().unwrap(),
+            vec![YakBlockerSnapshot {
+                target: unrelated_target,
+                blocker: unrelated_blocker,
+                reason: Some("keep".to_string()),
+            }]
+        );
+    }
+
+    #[test]
+    fn removing_one_blocker_preserves_other_blockers_for_same_yaks() {
+        let (storage, _temp) = setup_test_storage();
+        let target = YakId::from("target");
+        let blocker = YakId::from("blocker");
+        let other_target = YakId::from("other-target");
+        let other_blocker = YakId::from("other-blocker");
+
+        storage
+            .write_blocker(&target, &blocker, Some("remove"))
+            .unwrap();
+        storage
+            .write_blocker(&target, &other_blocker, Some("same target"))
+            .unwrap();
+        storage
+            .write_blocker(&other_target, &blocker, Some("same blocker"))
+            .unwrap();
+
+        storage.remove_blocker(&target, &blocker).unwrap();
+
+        assert_eq!(
+            storage.list_blockers().unwrap(),
+            vec![
+                YakBlockerSnapshot {
+                    target: other_target,
+                    blocker,
+                    reason: Some("same blocker".to_string()),
+                },
+                YakBlockerSnapshot {
+                    target,
+                    blocker: other_blocker,
+                    reason: Some("same target".to_string()),
+                },
+            ]
+        );
     }
 
     #[test]

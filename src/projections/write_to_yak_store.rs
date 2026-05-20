@@ -96,8 +96,105 @@ fn apply_manual_blocker_event<T: WriteYakStore>(store: &mut T, event: &YakEvent)
     }
 }
 
+fn apply_explicit_blocker_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<bool> {
+    match event {
+        YakEvent::BlockerAdded(e, _) => {
+            if let BlockerSource::Yak(blocker) = &e.blocker.source {
+                store.write_blocker(&e.target, blocker, e.blocker.reason.as_deref())?;
+                return Ok(true);
+            }
+            Ok(false)
+        }
+        YakEvent::BlockerUpdated(e, _) => {
+            if let BlockerSource::Yak(blocker) = &e.blocker.source {
+                store.write_blocker(&e.target, blocker, e.blocker.reason.as_deref())?;
+                return Ok(true);
+            }
+            Ok(false)
+        }
+        YakEvent::BlockerRemoved(e, _) => {
+            if let BlockerSource::Yak(blocker) = &e.source {
+                store.remove_blocker(&e.target, blocker)?;
+                return Ok(true);
+            }
+            Ok(false)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn apply_added_event<T: WriteYakStore>(
+    store: &mut T,
+    name: &Name,
+    id: &YakId,
+    parent_id: Option<&YakId>,
+    metadata: &crate::domain::event_metadata::EventMetadata,
+) -> Result<()> {
+    store.create_yak(name, id, parent_id)?;
+    let key = if id.as_str().is_empty() {
+        &YakId::from(name.as_str())
+    } else {
+        id
+    };
+    store.write_field(key, STATE_FIELD, "todo")?;
+    store.write_field(key, NAME_FIELD, name.as_str())?;
+    let metadata_json = serde_json::json!({
+        "created_by": {
+            "name": metadata.author.name,
+            "email": metadata.author.email
+        },
+        "created_at": metadata.timestamp.as_epoch_secs()
+    });
+    store.write_field(key, CREATED_FIELD, &metadata_json.to_string())
+}
+
+fn apply_snapshot_event<T: WriteYakStore>(
+    store: &mut T,
+    snapshot: &crate::domain::YakMapSnapshot,
+) -> Result<()> {
+    store.clear_all()?;
+    for snap in &snapshot.yaks {
+        store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
+        if snap.state == crate::domain::YakState::Blocked {
+            store.write_field(&snap.id, STATE_FIELD, "todo")?;
+            store.write_field(
+                &snap.id,
+                MANUAL_BLOCKER_FIELD,
+                crate::domain::yak_map::MIGRATED_BLOCKED_REASON,
+            )?;
+        } else {
+            store.write_field(&snap.id, STATE_FIELD, &snap.state.to_string())?;
+        }
+        store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
+        if let Some(ref ctx) = snap.context {
+            if !ctx.is_empty() {
+                store.write_field(&snap.id, CONTEXT_FIELD, ctx)?;
+            }
+        }
+        let metadata_json = serde_json::json!({
+            "created_by": {
+                "name": snap.created_by.name,
+                "email": snap.created_by.email
+            },
+            "created_at": snap.created_at.as_epoch_secs()
+        });
+        store.write_field(&snap.id, CREATED_FIELD, &metadata_json.to_string())?;
+        for (field_name, content) in &snap.fields {
+            let actual_name = migrate_field_name(field_name);
+            store.write_field(&snap.id, actual_name, content)?;
+        }
+    }
+    for blocker in &snapshot.blockers {
+        store.write_blocker(&blocker.target, &blocker.blocker, blocker.reason.as_deref())?;
+    }
+    for blocker in &snapshot.manual_blockers {
+        store.write_field(&blocker.target, MANUAL_BLOCKER_FIELD, &blocker.reason)?;
+    }
+    Ok(())
+}
+
 fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> {
-    if apply_manual_blocker_event(store, event)? {
+    if apply_manual_blocker_event(store, event)? || apply_explicit_blocker_event(store, event)? {
         return Ok(());
     }
 
@@ -109,24 +206,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
                 parent_id,
             },
             metadata,
-        ) => {
-            store.create_yak(name, id, parent_id.as_ref())?;
-            let key = if id.as_str().is_empty() {
-                &YakId::from(name.as_str())
-            } else {
-                id
-            };
-            store.write_field(key, STATE_FIELD, "todo")?;
-            store.write_field(key, NAME_FIELD, name.as_str())?;
-            let metadata_json = serde_json::json!({
-                "created_by": {
-                    "name": metadata.author.name,
-                    "email": metadata.author.email
-                },
-                "created_at": metadata.timestamp.as_epoch_secs()
-            });
-            store.write_field(key, CREATED_FIELD, &metadata_json.to_string())?;
-        }
+        ) => apply_added_event(store, name, id, parent_id.as_ref(), metadata)?,
 
         YakEvent::Removed(RemovedEvent { id }, _) => {
             store.delete_yak(id)?;
@@ -153,41 +233,7 @@ fn apply_event<T: WriteYakStore>(store: &mut T, event: &YakEvent) -> Result<()> 
         | YakEvent::ManualBlockerRemoved(_, _) => {}
 
         YakEvent::Compacted(snapshot, _) | YakEvent::Migrated(snapshot, _) => {
-            store.clear_all()?;
-            for snap in &snapshot.yaks {
-                store.create_yak(&snap.name, &snap.id, snap.parent_id.as_ref())?;
-                if snap.state == crate::domain::YakState::Blocked {
-                    store.write_field(&snap.id, STATE_FIELD, "todo")?;
-                    store.write_field(
-                        &snap.id,
-                        MANUAL_BLOCKER_FIELD,
-                        crate::domain::yak_map::MIGRATED_BLOCKED_REASON,
-                    )?;
-                } else {
-                    store.write_field(&snap.id, STATE_FIELD, &snap.state.to_string())?;
-                }
-                store.write_field(&snap.id, NAME_FIELD, snap.name.as_str())?;
-                if let Some(ref ctx) = snap.context {
-                    if !ctx.is_empty() {
-                        store.write_field(&snap.id, CONTEXT_FIELD, ctx)?;
-                    }
-                }
-                let metadata_json = serde_json::json!({
-                    "created_by": {
-                        "name": snap.created_by.name,
-                        "email": snap.created_by.email
-                    },
-                    "created_at": snap.created_at.as_epoch_secs()
-                });
-                store.write_field(&snap.id, CREATED_FIELD, &metadata_json.to_string())?;
-                for (field_name, content) in &snap.fields {
-                    let actual_name = migrate_field_name(field_name);
-                    store.write_field(&snap.id, actual_name, content)?;
-                }
-            }
-            for blocker in &snapshot.manual_blockers {
-                store.write_field(&blocker.target, MANUAL_BLOCKER_FIELD, &blocker.reason)?;
-            }
+            apply_snapshot_event(store, snapshot)?;
         }
     }
     Ok(())

@@ -4,24 +4,30 @@ use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::RESERVED_FIELDS;
 use crate::domain::ports::{ReadYakStore, WriteYakStore};
 use crate::domain::slug::{Name, YakId};
-use crate::domain::{Yak, YakState, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD};
+use crate::domain::{
+    Yak, YakBlockerSnapshot, YakState, CONTEXT_FIELD, ID_FIELD, NAME_FIELD, STATE_FIELD,
+};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 const PARENT_ID_FIELD: &str = "_parent_id";
+type BlockerKey = (String, String);
+type Blockers = HashMap<BlockerKey, Option<String>>;
 
 #[derive(Clone)]
 pub struct InMemoryStorage {
     // HashMap: storage_key -> HashMap of field_name -> field_content
     // storage_key is either the yak id (if non-empty) or the yak name (legacy)
     yaks: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+    blockers: Arc<RwLock<Blockers>>,
 }
 
 impl InMemoryStorage {
     pub fn new() -> Self {
         Self {
             yaks: Arc::new(RwLock::new(HashMap::new())),
+            blockers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -114,6 +120,10 @@ impl WriteYakStore for InMemoryStorage {
             .unwrap_or_else(|| id.as_str().to_string());
         let mut yaks = self.yaks.write().unwrap();
         yaks.remove(&key);
+        self.blockers
+            .write()
+            .unwrap()
+            .retain(|(target, blocker), _| target != id.as_str() && blocker != id.as_str());
         Ok(())
     }
 
@@ -199,9 +209,26 @@ impl WriteYakStore for InMemoryStorage {
         Ok(())
     }
 
+    fn write_blocker(&self, target: &YakId, blocker: &YakId, reason: Option<&str>) -> Result<()> {
+        self.blockers.write().unwrap().insert(
+            (target.as_str().to_string(), blocker.as_str().to_string()),
+            reason.map(str::to_string),
+        );
+        Ok(())
+    }
+
+    fn remove_blocker(&self, target: &YakId, blocker: &YakId) -> Result<()> {
+        self.blockers
+            .write()
+            .unwrap()
+            .remove(&(target.as_str().to_string(), blocker.as_str().to_string()));
+        Ok(())
+    }
+
     fn clear_all(&self) -> Result<()> {
         let mut yaks = self.yaks.write().unwrap();
         yaks.clear();
+        self.blockers.write().unwrap().clear();
         Ok(())
     }
 }
@@ -426,6 +453,27 @@ impl ReadYakStore for InMemoryStorage {
         }
     }
 
+    fn list_blockers(&self) -> Result<Vec<YakBlockerSnapshot>> {
+        let mut blockers = self
+            .blockers
+            .read()
+            .unwrap()
+            .iter()
+            .map(|((target, blocker), reason)| YakBlockerSnapshot {
+                target: YakId::from(target.as_str()),
+                blocker: YakId::from(blocker.as_str()),
+                reason: reason.clone(),
+            })
+            .collect::<Vec<_>>();
+        blockers.sort_by(|a, b| {
+            a.target
+                .as_str()
+                .cmp(b.target.as_str())
+                .then_with(|| a.blocker.as_str().cmp(b.blocker.as_str()))
+        });
+        Ok(blockers)
+    }
+
     fn read_field(&self, id: &YakId, field_name: &str) -> Result<String> {
         let yaks = self.yaks.read().unwrap();
         let key = Self::resolve_key_from_yaks(&yaks, id.as_str())
@@ -471,6 +519,37 @@ mod tests {
             .unwrap();
         // Should be findable by name
         assert!(ReadYakStore::fuzzy_find_yak_id(&storage, "child").is_ok());
+    }
+
+    #[test]
+    fn deleting_yak_removes_blockers_where_it_is_target_or_blocker() {
+        let storage = InMemoryStorage::new();
+        let target = YakId::from("target");
+        let blocker = YakId::from("blocker");
+        let unrelated_target = YakId::from("unrelated-target");
+        let unrelated_blocker = YakId::from("unrelated-blocker");
+
+        storage
+            .write_blocker(&target, &unrelated_blocker, Some("target blocked"))
+            .unwrap();
+        storage
+            .write_blocker(&unrelated_target, &blocker, Some("blocker blocks"))
+            .unwrap();
+        storage
+            .write_blocker(&unrelated_target, &unrelated_blocker, Some("keep"))
+            .unwrap();
+
+        storage.delete_yak(&target).unwrap();
+        storage.delete_yak(&blocker).unwrap();
+
+        assert_eq!(
+            storage.list_blockers().unwrap(),
+            vec![YakBlockerSnapshot {
+                target: unrelated_target,
+                blocker: unrelated_blocker,
+                reason: Some("keep".to_string()),
+            }]
+        );
     }
 
     #[test]

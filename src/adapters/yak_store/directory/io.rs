@@ -5,10 +5,12 @@ use super::permissions::{
 };
 use super::query::resolve_by_id;
 use crate::domain::slug::{slugify, Name, YakId};
-use crate::domain::{CONTEXT_FIELD, ID_FIELD, NAME_FIELD};
+use crate::domain::{YakBlockerSnapshot, CONTEXT_FIELD, ID_FIELD, NAME_FIELD};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
+
+const BLOCKERS_FILE: &str = ".blockers.json";
 
 /// Create a new yak directory.
 pub(super) fn create_yak(
@@ -238,6 +240,11 @@ pub(super) fn clear(base_path: &Path) -> Result<()> {
         return Ok(());
     }
 
+    let blockers_file = base_path.join(BLOCKERS_FILE);
+    if blockers_file.exists() {
+        fs::remove_file(blockers_file)?;
+    }
+
     // base_path stays writable, only make individual yak directories writable before removing
     for entry in fs::read_dir(base_path)? {
         let entry = entry?;
@@ -286,6 +293,57 @@ pub(super) fn write_field(
 }
 
 /// Read a field from a yak directory.
+pub(super) fn read_blockers(base_path: &Path) -> Result<Vec<YakBlockerSnapshot>> {
+    let path = base_path.join(BLOCKERS_FILE);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let json =
+        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let values: Vec<serde_json::Value> = serde_json::from_str(&json)
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+
+    let blockers = values
+        .into_iter()
+        .filter_map(|value| {
+            Some(YakBlockerSnapshot {
+                target: YakId::from(value.get("target")?.as_str()?),
+                blocker: YakId::from(value.get("blocker")?.as_str()?),
+                reason: value
+                    .get("reason")
+                    .and_then(|reason| reason.as_str())
+                    .map(str::to_string),
+            })
+        })
+        .collect();
+    Ok(blockers)
+}
+
+pub(super) fn write_blockers(base_path: &Path, blockers: &[YakBlockerSnapshot]) -> Result<()> {
+    fs::create_dir_all(base_path)?;
+    let path = base_path.join(BLOCKERS_FILE);
+    if blockers.is_empty() {
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        return Ok(());
+    }
+
+    let values = blockers
+        .iter()
+        .map(|blocker| {
+            serde_json::json!({
+                "target": blocker.target.as_str(),
+                "blocker": blocker.blocker.as_str(),
+                "reason": blocker.reason,
+            })
+        })
+        .collect::<Vec<_>>();
+    fs::write(&path, serde_json::to_string(&values)?)
+        .with_context(|| format!("Failed to write {}", path.display()))
+}
+
 pub(super) fn read_field(base_path: &Path, id: &YakId, field_name: &str) -> Result<String> {
     let dir = resolve_by_id(base_path, id.as_str())
         .or_else(|| {

@@ -2077,6 +2077,10 @@ mod tests {
             fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not implemented")
             }
+
+            fn list_blockers(&self) -> Result<Vec<crate::domain::YakBlockerSnapshot>> {
+                Ok(Vec::new())
+            }
         }
 
         let store = MockStore;
@@ -2118,6 +2122,10 @@ mod tests {
 
             fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not implemented")
+            }
+
+            fn list_blockers(&self) -> Result<Vec<crate::domain::YakBlockerSnapshot>> {
+                Ok(Vec::new())
             }
         }
 
@@ -2216,6 +2224,10 @@ mod tests {
             }
             fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not needed")
+            }
+
+            fn list_blockers(&self) -> Result<Vec<crate::domain::YakBlockerSnapshot>> {
+                Ok(Vec::new())
             }
         }
 
@@ -2558,6 +2570,10 @@ mod tests {
             }
             fn read_field(&self, _id: &YakId, _field_name: &str) -> Result<String> {
                 anyhow::bail!("Not needed")
+            }
+
+            fn list_blockers(&self) -> Result<Vec<crate::domain::YakBlockerSnapshot>> {
+                Ok(Vec::new())
             }
         }
 
