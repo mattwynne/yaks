@@ -82,7 +82,7 @@ The CLI is designed to work for humans (readable, ergonomic, tab-completed) and 
 
 *[screenshot: yx ls showing the real project tree]*
 
-It has states (`todo`, `wip`, `blocked`, `done`), context and custom fields, tags, sync, an event log, and tab completion. It's deliberately minimal — no epics, stories or tasks. Bring your own workflow.
+It has workflow states (`todo`, `wip`, `done`), explicit blockers for work that is waiting, context and custom fields, tags, sync, an event log, and tab completion. It's deliberately minimal — no epics, stories or tasks. Bring your own workflow.
 
 *[screenshot or gif of yx sync]*
 

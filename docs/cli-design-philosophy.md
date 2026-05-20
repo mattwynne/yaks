@@ -277,6 +277,9 @@ yx done "task"
 
 # Advanced features available but not required
 yx list --format markdown --only not-done
+yx list --ready
+yx blocker add "blocked task" --reason "waiting for credentials"
+yx blocker add "blocked task" --by "blocking task" --reason "waiting on it"
 yx done --recursive "parent task"
 yx context "task" --show
 
@@ -287,7 +290,7 @@ yx list --help         # Detailed format options
 
 **Complexity layers:**
 1. Core commands (add, list, done, rm) - visible in main help
-2. Useful flags (--format, --only) - visible in command help
+2. Useful flags (--format, --only, --ready) - visible in command help
 3. Advanced features (--recursive, stdin) - documented but optional
 
 **Why it matters:** New users aren't overwhelmed. Power users discover advanced features gradually.

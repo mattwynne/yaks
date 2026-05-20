@@ -92,7 +92,7 @@ enum Commands {
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
-        /// Filter to yaks that are actionable now (todo with all direct children done)
+        /// Filter to yaks that are actionable now (todo, unblocked, with children done)
         #[arg(long)]
         ready: bool,
         /// Filter by tag name (exact match, @ prefix stripped)

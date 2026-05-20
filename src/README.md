@@ -27,10 +27,10 @@ adapters to ports, and routes commands to use cases. See
 Core business logic. No dependencies on infrastructure.
 
 - **`yak.rs`** - `YakView` read-model DTO (id, name, parent_id, state, context, fields, children)
+- **`yak_state.rs`** - `YakState` enum for workflow state: `todo`, `wip`, or `done`. `blocked` is not a workflow state; availability is derived from blockers, hierarchy, and state.
 - **`yak_map.rs`** - `YakMap` aggregate: the write model that enforces all
-  invariants (e.g. parent must exist, parent can't be done if children aren't)
-- **`event.rs`** - `YakEvent` enum: Added, Removed, Moved, FieldUpdated.
-  Events carry `EventMetadata` (author, timestamp).
+  invariants (e.g. parent must exist, parent can't be done if children aren't, blocker relationships cannot create cycles or duplicate hierarchy)
+- **`events/`** - `YakEvent` definitions: Added, Removed, Moved, FieldUpdated, Compacted, and blocker events. Events carry `EventMetadata` (author, timestamp).
 - **`slug.rs`** - Identity types: `YakId` (immutable), `Slug` (filesystem),
   `Name` (display). See [ADR 0005](../docs/adr/0005-identity-model-for-yaks.md).
 - **`field.rs`** - Field name validation, reserved field constants
@@ -52,8 +52,13 @@ with an `execute` method.
   commands to the `YakMap` aggregate, appends events, notifies the bus
 - Use cases: `AddYak`, `ListYaks`, `DoneYak`, `StartYak`, `RemoveYak`,
   `PruneYaks`, `EditContext`, `ShowContext`, `SetState`, `MoveYak`,
-  `RenameYak`, `ShowField`, `WriteField`, `ShowLog`, `SyncYaks`,
-  `Completions`
+  `RenameYak`, `AddBlocker`, `RemoveBlocker`, `ShowField`, `WriteField`,
+  `ShowLog`, `SyncYaks`, `Completions`
+- Readiness is computed in the application layer for list/show output:
+  `yx list --ready` returns todo yaks with no unfinished children, no active
+  yak blockers, no manual blockers, and no state reason that makes them
+  unavailable. JSON output includes `ready`, `blocked_by`, and readiness
+  reason details for agents/scripts.
 
 ### Adapters (`adapters/`)
 

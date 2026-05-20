@@ -10,7 +10,7 @@ A discovery tree is a tree of nested goals. Put prerequisites underneath the lar
 
 Yaks is built around three values:
 
-- **Simple**: everything is a yak. No separate epics, stories, tasks, bugs, or chores. Just multi-word names, optional context, tags, and fields when your team needs them. The core flow is `todo` → `wip` → `done`, with `blocked` available when work is explicitly waiting.
+- **Simple**: everything is a yak. No separate epics, stories, tasks, bugs, or chores. Just multi-word names, optional context, tags, and fields when your team needs them. The workflow state is only `todo` → `wip` → `done`; readiness is derived from blockers, hierarchy, and state when work is explicitly waiting.
 - **Collaborative**: yaks sync through git with conflict-free event merging. Multiple people and coding agents can update the same discovery tree from different branches, clones, and worktrees without coordinating edits.
 - **Delightful**: the CLI should feel instant (<100ms for everyday operations), forgiving, and pleasant: fuzzy matching, tab completion, multi-word names, JSON output, and a pretty tree.
 
@@ -49,6 +49,18 @@ echo 'This project uses yaks (yx) for task management. See !yx help' > AGENTS.md
 ```
 
 Multiple agents can update the shared discovery tree at the same time. Yaks uses an event-sourced CRDT-style merge on a hidden git ref, so simultaneous updates sync without normal file merge conflicts.
+
+### Readiness and blockers
+
+Yaks keeps workflow state small: `todo`, `wip`, or `done`. Whether a yak is ready to start is derived from that state, its children, and blockers.
+
+```bash
+yx list --ready
+yx blocker add "publish announcement" --reason "waiting for credentials"
+yx blocker add "deploy release" --by "security review" --reason "waiting on approval"
+```
+
+`yx list --only not-done` includes every yak that is not `done`, whether ready or blocked. Use `yx list --ready` when you want only actionable `todo` yaks whose children are complete and whose blockers are resolved.
 
 ## Why "Yaks"?
 

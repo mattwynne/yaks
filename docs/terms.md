@@ -399,6 +399,28 @@ of them because it serves a different lifecycle moment
 (freezing state vs. live read model vs. aggregate
 internals). Implements `From<&YakView>` for conversion.
 
+### Readiness
+
+Whether a yak is actionable now. Readiness is derived, not stored as a workflow state.
+
+A yak is ready when it is `todo`, has no incomplete children, has no active yak blockers, and has no manual/external blocker. Parents become ready only after their children are complete; a yak blocker stops blocking once that yak is done. `yx list --ready` filters by this derived value, and JSON list/show output exposes readiness details for agents/scripts, including `ready`, `blocked_by`, and structured readiness reasons.
+
+- **Used in**: `features/list.feature`, `features/show.feature`, `features/blockers.feature`
+- **Related to**: State, Blocker, Parent/Child
+
+### Blocker
+
+An explicit reason a yak is not ready.
+
+Blockers come in two forms:
+- **Manual/external blocker**: `yx blocker add <yak> --reason "waiting for credentials"`.
+- **Yak blocker**: `yx blocker add <yak> --by <blocking-yak> --reason "waiting on it"`.
+
+The `--reason` flag is required for manual blockers and optional for yak blockers. Explicit blocker relationships cannot duplicate blocker relationships already implied by hierarchy, and cannot create cycles.
+
+- **Used in**: `features/blockers.feature`, `features/state.feature`
+- **Related to**: Readiness, State, Hierarchy
+
 ### State
 
 The lifecycle stage of a yak: todo, wip, or done.
@@ -415,7 +437,7 @@ The lifecycle stage of a yak: todo, wip, or done.
 - **Related to**: Todo, Wip, Done
 
 `YakState` is a proper enum in the domain, but on disk
-it's stored as a string in the `.state` reserved field.
+it's stored as a string in the `.state` reserved field. `blocked` is a legacy stored state only; current code migrates it to `todo` plus a manual blocker.
 
 **State propagation rules** (from `features/state.feature`
 and `features/done.feature`):
