@@ -1,5 +1,23 @@
 use serde::Serialize;
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ReadinessView {
+    pub ready: bool,
+    pub reasons: Vec<ReadinessReasonView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReadinessReasonView {
+    pub kind: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub yak: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocker: Option<YakBlockerView>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<String>,
+}
+
 /// View model for displaying detailed yak information (used in `yx show`)
 #[derive(Debug, Clone, Serialize)]
 pub struct YakDetailView {
@@ -9,6 +27,7 @@ pub struct YakDetailView {
     pub breadcrumb: Vec<YakChildView>,
     pub name: String,
     pub state: String,
+    pub readiness: ReadinessView,
     /// Formatted date string
     pub created_at: String,
     /// Author name
@@ -66,6 +85,7 @@ pub struct YakTreeNode {
     pub state: String,
     /// Derived actionable status: true when the yak is todo and all direct children are done.
     pub ready: bool,
+    pub readiness: ReadinessView,
     /// Presentation hint: true when any descendant is actively wip.
     #[serde(skip)]
     pub has_wip_descendant: bool,

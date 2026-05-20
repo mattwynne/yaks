@@ -16,6 +16,7 @@ mod list_tags;
 mod list_yaks;
 mod move_yak;
 mod prune_yaks;
+mod readiness;
 mod remove_blocker;
 mod remove_tag;
 mod remove_yak;

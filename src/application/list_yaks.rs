@@ -1,7 +1,7 @@
 // ListYaks use case - displays all yaks
 
-use crate::adapters::views::{Message, YakBlockerView, YakTreeNode, YakTreeView};
-use crate::domain::events::BlockerSource;
+use crate::adapters::views::{Message, ReadinessView, YakBlockerView, YakTreeNode, YakTreeView};
+use crate::application::readiness::build_readiness_views;
 use crate::domain::slug::{Name, YakId};
 use crate::domain::{Yak, YakState};
 // DisplayPort accessed via app.display
@@ -27,7 +27,7 @@ struct ViewBuildContext<'a> {
     only: Option<&'a str>,
     tag: Option<&'a str>,
     ready: bool,
-    readiness_by_id: &'a HashMap<YakId, bool>,
+    readiness_by_id: &'a HashMap<YakId, ReadinessView>,
     blockers_by_id: &'a HashMap<YakId, Vec<YakBlockerView>>,
     visible_ids: Option<&'a HashSet<YakId>>,
 }
@@ -192,7 +192,8 @@ impl ListYaks {
                     .map(|y| y.id.as_str().to_string())
                     .unwrap_or_default();
 
-                let node_ready = ready_for(node, context.readiness_by_id);
+                let readiness = readiness_for(node, context.readiness_by_id);
+                let node_ready = readiness.ready;
                 let has_wip_descendant = has_wip_descendant(node);
                 let blocked_by = node
                     .yak
@@ -235,6 +236,7 @@ impl ListYaks {
                     id,
                     state: state_str,
                     ready: node_ready,
+                    readiness,
                     has_wip_descendant,
                     blocked_by,
                     context: yak_context,
@@ -271,7 +273,7 @@ impl ListYaks {
         only: Option<&str>,
         tag: Option<&str>,
         ready: bool,
-        readiness_by_id: &HashMap<YakId, bool>,
+        readiness_by_id: &HashMap<YakId, ReadinessView>,
         visible_ids: Option<&HashSet<YakId>>,
     ) -> bool {
         node.children.iter().any(|child| {
@@ -295,7 +297,7 @@ impl ListYaks {
         only: Option<&str>,
         tag: Option<&str>,
         ready: bool,
-        readiness_by_id: &HashMap<YakId, bool>,
+        readiness_by_id: &HashMap<YakId, ReadinessView>,
     ) -> bool {
         let ready_matches = !ready || ready_for(node, readiness_by_id);
         let only_matches = match only {
@@ -321,44 +323,20 @@ impl UseCase for ListYaks {
         let only = self.only.as_deref();
         let tag = self.tag.as_deref();
         let yaks = app.store.list_yaks()?;
-        let yaks_by_id: HashMap<YakId, Yak> = yaks
-            .iter()
-            .map(|yak| (yak.id.clone(), yak.clone()))
-            .collect();
         let (readiness_by_id, blockers_by_id): (
-            HashMap<YakId, bool>,
+            HashMap<YakId, ReadinessView>,
             HashMap<YakId, Vec<YakBlockerView>>,
         ) = app.with_yak_map_result(|map| {
-            let readiness = yaks
+            let readiness = build_readiness_views(map, &yaks);
+            let blockers = readiness
                 .iter()
-                .map(|yak| map.is_ready(&yak.id).map(|ready| (yak.id.clone(), ready)))
-                .collect::<Result<HashMap<_, _>>>()?;
-            let blockers = yaks
-                .iter()
-                .map(|yak| {
-                    let blocked_by = map
-                        .active_blockers(&yak.id)
-                        .into_iter()
-                        .filter_map(|blocker| match blocker.source {
-                            BlockerSource::Yak(id) => {
-                                yaks_by_id.get(&id).map(|yak| YakBlockerView {
-                                    kind: "yak".to_string(),
-                                    id: Some(yak.id.as_str().to_string()),
-                                    name: yak.name.to_string(),
-                                    state: Some(yak.state.to_string()),
-                                    reason: blocker.reason,
-                                })
-                            }
-                            BlockerSource::Manual => Some(YakBlockerView {
-                                kind: "manual".to_string(),
-                                id: None,
-                                name: "manual".to_string(),
-                                state: None,
-                                reason: blocker.reason,
-                            }),
-                        })
+                .map(|(id, view)| {
+                    let blocked_by = view
+                        .reasons
+                        .iter()
+                        .filter_map(|reason| reason.blocker.clone())
                         .collect::<Vec<_>>();
-                    (yak.id.clone(), blocked_by)
+                    (id.clone(), blocked_by)
                 })
                 .collect();
             Ok((readiness, blockers))
@@ -449,12 +427,19 @@ impl UseCase for ListYaks {
     }
 }
 
-fn ready_for(node: &YakNode, readiness_by_id: &HashMap<YakId, bool>) -> bool {
+fn readiness_for(node: &YakNode, readiness_by_id: &HashMap<YakId, ReadinessView>) -> ReadinessView {
     node.yak
         .as_ref()
         .and_then(|yak| readiness_by_id.get(&yak.id))
-        .copied()
-        .unwrap_or(false)
+        .cloned()
+        .unwrap_or(ReadinessView {
+            ready: false,
+            reasons: vec![],
+        })
+}
+
+fn ready_for(node: &YakNode, readiness_by_id: &HashMap<YakId, ReadinessView>) -> bool {
+    readiness_for(node, readiness_by_id).ready
 }
 
 fn has_wip_descendant(node: &YakNode) -> bool {

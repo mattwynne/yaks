@@ -298,7 +298,7 @@ fn buffer_to_string(buffer: &ratatui::buffer::Buffer) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::views::YakChildView;
+    use crate::adapters::views::{ReadinessView, YakChildView};
     use ratatui::backend::TestBackend;
 
     /// Helper to build a YakDetailView for tests with sensible defaults
@@ -319,6 +319,10 @@ mod tests {
             breadcrumb,
             name: name.to_string(),
             state: state.to_string(),
+            readiness: ReadinessView {
+                ready: true,
+                reasons: vec![],
+            },
             created_at: created_at.to_string(),
             created_by: created_by.to_string(),
             children,

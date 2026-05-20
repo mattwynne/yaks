@@ -51,6 +51,7 @@ impl ConsoleDisplay {
                         &node.tags,
                         node.has_wip_descendant,
                     );
+                    self.display_readiness_detail(&node_prefix, node);
                 }
                 _ => {
                     // markdown
@@ -200,6 +201,29 @@ impl ConsoleDisplay {
         .unwrap();
     }
 
+    fn display_readiness_detail(&self, node_prefix: &str, node: &YakTreeNode) {
+        let visible_reasons = node
+            .readiness
+            .reasons
+            .iter()
+            .filter(|reason| reason.kind != "incomplete_children" && reason.kind != "state")
+            .collect::<Vec<_>>();
+        if node.readiness.ready || visible_reasons.is_empty() {
+            return;
+        }
+        let mut out = self.output.lock().unwrap();
+        let reasons = visible_reasons
+            .iter()
+            .map(|reason| reason.message.as_str())
+            .collect::<Vec<_>>()
+            .join("; ");
+        if self.options.color {
+            writeln!(out, "{node_prefix}  \x1b[2mnot ready: {reasons}\x1b[0m").unwrap();
+        } else {
+            writeln!(out, "{node_prefix}  not ready: {reasons}").unwrap();
+        }
+    }
+
     fn display_yak_markdown(&self, depth: usize, name: &Name, state: &str, tags: &[String]) {
         let mut out = self.output.lock().unwrap();
         let indent = "  ".repeat(depth);
@@ -215,6 +239,19 @@ impl ConsoleDisplay {
             writeln!(out, "{line}")
         }
         .unwrap();
+    }
+
+    fn display_show_readiness(&self, view: &YakDetailView) {
+        self.info("");
+        if view.readiness.ready {
+            self.info("Ready: yes");
+            return;
+        }
+
+        self.info("Ready: no");
+        for reason in &view.readiness.reasons {
+            self.info(&format!("  - {}", reason.message));
+        }
     }
 
     pub fn display_section_rule(&self, label: &str) {
@@ -442,6 +479,8 @@ impl crate::domain::ports::DisplayPort for ConsoleDisplay {
                 writeln!(out, "{bottom}").unwrap();
             }
         }
+
+        self.display_show_readiness(view);
 
         // Context
         if view.has_context {

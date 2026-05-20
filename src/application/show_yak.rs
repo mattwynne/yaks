@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use super::{Application, UseCase};
 use crate::adapters::views::{YakChildView, YakDetailView};
+use crate::application::readiness::build_readiness_views;
 use crate::domain::tag::format_tag;
 
 /// Convert a snake_case field name to Title Case (e.g. "relates_to" → "Relates To")
@@ -47,6 +48,15 @@ impl UseCase for ShowYak {
 
         let id = app.resolve_yak_id(&self.name)?;
         let yak = app.store.get_yak(&id)?;
+        let all_yaks = app.store.list_yaks()?;
+        let readiness = app.with_yak_map_result(|map| {
+            Ok(build_readiness_views(map, &all_yaks).remove(&id).unwrap_or(
+                crate::adapters::views::ReadinessView {
+                    ready: false,
+                    reasons: vec![],
+                },
+            ))
+        })?;
         let visible_ids = app.focused_yak_ids()?;
 
         // Breadcrumb: walk parent chain to collect ancestors with id, name, state (root-first)
@@ -66,7 +76,6 @@ impl UseCase for ShowYak {
         // Collect immediate children, sorted by done-state then name
         let children: Vec<YakChildView> = {
             // Find children by scanning all yaks for matching parent_id
-            let all_yaks = app.store.list_yaks()?;
             let mut kids: Vec<_> = all_yaks
                 .iter()
                 .filter(|y| y.parent_id.as_ref() == Some(&yak.id))
@@ -115,6 +124,7 @@ impl UseCase for ShowYak {
             breadcrumb: ancestors,
             name: yak.name.to_string(),
             state: yak.state.to_string(),
+            readiness,
             created_at,
             created_by: yak.created_by.name.clone(),
             children,
