@@ -1,5 +1,6 @@
 mod commit;
 pub mod git;
+pub mod global_event_bus;
 #[cfg(any(test, feature = "test-support"))]
 pub mod memory;
 pub mod migrate_v1_to_v2;
@@ -14,6 +15,7 @@ mod sync;
 mod tree;
 
 pub use git::GitEventStore;
+pub use global_event_bus::GitGlobalEventBus;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryEventStore;
 pub use noop::NoOpEventStore;
