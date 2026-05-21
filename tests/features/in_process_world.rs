@@ -425,7 +425,7 @@ impl TestWorld for InProcessWorld {
     }
 
     fn list_yaks_ready(&mut self) -> Result<()> {
-        self.execute(|app| app.handle(ListYaks::new("pretty", None, None).with_ready(true)))
+        self.execute(|app| app.handle(ListYaks::new("ids", None, None).with_ready(true)))
     }
 
     fn list_yaks_with_format(&mut self, format: &str) -> Result<()> {

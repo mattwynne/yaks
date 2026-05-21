@@ -84,11 +84,11 @@ enum Commands {
     List {
         #[arg(
             long,
-            default_value = "pretty",
+            value_name = "FORMAT",
             help = "Output format: pretty (default), markdown/md, plain/raw, json, ids",
-            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line\n  - json: Full yak tree as JSON array (for agents/scripts)\n  - ids: Just yak IDs, one per line (for piping)"
+            long_help = "Output format:\n  - pretty: Unicode box-drawing with colored status dots (default)\n  - markdown (or md): Checkbox-style list with indentation\n  - plain (or raw): Just yak names, one per line\n  - json: Full yak tree as JSON array (for agents/scripts)\n  - ids: Just yak IDs, one per line (for piping)\n\nDefault: pretty, or ids when --ready is used."
         )]
-        format: String,
+        format: Option<String>,
         /// Filter by completion status (done, not-done)
         #[arg(long)]
         only: Option<String>,
@@ -635,7 +635,15 @@ fn route_command(
             ready,
             tag,
         } => {
-            let use_format = if format == "json" { "pretty" } else { &format };
+            let requested_format =
+                format
+                    .as_deref()
+                    .unwrap_or(if ready { "ids" } else { "pretty" });
+            let use_format = if requested_format == "json" {
+                "pretty"
+            } else {
+                requested_format
+            };
             handler.handle(
                 ListYaks::new(use_format, only.as_deref(), tag.as_deref()).with_ready(ready),
             )
@@ -895,7 +903,7 @@ fn main() -> Result<()> {
     // Check if command requests JSON format
     let wants_json = match &cli.command {
         Commands::Show { format, .. } => format == "json",
-        Commands::List { format, .. } => format == "json",
+        Commands::List { format, .. } => format.as_deref() == Some("json"),
         _ => false,
     };
 

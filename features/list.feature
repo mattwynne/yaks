@@ -136,6 +136,18 @@ Feature: List yaks
         parent task/child task
         """
 
+  Rule: Ready yaks default to IDs for scripting
+
+    Example: Default ready list is flat IDs only
+      Given I have a clean git repository
+      And I add the yak "parent task" with id "parent-task"
+      And I add the yak "ready child" with id "ready-child" under "parent task"
+      When I list ready yaks
+      Then the output should be:
+        """
+        ready-child
+        """
+
   Rule: Yaks can be filtered by completion status
 
     Example: Show only incomplete yaks

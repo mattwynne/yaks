@@ -72,7 +72,7 @@ Feature: Explicit blockers affect readiness
     Then the JSON yak "publish announcement" should have ready true
     And the JSON yak "publish announcement" should not have blockers
     When I list ready yaks
-    Then the output should include "publish announcement"
+    Then the output should include "publish-announcement-"
     When I show the log
     Then the output should include "removed blocker"
 
@@ -117,7 +117,7 @@ Feature: Explicit blockers affect readiness
     Then the JSON yak "deploy release" should have ready true
     And the JSON yak "deploy release" should not have blockers
     When I list ready yaks
-    Then the output should include "deploy release"
+    Then the output should include "deploy-release-"
 
   Scenario: Recursively completing a subtree removes blockers supplied by descendants
     Given I add the yak "launch conference"
