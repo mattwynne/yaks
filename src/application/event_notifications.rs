@@ -30,7 +30,7 @@ impl EventNotification {
 
         Self {
             event_id: metadata.event_id.clone().unwrap_or_else(|| "-".to_string()),
-            event_type: event_type(event).to_string(),
+            event_type: yak_event_type(event).to_string(),
             yak_id,
             yak_name,
             timestamp: metadata.timestamp.as_epoch_secs(),
@@ -52,7 +52,7 @@ pub fn event_notification_json_line(
     EventNotification::from_event(event, resolve_name).to_json_line()
 }
 
-fn event_type(event: &YakEvent) -> &'static str {
+pub fn yak_event_type(event: &YakEvent) -> &'static str {
     match event {
         YakEvent::Added(_, _) => "Added",
         YakEvent::Removed(_, _) => "Removed",

@@ -314,6 +314,15 @@ enum EventsAction {
         #[arg(long)]
         timeout: Option<String>,
     },
+    /// Wait for the next event of a given PascalCase domain event type
+    WaitForNext {
+        /// Either EVENT_TYPE, or yak name words followed by EVENT_TYPE.
+        #[arg(required = true)]
+        args: Vec<String>,
+        /// Stop waiting after a duration like 30s, 2m, or 500ms
+        #[arg(long)]
+        timeout: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -473,6 +482,50 @@ fn handle_events_command(handler: &mut impl CommandHandler, action: EventsAction
             let timeout = timeout.as_deref().map(parse_duration).transpose()?;
             handler.handle(WatchEvents::new(yak).with_timeout(timeout))
         }
+        EventsAction::WaitForNext { args, timeout } => {
+            let (yak, event_type) = parse_wait_for_next_args(args)?;
+            validate_event_type(&event_type)?;
+            let timeout = timeout.as_deref().map(parse_duration).transpose()?;
+            handler.handle(
+                WatchEvents::new(yak)
+                    .with_timeout(timeout)
+                    .waiting_for(event_type),
+            )
+        }
+    }
+}
+
+fn parse_wait_for_next_args(mut args: Vec<String>) -> Result<(Option<String>, String)> {
+    let event_type = args
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("wait-for-next requires an event type"))?;
+    let yak = if args.is_empty() {
+        None
+    } else {
+        Some(args.join(" "))
+    };
+    Ok((yak, event_type))
+}
+
+fn validate_event_type(event_type: &str) -> Result<()> {
+    const EVENT_TYPES: &[&str] = &[
+        "Added",
+        "Removed",
+        "Moved",
+        "FieldUpdated",
+        "BlockerAdded",
+        "BlockerUpdated",
+        "BlockerRemoved",
+        "ManualBlockerAdded",
+        "ManualBlockerUpdated",
+        "ManualBlockerRemoved",
+        "Compacted",
+        "Migrated",
+    ];
+    if EVENT_TYPES.contains(&event_type) {
+        Ok(())
+    } else {
+        anyhow::bail!("unsupported event type '{event_type}'")
     }
 }
 
@@ -926,6 +979,32 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
     use yx::application::COMMANDS;
+
+    #[test]
+    fn parses_wait_for_next_args() {
+        assert_eq!(
+            parse_wait_for_next_args(vec!["BlockerRemoved".to_string()]).unwrap(),
+            (None, "BlockerRemoved".to_string())
+        );
+        assert_eq!(
+            parse_wait_for_next_args(vec![
+                "project".to_string(),
+                "yak".to_string(),
+                "BlockerRemoved".to_string(),
+            ])
+            .unwrap(),
+            (
+                Some("project yak".to_string()),
+                "BlockerRemoved".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn validates_pascal_case_event_types_only() {
+        assert!(validate_event_type("BlockerRemoved").is_ok());
+        assert!(validate_event_type("blocker-removed").is_err());
+    }
 
     #[test]
     fn parses_duration_units() {

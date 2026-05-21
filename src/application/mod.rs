@@ -52,7 +52,7 @@ pub use done_yak::DoneYak;
 pub use edit_context::EditContext;
 pub use edit_field::EditField;
 pub use ensure_gitignore::EnsureGitignore;
-pub use event_notifications::{event_notification_json_line, EventNotification};
+pub use event_notifications::{event_notification_json_line, yak_event_type, EventNotification};
 pub use event_watcher::{referenced_yak_ids, EventSubtreeFilter, EventWatchScope, EventWatcher};
 pub use generate_completions::GenerateCompletions;
 pub use list_tags::ListTags;
