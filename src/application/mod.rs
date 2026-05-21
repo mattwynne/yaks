@@ -35,6 +35,7 @@ mod show_yak;
 mod start_yak;
 mod sync_yaks;
 mod use_case;
+mod watch_events;
 mod write_context;
 mod write_field;
 
@@ -74,5 +75,6 @@ pub use show_yak::ShowYak;
 pub use start_yak::StartYak;
 pub use sync_yaks::SyncYaks;
 pub use use_case::UseCase;
+pub use watch_events::WatchEvents;
 pub use write_context::WriteContext;
 pub use write_field::WriteField;

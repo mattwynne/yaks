@@ -23,6 +23,7 @@ pub const COMMANDS: &[&str] = &[
     "reset",
     "sync",
     "log",
+    "events",
     "blocker",
     "tag",
     "tags",

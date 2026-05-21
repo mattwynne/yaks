@@ -36,6 +36,7 @@ pub struct Application<'a> {
     pub input: &'a dyn InputPort,
     pub local_workspace: &'a dyn LocalWorkspacePort,
     pub event_reader: Option<&'a dyn EventStoreReader>,
+    pub(super) global_event_bus: Option<&'a mut dyn crate::domain::ports::GlobalEventBus>,
     auth: &'a dyn AuthenticationPort,
 }
 
@@ -59,8 +60,16 @@ impl<'a> Application<'a> {
             input,
             local_workspace,
             event_reader,
+            global_event_bus: None,
             auth,
         }
+    }
+
+    pub fn set_global_event_bus(
+        &mut self,
+        global_event_bus: &'a mut dyn crate::domain::ports::GlobalEventBus,
+    ) {
+        self.global_event_bus = Some(global_event_bus);
     }
 
     pub fn focus_id(&self) -> Result<Option<YakId>> {

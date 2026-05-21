@@ -38,6 +38,10 @@ impl<'a> EventWatcher<'a> {
         };
         Ok(Some(self.filter.filter_batch(batch)?))
     }
+
+    pub fn resolve_name(&self, id: &str) -> String {
+        self.filter.resolve_name(id)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +79,20 @@ impl EventSubtreeFilter {
         }
 
         Ok(relevant)
+    }
+
+    pub fn resolve_name(&self, id: &str) -> String {
+        let id = YakId::from(id);
+        self.current_map()
+            .ok()
+            .and_then(|map| {
+                map.snapshot(Vec::new())
+                    .yaks
+                    .into_iter()
+                    .find(|yak| yak.id == id)
+                    .map(|yak| yak.name.to_string())
+            })
+            .unwrap_or_else(|| id.to_string())
     }
 
     fn current_map(&self) -> Result<YakMap> {
@@ -367,6 +385,22 @@ mod tests {
                 Ok(Some(self.batches.remove(0)))
             }
         }
+    }
+
+    #[test]
+    fn resolves_names_from_current_in_memory_projection() {
+        let mut filter = EventSubtreeFilter::new(
+            EventWatchScope::Subtree(YakId::from("project-a1b2")),
+            history(),
+        );
+
+        assert_eq!(filter.resolve_name("fix-bug-c3d4"), "fix bug");
+        assert_eq!(filter.resolve_name("missing-z9z9"), "missing-z9z9");
+
+        filter
+            .filter_batch(vec![moved("admin-g7h8", Some("project-a1b2"))])
+            .unwrap();
+        assert_eq!(filter.resolve_name("admin-g7h8"), "admin");
     }
 
     #[test]

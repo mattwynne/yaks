@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use yx::adapters::authentication::GitAuthentication;
 use yx::adapters::broken_pipe_guard::BrokenPipeGuard;
 use yx::adapters::event_store::migration::Migrator;
-use yx::adapters::event_store::{GitEventStore, NoOpEventStore};
+use yx::adapters::event_store::{GitEventStore, GitGlobalEventBus, NoOpEventStore};
 use yx::adapters::json_display::JsonDisplay;
 use yx::adapters::local_workspace::LocalWorkspace;
 use yx::adapters::tui_display::TuiDisplay;
@@ -18,7 +18,7 @@ use yx::application::{
     EditField, EnsureGitignore, GenerateCompletions, ListTags, ListYaks, MoveYak, PruneYaks,
     RemoveBlocker, RemoveTag, RemoveYak, RenameYak, ResetDiskFromGit, ResetGitFromDisk, SetState,
     SetSyncRemote, ShowContext, ShowField, ShowLog, ShowSyncRemote, ShowYak, StartYak, SyncYaks,
-    WriteContext, WriteField,
+    WatchEvents, WriteContext, WriteField,
 };
 use yx::domain::normalize_tag;
 use yx::domain::ports::{EventStore, LocalWorkspacePort};
@@ -263,6 +263,12 @@ enum Commands {
     /// Show event log from refs/notes/yaks
     #[command(display_order = 23)]
     Log,
+    /// Watch committed yak events
+    #[command(display_order = 24)]
+    Events {
+        #[command(subcommand)]
+        action: EventsAction,
+    },
     /// Generate shell completions (hidden)
     #[command(hide = true)]
     Completions {
@@ -295,6 +301,18 @@ enum BlockerAction {
         /// Remove the manual/external blocker
         #[arg(long)]
         manual: bool,
+    },
+}
+
+#[derive(Parser, Debug)]
+enum EventsAction {
+    /// Stream events as NDJSON until interrupted or timeout expires
+    Watch {
+        /// Optional yak name. Omit to watch all events.
+        yak: Vec<String>,
+        /// Stop watching after a duration like 30s, 2m, or 500ms
+        #[arg(long)]
+        timeout: Option<String>,
     },
 }
 
@@ -442,6 +460,34 @@ fn handle_tag_command(handler: &mut impl CommandHandler, action: TagAction) -> R
         }
         TagAction::List { name } => handler.handle(ListTags::new(&name)),
     }
+}
+
+fn handle_events_command(handler: &mut impl CommandHandler, action: EventsAction) -> Result<()> {
+    match action {
+        EventsAction::Watch { yak, timeout } => {
+            let yak = if yak.is_empty() {
+                None
+            } else {
+                Some(yak.join(" "))
+            };
+            let timeout = timeout.as_deref().map(parse_duration).transpose()?;
+            handler.handle(WatchEvents::new(yak).with_timeout(timeout))
+        }
+    }
+}
+
+fn parse_duration(raw: &str) -> Result<std::time::Duration> {
+    let raw = raw.trim();
+    if let Some(ms) = raw.strip_suffix("ms") {
+        return Ok(std::time::Duration::from_millis(ms.parse()?));
+    }
+    if let Some(seconds) = raw.strip_suffix('s') {
+        return Ok(std::time::Duration::from_secs(seconds.parse()?));
+    }
+    if let Some(minutes) = raw.strip_suffix('m') {
+        return Ok(std::time::Duration::from_secs(minutes.parse::<u64>()? * 60));
+    }
+    Ok(std::time::Duration::from_secs(raw.parse()?))
 }
 
 fn handle_blocker_command(handler: &mut impl CommandHandler, action: BlockerAction) -> Result<()> {
@@ -631,6 +677,7 @@ fn route_command(
             pager::Pager::with_pager("less -R").setup();
             handler.handle(ShowLog::new())
         }
+        Commands::Events { action } => handle_events_command(handler, action),
         Commands::Completions { words } => handler.handle(GenerateCompletions::new(words)),
     }
 }
@@ -831,6 +878,8 @@ fn main() -> Result<()> {
         None
     };
 
+    let mut global_event_bus = repo_root.as_ref().map(|root| GitGlobalEventBus::new(root));
+
     // Initialize authentication: use git config when in a repo, fallback otherwise
     let auth: Box<dyn yx::domain::ports::AuthenticationPort> = if let Some(ref root) = repo_root {
         Box::new(GitAuthentication::new(root)?)
@@ -859,6 +908,9 @@ fn main() -> Result<()> {
             .map(|r| r as &dyn yx::domain::ports::EventStoreReader),
         auth.as_ref(),
     );
+    if let Some(ref mut bus) = global_event_bus {
+        app.set_global_event_bus(bus);
+    }
 
     // Ensure .yaks is gitignored (runs before any other command)
     app.handle(EnsureGitignore::new())?;
@@ -874,6 +926,26 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
     use yx::application::COMMANDS;
+
+    #[test]
+    fn parses_duration_units() {
+        assert_eq!(
+            parse_duration("500ms").unwrap(),
+            std::time::Duration::from_millis(500)
+        );
+        assert_eq!(
+            parse_duration("30s").unwrap(),
+            std::time::Duration::from_secs(30)
+        );
+        assert_eq!(
+            parse_duration("2m").unwrap(),
+            std::time::Duration::from_secs(120)
+        );
+        assert_eq!(
+            parse_duration("7").unwrap(),
+            std::time::Duration::from_secs(7)
+        );
+    }
 
     #[test]
     fn add_joins_multiple_args_into_yak_name() {
