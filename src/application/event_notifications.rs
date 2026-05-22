@@ -1,7 +1,6 @@
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::domain::events::{Blocker, BlockerSource};
 use crate::domain::narrative::to_plain_text;
 use crate::domain::YakEvent;
 
@@ -36,7 +35,7 @@ impl EventNotification {
             timestamp: metadata.timestamp.as_epoch_secs(),
             author: metadata.author.name.clone(),
             narrative,
-            event: event_payload(event),
+            event: event.canonical_json_payload(),
         }
     }
 
@@ -66,82 +65,6 @@ pub fn yak_event_type(event: &YakEvent) -> &'static str {
         YakEvent::ManualBlockerRemoved(_, _) => "ManualBlockerRemoved",
         YakEvent::Compacted(_, _) => "Compacted",
         YakEvent::Migrated(_, _) => "Migrated",
-    }
-}
-
-fn event_payload(event: &YakEvent) -> Value {
-    match event {
-        YakEvent::Added(e, _) => json!({
-            "type": "Added",
-            "id": e.id.as_str(),
-            "name": e.name.as_ref(),
-            "parent_id": e.parent_id.as_ref().map(|id| id.as_str()),
-        }),
-        YakEvent::Removed(e, _) => json!({
-            "type": "Removed",
-            "id": e.id.as_str(),
-        }),
-        YakEvent::Moved(e, _) => json!({
-            "type": "Moved",
-            "id": e.id.as_str(),
-            "new_parent": e.new_parent.as_ref().map(|id| id.as_str()),
-        }),
-        YakEvent::FieldUpdated(e, _) => json!({
-            "type": "FieldUpdated",
-            "id": e.id.as_str(),
-            "field_name": e.field_name,
-        }),
-        YakEvent::BlockerAdded(e, _) => json!({
-            "type": "BlockerAdded",
-            "target": e.target.as_str(),
-            "blocker": blocker_payload(&e.blocker),
-        }),
-        YakEvent::BlockerUpdated(e, _) => json!({
-            "type": "BlockerUpdated",
-            "target": e.target.as_str(),
-            "blocker": blocker_payload(&e.blocker),
-        }),
-        YakEvent::BlockerRemoved(e, _) => json!({
-            "type": "BlockerRemoved",
-            "target": e.target.as_str(),
-            "source": blocker_source_payload(&e.source),
-        }),
-        YakEvent::ManualBlockerAdded(e, _) => json!({
-            "type": "ManualBlockerAdded",
-            "target": e.target.as_str(),
-            "reason": e.reason,
-        }),
-        YakEvent::ManualBlockerUpdated(e, _) => json!({
-            "type": "ManualBlockerUpdated",
-            "target": e.target.as_str(),
-            "reason": e.reason,
-        }),
-        YakEvent::ManualBlockerRemoved(e, _) => json!({
-            "type": "ManualBlockerRemoved",
-            "target": e.target.as_str(),
-        }),
-        YakEvent::Compacted(snapshot, _) => json!({
-            "type": "Compacted",
-            "yak_count": snapshot.yak_count(),
-        }),
-        YakEvent::Migrated(snapshot, _) => json!({
-            "type": "Migrated",
-            "yak_count": snapshot.yak_count(),
-        }),
-    }
-}
-
-fn blocker_payload(blocker: &Blocker) -> Value {
-    json!({
-        "source": blocker_source_payload(&blocker.source),
-        "reason": blocker.reason,
-    })
-}
-
-fn blocker_source_payload(source: &BlockerSource) -> Value {
-    match source {
-        BlockerSource::Yak(id) => json!({ "kind": "yak", "id": id.as_str() }),
-        BlockerSource::Manual => json!({ "kind": "manual" }),
     }
 }
 
@@ -204,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn field_updated_event_serializes_field_name() {
+    fn field_updated_event_serializes_full_canonical_payload() {
         let event = YakEvent::FieldUpdated(
             FieldUpdatedEvent {
                 id: YakId::from("yak-a1b2"),
@@ -220,6 +143,8 @@ mod tests {
         assert_eq!(notification.yak_id, "yak-a1b2");
         assert_eq!(notification.narrative, "Matt finished yak name");
         assert_eq!(notification.event["field_name"], ".state");
+        assert_eq!(notification.event["content"], "done");
+        assert_eq!(notification.event, event.canonical_json_payload());
     }
 
     #[test]

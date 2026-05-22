@@ -1,6 +1,7 @@
 // Event domain model - represents a logged yak operation
 
 use anyhow::Result;
+use serde_json::{json, Value};
 
 use super::event_format::{parse_quoted_values, EventFormat};
 use super::event_metadata::EventMetadata;
@@ -214,6 +215,87 @@ impl YakEvent {
             Self::Compacted(_, _) => "",
             Self::Migrated(_, _) => "",
         }
+    }
+
+    /// The canonical machine-readable payload for this domain event.
+    ///
+    /// This is used by external event streams such as `yx events watch` so
+    /// consumers receive the complete domain fact, not a lossy projection.
+    pub fn canonical_json_payload(&self) -> Value {
+        match self {
+            Self::Added(e, _) => json!({
+                "type": "Added",
+                "id": e.id.as_str(),
+                "name": e.name.as_ref(),
+                "parent_id": e.parent_id.as_ref().map(|id| id.as_str()),
+            }),
+            Self::Removed(e, _) => json!({
+                "type": "Removed",
+                "id": e.id.as_str(),
+            }),
+            Self::Moved(e, _) => json!({
+                "type": "Moved",
+                "id": e.id.as_str(),
+                "new_parent": e.new_parent.as_ref().map(|id| id.as_str()),
+            }),
+            Self::FieldUpdated(e, _) => json!({
+                "type": "FieldUpdated",
+                "id": e.id.as_str(),
+                "field_name": e.field_name,
+                "content": e.content,
+            }),
+            Self::BlockerAdded(e, _) => json!({
+                "type": "BlockerAdded",
+                "target": e.target.as_str(),
+                "blocker": blocker_payload(&e.blocker),
+            }),
+            Self::BlockerUpdated(e, _) => json!({
+                "type": "BlockerUpdated",
+                "target": e.target.as_str(),
+                "blocker": blocker_payload(&e.blocker),
+            }),
+            Self::BlockerRemoved(e, _) => json!({
+                "type": "BlockerRemoved",
+                "target": e.target.as_str(),
+                "source": blocker_source_payload(&e.source),
+            }),
+            Self::ManualBlockerAdded(e, _) => json!({
+                "type": "ManualBlockerAdded",
+                "target": e.target.as_str(),
+                "reason": e.reason,
+            }),
+            Self::ManualBlockerUpdated(e, _) => json!({
+                "type": "ManualBlockerUpdated",
+                "target": e.target.as_str(),
+                "reason": e.reason,
+            }),
+            Self::ManualBlockerRemoved(e, _) => json!({
+                "type": "ManualBlockerRemoved",
+                "target": e.target.as_str(),
+            }),
+            Self::Compacted(snapshot, _) => json!({
+                "type": "Compacted",
+                "yak_count": snapshot.yak_count(),
+            }),
+            Self::Migrated(snapshot, _) => json!({
+                "type": "Migrated",
+                "yak_count": snapshot.yak_count(),
+            }),
+        }
+    }
+}
+
+fn blocker_payload(blocker: &Blocker) -> Value {
+    json!({
+        "source": blocker_source_payload(&blocker.source),
+        "reason": blocker.reason,
+    })
+}
+
+fn blocker_source_payload(source: &BlockerSource) -> Value {
+    match source {
+        BlockerSource::Yak(id) => json!({ "kind": "yak", "id": id.as_str() }),
+        BlockerSource::Manual => json!({ "kind": "manual" }),
     }
 }
 
