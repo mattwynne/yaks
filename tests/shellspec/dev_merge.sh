@@ -21,6 +21,43 @@ Describe 'bin/dev merge'
       cd "$repo"
       YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
       check() { :; }
+      cargo() { echo "cargo $*" | tee -a "$repo/cargo.log"; }
+      yx() { echo "$*" >> "$repo/yx.log"; }
+      argc_branch=yak-123
+      merge
+
+      git rev-parse --verify yak-123 >/dev/null 2>&1 && exit 1
+      grep -Fx "done yak-123" "$repo/yx.log"
+      grep -Fx "cargo build --release --quiet" "$repo/cargo.log"
+    '
+    The status should be success
+    The output should include '✅ Branch yak-123 merged to main'
+    The output should include 'done yak-123'
+    The output should include 'Rebuilding local yx binary from main'
+    The output should include 'cargo build --release --quiet'
+    The error should include "Preparing worktree (checking out 'yak-123')"
+  End
+
+  It 'warns but completes cleanup when the post-merge rebuild fails'
+    When run bash -c '
+      set -e
+      repo=$(mktemp -d)
+      trap "rm -rf \"$repo\"" EXIT
+      git -C "$repo" init --initial-branch=main --quiet
+      git -C "$repo" config user.email test@example.com
+      git -C "$repo" config user.name "Test User"
+      echo base > "$repo/file.txt"
+      git -C "$repo" add file.txt
+      git -C "$repo" commit --quiet -m base
+      git -C "$repo" switch --quiet -c yak-123
+      echo change >> "$repo/file.txt"
+      git -C "$repo" commit --quiet -am change
+      git -C "$repo" switch --quiet main
+
+      cd "$repo"
+      YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
+      check() { :; }
+      cargo() { echo "cargo $*"; return 1; }
       yx() { echo "$*" >> "$repo/yx.log"; }
       argc_branch=yak-123
       merge
@@ -30,8 +67,9 @@ Describe 'bin/dev merge'
     '
     The status should be success
     The output should include '✅ Branch yak-123 merged to main'
-    The output should include 'done yak-123'
-    The error should include "Preparing worktree (checking out 'yak-123')"
+    The output should include 'cargo build --release --quiet'
+    The error should include 'Warning: branch yak-123 was merged, but rebuilding the local yx binary failed'
+    The error should include 'Your yx binary may be stale. Run: cargo build --release'
   End
 
   It 'fails before checks when the branch worktree is dirty'
@@ -85,6 +123,7 @@ JSON
       cd "$repo"
       YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
       check() { echo FULL_CHECK_SHOULD_NOT_RUN; return 1; }
+      cargo() { :; }
       npm() { echo "npm $* in ${PWD#$repo/}"; }
       yx() { :; }
       argc_branch=yak-123

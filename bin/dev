@@ -212,7 +212,7 @@ dead-steps() {
   # (Given/When/Then/And/But/* lines, stripped to just the step text)
   local step_texts
   step_texts=$(grep -rhE '^\s*(Given|When|Then|And|But|\*)\s+' "$features_dir"/ \
-    | sed -E 's/^\s*(Given|When|Then|And|But|\*)\s+//' \
+    | sed -E 's/^[[:space:]]*(Given|When|Then|And|But|\*)[[:space:]]+//' \
     | sed 's/[[:space:]]*$//')
 
   # Extract unique step patterns from steps.rs and check each one.
@@ -683,7 +683,7 @@ SCHEMA
 
     local prompt
     prompt=$(cat <<PROMPT
-Review the current state of the \`${yak_name}\` yak.
+Review the current state of the ${yak_name} yak.
 
 Look at:
 - The yak context (yx context --show ${yak_name})
@@ -693,7 +693,7 @@ Look at:
 Determine if the yak needs human help to proceed. This includes situations where:
 - The next step is unclear or ambiguous
 - There are multiple viable approaches and a decision is needed
-- There's a blocker that requires human intervention
+- There is a blocker that requires human intervention
 - The acceptance criteria are unclear
 
 Always provide the next_step:
@@ -722,16 +722,16 @@ PROMPT
 
     echo ""
     cat <<EOF | claude -p --allowedTools "Read,Write,Edit,Bash"
-Work on the \`${yak_name}\` yak.
+Work on the ${yak_name} yak.
 
 Your goal for THIS TURN: Complete ONE single (sub-)yak and then STOP.
 
 Steps:
-1. Check the context of \`${yak_name}\` to identify the next unblocked (sub-)yak to work on
-2. Mark that (sub-)yak as "wip" using: yx state <name> wip
+1. Check the context of ${yak_name} to identify the next unblocked (sub-)yak to work on
+2. Mark that (sub-)yak as wip using: yx state <name> wip
 3. Work on ONLY that one (sub-)yak until complete
-4. When done, mark it as "done" using: yx done <name>
-5. Update the context on the relevant yak(s) with anything you've learned and what needs to be done next
+4. When done, mark it as done using: yx done <name>
+5. Update the context on the relevant yak(s) with anything you have learned and what needs to be done next
 6. STOP - do not continue to another (sub-)yak
 
 Key skills:
@@ -742,8 +742,8 @@ Key skills:
 If the acceptance criteria are clear, you do not need to ask me for confirmation.
 
 IMPORTANT:
-- Print regular updates to ./thoughts about what you're about to do, what you've achieved, and anything you're puzzled about so I can watch what's going on.
-- When you finish the (sub-)yak, update the context on the relevant yak(s) with anything you've learned and what needs to be done next.
+- Print regular updates to ./thoughts about what you are about to do, what you have achieved, and anything you are puzzled about so I can watch what is going on.
+- When you finish the (sub-)yak, update the context on the relevant yak(s) with anything you have learned and what needs to be done next.
 
 Remember: ONE (sub-)yak per turn, then STOP!
 
@@ -860,10 +860,10 @@ $context
 2. Use TDD to write tests that catch each missed mutant:
    - Write a failing test that would pass if the mutant were applied
    - Verify it passes against the real code
-3. Run \`dev mutate-diff\` to verify mutants are now caught
-4. Run \`dev check\` to verify nothing is broken
+3. Run dev mutate-diff to verify mutants are now caught
+4. Run dev check to verify nothing is broken
 5. Commit with a descriptive message
-6. Mark the yak done: \`yx done "$yak_name"\`
+6. Mark the yak done: yx done <yak-name>
 EOF
   )
 
@@ -968,11 +968,11 @@ For each mutant, decide:
    → If YES: update the yak context with analysis explaining what the
      behaviour is, why it matters, and a suggested test approach.
    → If NO: update the yak context with restructuring instructions
-     explaining what's wrong with the current code and how to change it
+     explaining what is wrong with the current code and how to change it
      so the unwanted behaviour is eliminated.
 
-Use \`yx context "<yak-name>"\` (pipe content via stdin) to update each
-yak's context.
+Use yx context <yak-name> (pipe content via stdin) to update each
+yak context.
 
 ## Yaks to triage:
 $yaks_section
@@ -1068,6 +1068,20 @@ mark_merged_yak_done() {
 
   echo "⚠️ Warning: merged branch $branch, but could not mark matching yak done" >&2
   [ -z "$yx_output" ] || echo "$yx_output" >&2
+  return 0
+}
+
+rebuild_local_yx_after_merge() {
+  local branch="$1"
+
+  echo ""
+  echo "Rebuilding local yx binary from main..."
+  if cargo build --release --quiet; then
+    return 0
+  fi
+
+  echo "⚠️ Warning: branch $branch was merged, but rebuilding the local yx binary failed" >&2
+  echo "   Your yx binary may be stale. Run: cargo build --release" >&2
   return 0
 }
 
@@ -1241,6 +1255,8 @@ merge() {
     echo "❌ Fast-forward merge failed — is main's working tree clean?"
     return 1
   fi
+
+  rebuild_local_yx_after_merge "$branch"
 
   # Clean up worktree and branch
   if [ -n "$worktree" ]; then
