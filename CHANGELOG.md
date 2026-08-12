@@ -6,6 +6,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-12
+
 ### Added
 
 - Added `yx events watch` and `yx events wait-for-next` for scripts and agents to observe committed domain events.
