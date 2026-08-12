@@ -8,9 +8,13 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ### Added
 
+- Added `yx events watch` and `yx events wait-for-next` for scripts and agents to observe committed domain events.
+
 ### Changed
 
-- Blocker cycle validation errors now describe the problem as a `circular dependency`.
+- Readiness is now derived from workflow state, hierarchy, and blockers, with explanations in list/show/tree and JSON output.
+- `yx list --ready` now emits flat yak IDs by default.
+- External blocking now uses manual blockers instead of the `blocked` workflow state; legacy blocked yaks migrate to `todo` with a manual blocker.
 - `bin/release` and `bin/dev release X.Y.Z` now push `main` and the release tag to the configured upstream remote after successful checks, commit, and tag creation.
 
 ### Deprecated
@@ -18,6 +22,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 ### Removed
 
 ### Fixed
+
+- Blocker cycle validation errors now describe the problem as a `circular dependency`.
 
 ### Security
 
