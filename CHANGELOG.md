@@ -16,6 +16,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 - Added `yx delete` as an alias for `yx remove`, including shell completion support.
 
+### Fixed
+
+- Long yak titles now use bounded, deterministic slugs and IDs instead of exceeding filesystem path-component limits.
+
 ## [0.4.0] - 2026-10-06
 
 ### Removed
@@ -45,7 +49,6 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ### Fixed
 
-- Long yak titles now use bounded, deterministic slugs and IDs instead of exceeding filesystem path-component limits.
 - Blocker cycle validation errors now describe the problem as a `circular dependency`.
 
 ### Security
