@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Fixed
+
+- `yx context` and `yx field` now wait for delayed piped input instead of silently discarding writes.
+
 ## [0.5.0] - 2026-10-06
 
 ### Added

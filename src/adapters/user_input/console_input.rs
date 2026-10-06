@@ -57,15 +57,12 @@ impl ConsoleInput {
     /// - If stdin is a pipe/file with zero bytes, returns `Ok(None)`
     /// - If stdin is /dev/null or a TTY, returns `Ok(None)`
     pub fn read_stdin_content(&self) -> Result<Option<String>> {
-        if Self::stdin_has_readable_data() {
-            let content = Self::read_stdin()?;
-            if !content.is_empty() {
-                return Ok(Some(content));
-            }
+        if !Self::stdin_is_piped() {
+            return Ok(None);
         }
-        // Empty pipe/file or non-pipe (e.g., /dev/null in Docker):
-        // treat as "no input available".
-        Ok(None)
+
+        let content = Self::read_stdin()?;
+        Ok((!content.is_empty()).then_some(content))
     }
 
     /// Open $EDITOR to let the user compose or edit content.
@@ -108,31 +105,6 @@ impl ConsoleInput {
         }
         let file_type = stat.st_mode & libc::S_IFMT;
         file_type == libc::S_IFIFO || file_type == libc::S_IFREG
-    }
-
-    pub fn stdin_has_readable_data() -> bool {
-        use std::os::unix::io::AsRawFd;
-
-        let stdin_fd = io::stdin().as_raw_fd();
-
-        // First check: Is it a pipe (FIFO) or a regular file
-        // (redirect)?
-        if !Self::stdin_is_piped() {
-            return false;
-        }
-
-        // Second check: Is there data available to read?
-        let mut pollfd = libc::pollfd {
-            fd: stdin_fd,
-            events: libc::POLLIN,
-            revents: 0,
-        };
-
-        // Poll with 0 timeout (non-blocking check)
-        let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
-
-        // Return true only if poll succeeded and POLLIN is set
-        result > 0 && (pollfd.revents & libc::POLLIN) != 0
     }
 
     fn read_stdin() -> Result<String> {

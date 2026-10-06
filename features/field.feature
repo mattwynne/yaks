@@ -14,6 +14,17 @@ Feature: Yak fields
         field content
         """
 
+    @fullstack
+    Example: Write a field from a delayed pipe
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the "notes" field of "my yak" to "delayed notes" after a delay
+      And I show the "notes" field of "my yak"
+      Then the output should be:
+        """
+        delayed notes
+        """
+
   Rule: Zero-byte stdin is a no-op
 
     @fullstack

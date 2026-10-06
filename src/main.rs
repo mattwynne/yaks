@@ -375,6 +375,27 @@ struct StdinState {
     content: Option<String>,
 }
 
+fn command_accepts_stdin(command: &Commands) -> bool {
+    match command {
+        Commands::Add { context, edit, .. } => context.is_none() && !edit,
+        Commands::Context { .. } | Commands::Field { .. } => true,
+        _ => false,
+    }
+}
+
+fn read_stdin_state(command: &Commands) -> Result<StdinState> {
+    let force_interactive = std::env::var("YX_FORCE_INTERACTIVE").as_deref() == Ok("1");
+    let is_piped =
+        !force_interactive && command_accepts_stdin(command) && ConsoleInput::stdin_is_piped();
+    let content = if is_piped {
+        ConsoleInput.read_stdin_content()?
+    } else {
+        None
+    };
+
+    Ok(StdinState { is_piped, content })
+}
+
 /// Route a CLI command to its use case via CommandHandler.
 ///
 /// This function physically cannot access Application internals,
@@ -840,20 +861,9 @@ fn main() -> Result<()> {
 
     let skip_git = std::env::var("YX_SKIP_GIT_CHECKS").is_ok();
 
-    // Pre-compute stdin state before any adapter construction.
-    // This is the only place main() touches an adapter directly — it
-    // passes the result into route_command so routing stays pure.
-    let is_piped = ConsoleInput::stdin_is_piped();
-    let stdin_content = if is_piped && ConsoleInput::stdin_has_readable_data() {
-        let input = ConsoleInput;
-        input.read_stdin_content().ok().flatten()
-    } else {
-        None
-    };
-    let stdin = StdinState {
-        is_piped,
-        content: stdin_content,
-    };
+    // Read piped content to EOF only for commands that accept stdin.
+    // This keeps unrelated commands from consuming or waiting on stdin.
+    let stdin = read_stdin_state(&cli.command)?;
 
     // Initialize event infrastructure
     // Discover git repo root using libgit2
@@ -1077,6 +1087,27 @@ mod tests {
                 assert!(recursive);
             }
             other => panic!("Expected Remove, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn only_commands_that_use_piped_content_accept_stdin() {
+        for args in [
+            &["yx", "add", "yak"][..],
+            &["yx", "context", "yak"],
+            &["yx", "field", "yak", "notes"],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap();
+            assert!(command_accepts_stdin(&cli.command), "args: {args:?}");
+        }
+
+        for args in [
+            &["yx", "list"][..],
+            &["yx", "add", "yak", "--context", "notes"],
+            &["yx", "add", "yak", "--edit"],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap();
+            assert!(!command_accepts_stdin(&cli.command), "args: {args:?}");
         }
     }
 

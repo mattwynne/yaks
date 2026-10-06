@@ -28,6 +28,17 @@ Feature: Manage yak context
         # File context
         """
 
+    @fullstack
+    Example: Setting context from a delayed pipe
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I set the context of "my yak" to "delayed context" after a delay
+      And I show the context of "my yak"
+      Then the output should be:
+        """
+        delayed context
+        """
+
   Rule: Stdin input replaces existing context
 
     Example: Setting context twice replaces the first value
@@ -40,6 +51,16 @@ Feature: Manage yak context
         """
         new
         """
+
+  Rule: Stdin read failures are reported
+
+    @fullstack
+    Example: Invalid UTF-8 stdin fails the command
+      Given I have a clean git repository
+      And I add the yak "my yak"
+      When I try to set the context of "my yak" with invalid UTF-8 stdin
+      Then the command should fail
+      And the error should contain "Failed to read from stdin"
 
   Rule: Zero-byte stdin is a no-op
 

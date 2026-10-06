@@ -110,6 +110,15 @@ impl FullStackWorld {
     }
 
     fn run_yx_with_stdin(&mut self, args: &[&str], stdin_content: &str) -> Result<()> {
+        self.run_yx_with_delayed_stdin(args, stdin_content, std::time::Duration::ZERO)
+    }
+
+    pub fn run_yx_with_delayed_stdin(
+        &mut self,
+        args: &[&str],
+        stdin_content: &str,
+        delay: std::time::Duration,
+    ) -> Result<()> {
         let yx_path = env!("CARGO_BIN_EXE_yx");
 
         let mut child = Command::new(yx_path)
@@ -122,6 +131,7 @@ impl FullStackWorld {
             .spawn()
             .context("Failed to spawn yx command")?;
 
+        std::thread::sleep(delay);
         if let Some(mut stdin) = child.stdin.take() {
             stdin
                 .write_all(stdin_content.as_bytes())
@@ -1003,6 +1013,33 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         self.exit_code = output.status.code().unwrap_or(-1);
         self.output = String::from_utf8_lossy(&output.stdout).to_string();
         self.error = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(())
+    }
+
+    /// Run yx with stdin containing invalid UTF-8.
+    /// Captures output without checking exit code.
+    pub fn run_yx_with_invalid_stdin(&mut self, args: &[&str]) -> Result<()> {
+        let yx_path = env!("CARGO_BIN_EXE_yx");
+        let stdin_path = self.repo_path.join(".invalid-stdin");
+        std::fs::write(&stdin_path, [0xff]).context("Failed to write invalid stdin file")?;
+        let stdin =
+            std::fs::File::open(&stdin_path).context("Failed to open invalid stdin file")?;
+
+        let output = Command::new(yx_path)
+            .args(args)
+            .env("YX_ROOT", &self.repo_path)
+            .current_dir(&self.repo_path)
+            .stdin(Stdio::from(stdin))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .context("Failed to run yx command")?;
+
+        self.exit_code = output.status.code().unwrap_or(-1);
+        self.output = String::from_utf8_lossy(&output.stdout).to_string();
+        self.error = String::from_utf8_lossy(&output.stderr).to_string();
+        std::fs::remove_file(stdin_path).ok();
 
         Ok(())
     }

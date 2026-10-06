@@ -1518,9 +1518,41 @@ async fn set_context_from_file(
     world.run_yx_with_file_stdin(&["context", &name], &content)
 }
 
+#[when(regex = r#"^I set the context of "(.+)" to "(.+)" after a delay$"#)]
+async fn set_context_after_pipe_delay(
+    world: &mut FullStackWorld,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.run_yx_with_delayed_stdin(
+        &["context", &name],
+        &content,
+        std::time::Duration::from_millis(250),
+    )
+}
+
+#[when(regex = r#"^I try to set the context of "(.+)" with invalid UTF-8 stdin$"#)]
+async fn try_set_context_invalid_stdin(world: &mut FullStackWorld, name: String) -> Result<()> {
+    world.run_yx_with_invalid_stdin(&["context", &name])
+}
+
 #[when(regex = r#"^I try to set the context of "(.+)" with empty stdin$"#)]
 async fn try_set_context_empty_stdin(world: &mut FullStackWorld, name: String) -> Result<()> {
     world.run_yx_with_empty_stdin(&["context", &name])
+}
+
+#[when(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)" after a delay$"#)]
+async fn set_field_after_pipe_delay(
+    world: &mut FullStackWorld,
+    field: String,
+    name: String,
+    content: String,
+) -> Result<()> {
+    world.run_yx_with_delayed_stdin(
+        &["field", &name, &field],
+        &content,
+        std::time::Duration::from_millis(250),
+    )
 }
 
 #[when(regex = r#"^I try to set the "(.+)" field of "(.+)" with empty stdin$"#)]
