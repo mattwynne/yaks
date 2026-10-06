@@ -6,6 +6,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-06
+
 ### Added
 
 - Added `yx delete` as an alias for `yx remove`, including shell completion support.
