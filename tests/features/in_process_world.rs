@@ -685,6 +685,16 @@ impl TestWorld for InProcessWorld {
         self.execute(move |app| app.handle(AddYak::new(&name).with_field(&key, &value)))
     }
 
+    fn add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let name = name.to_string();
+        self.execute(move |app| app.handle(AddYak::new(&name).with_tags(tags)))
+    }
+
+    fn try_add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let name = name.to_string();
+        self.try_execute(move |app| app.handle(AddYak::new(&name).with_tags(tags)))
+    }
+
     fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
         let normalized: Vec<String> = tags
             .iter()
