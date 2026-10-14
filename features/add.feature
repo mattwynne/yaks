@@ -219,6 +219,38 @@ Feature: Add yaks
       And I run yx field "my yak" priority --show
       Then the output should include "high"
 
+  Rule: --tag sets tags at creation time
+
+    @fullstack
+    Example: Repeatable --tag flags attach normalized tags
+      Given I have a clean git repository
+      When I run yx add "my yak" --tag @goal:design --tag needs-review
+      And I run yx tag list "my yak"
+      Then the output should be:
+        """
+        @goal:design
+        @needs-review
+        """
+
+    @fullstack
+    Example: Duplicate tags are attached only once
+      Given I have a clean git repository
+      When I run yx add "my yak" --tag @urgent --tag urgent
+      And I run yx tag list "my yak"
+      Then the output should be:
+        """
+        @urgent
+        """
+
+    @fullstack
+    Example: An invalid tag prevents yak creation
+      Given I have a clean git repository
+      When I try to run yx add "my yak" --tag valid --tag "bad tag"
+      Then the command should fail
+      And the error should contain "cannot contain whitespace"
+      When I list the yaks
+      Then the output should not include "my yak"
+
   Rule: Whitespace-only names are rejected
 
     Example: Whitespace-only name is rejected

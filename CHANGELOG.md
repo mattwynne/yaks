@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Added
+
+- `yx add` now accepts repeatable `--tag` options to attach normalized tags during creation.
+
 ### Fixed
 
 - Git worktrees that have run `yx` can now be removed normally without first changing `.yaks` directory permissions. Existing projections are rebuilt the first time `yx` runs after upgrading.

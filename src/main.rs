@@ -78,6 +78,9 @@ enum Commands {
         /// Set a custom field (format: key=value, repeatable)
         #[arg(long = "field", value_parser = parse_field_arg)]
         fields: Vec<(String, String)>,
+        /// Add a tag (repeatable, @ prefix optional)
+        #[arg(long = "tag", value_name = "TAG")]
+        tags: Vec<String>,
     },
     /// List yaks
     #[command(alias = "ls", display_order = 2)]
@@ -601,9 +604,17 @@ fn handle_add_command(
     edit: bool,
     id: Option<String>,
     fields: Vec<(String, String)>,
+    tags: Vec<String>,
     stdin: &StdinState,
 ) -> Result<()> {
     let name_str = name.join(" ");
+    let mut normalized_tags = Vec::new();
+    for tag in &tags {
+        let normalized = normalize_tag(tag)?;
+        if !normalized_tags.contains(&normalized) {
+            normalized_tags.push(normalized);
+        }
+    }
     let has_explicit_context = context.is_some();
     // Resolve context: --context flag > --edit (editor) > piped stdin
     let resolved_context = if has_explicit_context {
@@ -620,6 +631,7 @@ fn handle_add_command(
         .with_state(state.as_deref())
         .with_context(resolved_context.as_deref())
         .with_id(id.as_deref())
+        .with_tags(normalized_tags)
         .with_edit(edit && !has_explicit_context);
     for (key, value) in &fields {
         use_case = use_case.with_field(key, value);
@@ -641,8 +653,9 @@ fn route_command(
             edit,
             id,
             fields,
+            tags,
         } => handle_add_command(
-            handler, name, under, state, context, edit, id, fields, &stdin,
+            handler, name, under, state, context, edit, id, fields, tags, &stdin,
         ),
         Commands::List {
             format,
