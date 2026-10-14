@@ -2,6 +2,7 @@
 
 use crate::adapters::views::Message;
 use crate::domain::event_metadata::{Author, Timestamp};
+use crate::domain::field::TAGS_FIELD;
 use crate::domain::slug::YakId;
 use crate::domain::validate_yak_name;
 use anyhow::Result;
@@ -16,6 +17,7 @@ pub struct AddYak {
     context: Option<String>,
     id: Option<String>,
     fields: Vec<(String, String)>,
+    tags: Vec<String>,
     author_override: Option<Author>,
     timestamp_override: Option<Timestamp>,
     /// When true, launch $EDITOR for initial context (uses InputPort)
@@ -34,6 +36,7 @@ impl AddYak {
             context: None,
             id: None,
             fields: vec![],
+            tags: vec![],
             author_override: None,
             timestamp_override: None,
             edit: false,
@@ -68,6 +71,12 @@ impl AddYak {
     /// Add a custom field (e.g. "plan", "notes")
     pub fn with_field(mut self, name: &str, value: &str) -> Self {
         self.fields.push((name.to_string(), value.to_string()));
+        self
+    }
+
+    /// Set tags when the yak is created
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
         self
     }
 
@@ -132,15 +141,20 @@ impl UseCase for AddYak {
             self.timestamp_override.unwrap_or_else(Timestamp::now),
         );
 
+        let tags = self.tags.join("\n");
         let id = app.with_yak_map_result_using_metadata(metadata, |yak_map| {
-            yak_map.add_yak(
+            let id = yak_map.add_yak(
                 self.name.clone(),
                 parent_id,
                 context,
                 self.state.clone(),
                 self.id.as_ref().map(|s| YakId::from(s.as_str())),
                 self.fields.clone(),
-            )
+            )?;
+            if !tags.is_empty() {
+                yak_map.update_field(id.clone(), TAGS_FIELD.to_string(), tags)?;
+            }
+            Ok(id)
         })?;
         app.display.message(&Message::Info(id.as_str().to_string()));
         Ok(())
@@ -396,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_yak_with_fields() {
+    fn test_add_yak_with_fields_and_tags() {
         let mut event_store = InMemoryEventStore::new();
         let mut event_bus = EventBus::new();
 
@@ -420,12 +434,15 @@ mod tests {
 
         AddYak::new("test")
             .with_field("plan", "step 1")
+            .with_tags(vec!["goal:design".to_string(), "needs-review".to_string()])
             .execute(&mut app)
             .unwrap();
 
         let id = ReadYakStore::fuzzy_find_yak_id(&storage, "test").unwrap();
         let content = ReadYakStore::read_field(&storage, &id, "plan").unwrap();
         assert_eq!(content, "step 1");
+        let yak = ReadYakStore::get_yak(&storage, &id).unwrap();
+        assert_eq!(yak.tags, vec!["goal:design", "needs-review"]);
     }
 
     #[test]

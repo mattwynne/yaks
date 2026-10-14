@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Added
+
+- `yx add` now accepts repeatable `--tag` options to attach normalized tags during creation.
+
 ## [0.5.1] - 2026-10-07
 
 ### Fixed
