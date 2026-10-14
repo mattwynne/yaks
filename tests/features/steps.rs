@@ -396,6 +396,24 @@ fn impl_add_yak_with_field(
     world.add_yak_with_field(&yak_name, &key, &value)
 }
 
+fn impl_add_yak_with_tags(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    tag1: String,
+    tag2: String,
+) -> Result<()> {
+    world.add_yak_with_tags(&yak_name, vec![tag1, tag2])
+}
+
+fn impl_try_add_yak_with_tags(
+    world: &mut dyn TestWorld,
+    yak_name: String,
+    tag1: String,
+    tag2: String,
+) -> Result<()> {
+    world.try_add_yak_with_tags(&yak_name, vec![tag1, tag2])
+}
+
 fn impl_tag_yak(world: &mut dyn TestWorld, name: String, tag: String) -> Result<()> {
     world.add_tags(&name, vec![tag])
 }
@@ -784,6 +802,12 @@ both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)" under "(
 
 both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)
     fn when_add_yak_with_field_fs / when_add_yak_with_field_ip (yak_name: String, key: String, value: String) -> impl_add_yak_with_field);
+
+both_worlds!(when(regex = r#"^I add the yak "([^"]+)" with tags "([^"]+)" and "([^"]+)"$"#)
+    fn when_add_yak_with_tags_fs / when_add_yak_with_tags_ip (yak_name: String, tag1: String, tag2: String) -> impl_add_yak_with_tags);
+
+both_worlds!(when(regex = r#"^I try to add the yak "([^"]+)" with tags "([^"]+)" and "([^"]+)"$"#)
+    fn when_try_add_yak_with_tags_fs / when_try_add_yak_with_tags_ip (yak_name: String, tag1: String, tag2: String) -> impl_try_add_yak_with_tags);
 
 // -- Tag steps --
 

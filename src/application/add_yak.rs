@@ -4,7 +4,7 @@ use crate::adapters::views::Message;
 use crate::domain::event_metadata::{Author, Timestamp};
 use crate::domain::field::TAGS_FIELD;
 use crate::domain::slug::YakId;
-use crate::domain::validate_yak_name;
+use crate::domain::{normalize_tag, validate_yak_name};
 use anyhow::Result;
 
 use super::{Application, UseCase};
@@ -112,6 +112,14 @@ impl UseCase for AddYak {
         // Validate user-provided name
         validate_yak_name(&self.name).map_err(|e| anyhow::anyhow!(e))?;
 
+        let mut normalized_tags = Vec::new();
+        for tag in &self.tags {
+            let normalized = normalize_tag(tag)?;
+            if !normalized_tags.contains(&normalized) {
+                normalized_tags.push(normalized);
+            }
+        }
+
         // Resolve parent to its ID
         let parent_id = if let Some(ref parent_name) = self.parent {
             Some(app.resolve_yak_id(parent_name)?)
@@ -141,7 +149,7 @@ impl UseCase for AddYak {
             self.timestamp_override.unwrap_or_else(Timestamp::now),
         );
 
-        let tags = self.tags.join("\n");
+        let tags = normalized_tags.join("\n");
         let id = app.with_yak_map_result_using_metadata(metadata, |yak_map| {
             let id = yak_map.add_yak(
                 self.name.clone(),

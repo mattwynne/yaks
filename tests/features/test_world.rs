@@ -173,6 +173,12 @@ pub trait TestWorld {
     /// Add a yak with a custom field
     fn add_yak_with_field(&mut self, name: &str, key: &str, value: &str) -> Result<()>;
 
+    /// Add a yak with tags set during creation
+    fn add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()>;
+
+    /// Try to add a yak with tags - captures result without bailing on failure
+    fn try_add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()>;
+
     /// Add tags to a yak
     fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()>;
 
