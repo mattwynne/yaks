@@ -1457,6 +1457,15 @@ mod tests {
         )
         .unwrap();
 
+        assert!(
+            storage.base_path.join("parent/child-one").is_dir(),
+            "child should move below its new parent"
+        );
+        assert!(
+            !storage.base_path.join("child-one").exists(),
+            "child should no longer remain at the root"
+        );
+
         // Explicitly check that base_path is still writable.
         let base_perms = std::fs::metadata(&storage.base_path).unwrap().permissions();
         let mode = base_perms.mode();
@@ -1468,6 +1477,15 @@ mod tests {
 
         // Move child-one from parent back to root.
         WriteYakStore::reparent_yak(&storage, &YakId::from("child-one-c3d4"), None).unwrap();
+
+        assert!(
+            storage.base_path.join("child-one").is_dir(),
+            "child should move back to the root"
+        );
+        assert!(
+            !storage.base_path.join("parent/child-one").exists(),
+            "child should no longer remain below its old parent"
+        );
 
         // Explicitly check that base_path is still writable.
         let base_perms = std::fs::metadata(&storage.base_path).unwrap().permissions();
