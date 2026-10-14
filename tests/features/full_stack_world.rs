@@ -869,6 +869,34 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Remove a named worktree using git from its parent repository.
+    pub fn remove_worktree(&mut self, parent_name: &str, worktree_name: &str) -> Result<()> {
+        let parent_path = self.repo_path(parent_name)?;
+        let worktree_path = self.repo_path(worktree_name)?;
+
+        let output = Command::new("git")
+            .args(["worktree", "remove", &worktree_path.to_string_lossy()])
+            .current_dir(parent_path)
+            .output()
+            .context("Failed to remove git worktree")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "git worktree remove failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        if worktree_path.exists() {
+            anyhow::bail!(
+                "git worktree remove succeeded but left '{}' behind",
+                worktree_path.display()
+            );
+        }
+
+        self.repos.remove(worktree_name);
+        Ok(())
+    }
+
     /// Run yx command scoped to a named repository with stdin content
     pub fn run_yx_in_repo_with_stdin(
         &mut self,

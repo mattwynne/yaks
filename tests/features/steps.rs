@@ -1805,6 +1805,15 @@ async fn git_worktree(world: &mut FullStackWorld, parent: String, worktree: Stri
     world.create_worktree(&parent, &worktree)
 }
 
+#[then(regex = r#"^([\w-]+) can remove the worktree ([\w-]+)$"#)]
+async fn remove_git_worktree(
+    world: &mut FullStackWorld,
+    parent: String,
+    worktree: String,
+) -> Result<()> {
+    world.remove_worktree(&parent, &worktree)
+}
+
 #[given(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
 #[when(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
 async fn repo_has_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
