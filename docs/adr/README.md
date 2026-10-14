@@ -32,6 +32,7 @@ ADRs document significant architectural and design decisions.
 | [0024](0024-content-addressed-check-verification.md) | Content-addressed check verification | proposed |
 | [0025](0025-remove-reset-git-from-disk.md) | Remove reset git from disk | accepted |
 | [0026](0026-version-worktree-projections-by-event-revision.md) | Version worktree projections by event revision | accepted |
+| [0027](0027-version-projection-cache-format.md) | Version projection cache format | accepted |
 
 ## When to Write an ADR
 

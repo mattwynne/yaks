@@ -11,3 +11,11 @@ Feature: Git worktree compatibility
       And a git worktree of main called feature
       And feature has a yak called "make the tea"
       Then main can remove the worktree feature
+
+    Example: A legacy projection is rebuilt before use
+      Given a git clone of origin called main
+      And a git worktree of main called feature
+      And feature has a yak called "make the tea"
+      And feature has a legacy read-only projection
+      When feature lists its yaks
+      Then main can remove the worktree feature

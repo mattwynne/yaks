@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 const PROJECTION_REVISION_FILE: &str = ".projection-tip";
 const PROJECTION_LOCK_FILE: &str = ".projection.lock";
+const PROJECTION_FORMAT_VERSION: &str = "v1";
 const EMPTY_REVISION: &str = "empty";
 
 #[derive(Clone)]
@@ -90,7 +91,12 @@ impl DirectoryStorage {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        let value = value.trim();
+        let Some((version, value)) = value.trim().split_once(':') else {
+            return Ok(None);
+        };
+        if version != PROJECTION_FORMAT_VERSION {
+            return Ok(None);
+        }
         if value == EMPTY_REVISION {
             return Ok(Some(EventStreamRevision::Empty));
         }
@@ -111,7 +117,7 @@ impl DirectoryStorage {
             PROJECTION_REVISION_FILE,
             std::process::id()
         ));
-        std::fs::write(&temporary, format!("{value}\n"))?;
+        std::fs::write(&temporary, format!("{PROJECTION_FORMAT_VERSION}:{value}\n"))?;
         std::fs::rename(temporary, self.base_path.join(PROJECTION_REVISION_FILE))?;
         Ok(())
     }
@@ -238,12 +244,16 @@ mod tests {
 
     #[test]
     fn projection_revision_roundtrips_empty_and_commit() {
-        let (storage, _temp) = setup_test_storage();
+        let (storage, temp) = setup_test_storage();
         assert_eq!(storage.read_projection_revision().unwrap(), None);
 
         storage
             .write_projection_revision(&EventStreamRevision::Empty)
             .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(PROJECTION_REVISION_FILE)).unwrap(),
+            "v1:empty\n"
+        );
         assert_eq!(
             storage.read_projection_revision().unwrap(),
             Some(EventStreamRevision::Empty)
@@ -253,6 +263,10 @@ mod tests {
         storage
             .write_projection_revision(&EventStreamRevision::Commit(oid.to_string()))
             .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(PROJECTION_REVISION_FILE)).unwrap(),
+            format!("v1:{oid}\n")
+        );
         assert_eq!(
             storage.read_projection_revision().unwrap(),
             Some(EventStreamRevision::Commit(oid.to_string()))
@@ -267,6 +281,19 @@ mod tests {
         assert_eq!(storage.read_projection_revision().unwrap(), None);
 
         std::fs::write(checkpoint, "gggggggggggggggggggggggggggggggggggggggg").unwrap();
+        assert_eq!(storage.read_projection_revision().unwrap(), None);
+    }
+
+    #[test]
+    fn legacy_and_unknown_projection_formats_are_treated_as_missing() {
+        let (storage, temp) = setup_test_storage();
+        let checkpoint = temp.path().join(PROJECTION_REVISION_FILE);
+        let oid = "0123456789abcdef0123456789abcdef01234567";
+
+        std::fs::write(&checkpoint, oid).unwrap();
+        assert_eq!(storage.read_projection_revision().unwrap(), None);
+
+        std::fs::write(checkpoint, format!("v2:{oid}")).unwrap();
         assert_eq!(storage.read_projection_revision().unwrap(), None);
     }
 

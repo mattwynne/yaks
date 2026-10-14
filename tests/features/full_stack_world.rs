@@ -869,6 +869,37 @@ printf '%s\n' "${{COMPREPLY[@]}}"
         Ok(())
     }
 
+    /// Simulate a projection written before projection cache formats were versioned.
+    pub fn make_projection_legacy_read_only(&self, repo_name: &str) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let yaks_path = self.repo_path(repo_name)?.join(".yaks");
+        let checkpoint_path = yaks_path.join(".projection-tip");
+        let checkpoint = std::fs::read_to_string(&checkpoint_path)
+            .context("Failed to read projection checkpoint")?;
+        let legacy_revision = checkpoint
+            .trim()
+            .split_once(':')
+            .map_or(checkpoint.trim(), |(_, revision)| revision);
+        std::fs::write(&checkpoint_path, format!("{legacy_revision}\n"))
+            .context("Failed to write legacy projection checkpoint")?;
+
+        fn make_directories_read_only(dir: &std::path::Path) -> Result<()> {
+            for entry in std::fs::read_dir(dir)? {
+                let path = entry?.path();
+                if path.is_dir() {
+                    make_directories_read_only(&path)?;
+                    let mut permissions = std::fs::metadata(&path)?.permissions();
+                    permissions.set_mode(permissions.mode() & !0o222);
+                    std::fs::set_permissions(path, permissions)?;
+                }
+            }
+            Ok(())
+        }
+
+        make_directories_read_only(&yaks_path)
+    }
+
     /// Remove a named worktree using git from its parent repository.
     pub fn remove_worktree(&mut self, parent_name: &str, worktree_name: &str) -> Result<()> {
         let parent_path = self.repo_path(parent_name)?;

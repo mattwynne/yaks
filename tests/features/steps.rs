@@ -1814,6 +1814,25 @@ async fn remove_git_worktree(
     world.remove_worktree(&parent, &worktree)
 }
 
+#[given(regex = r#"^([\w-]+) has a legacy read-only projection$"#)]
+async fn legacy_read_only_projection(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.make_projection_legacy_read_only(&repo)
+}
+
+#[when(regex = r#"^([\w-]+) lists its yaks$"#)]
+async fn repo_lists_yaks(world: &mut FullStackWorld, repo: String) -> Result<()> {
+    world.run_yx_in_repo(&repo, &["ls"])?;
+    if world.get_exit_code() != 0 {
+        anyhow::bail!(
+            "Failed to list yaks in repo '{}':\nstdout: {}\nstderr: {}",
+            repo,
+            world.get_output(),
+            world.get_error()
+        );
+    }
+    Ok(())
+}
+
 #[given(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
 #[when(regex = r#"^([\w-]+) (?:has|adds) a yak called "(.+)"$"#)]
 async fn repo_has_yak(world: &mut FullStackWorld, repo: String, yak: String) -> Result<()> {
