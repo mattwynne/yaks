@@ -1,6 +1,9 @@
 # Mutation testing configuration
 # Run with: dev mutate
 
+# Allow generated mutants to leave variables and imports unused
+cap_lints = true
+
 # Enable test-support feature so cucumber test target compiles
 features = ["test-support"]
 
