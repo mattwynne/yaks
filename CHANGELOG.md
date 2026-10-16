@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Fixed
+
+- Git worktrees that have run `yx` can now be removed normally without first changing `.yaks` directory permissions.
+
 ## [0.5.1] - 2026-10-07
 
 ### Fixed

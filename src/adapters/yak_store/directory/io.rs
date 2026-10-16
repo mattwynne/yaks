@@ -1,7 +1,7 @@
 // File and directory I/O operations for directory-based storage
 
 use super::permissions::{
-    make_dir_readonly, make_dir_writable_recursive, make_readonly, make_writable,
+    make_dir_writable_recursive, make_files_readonly_recursive, make_readonly, make_writable,
 };
 use super::query::resolve_by_id;
 use crate::domain::slug::{slugify, Name, YakId};
@@ -61,13 +61,9 @@ pub(super) fn create_yak(
             .with_context(|| format!("Failed to write id file for yak: {name}"))?;
     }
 
-    // Make the new yak directory readonly recursively
-    make_dir_readonly(&dir)?;
-
-    // Make parent readonly again (only if it's a yak directory, not base_path)
-    if parent_dir != base_path {
-        make_readonly(&parent_dir)?;
-    }
+    // Files discourage direct editing, while writable directories keep the
+    // disposable projection removable by git worktree and filesystem cleanup.
+    make_files_readonly_recursive(&dir)?;
 
     Ok(())
 }
@@ -90,11 +86,6 @@ pub(super) fn delete_yak(base_path: &Path, id: &YakId) -> Result<()> {
         rescue_children(base_path, &dir)?;
 
         fs::remove_dir_all(&dir).with_context(|| format!("Failed to remove yak '{id}'"))?;
-
-        // Make parent readonly again - but only if it's a yak directory
-        if parent_dir != base_path {
-            make_readonly(parent_dir)?;
-        }
     }
     Ok(())
 }
@@ -124,7 +115,6 @@ pub(super) fn rename_yak(base_path: &Path, id: &YakId, new_name: &Name) -> Resul
         fs::write(&name_file, new_name.as_str())
             .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
         make_readonly(&name_file)?;
-        make_readonly(&from_dir)?;
         return Ok(());
     }
 
@@ -146,11 +136,7 @@ pub(super) fn rename_yak(base_path: &Path, id: &YakId, new_name: &Name) -> Resul
     fs::write(&name_file, new_name.as_str())
         .with_context(|| format!("Failed to update name file for '{}'", new_name))?;
 
-    // Make the new dir readonly recursively, parent dir readonly (only if it's a yak directory)
-    make_dir_readonly(&to_dir)?;
-    if parent_dir != base_path {
-        make_readonly(parent_dir)?;
-    }
+    make_files_readonly_recursive(&to_dir)?;
 
     Ok(())
 }
@@ -192,14 +178,7 @@ pub(super) fn reparent_yak(
     fs::rename(&current_dir, &new_dir)
         .with_context(|| format!("Failed to move yak '{}' to new parent", id))?;
 
-    // Make yak dir readonly, both parent dirs readonly (only if they're yak directories)
-    make_dir_readonly(&new_dir)?;
-    if new_parent_dir != base_path {
-        make_readonly(&new_parent_dir)?;
-    }
-    if old_parent_dir != base_path {
-        make_readonly(old_parent_dir)?;
-    }
+    make_files_readonly_recursive(&new_dir)?;
 
     Ok(())
 }
@@ -222,8 +201,7 @@ fn rescue_children(base_path: &Path, parent_dir: &Path) -> Result<()> {
 
                     fs::rename(&path, &target).context("Failed to rescue child yak")?;
 
-                    // Make it readonly at new location (base_path stays writable)
-                    make_dir_readonly(&target)?;
+                    make_files_readonly_recursive(&target)?;
                 }
             }
         }
@@ -285,9 +263,6 @@ pub(super) fn write_field(
 
     // Make the file readonly
     make_readonly(&field_path)?;
-
-    // Make the dir readonly
-    make_readonly(&dir)?;
 
     Ok(())
 }

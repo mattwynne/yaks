@@ -1070,21 +1070,10 @@ mod tests {
             .unwrap();
 
         // Create a plain (non-yak) subdirectory inside the parent
-        // (Need to make parent writable first since yak directories are readonly)
         let parent_dir = storage.base_path.join("parent");
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&parent_dir).unwrap().permissions();
-        perms.set_mode(perms.mode() | 0o200);
-        std::fs::set_permissions(&parent_dir, perms).unwrap();
-
         let plain_dir = parent_dir.join("not-a-yak");
         std::fs::create_dir_all(&plain_dir).unwrap();
         std::fs::write(plain_dir.join("notes.txt"), "just a plain dir").unwrap();
-
-        // Make parent readonly again
-        let mut perms = std::fs::metadata(&parent_dir).unwrap().permissions();
-        perms.set_readonly(true);
-        std::fs::set_permissions(&parent_dir, perms).unwrap();
 
         // Delete the parent — should rescue the child but not the plain dir
         WriteYakStore::delete_yak(&storage, &YakId::from("parent-a1b2")).unwrap();
@@ -1195,7 +1184,9 @@ mod tests {
     }
 
     #[test]
-    fn test_yak_files_are_readonly_after_creation() {
+    fn test_yak_directory_is_writable_and_files_are_readonly_after_creation() {
+        use std::os::unix::fs::PermissionsExt;
+
         let (mut storage, _temp) = setup_test_storage();
 
         storage
@@ -1214,11 +1205,11 @@ mod tests {
         let name_file = yak_dir.join(crate::domain::NAME_FIELD);
         let id_file = yak_dir.join(crate::domain::ID_FIELD);
 
-        // Verify directory is readonly
+        // Deleting entries requires owner-write permission on their directory.
         let dir_perms = std::fs::metadata(&yak_dir).unwrap().permissions();
         assert!(
-            dir_perms.readonly(),
-            "Yak directory should be readonly after creation"
+            dir_perms.mode() & 0o200 != 0,
+            "Yak directory should be owner-writable after creation"
         );
 
         // Verify files are readonly
@@ -1242,10 +1233,12 @@ mod tests {
     }
 
     #[test]
-    fn test_write_field_works_on_readonly_yak() {
+    fn test_write_field_keeps_directory_writable_and_file_readonly() {
+        use std::os::unix::fs::PermissionsExt;
+
         let (mut storage, _temp) = setup_test_storage();
 
-        // Create a yak (will be readonly after creation)
+        // Create a yak with a writable directory and read-only files.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1259,14 +1252,14 @@ mod tests {
 
         let yak_dir = storage.base_path.join("test-yak");
 
-        // Verify directory is readonly before update
+        // Verify directory is writable before update
         let dir_perms_before = std::fs::metadata(&yak_dir).unwrap().permissions();
         assert!(
-            dir_perms_before.readonly(),
-            "Yak directory should be readonly before field update"
+            dir_perms_before.mode() & 0o200 != 0,
+            "Yak directory should be owner-writable before field update"
         );
 
-        // Update a field (should work despite readonly status)
+        // Update a field.
         storage
             .on_event(&YakEvent::FieldUpdated(
                 FieldUpdatedEvent {
@@ -1282,11 +1275,11 @@ mod tests {
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("test-yak-a1b2")).unwrap();
         assert_eq!(yak.state, crate::domain::YakState::Wip);
 
-        // Verify directory is still readonly after update
+        // Verify directory is still writable after update
         let dir_perms_after = std::fs::metadata(&yak_dir).unwrap().permissions();
         assert!(
-            dir_perms_after.readonly(),
-            "Yak directory should remain readonly after field update"
+            dir_perms_after.mode() & 0o200 != 0,
+            "Yak directory should remain owner-writable after field update"
         );
 
         // Verify the updated file is readonly
@@ -1326,7 +1319,7 @@ mod tests {
         assert_eq!(yaks[0].tags, vec!["tag1", "tag2", "tag3"]);
     }
 
-    // --- Tests to catch mutants in io.rs that flip `!= base_path` guards ---
+    // --- Writable directory regressions ---
 
     #[test]
     fn test_base_path_stays_writable_after_delete() {
@@ -1347,8 +1340,7 @@ mod tests {
         // Delete it
         WriteYakStore::delete_yak(&storage, &YakId::from("first-yak-a1b2")).unwrap();
 
-        // If base_path were made readonly by delete (mutant lines 82/93),
-        // the next create would fail
+        // The next create proves deletion left the projection root writable.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1383,9 +1375,7 @@ mod tests {
             ))
             .unwrap();
 
-        // Rename the root-level yak (parent_dir == base_path)
-        // This will trigger the parent_dir != base_path guards at lines 134 and 149
-        // The mutant at line 149 would flip to `if parent_dir == base_path` and make base_path readonly
+        // Rename the root-level yak.
         WriteYakStore::rename_yak(
             &storage,
             &YakId::from("first-yak-a1b2"),
@@ -1393,7 +1383,7 @@ mod tests {
         )
         .unwrap();
 
-        // Explicitly check that base_path is still writable (catches mutant at line 149)
+        // Explicitly check that base_path is still writable.
         let base_perms = std::fs::metadata(&storage.base_path).unwrap().permissions();
         let mode = base_perms.mode();
         assert!(
@@ -1402,8 +1392,7 @@ mod tests {
             mode
         );
 
-        // Also create another root-level yak to ensure base_path stays writable
-        // (catches mutant at line 149 if it makes base_path readonly)
+        // Also create another root-level yak to prove it remains usable.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1460,7 +1449,7 @@ mod tests {
             ))
             .unwrap();
 
-        // Move child-one FROM root TO parent (old_parent_dir == base_path, triggers line 198)
+        // Move child-one from root to parent.
         WriteYakStore::reparent_yak(
             &storage,
             &YakId::from("child-one-c3d4"),
@@ -1468,7 +1457,16 @@ mod tests {
         )
         .unwrap();
 
-        // Explicitly check that base_path is still writable (catches mutant at line 198)
+        assert!(
+            storage.base_path.join("parent/child-one").is_dir(),
+            "child should move below its new parent"
+        );
+        assert!(
+            !storage.base_path.join("child-one").exists(),
+            "child should no longer remain at the root"
+        );
+
+        // Explicitly check that base_path is still writable.
         let base_perms = std::fs::metadata(&storage.base_path).unwrap().permissions();
         let mode = base_perms.mode();
         assert!(
@@ -1477,10 +1475,19 @@ mod tests {
             mode
         );
 
-        // Move child-one FROM parent back TO root (new_parent_dir == base_path, triggers line 195)
+        // Move child-one from parent back to root.
         WriteYakStore::reparent_yak(&storage, &YakId::from("child-one-c3d4"), None).unwrap();
 
-        // Explicitly check that base_path is still writable (catches mutant at line 195)
+        assert!(
+            storage.base_path.join("child-one").is_dir(),
+            "child should move back to the root"
+        );
+        assert!(
+            !storage.base_path.join("parent/child-one").exists(),
+            "child should no longer remain below its old parent"
+        );
+
+        // Explicitly check that base_path is still writable.
         let base_perms = std::fs::metadata(&storage.base_path).unwrap().permissions();
         let mode = base_perms.mode();
         assert!(
@@ -1489,8 +1496,7 @@ mod tests {
             mode
         );
 
-        // Create another root-level yak to ensure base_path stays writable
-        // (catches mutants at lines 195/198 if they make base_path readonly)
+        // Create another root-level yak to prove it remains usable.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1534,10 +1540,7 @@ mod tests {
             ))
             .unwrap();
 
-        // Rename the child (which lives in a yak parent directory)
-        // parent_dir != base_path, so this triggers the guards at lines 134 and 149
-        // The mutant at line 134 would flip to `if parent_dir == base_path` and skip making the parent writable,
-        // causing the rename to fail since the parent directory is readonly
+        // Rename the child, which lives in another yak directory.
         WriteYakStore::rename_yak(
             &storage,
             &YakId::from("child-c3d4"),
@@ -1549,7 +1552,7 @@ mod tests {
         let yak = ReadYakStore::get_yak(&storage, &YakId::from("child-c3d4")).unwrap();
         assert_eq!(yak.name, Name::from("renamed child"));
 
-        // Also verify we can still create another child (parent should be writable then readonly again)
+        // Also verify the writable parent can still accept another child.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1566,7 +1569,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_yak_dir_is_readonly_after_child_operations() {
+    fn test_parent_yak_dir_is_writable_after_child_operations() {
+        use std::os::unix::fs::PermissionsExt;
+
         let (mut storage, _temp) = setup_test_storage();
 
         // Create parent yak
@@ -1593,25 +1598,25 @@ mod tests {
             ))
             .unwrap();
 
-        // Verify parent directory is readonly after child creation
+        // Verify parent directory is writable after child creation
         let parent_dir = storage.base_path.join("parent");
         let parent_perms = std::fs::metadata(&parent_dir).unwrap().permissions();
         assert!(
-            parent_perms.readonly(),
-            "Parent directory should be readonly after child creation"
+            parent_perms.mode() & 0o200 != 0,
+            "Parent directory should be owner-writable after child creation"
         );
 
         // Delete the child
         WriteYakStore::delete_yak(&storage, &YakId::from("child-one-c3d4")).unwrap();
 
-        // Verify parent directory is still readonly after child deletion
+        // Verify parent directory is still writable after child deletion
         let parent_perms = std::fs::metadata(&parent_dir).unwrap().permissions();
         assert!(
-            parent_perms.readonly(),
-            "Parent directory should remain readonly after child deletion"
+            parent_perms.mode() & 0o200 != 0,
+            "Parent directory should remain owner-writable after child deletion"
         );
 
-        // Create another child under parent (should still work because io.rs makes it writable temporarily)
+        // Create another child under parent.
         storage
             .on_event(&YakEvent::Added(
                 AddedEvent {
@@ -1623,11 +1628,11 @@ mod tests {
             ))
             .unwrap();
 
-        // Verify parent directory is readonly again after second child creation
+        // Verify parent directory remains writable after second child creation
         let parent_perms = std::fs::metadata(&parent_dir).unwrap().permissions();
         assert!(
-            parent_perms.readonly(),
-            "Parent directory should be readonly after second child creation"
+            parent_perms.mode() & 0o200 != 0,
+            "Parent directory should remain owner-writable after second child creation"
         );
     }
 }

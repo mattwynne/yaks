@@ -33,8 +33,8 @@ pub(super) fn make_readonly(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Make a directory and all its files read-only (recursively)
-pub(super) fn make_dir_readonly(dir: &Path) -> Result<()> {
+/// Make all files below a directory read-only, while leaving directories writable.
+pub(super) fn make_files_readonly_recursive(dir: &Path) -> Result<()> {
     if !dir.exists() {
         return Ok(());
     }
@@ -42,12 +42,11 @@ pub(super) fn make_dir_readonly(dir: &Path) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
-            make_dir_readonly(&path)?;
+            make_files_readonly_recursive(&path)?;
         } else {
             make_readonly(&path)?;
         }
     }
-    make_readonly(dir)?;
     Ok(())
 }
 
