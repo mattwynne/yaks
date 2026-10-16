@@ -1394,6 +1394,18 @@ impl TestWorld for FullStackWorld {
         self.run_yx(&["add", name, "--field", &field_arg])
     }
 
+    fn add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let args = add_yak_with_tag_args(name, tags);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.run_yx(&arg_refs)
+    }
+
+    fn try_add_yak_with_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
+        let args = add_yak_with_tag_args(name, tags);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.run_yx_unchecked(&arg_refs)
+    }
+
     fn add_tags(&mut self, name: &str, tags: Vec<String>) -> Result<()> {
         let mut args = vec!["tag", "add", name];
         let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
@@ -1423,6 +1435,15 @@ impl TestWorld for FullStackWorld {
     fn get_exit_code(&self) -> i32 {
         self.exit_code
     }
+}
+
+fn add_yak_with_tag_args(name: &str, tags: Vec<String>) -> Vec<String> {
+    let mut args = vec!["add".to_string(), name.to_string()];
+    for tag in tags {
+        args.push("--tag".to_string());
+        args.push(tag);
+    }
+    args
 }
 
 impl FullStackWorld {
