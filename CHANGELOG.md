@@ -8,6 +8,7 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ### Added
 
+- Commands that select a yak now accept the unique suffix at the end of its ID, such as `wx09` for `stray-click-wx09`.
 - `yx add` now accepts repeatable `--tag` options to attach normalized tags during creation.
 
 ### Fixed

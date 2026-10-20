@@ -430,19 +430,19 @@ impl ReadYakStore for InMemoryStorage {
             }
         }
 
-        // Fuzzy match on name field
+        // Match an ID suffix or fuzzy match on the name field.
+        let lowercase_query = query.to_lowercase();
         let matches: Vec<&String> = yaks
             .keys()
             .filter(|key| {
-                if let Some(fields) = yaks.get(*key) {
-                    let name = fields
-                        .get(NAME_FIELD)
-                        .map(|s| s.as_str())
-                        .unwrap_or(key.as_str());
-                    name.to_lowercase().contains(&query.to_lowercase())
-                } else {
-                    false
-                }
+                key.ends_with(query)
+                    || yaks.get(*key).is_some_and(|fields| {
+                        let name = fields
+                            .get(NAME_FIELD)
+                            .map(|s| s.as_str())
+                            .unwrap_or(key.as_str());
+                        name.to_lowercase().contains(&lowercase_query)
+                    })
             })
             .collect();
 

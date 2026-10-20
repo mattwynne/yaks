@@ -197,6 +197,22 @@ macro_rules! yak_store_tests {
         }
 
         #[test]
+        fn fuzzy_find_yak_id_matches_id_suffix() {
+            let (store, _guard) = $create_store;
+            store
+                .create_yak(
+                    &Name::from("stray click"),
+                    &YakId::from("stray-click-wx09"),
+                    None,
+                )
+                .unwrap();
+
+            let result = ReadYakStore::fuzzy_find_yak_id(&store, "wx09").unwrap();
+
+            assert_eq!(result, YakId::from("stray-click-wx09"));
+        }
+
+        #[test]
         fn fuzzy_find_yak_id_case_insensitive() {
             let (store, _guard) = $create_store;
             store

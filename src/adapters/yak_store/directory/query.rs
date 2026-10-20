@@ -231,15 +231,14 @@ pub(super) fn fuzzy_find_yak_id(base_path: &Path, query: &str) -> Result<YakId> 
         return Ok(id);
     }
 
-    // If not found, try fuzzy match on the name
+    // If not found, try an ID suffix or fuzzy match on the name.
     let yaks = list_yaks(base_path)?;
+    let lowercase_query = query.to_lowercase();
     let matches: Vec<&Yak> = yaks
         .iter()
         .filter(|yak| {
-            yak.name
-                .as_str()
-                .to_lowercase()
-                .contains(&query.to_lowercase())
+            yak.id.as_str().ends_with(query)
+                || yak.name.as_str().to_lowercase().contains(&lowercase_query)
         })
         .collect();
 

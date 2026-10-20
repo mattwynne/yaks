@@ -1,9 +1,21 @@
-Feature: Fuzzy match on yak names
-  Commands that take a yak name accept a unique substring
-  instead of requiring the full name. This avoids needing to
-  type or remember long hierarchical names.
+Feature: Find yaks by ID suffix or name
+  Commands that take a yak accept either the unique suffix of its ID
+  or a unique substring of its name. This avoids needing to type or
+  remember long IDs and hierarchical names.
 
-  Rule: A unique substring matches a yak
+  Rule: A unique ID suffix matches a yak
+
+    Example: Marking a yak done by its unique ID suffix
+      Given I have a clean git repository
+      And I add the yak "stray click" with id "stray-click-wx09"
+      And I mark the yak "wx09" as done
+      When I list the yaks in "markdown" format
+      Then the output should be:
+        """
+        - [done] stray click
+        """
+
+  Rule: A unique name substring matches a yak
 
     Example: Marking a yak done by unique substring
       Given I have a clean git repository
