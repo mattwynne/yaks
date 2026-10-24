@@ -5,6 +5,17 @@ on:
   pull_request:
 
 jobs:
+  macos-release-linkage:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build and check the release binary
+        run: |
+          cargo build --release
+          bin/check-macos-linkage target/release/yx
+
   tests:
     runs-on: ubuntu-latest
     steps:

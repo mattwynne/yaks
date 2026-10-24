@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: $0 <release-binary>" >&2
+  exit 2
+fi
+
+binary=$1
+if [ ! -x "$binary" ]; then
+  echo "Release binary is not executable: $binary" >&2
+  exit 1
+fi
+
+linkage=$(otool -L "$binary")
+offending=$(printf '%s\n' "$linkage" | grep -E \
+  '^[[:space:]]*(/opt/homebrew/|/usr/local/(Cellar|opt)/|[^[:space:]]*/lib(ssl|crypto)(\.[^[:space:]]*)?\.dylib)' || true)
+
+if [ -n "$offending" ]; then
+  echo "Error: non-portable macOS release linkage detected in $binary:" >&2
+  printf '%s\n' "$offending" >&2
+  exit 1
+fi
+
+echo "✓ macOS release linkage is portable: $binary"

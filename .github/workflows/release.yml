@@ -37,24 +37,9 @@ jobs:
         if: matrix.target != ''
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install OpenSSL for musl (Linux only)
-        if: matrix.target != ''
-        run: |
-          # Build static OpenSSL for musl
-          wget https://www.openssl.org/source/openssl-3.0.13.tar.gz
-          tar -xzf openssl-3.0.13.tar.gz
-          cd openssl-3.0.13
-          # Use -idirafter to add kernel headers after musl's standard headers
-          CC=musl-gcc CFLAGS="-idirafter /usr/include/x86_64-linux-gnu -idirafter /usr/include" ./Configure no-shared no-async --prefix=/tmp/musl-openssl --openssldir=/tmp/musl-openssl linux-x86_64
-          make -j$(nproc)
-          make install_sw
-          cd ..
-
       - name: Build release
         run: |
           if [ -n "${{ matrix.target }}" ]; then
-            export OPENSSL_DIR=/tmp/musl-openssl
-            export OPENSSL_STATIC=1
             cargo build --release --target ${{ matrix.target }}
             BINARY_PATH=target/${{ matrix.target }}/release/yx
           else
@@ -63,6 +48,9 @@ jobs:
           fi
 
           YX_BIN="$BINARY_PATH" bin/check-release "${GITHUB_REF_NAME}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            bin/check-macos-linkage "$BINARY_PATH"
+          fi
 
           mkdir -p release-bundle/bin release-bundle/completions
           cp $BINARY_PATH release-bundle/bin/yx

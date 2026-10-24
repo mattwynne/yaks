@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS release downloads no longer depend on Homebrew OpenSSL, so `yx` starts on Macs without the runner's OpenSSL formula installed.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added
