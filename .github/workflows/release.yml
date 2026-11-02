@@ -84,7 +84,8 @@ jobs:
 
       - name: Prepare release notes and installer
         run: |
-          bin/changelog-section "${GITHUB_REF_NAME}" > release-notes.md
+          printf "_Written by Matt's Robot_\n\n---\n\n" > release-notes.md
+          bin/changelog-section "${GITHUB_REF_NAME}" >> release-notes.md
 
           LINUX_SUM=$(sha256sum yx-linux-x86_64.zip/yx-linux-x86_64.zip | cut -d' ' -f1)
           MACOS_SUM=$(sha256sum yx-macos-aarch64.zip/yx-macos-aarch64.zip | cut -d' ' -f1)
