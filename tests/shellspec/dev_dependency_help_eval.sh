@@ -5,6 +5,12 @@ Describe 'bin/dev eval-dependency-help'
     EVAL_TMP=$(mktemp -d)
     export EVAL_TMP
     mkdir -p "$EVAL_TMP/bin"
+    cat > "$EVAL_TMP/bin/cargo" <<'EOF'
+#!/usr/bin/env bash
+# dev check builds the real binary before ShellSpec; avoid a concurrent rebuild.
+exit 0
+EOF
+    chmod +x "$EVAL_TMP/bin/cargo"
     cat > "$EVAL_TMP/bin/codex" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
