@@ -11,7 +11,8 @@ pub fn for_humans() -> &'static str {
   yx done \"fix the flaky test\"
 
 \x1b[1;33mDependencies:\x1b[0m
-  Children block their parent. Put prerequisites \x1b[1munder\x1b[0m the goal:
+  Use the tree for prerequisites, not just categories. Children block their
+  parent, so put earlier work \x1b[1munder\x1b[0m the later goal:
 
   yx add \"deploy app\"
   yx add \"write tests\" --under \"deploy app\"
@@ -21,7 +22,10 @@ pub fn for_humans() -> &'static str {
   deploy app
   ├── write tests      ← can do in parallel
   └── set up CI        ← with this one
-      └── fix linter   ← but do this first"
+      └── fix linter   ← but do this first
+
+  Use explicit yak blockers for shared/cross-branch dependencies that the
+  single-parent tree cannot express, and for external impediments."
 }
 
 pub fn for_agents() -> &'static str {
@@ -39,7 +43,8 @@ EOF
   yx done \"fix the flaky test\"
 
 \x1b[1;33mDependencies:\x1b[0m
-  Children block their parent. Put prerequisites under the goal:
+  Use the tree for prerequisites, not just categories. Children block their
+  parent, so put earlier work under the later goal:
 
   yx add \"deploy app\"
   yx add \"write tests\" --under \"deploy app\"
@@ -49,7 +54,10 @@ EOF
   deploy app
   ├── write tests      ← can do in parallel
   └── set up CI        ← with this one
-      └── fix linter   ← but do this first"
+      └── fix linter   ← but do this first
+
+  Use explicit yak blockers for shared/cross-branch dependencies that the
+  single-parent tree cannot express, and for external impediments."
 }
 
 #[cfg(test)]

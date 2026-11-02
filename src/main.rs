@@ -56,7 +56,10 @@ struct Cli {
 #[derive(Parser, Debug)]
 enum Commands {
     /// Add a new yak
-    #[command(display_order = 1)]
+    #[command(
+        display_order = 1,
+        after_help = "Dependency direction:\n  If B must happen before A, put B under A:\n\n  yx add \"B\" --under \"A\"\n\n  Earlier work is the child; later work is the parent. Children block their\n  parent, so work from ready leaves toward the goal."
+    )]
     Add {
         /// The yak name (space-separated words)
         name: Vec<String>,
@@ -137,7 +140,11 @@ enum Commands {
         exclude_tag: Option<String>,
     },
     /// Move a yak in the hierarchy
-    #[command(alias = "mv", display_order = 12)]
+    #[command(
+        alias = "mv",
+        display_order = 12,
+        after_help = "Use the tree for prerequisites:\n  Avoid a flat list of sibling yaks joined by explicit blockers when nesting\n  expresses the same ordering.\n\n  Before (flat blocker chain):\n    Release inventory tools\n    ├── Deploy service          [blocked by integration]\n    └── Integrate adapters\n\n  After (prerequisite tree):\n    Release inventory tools\n    └── Deploy service\n        └── Integrate adapters\n\n  Restructure existing yaks with:\n    yx move Deploy service --under Release inventory tools\n    yx move Integrate adapters --under Deploy service"
+    )]
     Move {
         /// The yak to move (space-separated words)
         name: Vec<String>,
@@ -277,6 +284,9 @@ enum Commands {
 #[derive(Parser, Debug)]
 enum BlockerAction {
     /// Add or update a blocker. Use --by for yak blockers; omit it for a manual/external blocker.
+    #[command(
+        after_help = "When to use a blocker:\n  First use parent/child nesting when one yak is a prerequisite for another.\n  Use --by for a shared/cross-branch dependency that the single-parent tree\n  cannot express. Omit --by for a manual/external impediment.\n\n  Do not duplicate a dependency already implied by nesting or another dependency\n  path. A blocker on a parent does not gate its children; block each affected leaf\n  when the impediment applies to the children too."
+    )]
     Add {
         /// The yak being blocked
         yak: String,

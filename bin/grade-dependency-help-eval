@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+answer=$(jq '
+  if type == "array" then
+    [.. | objects | select(has("parent_id") and has("blocked_by"))] as $nodes
+    | ($nodes | map({key: .id, value: .name}) | from_entries) as $names
+    | {
+        yaks: [$nodes[] | {
+          name,
+          parent: (if .parent_id == null then null else $names[.parent_id] end)
+        }],
+        blockers: [$nodes[] | .name as $blocked | .blocked_by[] | {
+          blocked: $blocked,
+          kind,
+          by: (if .kind == "yak" then $names[.id] else null end),
+          reason
+        }]
+      }
+  else . end
+')
+
+if jq -e '
+  ([.yaks[] | select(.parent == "Launch catalog service")] | length) >= 6
+  and ([.blockers[] | select(.kind == "yak")] | length) >= 4
+' >/dev/null <<<"$answer"; then
+  echo "FAIL: prerequisites are flattened into sibling yaks" >&2
+  exit 1
+fi
+
+if jq -e '
+  any(.blockers[];
+    .kind == "manual" and .blocked == "Validate common library")
+  and ([.blockers[]
+    | select(
+        .kind == "manual"
+        and (.blocked == "Implement reader" or .blocked == "Implement refresh")
+      )] | length) < 2
+' >/dev/null <<<"$answer"; then
+  echo "FAIL: a parent blocker does not gate the affected leaves" >&2
+  exit 1
+fi
+
+if jq -e '
+  def has_parent($name; $parent):
+    [.yaks[] | select(.name == $name) | .parent] == [$parent];
+  def yak_blockers:
+    [.blockers[]
+      | select(.kind == "yak")
+      | {blocked, by}]
+    | sort_by(.blocked, .by);
+  def manual_blockers:
+    [.blockers[]
+      | select(.kind == "manual")
+      | {blocked, reason}]
+    | sort_by(.blocked);
+
+  [.yaks[] | select(.name == "Publish shared contract") | .parent] as $homes
+  | $homes[0] as $home
+  | (.yaks | length) == 9
+  and has_parent("Launch catalog service"; null)
+  and ($homes | length) == 1
+  and (["Launch catalog service", "Implement reader", "Implement refresh",
+        "Build search endpoint"] | index($home)) != null
+  and has_parent("Deploy catalog service"; "Launch catalog service")
+  and has_parent("Wire components"; "Deploy catalog service")
+  and has_parent("Adapt legacy importer"; "Wire components")
+  and has_parent("Validate common library"; "Adapt legacy importer")
+  and has_parent("Implement reader"; "Validate common library")
+  and has_parent("Implement refresh"; "Validate common library")
+  and has_parent("Build search endpoint"; "Wire components")
+  and yak_blockers == ([
+    {"blocked": "Build search endpoint", "by": "Publish shared contract"},
+    {"blocked": "Implement reader", "by": "Publish shared contract"},
+    {"blocked": "Implement refresh", "by": "Publish shared contract"}
+  ] | map(select(.blocked != $home)) | sort_by(.blocked, .by))
+  and (manual_blockers | map(.blocked)) == [
+    "Implement reader",
+    "Implement refresh"
+  ]
+  and (manual_blockers | all(.reason | type == "string" and length > 0))
+  and (.blockers | length) == (if $home == "Launch catalog service" then 5 else 4 end)
+' >/dev/null <<<"$answer"; then
+  echo "PASS: prerequisite nesting guidance"
+  exit 0
+fi
+
+echo "FAIL: map did not use the expected prerequisite tree and minimal blockers" >&2
+exit 1

@@ -6,6 +6,14 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Changed
+
+- CLI help now explains when to model prerequisites by nesting yaks and when to use explicit blockers for shared or external dependencies.
+
+### Security
+
+- Updated `libz-sys` to 1.1.31 to address RUSTSEC-2026-0418.
+
 ## [0.6.1] - 2026-11-01
 
 ### Fixed

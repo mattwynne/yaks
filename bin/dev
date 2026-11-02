@@ -651,6 +651,59 @@ check() {
   echo "✅ All checks passed - changes verified"
 }
 
+# @cmd Evaluate whether agents build prerequisite maps correctly using yx
+eval-dependency-help() {
+ (
+  set -euo pipefail
+  local project_root
+  project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+  local provider="${YX_EVAL_PROVIDER:-codex}"
+  local yx_binary="${YX_EVAL_BINARY:-$project_root/target/release/yx}"
+  command -v "$provider" >/dev/null || {
+    echo "Error: $provider CLI is required for this eval" >&2
+    return 1
+  }
+  (cd "$project_root" && cargo build --release --quiet)
+
+  local artifacts
+  artifacts=$(mktemp -d "${TMPDIR:-/tmp}/yx-dependency-eval-XXXXXX")
+  echo "Eval artifacts: $artifacts"
+  local workspace="$artifacts/workspace"
+  mkdir -p "$workspace/bin"
+  cp "$yx_binary" "$workspace/bin/yx"
+  git -C "$workspace" init --quiet
+  git -C "$workspace" config user.name "Dependency help eval"
+  git -C "$workspace" config user.email "eval@example.invalid"
+  git -C "$workspace" config core.hooksPath /dev/null
+  printf '.yaks/\n' > "$workspace/.gitignore"
+
+  # Keep every yx command, including the final inspection, in the scratch map.
+  unset YX_FOCUS YX_SKIP_GIT_CHECKS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  export YX_ROOT="$workspace"
+  export PATH="$workspace/bin:$PATH"
+  export CLAUDECODE=1
+  cp "$project_root/evals/prerequisite-nesting/task.md" "$artifacts/prompt.md"
+  case "$provider" in
+    codex)
+      (cd "$workspace" && codex exec --sandbox workspace-write \
+        --add-dir "$workspace/.git" --ephemeral --json - \
+        < "$artifacts/prompt.md") > "$artifacts/trace.jsonl" 2> "$artifacts/agent.stderr"
+      ;;
+    claude)
+      (cd "$workspace" && claude -p --allowedTools Bash --output-format json \
+        < "$artifacts/prompt.md") > "$artifacts/trace.json" 2> "$artifacts/agent.stderr"
+      ;;
+    *)
+      echo "Error: unknown eval provider '$provider' (use codex or claude)" >&2
+      return 1
+      ;;
+  esac
+
+  "$workspace/bin/yx" list --format json > "$artifacts/map.json"
+  "$project_root/bin/grade-dependency-help-eval" < "$artifacts/map.json"
+ )
+}
+
 # @cmd Run Ralph Wiggum loop (iterations with pause)
 # @arg yak-name! Name of the yak to work on
 # @option --max-iterations <NUM> Number of iterations to run (default: 3)
