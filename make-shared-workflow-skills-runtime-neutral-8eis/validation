@@ -1,0 +1,7 @@
+Pi removal implemented in the issue #21 worktree: deleted 32 tracked .pi files, removed Pi ignore rules and npm merge-check dispatch, replaced Pi tool calls in existing worktree guidance, and added an Unreleased note. All changes are recoverable from Git history.
+
+TDD: updated one merge regression test; confirmed RED because Pi-only changes skipped standard checks, then GREEN after removing the special dispatch. Focused merge suite: 7 passed. Full shell suite: 41 examples, 0 failures, 1 installer skip. Rust tests, in-process Cucumber, shellcheck, clippy, formatting, step coverage, and complexity checks passed. Cucumber reported 296 passed scenarios and 5 skipped.
+
+dev check blocked at security audit by pre-existing Cargo.lock dependency libz-sys 1.1.30, RUSTSEC-2026-0418; audit recommends >=1.1.31. Mutation phase not reached. No commit or merge performed because full verification is required. First check attempt also encountered transient Cargo cache contention; shell suite passed on rerun.
+
+Remaining broader retirement/consolidation tasks are in the parent plan; .agents/skills move and prepare/work consolidation have not been implemented yet.
