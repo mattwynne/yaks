@@ -601,6 +601,12 @@ check() {
     return 1
   fi
 
+  echo "Running eval harness unit tests (no model calls)..."
+  if ! PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'; then
+    echo "❌ Eval harness tests failed"
+    return 1
+  fi
+
   echo "Running unit + in-process cucumber tests..."
   if ! cargo test --features test-support; then
     echo "❌ Unit / in-process cucumber tests failed"
@@ -649,6 +655,31 @@ check() {
   echo ""
   write_check_record
   echo "✅ All checks passed - changes verified"
+}
+
+# @cmd Run the prose-to-yak-map eval manually (uses authenticated Codex)
+# @alias eval
+# @option --runs <N> Attempts per version (default: 8)
+# @option --jobs <N> Concurrent attempts in total (default: 4)
+# @option --compare <REV> Also evaluate an old Git revision
+# @option --model <MODEL> Codex model (default: gpt-6.1-sol)
+# @option --timeout <SECONDS> Time limit per attempt (default: 300)
+# @option --output <DIR> Save report and artifacts to this empty directory
+eval-help() {
+  local project_root
+  project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+  local eval_args=(--working-tree --runs "${argc_runs:-8}" --jobs "${argc_jobs:-4}"
+    --model "${argc_model:-gpt-6.1-sol}" --timeout "${argc_timeout:-300}")
+  if [ -n "${argc_compare:-}" ]; then
+    eval_args+=(--old-ref "$argc_compare")
+  else
+    eval_args+=(--current-only)
+  fi
+  if [ -n "${argc_output:-}" ]; then
+    eval_args+=(--output "$argc_output")
+  fi
+  python3 "$project_root/bin/compare-dependency-help" \
+    "${eval_args[@]}"
 }
 
 # @cmd Evaluate whether agents build prerequisite maps correctly using yx
@@ -711,7 +742,8 @@ eval-dependency-help() {
   esac
 
   "$workspace/bin/yx" list --format json > "$artifacts/map.json"
-  "$project_root/bin/grade-dependency-help-eval" < "$artifacts/map.json"
+  python3 "$project_root/evals/prerequisite-nesting/grade.py" \
+    --output "$artifacts/assessment.json" < "$artifacts/map.json"
  )
 }
 

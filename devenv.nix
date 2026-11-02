@@ -17,6 +17,7 @@
     rust-code-analysis  # code metrics (cyclomatic complexity, LOC, etc.)
     cargo-audit
     cargo-mutants
+    python3  # manual prose eval runner and fast grader tests
   ] ++ lib.optionals pkgs.stdenv.isDarwin [
     libiconv
   ];

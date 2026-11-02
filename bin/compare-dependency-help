@@ -13,15 +13,6 @@ import tempfile
 import time
 
 
-def classify(map_path, status):
-    try:
-        if not isinstance(json.loads(map_path.read_text()), list):
-            return "error"
-    except (OSError, ValueError):
-        return "error"
-    return "pass" if status == 0 else "fail"
-
-
 def summarize(rows):
     summary = {}
     for variant in ("old", "new"):
@@ -34,6 +25,7 @@ def summarize(rows):
             "passed": passed,
             "failed": sum(row["outcome"] == "fail" for row in attempts),
             "errors": sum(row["outcome"] == "error" for row in attempts),
+            "review": sum(row["outcome"] == "review" for row in attempts),
             "pass_rate": passed / len(attempts),
             "median_seconds": statistics.median(row["seconds"] for row in attempts),
         }
@@ -65,6 +57,19 @@ def build_binary(root, revision, variant, output, target):
     # Copy before building the other revision into the shared target directory.
     import shutil
     shutil.copy2(target / "debug/yx", binary)
+    return binary, sha
+
+
+def build_current_binary(root, output):
+    """Build the working tree, including uncommitted help edits."""
+    import shutil
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    print("Building current working copy", flush=True)
+    with (output / "new-build.log").open("w") as log:
+        subprocess.run(["cargo", "build", "--locked", "--target-dir", str(root / "target")],
+                       cwd=root, stdout=log, stderr=subprocess.STDOUT, check=True)
+    binary = output / "yx-new"
+    shutil.copy2(root / "target/debug/yx", binary)
     return binary, sha
 
 
@@ -113,11 +118,20 @@ def run_attempt(root, binary, variant, index, output, model, timeout):
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
-    outcome = classify(directory / "run/map.json", status) if status is not None else "error"
+    try:
+        assessment = json.loads((directory / "run/assessment.json").read_text())
+        expected_status = {"pass": 0, "fail": 1, "review": 2}
+        outcome = assessment["outcome"]
+        if expected_status.get(outcome) != status:
+            outcome = "error"
+    except (OSError, ValueError, KeyError):
+        outcome = "error"
+        assessment = {"reasons": ["Agent run or map inspection did not complete"]}
     row = {
         "variant": variant, "attempt": index, "outcome": outcome,
         "seconds": round(time.monotonic() - started, 2), "exit_code": status,
         "artifacts": str(directory),
+        "assessment": assessment,
     }
     (directory / "result.json").write_text(json.dumps(row, indent=2) + "\n")
     return row
@@ -125,35 +139,61 @@ def run_attempt(root, binary, variant, index, output, model, timeout):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", type=int, default=10, help="Attempts per version")
+    parser.add_argument("--runs", type=int, default=8, help="Attempts per version")
     parser.add_argument("--jobs", type=int, default=4, help="Concurrent attempts in total")
     parser.add_argument("--old-ref", default="d5c4bc4", help="Revision before help changes")
     parser.add_argument("--new-ref", default="HEAD")
+    parser.add_argument("--current-only", action="store_true", help="Do not run a baseline")
+    parser.add_argument("--working-tree", action="store_true", help="Include uncommitted help edits")
     parser.add_argument("--model", default="gpt-6.1-sol", help="Same model for both versions")
     parser.add_argument("--timeout", type=int, default=300, help="Seconds per attempt")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--target-dir", type=Path, help="Reusable Cargo build cache")
+    parser.add_argument("--target-dir", type=Path, help="Reusable baseline Cargo build cache")
     args = parser.parse_args()
     if min(args.runs, args.jobs, args.timeout) < 1:
         parser.error("runs, jobs, and timeout must be positive")
     root = Path(__file__).resolve().parents[1]
-    output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="yx-help-comparison-"))
-    output.mkdir(parents=True, exist_ok=True)
-    print(f"Comparison artifacts: {output}", flush=True)
+    if args.output:
+        output = args.output.resolve()
+        if output.exists() and any(output.iterdir()):
+            parser.error("output directory must be empty")
+        output.mkdir(parents=True, exist_ok=True)
+    else:
+        parent = root / "eval-results"
+        parent.mkdir(exist_ok=True)
+        output = Path(tempfile.mkdtemp(prefix=time.strftime("%Y%m%d-%H%M%S-"), dir=parent))
+    print(f"Evaluation artifacts: {output}", flush=True)
     build_started = time.monotonic()
-    target = args.target_dir.resolve() if args.target_dir else output / "build"
-    old, old_sha = build_binary(root, args.old_ref, "old", output, target)
-    new, new_sha = build_binary(root, args.new_ref, "new", output, target)
-    old_help = snapshot_help(old, output, "old")
-    new_help = snapshot_help(new, output, "new")
-    if old_help == new_help:
+    binaries = {}
+    revisions = {}
+    helps = {}
+    if not args.current_only:
+        target = args.target_dir.resolve() if args.target_dir else root / "target/eval-baseline"
+        binaries["old"], revisions["old"] = build_binary(root, args.old_ref, "old", output, target)
+        helps["old"] = snapshot_help(binaries["old"], output, "old")
+    if args.working_tree or args.current_only:
+        binaries["new"], revisions["new"] = build_current_binary(root, output)
+    else:
+        target = output / "current-build"
+        binaries["new"], revisions["new"] = build_binary(root, args.new_ref, "new", output, target)
+    helps["new"] = snapshot_help(binaries["new"], output, "new")
+    if "old" in helps and helps["old"] == helps["new"]:
         raise RuntimeError("Old and new help are identical; refusing to run a misleading comparison")
     metadata = {
-        "old_commit": old_sha, "new_commit": new_sha, "model": args.model,
+        "revisions": revisions, "model": args.model,
+        "working_tree": args.working_tree or args.current_only,
         "runs_per_version": args.runs, "jobs": args.jobs, "timeout": args.timeout,
         "build_seconds": round(time.monotonic() - build_started, 2),
-        "old_binary_sha256": hashlib.sha256(old.read_bytes()).hexdigest(),
-        "new_binary_sha256": hashlib.sha256(new.read_bytes()).hexdigest(),
+        "binary_sha256": {
+            key: hashlib.sha256(binary.read_bytes()).hexdigest()
+            for key, binary in binaries.items()
+        },
+        "brief_sha256": hashlib.sha256(
+            (root / "evals/prerequisite-nesting/task.md").read_bytes()).hexdigest(),
+        "grader_sha256": hashlib.sha256(
+            (root / "evals/prerequisite-nesting/grade.py").read_bytes()).hexdigest(),
+        "git_status": subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=root, text=True),
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     rows = []
@@ -162,7 +202,7 @@ def main():
         futures = [
             pool.submit(run_attempt, root, binary, variant, index, output, args.model, args.timeout)
             for index in range(1, args.runs + 1)
-            for variant, binary in (("old", old), ("new", new))
+            for variant, binary in binaries.items()
         ]
         for future in as_completed(futures):
             row = future.result()
@@ -175,28 +215,39 @@ def main():
     }
     (output / "results.json").write_text(json.dumps(report, indent=2) + "\n")
     lines = [
-        "# Old versus new help", "",
+        "# Prose-to-yak-map eval", "",
         f"Model: {args.model}. Attempts per version: {args.runs}. Concurrent attempts: {args.jobs}.",
-        "", "| Help | Passed | Incorrect maps | Execution errors | Median seconds |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "", "| Help | Passed | Incorrect maps | Needs review | Execution errors | Median seconds |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for variant, summary in report["summary"].items():
+        label = "current" if variant == "new" else "baseline"
         lines.append(
-            f'| {variant} | {summary["passed"]}/{summary["attempts"]} | '
-            f'{summary["failed"]} | {summary["errors"]} | {summary["median_seconds"]:.1f} |'
+            f'| {label} | {summary["passed"]}/{summary["attempts"]} | '
+            f'{summary["failed"]} | {summary["review"]} | {summary["errors"]} | '
+            f'{summary["median_seconds"]:.1f} |'
         )
     lines.extend([
-        "", f"Old commit: {old_sha}", f"New commit: {new_sha}",
+        "", f"Revisions: {json.dumps(revisions)}",
         f'Build time: {metadata["build_seconds"]} seconds.',
         f'Evaluation wall time: {report["eval_seconds"]} seconds.', "",
-        "Each attempt uses a fresh Git repository and the same prose task and grader.",
-        "Execution errors count as unsuccessful attempts but are listed separately.",
-        "This is a small sample on one task; pass-rate differences are descriptive, not conclusive.",
+        "Each attempt starts empty and uses the same prose and structural grader.",
+        "Task roles are recognized from common English action words; ambiguous maps need review.",
+        "All attempts remain in the denominator. Failed attempts are not retried.",
+        "Inspect each run/assessment.json and map.json for details.",
+        "Small samples on a selected task are descriptive, not conclusive.",
     ])
     (output / "report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines), flush=True)
-    return 0
+    current = report["summary"]["new"]
+    if current["errors"] or current["review"]:
+        return 2
+    return 1 if current["failed"] else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, subprocess.CalledProcessError, RuntimeError) as error:
+        print(f"Eval error: {error}", file=__import__("sys").stderr)
+        raise SystemExit(2)

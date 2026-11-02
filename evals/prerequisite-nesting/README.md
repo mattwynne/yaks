@@ -1,56 +1,88 @@
-# Prerequisite nesting eval
+# Manual prose-to-yak-map eval
 
-Run `dev eval-dependency-help` with an authenticated Codex CLI.
-Set `YX_EVAL_PROVIDER=claude` to use Claude instead.
-
-For a repeated old-versus-new comparison, run:
+Run from the development shell with an authenticated Codex CLI:
 
 ```sh
-bin/compare-dependency-help --runs 10 --jobs 4
+dev eval
 ```
 
-This builds the pre-change revision `d5c4bc4` and current `HEAD` once each,
-then interleaves ten attempts per version with four attempts running in total.
-Both versions use the same task, grader, model, and timeout. Use `--old-ref`,
-`--new-ref`, and `--model` to select these explicitly.
+This builds the **current working copy**, including uncommitted help edits,
+then runs eight independent attempts with at most four running at once.
+Every attempt starts with an empty temporary Git repository. The agent reads
+the candidate CLI help, creates its own tasks through yx, and leaves them todo.
+The frozen [brief](task.md) is ordinary prose across three codebases; it
+supplies neither task names nor a starting map.
 
-The output directory contains `report.md`, `results.json`, exact revision
-metadata, both binaries, build logs, and every attempt's trace and saved map.
-Incorrect maps and model/process errors are reported separately. The pass
-rate uses all attempts, including errors; failed attempts are not retried.
-Compilation time is reported separately from evaluation wall time.
+Useful variations:
 
-The comparison requires Python 3, Cargo, jq, Git, tar, and an authenticated
-Codex CLI. Tests for the comparison accounting can be run with
-`python3 -m unittest discover -s tests -p test_dependency_help_comparison.py`.
+```sh
+dev eval --runs 2 --jobs 2
+dev eval --compare d5c4bc4
+dev eval --compare d5c4bc4 --runs 8 --jobs 4 --model gpt-6.1-sol
+dev eval --output /tmp/catalog-eval --timeout 300
+```
 
-The runner builds yx, copies it into a fresh temporary Git repository, and
-asks the agent to create a map using the CLI. The agent reads help itself.
-The task specifies yak names and dependencies in prose, without supplying
-the expected hierarchy.
+`--compare` adds the old revision as a baseline and interleaves attempts.
+The default model is `gpt-6.1-sol` for both versions. The default timeout is
+300 seconds per attempt. Initial compilation can take a few minutes; builds
+are cached and performed once per version, not per attempt.
 
-After the agent finishes, the runner independently calls
-`yx list --format json` and grades the persisted hierarchy and blockers.
-The final agent reply is not graded.
+Each run prints its artifact directory. By default, results stay in the
+gitignored `eval-results/` directory. An explicit output directory must be
+empty. It contains a readable `report.md`, `results.json`, exact revisions,
+binary/help snapshots, brief/grader hashes, build logs, and each attempt's
+prompt, command trace, saved Git repository, map, and `assessment.json`.
 
-The grader requires the prerequisite chain to be nested, the shared contract
-to have one home with explicit blockers from the other consuming branches, and missing vendor
-credentials to block both affected leaves. It rejects redundant blockers.
+## What the grader checks
 
-Each run prints its artifact directory. It retains the scratch repository,
-prompt, agent trace, stderr, and map.json for inspection. These are temporary
-artifacts, not changes to this project's yak map.
+The runner independently reads the actual map with `yx list --format json`.
+The [grader](grade.py) recognizes task roles from common English words such
+as reader, refresh, validation, migration, integration, and deployment.
+It checks that:
 
-The fast ShellSpec tests use real yx commands with a fake model process. They
-verify that a correct persisted map passes and an empty map fails even when
-the model claims success. They do not measure model performance.
+- The main prerequisite chain is expressed by ancestry in the tree.
+- The shared contract has one home, with explicit blockers from consumers
+  whose dependency is not already expressed by nesting.
+- Reader and refresh each have a manual credential blocker.
+- No extra explicit blockers duplicate the prerequisite chain.
 
-A live run measures one model attempt. Repeated runs and comparison against
-older help are needed to measure whether a wording change improves success.
+Task names need not match exact strings. Unrecognized or ambiguous tasks are
+marked **needs review** instead of being called incorrect. This is a
+case-specific word-based grader, not a general semantic judge: inspect
+`assessment.json` and `map.json` when it needs review or when changing
+the brief. Broader language or task decomposition may need human assessment.
 
-## Recorded comparison
+Exit status is 0 when all current-copy attempts pass, 1 for current-copy
+incorrect maps, and 2 for execution errors or maps needing review.
+Baseline failures do not make an otherwise passing current copy fail.
+All attempts stay in the reported denominator; failed attempts are not
+silently retried. Small samples describe this case, not general model quality.
 
-The [2026-11-02 comparison](results/2026-11-02.md) passed 10/10 attempts
-with each version of the help. This task did not distinguish the two versions
-for the selected model. The [machine-readable results](results/2026-11-02.json)
-include timings, binary hashes, exact revisions, and paths to individual runs.
+## Fast verification
+
+`dev check` runs the harness and grader tests without invoking a model.
+To run only these tests:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_*.py'
+shellspec tests/shellspec/dev_dependency_help_eval.sh
+```
+
+The tests include real archived agent maps that are nested, flat, and mixed,
+plus ambiguous-name and external-blocker cases. Runner tests use a fake agent
+process but real yx commands to verify that the persisted map is inspected.
+
+## Recorded experiments
+
+The [free-prose comparison](results/2026-11-02-free-prose.md) is the case
+packaged by `dev eval`: old help yielded five nested, two mixed, and one flat
+map; new help yielded eight nested maps. These were manually assessed before
+the current grader was introduced.
+
+The [earlier comparison](results/2026-11-02.md) used a more explicit brief
+and prescribed task names. Both versions passed 10/10; it is historical
+evidence, not a run of the current brief.
+
+The lower-level `bin/compare-dependency-help` command remains available
+for comparing two committed revisions with `--old-ref` and `--new-ref`.
+`dev eval` always evaluates the current working copy as its candidate.

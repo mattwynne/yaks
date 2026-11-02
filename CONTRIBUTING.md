@@ -80,6 +80,15 @@ all Rust source files. Reports the top 5 most complex functions.
 This also runs automatically as part of `dev check`. Currently it's
 visibility-only — no thresholds enforced yet.
 
+## Manual agent eval
+
+Run `dev eval` to test how an agent maps the prose brief into yaks. It uses
+an authenticated Codex CLI, runs eight fresh attempts four at a time, and
+saves maps, traces, and a report under `eval-results/`. Use
+`dev eval --compare d5c4bc4` to add the old-help baseline.
+See [the eval guide](evals/prerequisite-nesting/README.md) for options and
+grading limits. Model calls are manual; `dev check` only runs offline tests.
+
 ## Mutation Testing
 
 ```bash

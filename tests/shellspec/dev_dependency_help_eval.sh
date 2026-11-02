@@ -26,6 +26,38 @@ EOF
   BeforeEach 'setup_dependency_eval'
   AfterEach 'cleanup_dependency_eval'
 
+  It 'exposes dev eval with eight current-copy attempts and four workers by default'
+    cat > "$EVAL_TMP/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+EOF
+    chmod +x "$EVAL_TMP/bin/python3"
+    When run env PATH="$EVAL_TMP/bin:$PATH" "$TEST_PROJECT_DIR/bin/dev" eval
+    The status should be success
+    The output should include '--current-only'
+    The output should include '--working-tree'
+    The output should include '--runs'
+    The output should include '8'
+    The output should include '--jobs'
+    The output should include '4'
+  End
+
+  It 'accepts a baseline and caller-selected run settings'
+    cat > "$EVAL_TMP/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+EOF
+    chmod +x "$EVAL_TMP/bin/python3"
+    When run env PATH="$EVAL_TMP/bin:$PATH" "$TEST_PROJECT_DIR/bin/dev" eval \
+      --compare d5c4bc4 --runs 2 --jobs 1 --model test-model --timeout 60 --output /tmp/eval-output
+    The status should be success
+    The output should include '--old-ref'
+    The output should include 'd5c4bc4'
+    The output should not include '--current-only'
+    The output should include 'test-model'
+    The output should include '/tmp/eval-output'
+  End
+
   It 'fails when the model claims success but creates no yaks'
     When run bash -c '
       export PATH="'"$EVAL_TMP"'/bin:$PATH"

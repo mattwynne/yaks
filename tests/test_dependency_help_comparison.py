@@ -10,6 +10,44 @@ MODULE = runpy.run_path(str(Path(__file__).resolve().parents[1] / "bin/compare-d
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_unrecognized_task_names_are_reported_as_review_not_execution_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "bin").mkdir()
+            (root / "bin/dev").write_text("""eval-dependency-help() {
+  mkdir -p "$YX_EVAL_ARTIFACTS"
+  printf '[]' > "$YX_EVAL_ARTIFACTS/map.json"
+  printf '{"outcome":"review","reasons":["Unclear task roles"]}' > "$YX_EVAL_ARTIFACTS/assessment.json"
+  return 2
+}
+""")
+            row = MODULE["run_attempt"](root, root / "yx", "new", 1, root, "test", 5)
+            self.assertEqual(row["outcome"], "review")
+            self.assertEqual(MODULE["summarize"]([row])["new"]["review"], 1)
+
+    def test_current_only_evaluates_the_working_copy_without_building_a_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            binary = path / "yx"
+            binary.write_text("test binary")
+            output = path / "results"
+            with patch.dict(MODULE["main"].__globals__, {
+                "build_current_binary": lambda *args: (binary, "current-sha"),
+                "build_binary": lambda *args: self.fail("Baseline must not be built"),
+                "snapshot_help": lambda *args: "current help",
+                "run_attempt": lambda *args: {
+                    "variant": "new", "attempt": 1, "outcome": "pass",
+                    "seconds": 1, "artifacts": "test",
+                },
+            }):
+                with patch("sys.argv", ["eval", "--current-only", "--working-tree",
+                                       "--runs", "1", "--output", str(output)]):
+                    self.assertEqual(MODULE["main"](), 0)
+            report = MODULE["json"].loads((output / "results.json").read_text())
+            self.assertNotIn("old", report["summary"])
+            self.assertEqual(report["summary"]["new"]["passed"], 1)
+            self.assertTrue(report["working_tree"])
+
     def test_archive_timestamps_are_refreshed_before_using_shared_build_cache(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
@@ -34,15 +72,22 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual(binary.read_text(), "fake binary")
 
     def test_grader_failures_and_execution_errors_are_separate(self):
-        classify = MODULE["classify"]
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "map.json"
-            self.assertEqual(classify(path, 1), "error")
-            path.write_text("[]")
-            self.assertEqual(classify(path, 1), "fail")
-            self.assertEqual(classify(path, 0), "pass")
-            path.write_text("")
-            self.assertEqual(classify(path, 1), "error")
+            root = Path(directory)
+            (root / "bin").mkdir()
+            script = root / "bin/dev"
+            script.write_text("eval-dependency-help() { return 1; }\n")
+            row = MODULE["run_attempt"](root, root / "yx", "new", 1, root, "test", 5)
+            self.assertEqual(row["outcome"], "error")
+            script.write_text("""eval-dependency-help() {
+  mkdir -p "$YX_EVAL_ARTIFACTS"
+  printf '[]' > "$YX_EVAL_ARTIFACTS/map.json"
+  printf '{"outcome":"fail","reasons":["Flat map"]}' > "$YX_EVAL_ARTIFACTS/assessment.json"
+  return 1
+}
+""")
+            row = MODULE["run_attempt"](root, root / "yx", "new", 2, root, "test", 5)
+            self.assertEqual(row["outcome"], "fail")
 
     def test_summary_counts_all_attempts(self):
         summarize = MODULE["summarize"]
@@ -53,7 +98,7 @@ class ComparisonTests(unittest.TestCase):
             {"variant": "new", "outcome": "pass", "seconds": 10},
         ]
         self.assertEqual(summarize(rows)["old"], {
-            "attempts": 3, "passed": 1, "failed": 1, "errors": 1,
+            "attempts": 3, "passed": 1, "failed": 1, "errors": 1, "review": 0,
             "pass_rate": 1 / 3, "median_seconds": 40,
         })
 

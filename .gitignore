@@ -40,3 +40,5 @@ mutants.out/
 mutants.out.old/
 
 node_modules/
+# Saved manual model-eval runs (maps, traces, and copied binaries).
+/eval-results/
