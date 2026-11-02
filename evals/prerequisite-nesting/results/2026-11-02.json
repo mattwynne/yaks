@@ -1,0 +1,192 @@
+{
+  "old_commit": "d5c4bc440c976e42ca0d177bda7f7b969b23ddd0",
+  "new_commit": "b5e295710802bc8a7bb25493053e6ae78efadbcc",
+  "model": "gpt-6.1-sol",
+  "runs_per_version": 10,
+  "jobs": 4,
+  "timeout": 300,
+  "build_seconds": 22.48,
+  "old_binary_sha256": "14348020322f0f256e25191d825bb6f547fdd9af3860c3867a41021266f331e6",
+  "new_binary_sha256": "d86507607ab7f2d9e9375c222994e2b632a21cb9c8d7db30ce162eb33098a12b",
+  "eval_seconds": 123.44,
+  "summary": {
+    "old": {
+      "attempts": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": 0,
+      "pass_rate": 1.0,
+      "median_seconds": 23.46
+    },
+    "new": {
+      "attempts": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": 0,
+      "pass_rate": 1.0,
+      "median_seconds": 24.134999999999998
+    }
+  },
+  "attempts": [
+    {
+      "variant": "new",
+      "attempt": 1,
+      "outcome": "pass",
+      "seconds": 27.65,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-01"
+    },
+    {
+      "variant": "new",
+      "attempt": 2,
+      "outcome": "pass",
+      "seconds": 26.42,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-02"
+    },
+    {
+      "variant": "new",
+      "attempt": 3,
+      "outcome": "pass",
+      "seconds": 19.29,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-03"
+    },
+    {
+      "variant": "new",
+      "attempt": 4,
+      "outcome": "pass",
+      "seconds": 20.87,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-04"
+    },
+    {
+      "variant": "new",
+      "attempt": 5,
+      "outcome": "pass",
+      "seconds": 25.51,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-05"
+    },
+    {
+      "variant": "new",
+      "attempt": 6,
+      "outcome": "pass",
+      "seconds": 21.75,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-06"
+    },
+    {
+      "variant": "new",
+      "attempt": 7,
+      "outcome": "pass",
+      "seconds": 22.95,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-07"
+    },
+    {
+      "variant": "new",
+      "attempt": 8,
+      "outcome": "pass",
+      "seconds": 24.58,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-08"
+    },
+    {
+      "variant": "new",
+      "attempt": 9,
+      "outcome": "pass",
+      "seconds": 26.55,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-09"
+    },
+    {
+      "variant": "new",
+      "attempt": 10,
+      "outcome": "pass",
+      "seconds": 23.69,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/new-10"
+    },
+    {
+      "variant": "old",
+      "attempt": 1,
+      "outcome": "pass",
+      "seconds": 26.61,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-01"
+    },
+    {
+      "variant": "old",
+      "attempt": 2,
+      "outcome": "pass",
+      "seconds": 27.21,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-02"
+    },
+    {
+      "variant": "old",
+      "attempt": 3,
+      "outcome": "pass",
+      "seconds": 26.68,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-03"
+    },
+    {
+      "variant": "old",
+      "attempt": 4,
+      "outcome": "pass",
+      "seconds": 24.99,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-04"
+    },
+    {
+      "variant": "old",
+      "attempt": 5,
+      "outcome": "pass",
+      "seconds": 22.69,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-05"
+    },
+    {
+      "variant": "old",
+      "attempt": 6,
+      "outcome": "pass",
+      "seconds": 22.05,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-06"
+    },
+    {
+      "variant": "old",
+      "attempt": 7,
+      "outcome": "pass",
+      "seconds": 21.78,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-07"
+    },
+    {
+      "variant": "old",
+      "attempt": 8,
+      "outcome": "pass",
+      "seconds": 22.64,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-08"
+    },
+    {
+      "variant": "old",
+      "attempt": 9,
+      "outcome": "pass",
+      "seconds": 22.78,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-09"
+    },
+    {
+      "variant": "old",
+      "attempt": 10,
+      "outcome": "pass",
+      "seconds": 24.14,
+      "exit_code": 0,
+      "artifacts": "/tmp/yx-help-ab-20261102-v2/old-10"
+    }
+  ]
+}

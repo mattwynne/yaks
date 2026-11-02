@@ -663,10 +663,17 @@ eval-dependency-help() {
     echo "Error: $provider CLI is required for this eval" >&2
     return 1
   }
-  (cd "$project_root" && cargo build --release --quiet)
+  if [ "${YX_EVAL_SKIP_BUILD:-0}" != "1" ]; then
+    (cd "$project_root" && cargo build --release --quiet)
+  fi
 
   local artifacts
-  artifacts=$(mktemp -d "${TMPDIR:-/tmp}/yx-dependency-eval-XXXXXX")
+  if [ -n "${YX_EVAL_ARTIFACTS:-}" ]; then
+    artifacts="$YX_EVAL_ARTIFACTS"
+    mkdir "$artifacts"
+  else
+    artifacts=$(mktemp -d "${TMPDIR:-/tmp}/yx-dependency-eval-XXXXXX")
+  fi
   echo "Eval artifacts: $artifacts"
   local workspace="$artifacts/workspace"
   mkdir -p "$workspace/bin"
@@ -685,8 +692,12 @@ eval-dependency-help() {
   cp "$project_root/evals/prerequisite-nesting/task.md" "$artifacts/prompt.md"
   case "$provider" in
     codex)
+      local model_args=()
+      if [ -n "${YX_EVAL_MODEL:-}" ]; then
+        model_args=(--model "$YX_EVAL_MODEL")
+      fi
       (cd "$workspace" && codex exec --sandbox workspace-write \
-        --add-dir "$workspace/.git" --ephemeral --json - \
+        --add-dir "$workspace/.git" "${model_args[@]}" --ephemeral --json - \
         < "$artifacts/prompt.md") > "$artifacts/trace.jsonl" 2> "$artifacts/agent.stderr"
       ;;
     claude)

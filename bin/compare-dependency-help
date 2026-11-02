@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Compare real yak maps made with old and new yx binaries."""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
+import json
+import os
+from pathlib import Path
+import statistics
+import subprocess
+import tempfile
+import time
+
+
+def classify(map_path, status):
+    try:
+        if not isinstance(json.loads(map_path.read_text()), list):
+            return "error"
+    except (OSError, ValueError):
+        return "error"
+    return "pass" if status == 0 else "fail"
+
+
+def summarize(rows):
+    summary = {}
+    for variant in ("old", "new"):
+        attempts = [row for row in rows if row["variant"] == variant]
+        if not attempts:
+            continue
+        passed = sum(row["outcome"] == "pass" for row in attempts)
+        summary[variant] = {
+            "attempts": len(attempts),
+            "passed": passed,
+            "failed": sum(row["outcome"] == "fail" for row in attempts),
+            "errors": sum(row["outcome"] == "error" for row in attempts),
+            "pass_rate": passed / len(attempts),
+            "median_seconds": statistics.median(row["seconds"] for row in attempts),
+        }
+    return summary
+
+
+def build_binary(root, revision, variant, output, target):
+    sha = subprocess.check_output(
+        ["git", "rev-parse", revision + "^{commit}"], cwd=root, text=True
+    ).strip()
+    source = output / ("source-" + variant)
+    source.mkdir()
+    archive = output / (variant + ".tar")
+    with archive.open("wb") as stream:
+        subprocess.run(["git", "archive", sha], cwd=root, stdout=stream, check=True)
+    subprocess.run(["tar", "-xf", str(archive), "-C", str(source)], check=True)
+    # Git archives retain commit times. Refresh inputs so Cargo cannot mistake
+    # a second revision for unchanged sources in the shared target directory.
+    for path in source.rglob("*"):
+        if path.is_file():
+            path.touch()
+    print(f"Building {variant}: {sha}", flush=True)
+    with (output / (variant + "-build.log")).open("w") as log:
+        subprocess.run(
+            ["cargo", "build", "--locked", "--target-dir", str(target)],
+            cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True,
+        )
+    binary = output / ("yx-" + variant)
+    # Copy before building the other revision into the shared target directory.
+    import shutil
+    shutil.copy2(target / "debug/yx", binary)
+    return binary, sha
+
+
+def snapshot_help(binary, output, variant):
+    environment = dict(os.environ, CLAUDECODE="1")
+    sections = []
+    for name, args in (
+        ("top", ["--help"]), ("add", ["add", "--help"]),
+        ("move", ["move", "--help"]), ("blocker-add", ["blocker", "add", "--help"]),
+    ):
+        help_text = subprocess.check_output([str(binary), *args], env=environment, text=True)
+        (output / f"{variant}-help-{name}.txt").write_text(help_text)
+        sections.append(help_text)
+    return "\n".join(sections)
+
+
+def run_attempt(root, binary, variant, index, output, model, timeout):
+    directory = output / f"{variant}-{index:02d}"
+    directory.mkdir()
+    environment = os.environ.copy()
+    environment.update({
+        "YX_DEV_SOURCE_ONLY": "1",
+        "YX_EVAL_PROVIDER": "codex",
+        "YX_EVAL_SKIP_BUILD": "1",
+        "YX_EVAL_BINARY": str(binary),
+        "YX_EVAL_ARTIFACTS": str(directory / "run"),
+        "YX_EVAL_MODEL": model,
+    })
+    started = time.monotonic()
+    status = None
+    with (directory / "runner.log").open("w") as log:
+        # A process group lets the timeout also stop the model subprocess.
+        import signal
+        process = subprocess.Popen(
+            ["bash", "-c", 'source "$1"; eval-dependency-help',
+             "eval", str(root / "bin/dev")],
+            cwd=root, env=environment, stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        try:
+            status = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+    outcome = classify(directory / "run/map.json", status) if status is not None else "error"
+    row = {
+        "variant": variant, "attempt": index, "outcome": outcome,
+        "seconds": round(time.monotonic() - started, 2), "exit_code": status,
+        "artifacts": str(directory),
+    }
+    (directory / "result.json").write_text(json.dumps(row, indent=2) + "\n")
+    return row
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runs", type=int, default=10, help="Attempts per version")
+    parser.add_argument("--jobs", type=int, default=4, help="Concurrent attempts in total")
+    parser.add_argument("--old-ref", default="d5c4bc4", help="Revision before help changes")
+    parser.add_argument("--new-ref", default="HEAD")
+    parser.add_argument("--model", default="gpt-6.1-sol", help="Same model for both versions")
+    parser.add_argument("--timeout", type=int, default=300, help="Seconds per attempt")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--target-dir", type=Path, help="Reusable Cargo build cache")
+    args = parser.parse_args()
+    if min(args.runs, args.jobs, args.timeout) < 1:
+        parser.error("runs, jobs, and timeout must be positive")
+    root = Path(__file__).resolve().parents[1]
+    output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="yx-help-comparison-"))
+    output.mkdir(parents=True, exist_ok=True)
+    print(f"Comparison artifacts: {output}", flush=True)
+    build_started = time.monotonic()
+    target = args.target_dir.resolve() if args.target_dir else output / "build"
+    old, old_sha = build_binary(root, args.old_ref, "old", output, target)
+    new, new_sha = build_binary(root, args.new_ref, "new", output, target)
+    old_help = snapshot_help(old, output, "old")
+    new_help = snapshot_help(new, output, "new")
+    if old_help == new_help:
+        raise RuntimeError("Old and new help are identical; refusing to run a misleading comparison")
+    metadata = {
+        "old_commit": old_sha, "new_commit": new_sha, "model": args.model,
+        "runs_per_version": args.runs, "jobs": args.jobs, "timeout": args.timeout,
+        "build_seconds": round(time.monotonic() - build_started, 2),
+        "old_binary_sha256": hashlib.sha256(old.read_bytes()).hexdigest(),
+        "new_binary_sha256": hashlib.sha256(new.read_bytes()).hexdigest(),
+    }
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    rows = []
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        futures = [
+            pool.submit(run_attempt, root, binary, variant, index, output, args.model, args.timeout)
+            for index in range(1, args.runs + 1)
+            for variant, binary in (("old", old), ("new", new))
+        ]
+        for future in as_completed(futures):
+            row = future.result()
+            rows.append(row)
+            print(f'{row["variant"]} {row["attempt"]:02d}: {row["outcome"]} ({row["seconds"]}s)', flush=True)
+    report = {
+        **metadata, "eval_seconds": round(time.monotonic() - started, 2),
+        "summary": summarize(rows),
+        "attempts": sorted(rows, key=lambda row: (row["variant"], row["attempt"])),
+    }
+    (output / "results.json").write_text(json.dumps(report, indent=2) + "\n")
+    lines = [
+        "# Old versus new help", "",
+        f"Model: {args.model}. Attempts per version: {args.runs}. Concurrent attempts: {args.jobs}.",
+        "", "| Help | Passed | Incorrect maps | Execution errors | Median seconds |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for variant, summary in report["summary"].items():
+        lines.append(
+            f'| {variant} | {summary["passed"]}/{summary["attempts"]} | '
+            f'{summary["failed"]} | {summary["errors"]} | {summary["median_seconds"]:.1f} |'
+        )
+    lines.extend([
+        "", f"Old commit: {old_sha}", f"New commit: {new_sha}",
+        f'Build time: {metadata["build_seconds"]} seconds.',
+        f'Evaluation wall time: {report["eval_seconds"]} seconds.', "",
+        "Each attempt uses a fresh Git repository and the same prose task and grader.",
+        "Execution errors count as unsuccessful attempts but are listed separately.",
+        "This is a small sample on one task; pass-rate differences are descriptive, not conclusive.",
+    ])
+    (output / "report.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

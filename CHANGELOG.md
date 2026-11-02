@@ -9,6 +9,7 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 ### Changed
 
 - CLI help now explains when to model prerequisites by nesting yaks and when to use explicit blockers for shared or external dependencies.
+- Added a repeatable parallel comparison of old and new help using maps created by agents through the yx CLI, with per-attempt traces and timing reports.
 
 ### Security
 
