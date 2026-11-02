@@ -1,0 +1,5 @@
+Root cause: stale issue #21 branch pinned libz-sys 1.1.30; main already has 1.1.31 from release commit d5c4bc4. Updated only Cargo.lock version/checksum to match main. cargo audit failed before and passed after.
+
+Integrated full validation passed: devenv shell -- bin/dev check, exit 0. Shell suite 41 examples, 0 failures, 1 installer skip. Rust library 680 passed, CLI 8 passed. In-process Cucumber 174 passed/40 skipped; full-stack Cucumber 296 passed/5 skipped. Shellcheck, clippy, formatting, step coverage, complexity, and security audit passed. Five existing audit warnings remain allowed. Mutation tests correctly reported no Rust changes versus main. Log: /tmp/yaks-issue21-dev-check.log.
+
+Parent staged integrated changes before completion; no unstaged changes at validation handoff. Index tree: 0d7568ce74ff120d70233aa3a16cc2f01e49a499. Fresh .last-checked.json records old HEAD/tree by repository design and rejects staged state; parent must rerun dev check after commit/rebase for valid clean-tree reuse. No commit or merge performed by subagent. Parent owns final integration and completion.
