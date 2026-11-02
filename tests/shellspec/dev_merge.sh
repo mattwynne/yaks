@@ -99,7 +99,7 @@ Describe 'bin/dev merge'
     The error should include 'Cannot merge: worktree has uncommitted changes'
   End
 
-  It 'runs only changed .pi extension npm tests for .pi-only merges'
+  It 'runs repository checks even for paths formerly reserved for Pi extensions'
     When run bash -c '
       set -e
       repo=$(mktemp -d)
@@ -122,7 +122,7 @@ JSON
 
       cd "$repo"
       YX_DEV_SOURCE_ONLY=1 . "$TEST_PROJECT_DIR/bin/dev"
-      check() { echo FULL_CHECK_SHOULD_NOT_RUN; return 1; }
+      check() { echo FULL_CHECK_RAN; }
       cargo() { :; }
       npm() { echo "npm $* in ${PWD#$repo/}"; }
       yx() { :; }
@@ -130,14 +130,12 @@ JSON
       merge
     '
     The status should be success
-    The output should include 'Running .pi extension tests in .pi/extensions/protect-main'
-    The output should include 'npm test in'
-    The output should include '.pi/extensions/protect-main'
-    The output should not include 'FULL_CHECK_SHOULD_NOT_RUN'
+    The output should include 'FULL_CHECK_RAN'
+    The output should not include 'npm test in'
     The error should include "Preparing worktree (checking out 'yak-123')"
   End
 
-  It 'reuses a content-addressed successful check for non-.pi merges'
+  It 'reuses a content-addressed successful repository check'
     When run bash -c '
       set -e
       repo=$(mktemp -d)

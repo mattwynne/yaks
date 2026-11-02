@@ -715,105 +715,6 @@ eval-dependency-help() {
  )
 }
 
-# @cmd Run Ralph Wiggum loop (iterations with pause)
-# @arg yak-name! Name of the yak to work on
-# @option --max-iterations <NUM> Number of iterations to run (default: 3)
-ralph() {
-  local yak_name="${argc_yak_name}"
-  local max_iterations="${argc_max_iterations:-3}"
-
-  for ((i=1; i<=max_iterations; i++)); do
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " Iteration $i/$max_iterations"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-
-    echo "Checking if ready to proceed..."
-
-    local schema
-    schema=$(cat <<'SCHEMA'
-{
-  "type": "object",
-  "properties": {
-    "needs_human_help": {"type": "boolean"},
-    "reason": {"type": "string"},
-    "next_step": {"type": "string"}
-  },
-  "required": ["needs_human_help", "reason", "next_step"]
-}
-SCHEMA
-)
-
-    local prompt
-    prompt=$(cat <<PROMPT
-Review the current state of the ${yak_name} yak.
-
-Look at:
-- The yak context (yx context --show ${yak_name})
-- The context of any relevant sub-yaks
-- Current git status and recent commits
-
-Determine if the yak needs human help to proceed. This includes situations where:
-- The next step is unclear or ambiguous
-- There are multiple viable approaches and a decision is needed
-- There is a blocker that requires human intervention
-- The acceptance criteria are unclear
-
-Always provide the next_step:
-- If ready to proceed: describe what you plan to do next
-- If human help is needed: describe what decision or input is needed
-
-Respond with whether human help is needed, the reason, and the next step.
-PROMPT
-)
-
-    local result
-    result=$(echo "$prompt" | claude -p --output-format json --json-schema "$schema")
-
-    local needs_help
-    needs_help=$(echo "$result" | jq -r '.structured_output.needs_human_help')
-
-    echo "Next step: $(echo "$result" | jq -r '.structured_output.next_step')"
-    if [ "$needs_help" = "true" ]; then
-      echo "⚠️  Human help needed!"
-      echo "$result" | jq -r '.structured_output.reason'
-      echo ""
-      break
-    else
-      echo "✓ Ready to proceed..."
-    fi
-
-    echo ""
-    cat <<EOF | claude -p --allowedTools "Read,Write,Edit,Bash"
-Work on the ${yak_name} yak.
-
-Your goal for THIS TURN: Complete ONE single (sub-)yak and then STOP.
-
-Steps:
-1. Check the context of ${yak_name} to identify the next unblocked (sub-)yak to work on
-2. Mark that (sub-)yak as wip using: yx state <name> wip
-3. Work on ONLY that one (sub-)yak until complete
-4. When done, mark it as done using: yx done <name>
-5. Update the context on the relevant yak(s) with anything you have learned and what needs to be done next
-6. STOP - do not continue to another (sub-)yak
-
-Key skills:
-- yak-worktree-workflow
-- test-driven-development
-- verification-before-completion
-
-If the acceptance criteria are clear, you do not need to ask me for confirmation.
-
-IMPORTANT:
-- Print regular updates to ./thoughts about what you are about to do, what you have achieved, and anything you are puzzled about so I can watch what is going on.
-- When you finish the (sub-)yak, update the context on the relevant yak(s) with anything you have learned and what needs to be done next.
-
-Remember: ONE (sub-)yak per turn, then STOP!
-
-EOF
-  done
-}
 
 # @cmd Record README demo GIF using VHS
 # @alias d
@@ -1165,57 +1066,6 @@ changed_paths_for_merge() {
   git diff --name-only main...HEAD
 }
 
-package_has_npm_test_script() {
-  node -e '
-    const fs = require("fs");
-    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-    process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1);
-  ' >/dev/null 2>&1
-}
-
-run_pi_extension_checks() {
-  local changed_files="$1"
-  local extensions=""
-  local file extension_dir package_json
-
-  while IFS= read -r file; do
-    case "$file" in
-      .pi/extensions/*/*)
-        extension_dir=$(printf '%s\n' "$file" | cut -d/ -f1-3)
-        package_json="$extension_dir/package.json"
-        if [ -f "$package_json" ] && ! printf '%b' "$extensions" | grep -Fxq "$extension_dir"; then
-          extensions="${extensions}${extension_dir}"$'\n'
-        fi
-        ;;
-    esac
-  done <<< "$changed_files"
-
-  if [ -z "$extensions" ]; then
-    echo "No .pi extension checks to run"
-    return 0
-  fi
-
-  local ran_tests=false
-  while IFS= read -r extension_dir; do
-    [ -n "$extension_dir" ] || continue
-    if (cd "$extension_dir" && package_has_npm_test_script); then
-      echo "Running .pi extension tests in $extension_dir..."
-      (cd "$extension_dir" && npm test) || return 1
-      ran_tests=true
-    fi
-  done <<< "$(printf '%b' "$extensions")"
-
-  if [ "$ran_tests" = true ]; then
-    return 0
-  fi
-
-  echo "No .pi extension npm test scripts found; running light npm fallback where possible..."
-  while IFS= read -r extension_dir; do
-    [ -n "$extension_dir" ] || continue
-    echo "Running npm test --if-present in $extension_dir..."
-    (cd "$extension_dir" && npm test --if-present) || return 1
-  done <<< "$(printf '%b' "$extensions")"
-}
 
 check-for-merge() {
   local changed_files
@@ -1226,12 +1076,7 @@ check-for-merge() {
     return 0
   fi
 
-  if printf '%s\n' "$changed_files" | grep -qv '^\.pi/'; then
-    check
-    return $?
-  fi
-
-  run_pi_extension_checks "$changed_files"
+  check
 }
 
 # @cmd Merge a branch into main (cleanliness + rebase + check + fast-forward)

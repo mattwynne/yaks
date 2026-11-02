@@ -10,6 +10,12 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 - CLI help now explains when to model prerequisites by nesting yaks and when to use explicit blockers for shared or external dependencies.
 - Added a repeatable parallel comparison of old and new help using maps created by agents through the yx CLI, with per-attempt traces and timing reports.
+- Contributor skills now live in `.agents/skills`, with automatic Claude Code discovery. Preparation preserves example mapping and BDD formulation; the implementation workflow uses repository commands without Pi or Superpowers dependencies.
+
+### Removed
+
+- Removed the experimental Pi agent setup; contributor merges now consistently use the repository's standard verification.
+- Removed superseded workflow skills, the experimental `yx` agent plugin, and `dev ralph`.
 
 ### Security
 

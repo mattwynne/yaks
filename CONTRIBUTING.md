@@ -20,6 +20,34 @@ dev check  # Runs tests and linting
 Git hooks will prevent commits, merges, and pushes without recent
 verification.
 
+## Agent skills for contributors
+
+The skills in [`.agents/skills/`](.agents/skills/) describe how we maintain
+Yaks itself. They are contributor tooling, not a plugin or marketplace
+for Yaks users. General usage and yak-mapping guidance lives in `yx --help`
+and command-specific help.
+
+Claude Code discovers these project skills through the checked-in
+`.claude/skills -> ../.agents/skills` directory symlink. Start `claude` in
+this checkout after loading the development environment; no plugin or
+Superpowers installation is needed. Other agents can read the same files.
+
+- [prepare](.agents/skills/prepare/SKILL.md): agree scope and decisions,
+  use example mapping and BDD formulation, and record implementable work
+  on the yak. In Claude Code, invoke `/prepare`.
+- [work](.agents/skills/work/SKILL.md): claim the yak, work in isolation,
+  follow one-test-at-a-time TDD, verify, and merge with `dev merge`.
+  In Claude Code, invoke `/work`.
+
+Supporting skills cover BDD discovery/formulation, CQRS and event sourcing,
+mutation triage, exploratory testing, sandboxing, and domain language.
+These workflows use the repository's commands and the current agent's
+tools; delegation is optional.
+
+From an agent shell without direnv loaded, run checks with
+`devenv shell -- bin/dev check`. `yx start` only changes a yak's state;
+`dev start` also creates a worktree. Do not confuse those commands.
+
 ## Changelog
 
 Add user-visible changes to [CHANGELOG.md](CHANGELOG.md) under

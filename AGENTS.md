@@ -1,8 +1,14 @@
 This file provides guidance to Agents working in this repository.
 
-We use yaks for task tasking. See !yx help
+We use yaks for task tracking. Run `yx --help` for usage and mapping guidance.
 
 See [CONTRIBUTING](./CONTRIBUTING.md) for dev tooling and commands.
+
+Contributor-only agent skills live in [`.agents/skills/`](.agents/skills/).
+Use [prepare](.agents/skills/prepare/SKILL.md) to agree scope and behavioral
+examples, and [work](.agents/skills/work/SKILL.md) to implement and merge.
+Claude discovers the same skills through `.claude/skills`, a directory
+symlink; no agent plugin is required.
 
 ## Architecture
 
@@ -17,8 +23,9 @@ guide: layers, key types, ports, adapters, and how commands flow.
 **See [`docs/adr/`](docs/adr/README.md)** for Architecture Decision
 Records explaining why the design is the way it is.
 
-When making architectural decisions, invoke the `cqrs-event-sourcing`
-skill for guidance on aggregate boundaries, event design, read models,
+When making architectural decisions, read the
+[`cqrs-event-sourcing` skill](.agents/skills/cqrs-event-sourcing/SKILL.md)
+for guidance on aggregate boundaries, event design, read models,
 policies, and sagas.
 
 ## Testing layers
