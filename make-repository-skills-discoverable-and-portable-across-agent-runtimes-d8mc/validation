@@ -1,0 +1,5 @@
+Contributor cleanup implemented in issue #21 worktree: nine skills under .agents/skills, new contributor-only prepare/work, seven retained supporting skills, .claude/skills -> ../.agents/skills. Removed superseded shared workflows, plugins/yx, dev ralph, and .pi with its merge exemption. Updated AGENTS.md and CONTRIBUTING.md.
+
+All nine skill frontmatters pass quick_validate.py. Local Markdown references and all nine Claude discovery paths resolve. git diff --check and bash -n bin/dev pass. No brittle prose-matching tests added. Accepted ADR 0003 retains its historical /example-mapping reference under ADR policy.
+
+Mapping-help prerequisite #19 is already on main: 9a9a143, followed by b5e2957 test-harness optimization. Rebase will integrate it before merge. Subagent has matched main's libz-sys fix and is running full dev check.
