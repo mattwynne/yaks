@@ -6,6 +6,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
 ### Changed
 
 - Help for `yx`, `yx add`, `yx move`, and `yx blocker add` now shows when to put prerequisite work under its goal and when to use a blocker. The new `dev eval` command can run the same mapping task several times and compare the results with the old help.
