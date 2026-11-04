@@ -1,0 +1,31 @@
+Rule: Active blockers have a distinct compact presentation in pretty lists
+
+Example: A todo yak blocked by another yak is shown with `⏸`, followed by grey `blocked by security review`; the optional blocker reason is not repeated in the list.
+
+Example: A todo yak with a manual blocker is shown with `⏸`, followed by grey `blocked: waiting for credentials`.
+
+Example: With terminal colours enabled, `⏸` is red while the blocked yak title keeps normal todo styling and the explanation is dim grey.
+
+Rule: Other causes of unreadiness are not presented as blockers
+
+Example: A todo parent with an incomplete child keeps its existing progress/todo indicator and has no blocker explanation.
+
+Rule: Non-pretty formats retain their existing contracts
+
+Example: JSON continues to expose structured blocker names and reasons; Markdown, plain and IDs output are unchanged.
+
+Scenario: A yak blocker is compactly rendered in the list
+  Given I add the yak "deploy release"
+  And I add the yak "security review"
+  And I add blocker "security review" to "deploy release" with reason "waiting on approval"
+  When I list the yaks
+  Then the output should include "⏸ deploy release"
+  And the output should include "blocked by security review"
+  And the output should not include "waiting on approval"
+
+Scenario: A manual blocker retains its identifying reason
+  Given I add the yak "publish announcement"
+  And I add manual blocker to "publish announcement" with reason "waiting for credentials"
+  When I list the yaks
+  Then the output should include "⏸ publish announcement"
+  And the output should include "blocked: waiting for credentials"
