@@ -6,6 +6,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
 ### Changed
 
 - Pretty `yx list` output now marks explicitly blocked yaks with a red `⏸` and a concise, dimmed blocker summary.
