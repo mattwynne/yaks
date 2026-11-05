@@ -1,6 +1,24 @@
 Feature: Explicit blockers affect readiness
   Explicit blocker relationships make otherwise actionable yaks not ready.
 
+  Rule: Active blockers have a distinct compact presentation in pretty lists
+
+    Scenario: A yak blocker is compactly rendered in the list
+      Given I add the yak "deploy release"
+      And I add the yak "security review"
+      And I add blocker "security review" to "deploy release" with reason "waiting on approval"
+      When I list the yaks
+      Then the output should include "⏸ deploy release"
+      And the output should include "blocked by security review"
+      And the output should not include "waiting on approval"
+
+    Scenario: A manual blocker retains its identifying reason
+      Given I add the yak "publish announcement"
+      And I add manual blocker to "publish announcement" with reason "waiting for credentials"
+      When I list the yaks
+      Then the output should include "⏸ publish announcement"
+      And the output should include "blocked: waiting for credentials"
+
   Rule: Explicit yak blockers affect readiness
 
   Scenario: A yak blocked by another yak is not ready

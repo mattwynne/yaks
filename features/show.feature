@@ -25,7 +25,9 @@ Feature: Show yak details
       When I run yx show "deploy release"
       Then the output should include "blocked by security review: waiting on approval"
       When I list the yaks
-      Then the output should include "not ready: blocked by security review: waiting on approval"
+      Then the output should include "⏸ deploy release"
+      And the output should include "blocked by security review"
+      And the output should not include "waiting on approval"
 
     Example: Manual blocker is shown as the readiness reason in show and tree
       Given I have a clean git repository
@@ -34,7 +36,8 @@ Feature: Show yak details
       When I run yx show "publish announcement"
       Then the output should include "blocked by manual reason: waiting for credentials"
       When I list the yaks
-      Then the output should include "not ready: blocked by manual reason: waiting for credentials"
+      Then the output should include "⏸ publish announcement"
+      And the output should include "blocked: waiting for credentials"
 
     Example: Wip yak shows state as the readiness reason
       Given I have a clean git repository

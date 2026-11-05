@@ -44,10 +44,15 @@ impl ConsoleDisplay {
                 "pretty" => {
                     let node_prefix = format!(" {}{}", node.prefix, node.connector);
                     let name_ref = Name::from(node.name.as_str());
+                    let display_state = if node.state == "todo" && !node.blocked_by.is_empty() {
+                        "blocked"
+                    } else {
+                        &node.state
+                    };
                     self.display_yak_pretty(
                         &node_prefix,
                         &name_ref,
-                        &node.state,
+                        display_state,
                         &node.tags,
                         node.has_wip_descendant,
                     );
@@ -177,7 +182,7 @@ impl ConsoleDisplay {
                 ),
                 "blocked" => writeln!(
                     out,
-                    "{prefix}\x1b[33m⏸\x1b[0m \x1b[1m{name}\x1b[0m{dim_tags}"
+                    "{prefix}\x1b[31m⏸\x1b[0m \x1b[1m{name}\x1b[0m{dim_tags}"
                 ),
                 "done" => writeln!(
                     out,
@@ -202,25 +207,33 @@ impl ConsoleDisplay {
     }
 
     fn display_readiness_detail(&self, node_prefix: &str, node: &YakTreeNode) {
-        let visible_reasons = node
-            .readiness
-            .reasons
+        let yak_blockers = node
+            .blocked_by
             .iter()
-            .filter(|reason| reason.kind != "incomplete_children" && reason.kind != "state")
+            .filter(|blocker| blocker.kind == "yak")
+            .map(|blocker| blocker.name.as_str())
             .collect::<Vec<_>>();
-        if node.readiness.ready || visible_reasons.is_empty() {
+        let mut summaries = Vec::new();
+        if !yak_blockers.is_empty() {
+            summaries.push(format!("blocked by {}", yak_blockers.join(", ")));
+        }
+        summaries.extend(
+            node.blocked_by
+                .iter()
+                .filter(|blocker| blocker.kind == "manual")
+                .filter_map(|blocker| blocker.reason.as_deref())
+                .map(|reason| format!("blocked: {reason}")),
+        );
+        if summaries.is_empty() {
             return;
         }
+
         let mut out = self.output.lock().unwrap();
-        let reasons = visible_reasons
-            .iter()
-            .map(|reason| reason.message.as_str())
-            .collect::<Vec<_>>()
-            .join("; ");
+        let summary = summaries.join("; ");
         if self.options.color {
-            writeln!(out, "{node_prefix}  \x1b[2mnot ready: {reasons}\x1b[0m").unwrap();
+            writeln!(out, "{node_prefix}  \x1b[2m{summary}\x1b[0m").unwrap();
         } else {
-            writeln!(out, "{node_prefix}  not ready: {reasons}").unwrap();
+            writeln!(out, "{node_prefix}  {summary}").unwrap();
         }
     }
 
@@ -767,6 +780,14 @@ mod tests {
         let output = buffer.contents();
         assert_eq!(output, "○ deploy\n");
         assert!(!output.contains("38;5;64"));
+    }
+
+    #[test]
+    fn pretty_blocked_uses_red_pause_indicator_and_normal_title_style() {
+        let (display, buffer) = make_display(true);
+        let name = Name::from("deploy");
+        display.display_yak_pretty("", &name, "blocked", &[], false);
+        assert_eq!(buffer.contents(), "\x1b[31m⏸\x1b[0m \x1b[1mdeploy\x1b[0m\n");
     }
 
     #[test]
