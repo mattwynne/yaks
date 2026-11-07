@@ -6,6 +6,8 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-07
+
 ### Fixed
 
 - Blocker explanations in pretty `yx list` output now wrap between words to fit the terminal, with aligned indentation and continuous tree guides. Manual explanations display directly without a redundant label.
