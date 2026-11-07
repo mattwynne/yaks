@@ -42,6 +42,7 @@ pager = "0.16"
 ratatui = "0.29"
 crossterm = "0.28"
 fs2 = "0.4.3"
+textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
 
 [dev-dependencies]
 tempfile = "3.15"

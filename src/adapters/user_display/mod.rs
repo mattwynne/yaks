@@ -56,7 +56,7 @@ impl ConsoleDisplay {
                         &node.tags,
                         node.has_wip_descendant,
                     );
-                    self.display_readiness_detail(&node_prefix, node);
+                    self.display_readiness_detail(node);
                 }
                 _ => {
                     // markdown
@@ -206,7 +206,7 @@ impl ConsoleDisplay {
         .unwrap();
     }
 
-    fn display_readiness_detail(&self, node_prefix: &str, node: &YakTreeNode) {
+    fn display_readiness_detail(&self, node: &YakTreeNode) {
         let yak_blockers = node
             .blocked_by
             .iter()
@@ -222,7 +222,7 @@ impl ConsoleDisplay {
                 .iter()
                 .filter(|blocker| blocker.kind == "manual")
                 .filter_map(|blocker| blocker.reason.as_deref())
-                .map(|reason| format!("blocked: {reason}")),
+                .map(str::to_string),
         );
         if summaries.is_empty() {
             return;
@@ -230,10 +230,32 @@ impl ConsoleDisplay {
 
         let mut out = self.output.lock().unwrap();
         let summary = summaries.join("; ");
-        if self.options.color {
-            writeln!(out, "{node_prefix}  \x1b[2m{summary}\x1b[0m").unwrap();
+        let continuation = match node.connector.as_str() {
+            "" => "",
+            connector if connector.starts_with('├') => "│  ",
+            _ => "   ",
+        };
+        let child_guide = if node.children.is_empty() {
+            "  "
         } else {
-            writeln!(out, "{node_prefix}  {summary}").unwrap();
+            "│ "
+        };
+        let node_prefix = format!(" {}{}{}", node.prefix, continuation, child_guide);
+        let width = self
+            .options
+            .width
+            .saturating_sub(node_prefix.chars().count());
+        let options = textwrap::Options::new(width)
+            .break_words(false)
+            .word_separator(textwrap::WordSeparator::AsciiSpace)
+            .word_splitter(textwrap::WordSplitter::NoHyphenation)
+            .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit);
+        for line in textwrap::wrap(&summary, options) {
+            if self.options.color {
+                writeln!(out, "{node_prefix}\x1b[2m{line}\x1b[0m").unwrap();
+            } else {
+                writeln!(out, "{node_prefix}{line}").unwrap();
+            }
         }
     }
 
@@ -654,6 +676,148 @@ pub use test_buffer::TestBuffer;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn blocked_node(connector: &str) -> YakTreeNode {
+        YakTreeNode {
+            name: "publish".into(),
+            full_path: "release/publish".into(),
+            id: "publish".into(),
+            state: "todo".into(),
+            ready: false,
+            readiness: crate::adapters::views::ReadinessView {
+                ready: false,
+                reasons: vec![],
+            },
+            has_wip_descendant: false,
+            blocked_by: vec![crate::adapters::views::YakBlockerView {
+                kind: "manual".into(),
+                id: None,
+                name: "manual".into(),
+                state: None,
+                reason: Some("waiting for credentials".into()),
+            }],
+            context: None,
+            parent_id: None,
+            fields: Default::default(),
+            tags: vec![],
+            depth: 1,
+            connector: connector.into(),
+            prefix: String::new(),
+            children: vec![],
+        }
+    }
+
+    #[test]
+    fn blocker_detail_beneath_terminal_leaf() {
+        let (display, buffer) = make_display(false);
+        display.render_tree_nodes(&[blocked_node("╰─ ")], "pretty");
+        assert_eq!(
+            buffer.contents(),
+            " ╰─ ⏸ publish\n      waiting for credentials\n"
+        );
+    }
+
+    #[test]
+    fn blocker_detail_preserves_sibling_guide() {
+        let (display, buffer) = make_display(false);
+        let mut node = blocked_node("├─ ");
+        node.prefix = "│  ".into();
+        display.render_tree_nodes(&[node], "pretty");
+        assert_eq!(
+            buffer.contents(),
+            " │  ├─ ⏸ publish\n │  │    waiting for credentials\n"
+        );
+    }
+
+    #[test]
+    fn blocker_detail_continues_to_children() {
+        let (display, buffer) = make_display(false);
+        let mut node = blocked_node("╰─ ");
+        node.children.push(blocked_node("╰─ "));
+        display.display_readiness_detail(&node);
+        assert_eq!(buffer.contents(), "    │ waiting for credentials\n");
+    }
+
+    #[test]
+    fn blocker_detail_wraps_words_with_continuation_guides() {
+        let (mut display, buffer) = make_display(false);
+        display.options.width = 30;
+        let mut node = blocked_node("├─ ");
+        node.blocked_by[0].reason = Some("waiting for private credentials from Matt".into());
+        display.display_readiness_detail(&node);
+        assert_eq!(
+            buffer.contents(),
+            " │    waiting for private\n │    credentials from Matt\n"
+        );
+    }
+
+    #[test]
+    fn blocker_detail_preserves_words_at_width_boundaries() {
+        for (width, reason, expected) in [
+            (
+                29,
+                "waiting for credentials",
+                "      waiting for credentials\n",
+            ),
+            (
+                28,
+                "waiting for credentials",
+                "      waiting for\n      credentials\n",
+            ),
+            (
+                16,
+                "await superlongcredential approval",
+                "      await\n      superlongcredential\n      approval\n",
+            ),
+            (0, "await approval", "      await\n      approval\n"),
+            (
+                15,
+                "等待 凭证 来自 Matt",
+                "      等待 凭证\n      来自 Matt\n",
+            ),
+            (
+                18,
+                "waiting-on-credentials approval",
+                "      waiting-on-credentials\n      approval\n",
+            ),
+            (
+                60,
+                "waiting\nfor credentials",
+                "      waiting\n      for credentials\n",
+            ),
+        ] {
+            let (mut display, buffer) = make_display(false);
+            display.options.width = width;
+            let mut node = blocked_node("╰─ ");
+            node.blocked_by[0].reason = Some(reason.into());
+            display.display_readiness_detail(&node);
+            assert_eq!(
+                buffer.contents(),
+                expected,
+                "width {width}, reason {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn blocker_detail_wraps_yak_and_manual_summaries_in_colour() {
+        let (mut display, buffer) = make_display(true);
+        display.options.width = 27;
+        let mut node = blocked_node("");
+        node.children.push(blocked_node("╰─ "));
+        node.blocked_by.insert(
+            0,
+            crate::adapters::views::YakBlockerView {
+                kind: "yak".into(),
+                id: Some("review".into()),
+                name: "security review".into(),
+                state: Some("todo".into()),
+                reason: Some("approval notes".into()),
+            },
+        );
+        display.display_readiness_detail(&node);
+        assert_eq!(buffer.contents(), " │ \x1b[2mblocked by security\x1b[0m\n │ \x1b[2mreview; waiting for\x1b[0m\n │ \x1b[2mcredentials\x1b[0m\n");
+    }
 
     fn make_display(color: bool) -> (ConsoleDisplay, TestBuffer) {
         let buffer = TestBuffer::new();

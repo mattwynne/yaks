@@ -2465,6 +2465,7 @@ dependencies = [
  "tempfile",
  "termimad",
  "terminal_size",
+ "textwrap",
  "thiserror 1.0.69",
  "tokio",
  "uuid",

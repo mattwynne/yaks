@@ -37,7 +37,7 @@ Feature: Show yak details
       Then the output should include "blocked by manual reason: waiting for credentials"
       When I list the yaks
       Then the output should include "⏸ publish announcement"
-      And the output should include "blocked: waiting for credentials"
+      And the output should include "waiting for credentials"
 
     Example: Wip yak shows state as the readiness reason
       Given I have a clean git repository

@@ -17,7 +17,7 @@ Feature: Explicit blockers affect readiness
       And I add manual blocker to "publish announcement" with reason "waiting for credentials"
       When I list the yaks
       Then the output should include "⏸ publish announcement"
-      And the output should include "blocked: waiting for credentials"
+      And the output should include "waiting for credentials"
 
   Rule: Explicit yak blockers affect readiness
 
