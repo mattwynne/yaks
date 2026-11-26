@@ -107,8 +107,8 @@ enum Commands {
         #[arg(
             long = "sort-by",
             value_name = "FIELD",
-            help = "Sort sibling yaks by a field: name (default), created, or a custom field",
-            long_help = "Sort sibling yaks by a field. Done yaks still come first at each level.\n  - name: alphabetical (default)\n  - created: oldest first\n  - any other value: a custom field, such as `order`\n\nCustom field values compare as numbers when both are numbers, otherwise as text.\nNumbers come before text. Yaks without the field come last, sorted by name.\nThe command fails if no yak in the map has the field."
+            help = "Sort yaks at the same depth by a field: name (default), created, or a custom field",
+            long_help = "Sort yaks at the same depth by a field. Done yaks still come first at each level.\n  - name: alphabetical (default)\n  - created: oldest first\n  - any other value: a custom field, such as `order`\n\nCustom field values compare as numbers when both are numbers, otherwise as text.\nNumbers come before text. Yaks without the field come last, sorted by name.\nThe command fails if no yak in the map has the field."
         )]
         sort_by: Option<String>,
     },

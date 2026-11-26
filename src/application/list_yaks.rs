@@ -424,7 +424,8 @@ fn is_done(node: &YakNode) -> bool {
     node.yak.as_ref().is_some_and(|y| y.state == YakState::Done)
 }
 
-/// What `yx list --sort-by` orders siblings by, after done yaks come first.
+/// The key `yx list --sort-by` uses to order yaks at the same depth, after
+/// done yaks come first.
 /// Ties are always broken by name.
 enum SortKey {
     Name,
