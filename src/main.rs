@@ -104,6 +104,13 @@ enum Commands {
         /// Filter by tag name (exact match, @ prefix stripped)
         #[arg(long)]
         tag: Option<String>,
+        #[arg(
+            long = "sort-by",
+            value_name = "FIELD",
+            help = "Sort sibling yaks by a field: name (default), created, or a custom field",
+            long_help = "Sort sibling yaks by a field. Done yaks still come first at each level.\n  - name: alphabetical (default)\n  - created: oldest first\n  - any other value: a custom field, such as `order`\n\nCustom field values compare as numbers when both are numbers, otherwise as text.\nNumbers come before text. Yaks without the field come last, sorted by name.\nThe command fails if no yak in the map has the field."
+        )]
+        sort_by: Option<String>,
     },
     /// Mark yak as done
     #[command(alias = "finish", display_order = 4)]
@@ -665,6 +672,7 @@ fn route_command(
             only,
             ready,
             tag,
+            sort_by,
         } => {
             let requested_format =
                 format
@@ -676,7 +684,9 @@ fn route_command(
                 requested_format
             };
             handler.handle(
-                ListYaks::new(use_format, only.as_deref(), tag.as_deref()).with_ready(ready),
+                ListYaks::new(use_format, only.as_deref(), tag.as_deref())
+                    .with_ready(ready)
+                    .with_sort_by(sort_by.as_deref()),
             )
         }
         Commands::Done { name, recursive } => {

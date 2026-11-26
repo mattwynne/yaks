@@ -27,6 +27,8 @@ struct ViewBuildContext<'a> {
     only: Option<&'a str>,
     tag: Option<&'a str>,
     ready: bool,
+    /// Show filtered-out ancestors of matching yaks, to keep the tree readable
+    show_unmatched_ancestors: bool,
     readiness_by_id: &'a HashMap<YakId, ReadinessView>,
     blockers_by_id: &'a HashMap<YakId, Vec<YakBlockerView>>,
     visible_ids: Option<&'a HashSet<YakId>>,
@@ -60,6 +62,7 @@ pub struct ListYaks {
     only: Option<String>,
     tag: Option<String>,
     ready: bool,
+    sort_by: SortKey,
 }
 
 impl ListYaks {
@@ -69,11 +72,17 @@ impl ListYaks {
             only: only.map(|s| s.to_string()),
             tag: tag.map(|t| normalize_tag(t).unwrap_or_else(|_| t.to_string())),
             ready: false,
+            sort_by: SortKey::Name,
         }
     }
 
     pub fn with_ready(mut self, ready: bool) -> Self {
         self.ready = ready;
+        self
+    }
+
+    pub fn with_sort_by(mut self, sort_by: Option<&str>) -> Self {
+        self.sort_by = SortKey::parse(sort_by);
         self
     }
 
@@ -108,35 +117,21 @@ impl ListYaks {
             .map(|yak| build_node(yak, &children_by_parent, ""))
             .collect();
 
-        Self::sort_children(&mut root_nodes);
+        Self::sort_children(&mut root_nodes, &self.sort_by);
         root_nodes
     }
 
-    /// Sort children at this level: done first, then not-done, both alphabetically
-    fn sort_children(children: &mut [YakNode]) {
+    /// Sort children at this level: done first, then by the sort key, then by name
+    fn sort_children(children: &mut [YakNode], sort_by: &SortKey) {
         children.sort_by(|a, b| {
-            let a_done = a
-                .yak
-                .as_ref()
-                .map(|y| y.state == YakState::Done)
-                .unwrap_or(false);
-            let b_done = b
-                .yak
-                .as_ref()
-                .map(|y| y.state == YakState::Done)
-                .unwrap_or(false);
-
-            // Sort: done items first (they're grayed out), then by name
-            match (a_done, b_done) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.cmp(&b.name),
-            }
+            is_done(b)
+                .cmp(&is_done(a))
+                .then_with(|| sort_by.compare(a, b))
+                .then_with(|| a.name.cmp(&b.name))
         });
 
-        // Recursively sort children's children
         for child in children.iter_mut() {
-            Self::sort_children(&mut child.children);
+            Self::sort_children(&mut child.children, sort_by);
         }
     }
 
@@ -158,7 +153,7 @@ impl ListYaks {
                 context.ready,
                 context.readiness_by_id,
             );
-            let has_matching_visible_descendant = !context.ready
+            let has_matching_visible_descendant = context.show_unmatched_ancestors
                 && self.has_matching_visible_descendant(
                     node,
                     context.only,
@@ -362,8 +357,11 @@ impl UseCase for ListYaks {
             }
         }
 
-        // Handle ids format early (before tree building) unless readiness needs child state.
-        if normalized_format == "ids" && !self.ready {
+        self.sort_by.ensure_used_by(&yaks)?;
+
+        // Handle ids format early (before tree building) in flat store order,
+        // unless readiness needs child state or a sort key needs tree order.
+        if normalized_format == "ids" && !self.ready && matches!(self.sort_by, SortKey::Name) {
             for yak in &yaks {
                 if visible_ids
                     .as_ref()
@@ -397,6 +395,7 @@ impl UseCase for ListYaks {
             only,
             tag,
             ready: self.ready,
+            show_unmatched_ancestors: !self.ready && normalized_format != "ids",
             readiness_by_id: &readiness_by_id,
             blockers_by_id: &blockers_by_id,
             visible_ids: visible_ids.as_ref(),
@@ -419,6 +418,79 @@ impl UseCase for ListYaks {
         app.display.show_list(&view);
         Ok(())
     }
+}
+
+fn is_done(node: &YakNode) -> bool {
+    node.yak.as_ref().is_some_and(|y| y.state == YakState::Done)
+}
+
+/// What `yx list --sort-by` orders siblings by, after done yaks come first.
+/// Ties are always broken by name.
+enum SortKey {
+    Name,
+    Created,
+    Field(String),
+}
+
+impl SortKey {
+    /// `name` and `created` are built-in keys; any other value names a custom field.
+    fn parse(sort_by: Option<&str>) -> Self {
+        match sort_by {
+            None | Some("name") => Self::Name,
+            Some("created") => Self::Created,
+            Some(field) => Self::Field(field.to_string()),
+        }
+    }
+
+    /// Fails when no yak has the custom field, which usually means a typo.
+    /// An empty map has nothing to sort, so it never fails.
+    fn ensure_used_by(&self, yaks: &[Yak]) -> Result<()> {
+        if let Self::Field(field) = self {
+            if !yaks.is_empty() && !yaks.iter().any(|yak| yak.fields.contains_key(field)) {
+                anyhow::bail!(
+                    "No yak has a field named '{}'. Sort by a custom field, or by one of the built-in keys: name, created",
+                    field
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn compare(&self, a: &YakNode, b: &YakNode) -> std::cmp::Ordering {
+        match self {
+            Self::Name => std::cmp::Ordering::Equal,
+            Self::Created => created_at(a).cmp(&created_at(b)),
+            Self::Field(field) => SortValue::of(a, field)
+                .partial_cmp(&SortValue::of(b, field))
+                .unwrap_or(std::cmp::Ordering::Equal),
+        }
+    }
+}
+
+/// A field value as it takes part in sorting. The variant order is the sort
+/// order: numbers, then text, then yaks without the field.
+#[derive(PartialEq, PartialOrd)]
+enum SortValue<'a> {
+    Number(f64),
+    Text(&'a str),
+    Missing,
+}
+
+impl<'a> SortValue<'a> {
+    fn of(node: &'a YakNode, field: &str) -> Self {
+        let Some(value) = node.yak.as_ref().and_then(|y| y.fields.get(field)) else {
+            return Self::Missing;
+        };
+        let value = value.trim();
+        match value.parse::<f64>() {
+            Ok(number) if number.is_finite() => Self::Number(number),
+            _ => Self::Text(value),
+        }
+    }
+}
+
+fn created_at(node: &YakNode) -> Option<i64> {
+    node.yak.as_ref().map(|y| y.created_at.0)
 }
 
 fn readiness_for(node: &YakNode, readiness_by_id: &HashMap<YakId, ReadinessView>) -> ReadinessView {
@@ -1045,7 +1117,7 @@ mod tests {
             make_yak_node("bbb", "done"), // done, alphabetically second
             make_yak_node("aaa", "todo"), // not-done, alphabetically first
         ];
-        ListYaks::sort_children(&mut nodes);
+        ListYaks::sort_children(&mut nodes, &SortKey::Name);
         assert_eq!(
             nodes[0].name.as_str(),
             "bbb",
@@ -1056,6 +1128,212 @@ mod tests {
             "aaa",
             "Not-done item should sort after done item"
         );
+    }
+
+    fn make_sortable_node(name: &str, fields: &[(&str, &str)], created_at: i64) -> YakNode {
+        let mut node = make_yak_node(name, "todo");
+        let yak = node.yak.as_mut().unwrap();
+        yak.fields = fields
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        yak.created_at = Timestamp(created_at);
+        node
+    }
+
+    fn sorted_names(mut nodes: Vec<YakNode>, sort_by: &str) -> Vec<String> {
+        ListYaks::sort_children(&mut nodes, &SortKey::parse(Some(sort_by)));
+        nodes.iter().map(|n| n.name.to_string()).collect()
+    }
+
+    #[test]
+    fn sort_by_created_lists_oldest_first() {
+        let nodes = vec![
+            make_sortable_node("apple", &[], 300),
+            make_sortable_node("mango", &[], 100),
+            make_sortable_node("zebra", &[], 200),
+        ];
+        assert_eq!(sorted_names(nodes, "created"), ["mango", "zebra", "apple"]);
+    }
+
+    #[test]
+    fn sort_by_field_compares_negative_and_decimal_numbers() {
+        let nodes = vec![
+            make_sortable_node("a", &[("order", "10")], 0),
+            make_sortable_node("b", &[("order", "2.5")], 0),
+            make_sortable_node("c", &[("order", "-1")], 0),
+        ];
+        assert_eq!(sorted_names(nodes, "order"), ["c", "b", "a"]);
+    }
+
+    #[test]
+    fn sort_by_field_treats_nan_and_inf_as_text() {
+        // Rust parses "nan" and "-inf" as floats; users mean them as words.
+        let nodes = vec![
+            make_sortable_node("a", &[("order", "nan")], 0),
+            make_sortable_node("b", &[("order", "-inf")], 0),
+            make_sortable_node("c", &[("order", "1")], 0),
+        ];
+        assert_eq!(sorted_names(nodes, "order"), ["c", "b", "a"]);
+    }
+
+    #[test]
+    fn sort_by_field_ignores_surrounding_whitespace() {
+        // As text, "10\n" sorts before "9\n"; trimmed, they compare as numbers.
+        let nodes = vec![
+            make_sortable_node("a", &[("order", "10\n")], 0),
+            make_sortable_node("b", &[("order", "9\n")], 0),
+        ];
+        assert_eq!(sorted_names(nodes, "order"), ["b", "a"]);
+    }
+
+    #[test]
+    fn sort_by_name_ignores_a_custom_name_field() {
+        let nodes = vec![
+            make_sortable_node("zebra", &[("name", "aaa")], 0),
+            make_sortable_node("apple", &[("name", "zzz")], 0),
+        ];
+        assert_eq!(sorted_names(nodes, "name"), ["apple", "zebra"]);
+    }
+
+    #[test]
+    fn sort_by_created_ignores_a_custom_created_field() {
+        let nodes = vec![
+            make_sortable_node("apple", &[("created", "1")], 200),
+            make_sortable_node("zebra", &[("created", "2")], 100),
+        ];
+        assert_eq!(sorted_names(nodes, "created"), ["zebra", "apple"]);
+    }
+
+    #[test]
+    fn built_in_sort_keys_do_not_need_a_matching_field() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, _buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+        app.handle(AddYak::new("apple")).unwrap();
+
+        for key in ["name", "created"] {
+            app.handle(ListYaks::new("plain", None, None).with_sort_by(Some(key)))
+                .unwrap_or_else(|e| panic!("--sort-by {key} failed: {e}"));
+        }
+    }
+
+    #[test]
+    fn sorted_ids_with_a_tag_filter_list_only_matching_yaks() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        let mut app = make_app(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &display,
+            &input,
+            &workspace,
+            &auth,
+        );
+        app.handle(AddYak::new("release").with_id(Some("release-1")))
+            .unwrap();
+        for (name, order) in [("deploy", "2"), ("build", "1")] {
+            app.handle(
+                AddYak::new(name)
+                    .with_id(Some(&format!("{name}-1")))
+                    .with_parent(Some("release"))
+                    .with_field("order", order)
+                    .with_tags(vec!["bug".to_string()]),
+            )
+            .unwrap();
+        }
+        buffer.clear();
+
+        app.handle(ListYaks::new("ids", None, Some("bug")).with_sort_by(Some("order")))
+            .unwrap();
+
+        let ids: Vec<String> = buffer.contents().lines().map(String::from).collect();
+        assert_eq!(ids, ["build-1", "deploy-1"]);
+    }
+
+    #[test]
+    fn pretty_plain_and_json_follow_the_sorted_order() {
+        let mut event_store = InMemoryEventStore::new();
+        let mut event_bus = EventBus::new();
+        let storage = InMemoryStorage::new();
+        event_bus.register(Box::new(storage.clone()));
+        let (display, buffer) = make_test_display();
+        let input = InMemoryInput::new();
+        let auth = InMemoryAuthentication::new();
+        let workspace = TestWorkspace;
+        {
+            let mut app = make_app(
+                &mut event_store,
+                &mut event_bus,
+                &storage,
+                &display,
+                &input,
+                &workspace,
+                &auth,
+            );
+            for (name, order) in [("deploy", "10"), ("test", "9"), ("build", "1")] {
+                app.handle(AddYak::new(name).with_field("order", order))
+                    .unwrap();
+            }
+            for format in ["pretty", "plain"] {
+                buffer.clear();
+                app.handle(ListYaks::new(format, None, None).with_sort_by(Some("order")))
+                    .unwrap();
+                let output = buffer.contents();
+                let positions: Vec<usize> = ["build", "test", "deploy"]
+                    .iter()
+                    .map(|name| output.find(name).unwrap())
+                    .collect();
+                assert!(
+                    positions.windows(2).all(|w| w[0] < w[1]),
+                    "{format} output not sorted:\n{output}"
+                );
+            }
+        }
+
+        let json_buffer = TestBuffer::new();
+        let json_display = JsonDisplay::with_writer(Box::new(json_buffer.clone()));
+        let mut app = Application::new(
+            &mut event_store,
+            &mut event_bus,
+            &storage,
+            &json_display,
+            &input,
+            &workspace,
+            None,
+            &auth,
+        );
+        app.handle(ListYaks::new("pretty", None, None).with_sort_by(Some("order")))
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_str(&json_buffer.contents()).unwrap();
+        let names: Vec<&str> = json
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|node| node["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["build", "test", "deploy"]);
     }
 
     // Line 182: not-done filter must exclude done yaks (not fall through to _ => true)

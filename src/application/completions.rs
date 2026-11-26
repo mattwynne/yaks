@@ -47,7 +47,7 @@ pub fn complete_with_state(words: &[&str], yaks: &[(&str, bool)]) -> Vec<String>
             "state" => vec!["--recursive"],
             "context" => vec!["--show"],
             "field" => vec!["--show"],
-            "list" | "ls" => vec!["--format", "--only", "--ready", "--tag"],
+            "list" | "ls" => vec!["--format", "--only", "--ready", "--sort-by", "--tag"],
             "show" => vec!["--format"],
             "blocker" => vec!["--by", "--reason"],
             _ => vec![],
@@ -253,6 +253,12 @@ mod tests {
         let result = complete_with_state(&["yx", "list", "--"], &[]);
         assert!(result.contains(&"--format".to_string()));
         assert!(result.contains(&"--only".to_string()));
+    }
+
+    #[test]
+    fn offers_sort_by_flag_for_list() {
+        let result = complete_with_state(&["yx", "list", "--"], &[]);
+        assert!(result.contains(&"--sort-by".to_string()));
     }
 
     #[test]

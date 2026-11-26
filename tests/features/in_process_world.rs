@@ -547,6 +547,17 @@ impl TestWorld for InProcessWorld {
         self.try_execute(move |app| app.handle(ListYaks::new("pretty", Some(&only), None)))
     }
 
+    fn list_yaks_sorted(&mut self, format: &str, tag: Option<&str>, sort_by: &str) -> Result<()> {
+        self.execute(|app| app.handle(ListYaks::new(format, None, tag).with_sort_by(Some(sort_by))))
+    }
+
+    fn try_list_yaks_sorted(&mut self, sort_by: &str) -> Result<()> {
+        let sort_by = sort_by.to_string();
+        self.try_execute(move |app| {
+            app.handle(ListYaks::new("pretty", None, None).with_sort_by(Some(&sort_by)))
+        })
+    }
+
     fn set_context(&mut self, name: &str, content: &str) -> Result<()> {
         self.input.set_content(Some(content.to_string()));
         self.execute(|app| app.handle(EditContext::new(name)))
