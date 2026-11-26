@@ -53,6 +53,12 @@ pub trait TestWorld {
     /// Try to list yaks with a specific filter - captures result without bailing on failure
     fn try_list_yaks_with_filter(&mut self, only: &str) -> Result<()>;
 
+    /// List yaks with a format, an optional tag filter, and a sort key
+    fn list_yaks_sorted(&mut self, format: &str, tag: Option<&str>, sort_by: &str) -> Result<()>;
+
+    /// Try to list yaks with a sort key - captures result without bailing on failure
+    fn try_list_yaks_sorted(&mut self, sort_by: &str) -> Result<()>;
+
     /// Get the output from the last command
     fn get_output(&self) -> String;
 

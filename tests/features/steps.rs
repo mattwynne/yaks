@@ -183,6 +183,27 @@ fn impl_try_list_yaks_filter(world: &mut dyn TestWorld, only: String) -> Result<
     world.try_list_yaks_with_filter(&only)
 }
 
+fn impl_list_yaks_format_sorted(
+    world: &mut dyn TestWorld,
+    format: String,
+    sort_by: String,
+) -> Result<()> {
+    world.list_yaks_sorted(&format, None, &sort_by)
+}
+
+fn impl_list_yaks_format_tag_sorted(
+    world: &mut dyn TestWorld,
+    format: String,
+    tag: String,
+    sort_by: String,
+) -> Result<()> {
+    world.list_yaks_sorted(&format, Some(&tag), &sort_by)
+}
+
+fn impl_try_list_yaks_sorted(world: &mut dyn TestWorld, sort_by: String) -> Result<()> {
+    world.try_list_yaks_sorted(&sort_by)
+}
+
 fn impl_yak_count(world: &mut dyn TestWorld, expected: usize) -> Result<()> {
     check_yak_count(world, expected)
 }
@@ -632,6 +653,12 @@ both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)"$"#)
 both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with id "([^"]+)" under "([^"]+)"$"#)
     fn given_add_yak_with_id_under_fs / given_add_yak_with_id_under_ip (yak_name: String, id: String, parent: String) -> impl_add_yak_with_id_under);
 
+both_worlds!(given(regex = r#"^I add the yak "([^"]+)" with field "([^"]+)" set to "([^"]+)"$"#)
+    fn given_add_yak_with_field_fs / given_add_yak_with_field_ip (yak_name: String, key: String, value: String) -> impl_add_yak_with_field);
+
+both_worlds!(given(regex = r#"^I set the "(.+)" field of "(.+)" to "(.+)"$"#)
+    fn given_set_field_fs / given_set_field_ip (field: String, name: String, content: String) -> impl_set_field);
+
 // -- When steps --
 
 both_worlds!(when(regex = r#"^YX_FOCUS is set to "([^"]+)"$"#)
@@ -654,6 +681,15 @@ both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format filtering by t
 
 both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format filtering by tag "([^"]+)" and only "([^"]+)"$"#)
     fn when_list_yaks_format_tag_only_fs / when_list_yaks_format_tag_only_ip (format: String, tag: String, only: String) -> impl_list_yaks_format_tag_and_only);
+
+both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format sorted by "([^"]+)"$"#)
+    fn when_list_yaks_format_sorted_fs / when_list_yaks_format_sorted_ip (format: String, sort_by: String) -> impl_list_yaks_format_sorted);
+
+both_worlds!(when(regex = r#"^I list the yaks in "([^"]+)" format filtering by tag "([^"]+)" sorted by "([^"]+)"$"#)
+    fn when_list_yaks_format_tag_sorted_fs / when_list_yaks_format_tag_sorted_ip (format: String, tag: String, sort_by: String) -> impl_list_yaks_format_tag_sorted);
+
+both_worlds!(when(regex = r#"^I try to list the yaks sorted by "([^"]+)"$"#)
+    fn when_try_list_yaks_sorted_fs / when_try_list_yaks_sorted_ip (sort_by: String) -> impl_try_list_yaks_sorted);
 
 both_worlds!(when(expr = "I list the yaks as json")
     fn when_list_yaks_json_fs / when_list_yaks_json_ip () -> impl_list_yaks_json);

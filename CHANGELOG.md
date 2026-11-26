@@ -6,6 +6,10 @@ This project uses SemVer. While yaks is in the `0.x` phase, breaking changes may
 
 ## [Unreleased]
 
+### Added
+
+- `yx list --sort-by <field>` sorts yaks at the same depth by a custom field, such as `order`, or by the built-in keys `name` and `created`. Numbers compare as numbers and come before text; yaks without the field come last. Done yaks still come first at each level, and every output format follows the sorted order. The command fails if no yak has the field.
+
 ## [0.8.1] - 2026-11-07
 
 ### Fixed

@@ -1318,6 +1318,18 @@ impl TestWorld for FullStackWorld {
         self.run_yx_unchecked(&["list", "--only", only])
     }
 
+    fn list_yaks_sorted(&mut self, format: &str, tag: Option<&str>, sort_by: &str) -> Result<()> {
+        let mut args = vec!["list", "--format", format, "--sort-by", sort_by];
+        if let Some(tag) = tag {
+            args.extend(["--tag", tag]);
+        }
+        self.run_yx(&args)
+    }
+
+    fn try_list_yaks_sorted(&mut self, sort_by: &str) -> Result<()> {
+        self.run_yx_unchecked(&["list", "--sort-by", sort_by])
+    }
+
     fn get_output(&self) -> String {
         self.output.clone()
     }

@@ -68,6 +68,149 @@ Feature: List yaks
         - [todo] mango
         """
 
+  Rule: Yaks can be sorted by a custom field
+
+    Example: Build steps listed in their intended order
+      Given I have a clean git repository
+      And I add the yak "deploy" with field "order" set to "10"
+      And I add the yak "test" with field "order" set to "9"
+      And I add the yak "build" with field "order" set to "1"
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        - [todo] build
+        - [todo] test
+        - [todo] deploy
+        """
+
+    Example: Numeric estimates come before word estimates
+      Given I have a clean git repository
+      And I add the yak "spike" with field "estimate" set to "unknown"
+      And I add the yak "rewrite" with field "estimate" set to "large"
+      And I add the yak "fix typo" with field "estimate" set to "1"
+      When I list the yaks in "markdown" format sorted by "estimate"
+      Then the output should be:
+        """
+        - [todo] fix typo
+        - [todo] rewrite
+        - [todo] spike
+        """
+
+  Rule: Yaks without the sort field come last, by name
+
+    Example: Unordered chores follow the ordered release step
+      Given I have a clean git repository
+      And I add the yak "write docs"
+      And I add the yak "tidy up"
+      And I add the yak "deploy" with field "order" set to "1"
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        - [todo] deploy
+        - [todo] tidy up
+        - [todo] write docs
+        """
+
+  Rule: Sorting by a field that no yak has is an error
+
+    Example: A misspelt field name is reported
+      Given I have a clean git repository
+      And I add the yak "build" with field "order" set to "1"
+      When I try to list the yaks sorted by "ordr"
+      Then the command should fail
+      And the error should contain "ordr"
+      And the error should contain "name"
+      And the error should contain "created"
+
+    Example: Yaks hidden by a filter still count
+      Given I have a clean git repository
+      And I add the yak "build" with field "order" set to "1"
+      And I add the yak "flaky test"
+      And I tag "flaky test" with "bug"
+      When I list the yaks in "markdown" format filtering by tag "bug" sorted by "order"
+      Then the output should be:
+        """
+        - [todo] flaky test @bug
+        """
+
+    Example: An empty yak map lists nothing without an error
+      Given I have a clean git repository
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        You have no yaks. Are you done?
+        """
+
+  Rule: "name" and "created" always mean the built-in values
+
+    Example: A custom "name" field does not change sorting by name
+      Given I have a clean git repository
+      And I add the yak "zebra"
+      And I add the yak "apple" with field "name" set to "zzz"
+      When I list the yaks in "markdown" format sorted by "name"
+      Then the output should be:
+        """
+        - [todo] apple
+        - [todo] zebra
+        """
+
+  Rule: Done yaks still come first, at every level of the tree
+
+    Example: A finished late step lists before an early unfinished one
+      Given I have a clean git repository
+      And I add the yak "apple" with field "order" set to "1"
+      And I add the yak "zebra" with field "order" set to "9"
+      And I mark the yak "zebra" as done
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        - [done] zebra
+        - [todo] apple
+        """
+
+    Example: Release steps are sorted within their parent
+      Given I have a clean git repository
+      And I add the yak "release"
+      And I add the yak "deploy" under "release"
+      And I add the yak "build" under "release"
+      And I set the "order" field of "deploy" to "2"
+      And I set the "order" field of "build" to "1"
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        - [todo] release
+          - [todo] build
+          - [todo] deploy
+        """
+
+  Rule: Yaks with equal sort values are ordered by name
+
+    Example: Two first steps list alphabetically
+      Given I have a clean git repository
+      And I add the yak "mango" with field "order" set to "1"
+      And I add the yak "apple" with field "order" set to "1"
+      When I list the yaks in "markdown" format sorted by "order"
+      Then the output should be:
+        """
+        - [todo] apple
+        - [todo] mango
+        """
+
+  Rule: IDs follow the sorted tree order
+
+    Example: Piped IDs come out in build order
+      Given I have a clean git repository
+      And I add the yak "deploy" with id "step-a"
+      And I add the yak "build" with id "step-b"
+      And I set the "order" field of "deploy" to "2"
+      And I set the "order" field of "build" to "1"
+      When I list the yaks in "ids" format sorted by "order"
+      Then the output should be:
+        """
+        step-b
+        step-a
+        """
+
   Rule: Nested yaks are displayed as a hierarchy
 
     Example: Pretty format shows tree connectors for nested yaks
